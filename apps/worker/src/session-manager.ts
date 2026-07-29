@@ -153,6 +153,45 @@ async function recordInboundMessage(params: {
       waMessageId: params.waMessageId,
     },
   });
+
+  if (!conversation.assignedToId) {
+    await maybeAutoReply({
+      tenantId: session.tenantId,
+      sessionId: params.sessionId,
+      conversationId: conversation.id,
+      inboundText: params.text,
+    });
+  }
+}
+
+// v1 do construtor de fluxos: casamento simples por palavra-chave. Só dispara
+// pra conversa sem atendente atribuído — assim que um humano assume, a
+// automação para de responder no lugar dele.
+async function maybeAutoReply(params: {
+  tenantId: string;
+  sessionId: string;
+  conversationId: string;
+  inboundText: string;
+}) {
+  const rules = await prisma.autoReply.findMany({ where: { tenantId: params.tenantId } });
+  if (rules.length === 0) return;
+
+  const lowerText = params.inboundText.toLowerCase();
+  const match =
+    rules.find((r) => !r.isDefault && r.keyword && lowerText.includes(r.keyword.toLowerCase())) ??
+    rules.find((r) => r.isDefault);
+
+  if (!match) return;
+
+  await prisma.message.create({
+    data: {
+      conversationId: params.conversationId,
+      sessionId: params.sessionId,
+      direction: "OUTBOUND",
+      status: "PENDING",
+      body: match.response,
+    },
+  });
 }
 
 // Fase 0 mantém a fila simples de propósito: sem Redis/BullMQ ainda, o
@@ -171,6 +210,23 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
     });
 
     for (const message of pending) {
+      const blocked = await prisma.contactBlock.findUnique({
+        where: {
+          tenantId_waJid: {
+            tenantId: message.conversation.tenantId,
+            waJid: message.conversation.contact.waJid,
+          },
+        },
+      });
+
+      if (blocked) {
+        await prisma.message.update({
+          where: { id: message.id },
+          data: { status: "FAILED", errorMessage: "Contato está na lista de bloqueios" },
+        });
+        continue;
+      }
+
       try {
         const sent = await socket.sendMessage(message.conversation.contact.waJid, {
           text: message.body,

@@ -18,6 +18,8 @@ model Tenant {
   sessions      WhatsAppSession[]
   contacts      Contact[]
   conversations Conversation[]
+  contactBlocks ContactBlock[]
+  autoReplies   AutoReply[]
 }
 
 enum UserRole {
@@ -111,6 +113,7 @@ enum ConversationStatus {
 
 model Conversation {
   id        String              @id @default(cuid())
+  ticketNumber Int              @unique @default(autoincrement()) // identificador curto pro atendente citar por telefone/e-mail
   tenantId  String
   tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sessionId String
@@ -118,6 +121,7 @@ model Conversation {
   contactId String
   contact   Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
   status    ConversationStatus  @default(OPEN)
+  tags      String[]            @default([])
   assignedToId String?
   assignedTo   User?            @relation("AssignedAgent", fields: [assignedToId], references: [id])
   lastMessageAt DateTime        @default(now())
@@ -127,6 +131,36 @@ model Conversation {
 
   @@index([tenantId, status])
   @@index([sessionId])
+}
+
+// Lista de opt-out por tenant — contato que pediu pra não receber mais
+// mensagem. Consultada tanto pelo worker (nunca manda outbound pra quem tá
+// aqui) quanto pelas Campanhas na Fase 2.
+model ContactBlock {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  waJid     String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, waJid])
+  @@index([tenantId])
+}
+
+// v1 do "construtor de fluxos": resposta automática disparada por palavra-chave
+// (substring, case-insensitive) quando a conversa ainda não tem atendente
+// atribuído. isDefault = usada quando nenhuma palavra-chave bate.
+model AutoReply {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  keyword   String
+  response  String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
 }
 
 enum MessageDirection {
