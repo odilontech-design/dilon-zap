@@ -4,7 +4,8 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 
 const bodySchema = z.object({
-  pipelineStage: z.enum(["NOVO_LEAD", "EM_CONTATO", "PROPOSTA_ENVIADA", "FECHADO", "PERDIDO"]),
+  pipelineStage: z.enum(["NOVO_LEAD", "EM_CONTATO", "PROPOSTA_ENVIADA", "FECHADO", "PERDIDO"]).optional(),
+  name: z.string().max(120).nullable().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -19,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const updated = await prisma.contact.update({
     where: { id: contact.id },
-    data: { pipelineStage: parsed.data.pipelineStage },
+    data: parsed.data,
   });
 
   return NextResponse.json(updated);

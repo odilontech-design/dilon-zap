@@ -1,6 +1,7 @@
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
+  WAMessageStatus,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
@@ -104,7 +105,41 @@ export async function startSession(sessionId: string) {
     }
   });
 
+  socket.ev.on("messages.update", async (updates) => {
+    for (const { key, update } of updates) {
+      if (!key.fromMe || !key.id || update.status == null) continue;
+
+      const status = mapReceiptStatus(update.status);
+      if (!status) continue;
+
+      // Best-effort: se a mensagem não é nossa (ex: veio de outro worker/sessão
+      // antiga) o updateMany simplesmente não acha nada pra atualizar.
+      await prisma.message.updateMany({
+        where: { sessionId, waMessageId: key.id, direction: "OUTBOUND" },
+        data: { status },
+      });
+    }
+  });
+
   pollOutbox(sessionId, socket, () => stopped);
+}
+
+// WAMessageStatus do Baileys: ERROR/PENDING/SERVER_ACK (enviou pro WhatsApp) /
+// DELIVERY_ACK (chegou no aparelho) / READ / PLAYED (áudio ouvido, conta como lido).
+function mapReceiptStatus(waStatus: number): "SENT" | "DELIVERED" | "READ" | "FAILED" | null {
+  switch (waStatus) {
+    case WAMessageStatus.ERROR:
+      return "FAILED";
+    case WAMessageStatus.SERVER_ACK:
+      return "SENT";
+    case WAMessageStatus.DELIVERY_ACK:
+      return "DELIVERED";
+    case WAMessageStatus.READ:
+    case WAMessageStatus.PLAYED:
+      return "READ";
+    default:
+      return null;
+  }
 }
 
 async function recordInboundMessage(params: {

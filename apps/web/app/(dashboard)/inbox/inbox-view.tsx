@@ -4,6 +4,8 @@ import { useState } from "react";
 import useSWR from "swr";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
+type PipelineStage = "NOVO_LEAD" | "EM_CONTATO" | "PROPOSTA_ENVIADA" | "FECHADO" | "PERDIDO";
+type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
 
 type ConversationSummary = {
   id: string;
@@ -20,14 +22,14 @@ type ConversationDetail = {
   ticketNumber: number;
   status: ConversationStatus;
   tags: string[];
-  contact: { id: string; name: string | null; waJid: string };
+  contact: { id: string; name: string | null; waJid: string; pipelineStage: PipelineStage };
   assignedTo: { id: string; name: string } | null;
 };
 
 type Message = {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
-  status: "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
+  status: MessageStatus;
   body: string;
   createdAt: string;
 };
@@ -48,8 +50,24 @@ const STATUS_ACTION_LABEL: Record<ConversationStatus, string> = {
   RESOLVED: "Resolver",
 };
 
+const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
+  { key: "NOVO_LEAD", label: "Novo lead" },
+  { key: "EM_CONTATO", label: "Em contato" },
+  { key: "PROPOSTA_ENVIADA", label: "Proposta enviada" },
+  { key: "FECHADO", label: "Fechado" },
+  { key: "PERDIDO", label: "Perdido" },
+];
+
 function contactLabel(contact: { name: string | null; waJid: string }) {
   return contact.name ?? contact.waJid.replace("@s.whatsapp.net", "");
+}
+
+function formatPhone(waJid: string) {
+  return waJid.replace("@s.whatsapp.net", "").replace("@lid", "");
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
 export function InboxView() {
@@ -137,6 +155,7 @@ function ConversationThread({
   onChanged: () => void;
 }) {
   const [draft, setDraft] = useState("");
+  const [showContact, setShowContact] = useState(false);
   const { data: conversation, mutate: mutateConversation } = useSWR<ConversationDetail>(
     `/api/conversations/${conversationId}`,
     fetcher
@@ -186,78 +205,173 @@ function ConversationThread({
   if (!conversation) return <div className="p-6 text-sm text-neutral-400">Carregando...</div>;
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="border-b border-neutral-200 px-6 py-3 flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <p className="text-sm font-semibold">{contactLabel(conversation.contact)}</p>
-            <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
-          </div>
-          <div className="flex items-center gap-2">
-            {TABS.filter((t) => t.key !== conversation.status).map((t) => (
+    <div className="flex h-full">
+      <div className="flex flex-col flex-1 min-w-0">
+        <div className="border-b border-neutral-200 px-6 py-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-4">
+            <button onClick={() => setShowContact((v) => !v)} className="text-left hover:opacity-70">
+              <p className="text-sm font-semibold">{contactLabel(conversation.contact)}</p>
+              <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
+            </button>
+            <div className="flex items-center gap-2">
+              {TABS.filter((t) => t.key !== conversation.status).map((t) => (
+                <button
+                  key={t.key}
+                  onClick={() => patchConversation({ status: t.key })}
+                  className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
+                >
+                  {STATUS_ACTION_LABEL[t.key]}
+                </button>
+              ))}
+              <select
+                value={conversation.assignedTo?.id ?? ""}
+                onChange={(e) => patchConversation({ assignedToId: e.target.value || null })}
+                className="text-xs rounded-md border border-neutral-300 px-2 py-1.5"
+              >
+                <option value="">Atribuir a...</option>
+                {users?.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
               <button
-                key={t.key}
-                onClick={() => patchConversation({ status: t.key })}
+                onClick={() => setShowContact((v) => !v)}
                 className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
               >
-                {STATUS_ACTION_LABEL[t.key]}
+                Ver contato
               </button>
-            ))}
-            <select
-              value={conversation.assignedTo?.id ?? ""}
-              onChange={(e) => patchConversation({ assignedToId: e.target.value || null })}
-              className="text-xs rounded-md border border-neutral-300 px-2 py-1.5"
-            >
-              <option value="">Atribuir a...</option>
-              {users?.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name}
-                </option>
-              ))}
-            </select>
-            <button onClick={handleBlock} className="text-xs text-red-600 hover:underline">
-              Bloquear
-            </button>
+              <button onClick={handleBlock} className="text-xs text-red-600 hover:underline">
+                Bloquear
+              </button>
+            </div>
           </div>
+          <TagEditor tags={conversation.tags} onChange={(tags) => patchConversation({ tags })} />
         </div>
-        <TagEditor
-          tags={conversation.tags}
-          onChange={(tags) => patchConversation({ tags })}
-        />
-      </div>
-      <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2">
-        {messages?.map((m) => (
-          <div
-            key={m.id}
-            className={`max-w-md rounded-lg px-3 py-2 text-sm ${
-              m.direction === "OUTBOUND"
-                ? "self-end bg-accent text-white"
-                : "self-start bg-neutral-100 text-neutral-900"
-            }`}
+        <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2">
+          {messages?.map((m) => (
+            <div
+              key={m.id}
+              className={`max-w-md rounded-lg px-3 py-2 text-sm ${
+                m.direction === "OUTBOUND"
+                  ? "self-end bg-accent text-white"
+                  : "self-start bg-neutral-100 text-neutral-900"
+              }`}
+            >
+              <p className="whitespace-pre-wrap">{m.body}</p>
+              <div
+                className={`flex items-center gap-1 justify-end mt-1 text-[10px] ${
+                  m.direction === "OUTBOUND" ? "text-white/75" : "text-neutral-400"
+                }`}
+              >
+                {m.status === "PENDING" ? (
+                  <span>enviando...</span>
+                ) : m.status === "FAILED" ? (
+                  <span className={m.direction === "OUTBOUND" ? "text-red-100" : "text-red-500"}>
+                    falhou
+                  </span>
+                ) : (
+                  <>
+                    <span>{formatTime(m.createdAt)}</span>
+                    {m.direction === "OUTBOUND" && <MessageTicks status={m.status} />}
+                  </>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        <form onSubmit={handleSend} className="border-t border-neutral-200 p-4 flex gap-2">
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="Escreva uma mensagem..."
+            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
           >
-            <p>{m.body}</p>
-            {m.direction === "OUTBOUND" && m.status !== "SENT" && (
-              <p className="text-[10px] opacity-75 mt-1">
-                {m.status === "PENDING" ? "enviando..." : m.status === "FAILED" ? "falhou" : m.status}
-              </p>
-            )}
-          </div>
-        ))}
+            Enviar
+          </button>
+        </form>
       </div>
-      <form onSubmit={handleSend} className="border-t border-neutral-200 p-4 flex gap-2">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="Escreva uma mensagem..."
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+      {showContact && (
+        <ContactPanel
+          contact={conversation.contact}
+          onClose={() => setShowContact(false)}
+          onSaved={() => {
+            mutateConversation();
+            onChanged();
+          }}
         />
-        <button
-          type="submit"
-          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-        >
-          Enviar
+      )}
+    </div>
+  );
+}
+
+function MessageTicks({ status }: { status: MessageStatus }) {
+  if (status === "SENT") return <span aria-label="Enviada">✓</span>;
+  if (status === "DELIVERED") return <span aria-label="Entregue">✓✓</span>;
+  if (status === "READ") return <span className="text-sky-300" aria-label="Lida">✓✓</span>;
+  return null;
+}
+
+function ContactPanel({
+  contact,
+  onClose,
+  onSaved,
+}: {
+  contact: { id: string; name: string | null; waJid: string; pipelineStage: PipelineStage };
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(contact.name ?? "");
+
+  async function save(body: Record<string, unknown>) {
+    await fetch(`/api/contacts/${contact.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    onSaved();
+  }
+
+  return (
+    <div className="w-72 shrink-0 border-l border-neutral-200 bg-white p-4 flex flex-col gap-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold">Contato</h2>
+        <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" aria-label="Fechar">
+          ×
         </button>
-      </form>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-700 mb-1">Nome</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onBlur={() => name.trim() !== (contact.name ?? "") && save({ name: name.trim() || null })}
+          placeholder={formatPhone(contact.waJid)}
+          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+        />
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone</label>
+        <p className="text-sm text-neutral-600">{formatPhone(contact.waJid)}</p>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-700 mb-1">Status do lead</label>
+        <select
+          value={contact.pipelineStage}
+          onChange={(e) => save({ pipelineStage: e.target.value })}
+          className="w-full text-sm rounded-md border border-neutral-300 px-2 py-1.5"
+        >
+          {PIPELINE_STAGES.map((s) => (
+            <option key={s.key} value={s.key}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </div>
     </div>
   );
 }
