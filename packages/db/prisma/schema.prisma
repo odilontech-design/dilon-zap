@@ -105,6 +105,7 @@ model Contact {
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   waJid       String // ex: 5511999999999@s.whatsapp.net
   name        String?
+  avatarUrl   String? // URL da foto de perfil do WhatsApp, quando disponível/pública
   pipelineStage PipelineStage @default(NOVO_LEAD)
   createdAt   DateTime      @default(now())
 

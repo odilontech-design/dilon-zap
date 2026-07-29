@@ -7,14 +7,16 @@ type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type PipelineStage = "NOVO_LEAD" | "EM_CONTATO" | "PROPOSTA_ENVIADA" | "FECHADO" | "PERDIDO";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
 
+type ContactRef = { id: string; name: string | null; waJid: string; avatarUrl: string | null };
+
 type ConversationSummary = {
   id: string;
   ticketNumber: number;
   status: ConversationStatus;
   tags: string[];
-  contact: { id: string; name: string | null; waJid: string };
+  contact: ContactRef;
   assignedTo: { id: string; name: string } | null;
-  messages: { body: string; direction: "INBOUND" | "OUTBOUND" }[];
+  messages: { body: string; direction: "INBOUND" | "OUTBOUND"; createdAt: string }[];
 };
 
 type ConversationDetail = {
@@ -22,7 +24,7 @@ type ConversationDetail = {
   ticketNumber: number;
   status: ConversationStatus;
   tags: string[];
-  contact: { id: string; name: string | null; waJid: string; pipelineStage: PipelineStage };
+  contact: ContactRef & { pipelineStage: PipelineStage };
   assignedTo: { id: string; name: string } | null;
 };
 
@@ -70,6 +72,35 @@ function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }
 
+function Avatar({ contact, size = 36 }: { contact: ContactRef; size?: number }) {
+  const [broken, setBroken] = useState(false);
+  const label = contactLabel(contact);
+
+  if (contact.avatarUrl && !broken) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- foto vem de um CDN do WhatsApp, domínio não é fixo
+      <img
+        src={contact.avatarUrl}
+        alt={label}
+        width={size}
+        height={size}
+        onError={() => setBroken(true)}
+        className="rounded-full object-cover shrink-0"
+        style={{ width: size, height: size }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="rounded-full bg-accent/15 text-accent flex items-center justify-center font-medium shrink-0"
+      style={{ width: size, height: size, fontSize: size * 0.4 }}
+    >
+      {label.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 export function InboxView() {
   const [tab, setTab] = useState<ConversationStatus>("OPEN");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -113,22 +144,36 @@ export function InboxView() {
                 selectedId === c.id ? "bg-neutral-100" : ""
               }`}
             >
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-medium truncate">{contactLabel(c.contact)}</p>
-                <span className="text-[11px] font-mono text-neutral-400 shrink-0">#{c.ticketNumber}</span>
-              </div>
-              <p className="text-xs text-neutral-500 truncate mt-0.5">{c.messages[0]?.body ?? ""}</p>
-              <div className="flex items-center gap-1 mt-1.5 flex-wrap">
-                {c.assignedTo && (
-                  <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
-                    {c.assignedTo.name}
-                  </span>
-                )}
-                {c.tags.map((tag) => (
-                  <span key={tag} className="text-[10px] rounded-full bg-accent/10 text-accent px-2 py-0.5">
-                    {tag}
-                  </span>
-                ))}
+              <div className="flex gap-3">
+                <Avatar contact={c.contact} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <p className="text-sm font-medium truncate">{contactLabel(c.contact)}</p>
+                      <span className="text-[10px] font-mono text-neutral-400 shrink-0">
+                        #{c.ticketNumber}
+                      </span>
+                    </div>
+                    {c.messages[0] && (
+                      <span className="text-[11px] text-neutral-400 shrink-0">
+                        {formatTime(c.messages[0].createdAt)}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-neutral-500 truncate mt-0.5">{c.messages[0]?.body ?? ""}</p>
+                  <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                    {c.assignedTo && (
+                      <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
+                        {c.assignedTo.name}
+                      </span>
+                    )}
+                    {c.tags.map((tag) => (
+                      <span key={tag} className="text-[10px] rounded-full bg-accent/10 text-accent px-2 py-0.5">
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
             </button>
           ))}
@@ -209,9 +254,15 @@ function ConversationThread({
       <div className="flex flex-col flex-1 min-w-0">
         <div className="border-b border-neutral-200 px-6 py-3 flex flex-col gap-2">
           <div className="flex items-center justify-between gap-4">
-            <button onClick={() => setShowContact((v) => !v)} className="text-left hover:opacity-70">
-              <p className="text-sm font-semibold">{contactLabel(conversation.contact)}</p>
-              <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
+            <button
+              onClick={() => setShowContact((v) => !v)}
+              className="flex items-center gap-2.5 text-left hover:opacity-70"
+            >
+              <Avatar contact={conversation.contact} />
+              <div>
+                <p className="text-sm font-semibold">{contactLabel(conversation.contact)}</p>
+                <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
+              </div>
             </button>
             <div className="flex items-center gap-2">
               {TABS.filter((t) => t.key !== conversation.status).map((t) => (
@@ -321,7 +372,7 @@ function ContactPanel({
   onClose,
   onSaved,
 }: {
-  contact: { id: string; name: string | null; waJid: string; pipelineStage: PipelineStage };
+  contact: ContactRef & { pipelineStage: PipelineStage };
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -343,6 +394,9 @@ function ContactPanel({
         <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" aria-label="Fechar">
           ×
         </button>
+      </div>
+      <div className="flex justify-center">
+        <Avatar contact={contact} size={72} />
       </div>
       <div>
         <label className="block text-xs font-medium text-neutral-700 mb-1">Nome</label>

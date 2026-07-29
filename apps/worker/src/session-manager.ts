@@ -101,7 +101,7 @@ export async function startSession(sessionId: string) {
 
       if (!waJid || !text) continue; // Fase 0: só texto. Mídia entra depois.
 
-      await recordInboundMessage({ sessionId, waJid, text, waMessageId: msg.key.id ?? undefined });
+      await recordInboundMessage({ sessionId, waJid, text, waMessageId: msg.key.id ?? undefined, socket });
     }
   });
 
@@ -147,6 +147,7 @@ async function recordInboundMessage(params: {
   waJid: string;
   text: string;
   waMessageId?: string;
+  socket: ReturnType<typeof makeWASocket>;
 }) {
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
     where: { id: params.sessionId },
@@ -158,6 +159,12 @@ async function recordInboundMessage(params: {
     create: { tenantId: session.tenantId, waJid: params.waJid },
     update: {},
   });
+
+  if (!contact.avatarUrl) {
+    fetchAndSaveAvatar(params.socket, contact.id, params.waJid).catch(() => {
+      // sem foto de perfil ou privacidade bloqueando — segue sem avatar, não é erro
+    });
+  }
 
   const existingConversation = await prisma.conversation.findFirst({
     where: { tenantId: session.tenantId, contactId: contact.id, sessionId: params.sessionId },
@@ -197,6 +204,19 @@ async function recordInboundMessage(params: {
       inboundText: params.text,
     });
   }
+}
+
+// Busca a foto de perfil só na primeira mensagem de um contato (evita bater
+// na API do WhatsApp toda hora) — falha normalmente quando a pessoa não tem
+// foto pública ou a privacidade bloqueia, e isso não deve derrubar nada.
+async function fetchAndSaveAvatar(
+  socket: ReturnType<typeof makeWASocket>,
+  contactId: string,
+  waJid: string
+) {
+  const url = await socket.profilePictureUrl(waJid, "image");
+  if (!url) return;
+  await prisma.contact.update({ where: { id: contactId }, data: { avatarUrl: url } });
 }
 
 // v1 do construtor de fluxos: casamento simples por palavra-chave. Só dispara
