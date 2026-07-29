@@ -5,7 +5,7 @@ import { LoginForm } from "./login-form";
 
 export default async function LoginPage() {
   const session = await getServerSession(authOptions);
-  if (session) redirect("/inbox");
+  if (session) redirect("/painel");
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">

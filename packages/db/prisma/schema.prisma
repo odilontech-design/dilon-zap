@@ -89,20 +89,30 @@ model WhatsAppSignalKey {
   @@index([sessionId, category])
 }
 
+enum PipelineStage {
+  NOVO_LEAD
+  EM_CONTATO
+  PROPOSTA_ENVIADA
+  FECHADO
+  PERDIDO
+}
+
 // Um contato de WhatsApp dentro de um tenant (o mesmo número em tenants
 // diferentes é uma linha diferente — não há dado compartilhado entre negócios).
 model Contact {
-  id          String   @id @default(cuid())
+  id          String        @id @default(cuid())
   tenantId    String
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   waJid       String // ex: 5511999999999@s.whatsapp.net
   name        String?
-  createdAt   DateTime @default(now())
+  pipelineStage PipelineStage @default(NOVO_LEAD)
+  createdAt   DateTime      @default(now())
 
   conversations Conversation[]
 
   @@unique([tenantId, waJid])
   @@index([tenantId])
+  @@index([tenantId, pipelineStage])
 }
 
 enum ConversationStatus {

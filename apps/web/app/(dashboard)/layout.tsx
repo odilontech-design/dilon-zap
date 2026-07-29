@@ -10,8 +10,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <aside className="w-56 shrink-0 border-r border-neutral-200 bg-white p-4 flex flex-col">
         <p className="text-xs font-mono uppercase tracking-wide text-accent mb-6">Dilon Zap</p>
         <nav className="flex flex-col gap-1 text-sm">
+          <Link href="/painel" className="rounded-md px-3 py-2 hover:bg-neutral-100">
+            Painel
+          </Link>
           <Link href="/inbox" className="rounded-md px-3 py-2 hover:bg-neutral-100">
             Inbox
+          </Link>
+          <Link href="/funil" className="rounded-md px-3 py-2 hover:bg-neutral-100">
+            Funil
+          </Link>
+          <Link href="/relatorios" className="rounded-md px-3 py-2 hover:bg-neutral-100">
+            Relatórios
           </Link>
           <Link href="/connect" className="rounded-md px-3 py-2 hover:bg-neutral-100">
             Conectar número
