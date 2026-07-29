@@ -1,0 +1,15 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dilonzap
+      POSTGRES_PASSWORD: dilonzap
+      POSTGRES_DB: dilonzap
+    ports:
+      - "5432:5432"
+    volumes:
+      - dilonzap_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  dilonzap_postgres_data:

@@ -1,0 +1,14 @@
+node_modules/
+.next/
+dist/
+*.tsbuildinfo
+.env
+.env.local
+npm-debug.log*
+
+# Prisma
+packages/db/prisma/dev.db
+
+# Editor / OS
+.DS_Store
+.vscode/

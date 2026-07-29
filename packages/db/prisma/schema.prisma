@@ -1,0 +1,160 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Um Tenant = um negócio cliente da Dilon Tech (ex: Believe Cosméticos).
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  users         User[]
+  sessions      WhatsAppSession[]
+  contacts      Contact[]
+  conversations Conversation[]
+}
+
+enum UserRole {
+  OWNER
+  AGENT
+}
+
+model User {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         UserRole @default(AGENT)
+  createdAt    DateTime @default(now())
+
+  assignedConversations Conversation[] @relation("AssignedAgent")
+
+  @@index([tenantId])
+}
+
+enum SessionStatus {
+  PENDING_QR   // sessão criada, aguardando o dono escanear o QR Code
+  CONNECTED
+  DISCONNECTED // caiu, worker vai tentar reconectar sozinho
+  LOGGED_OUT   // usuário deslogou pelo celular, precisa parear de novo
+}
+
+// Uma sessão = uma conexão Baileys ativa para um número de WhatsApp de um tenant.
+// Fase 0: um tenant tem no máximo uma sessão. O schema já permite mais de uma
+// (para quando um negócio tiver múltiplos números conectados).
+model WhatsAppSession {
+  id            String        @id @default(cuid())
+  tenantId      String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  label         String        @default("Principal")
+  phoneNumber   String? // preenchido depois de conectar, formato E.164
+  status        SessionStatus @default(PENDING_QR)
+  qrCode        String? // QR atual em base64 (Fase 0: worker escreve, web lê via polling)
+  lastConnectedAt DateTime?
+  lastError     String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  authCreds String? @db.Text // credenciais Baileys (creds.json equivalente), serializado com BufferJSON
+  signalKeys WhatsAppSignalKey[]
+  conversations Conversation[]
+  messages      Message[]
+
+  @@index([tenantId])
+}
+
+// Chaves de sinal (Signal Protocol) do Baileys — cada uma é uma linha própria
+// em vez de um blob único, senão toda sessão vira um único JSON gigante que
+// cresce sem parar e nunca dá pra limpar entrada por entrada.
+model WhatsAppSignalKey {
+  id        String          @id @default(cuid())
+  sessionId String
+  session   WhatsAppSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  category  String // ex: "app-state-sync-key", "session", "pre-key"
+  keyId     String
+  value     String?         @db.Text // null = chave removida, serializado com BufferJSON
+  updatedAt DateTime        @updatedAt
+
+  @@unique([sessionId, category, keyId])
+  @@index([sessionId, category])
+}
+
+// Um contato de WhatsApp dentro de um tenant (o mesmo número em tenants
+// diferentes é uma linha diferente — não há dado compartilhado entre negócios).
+model Contact {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  waJid       String // ex: 5511999999999@s.whatsapp.net
+  name        String?
+  createdAt   DateTime @default(now())
+
+  conversations Conversation[]
+
+  @@unique([tenantId, waJid])
+  @@index([tenantId])
+}
+
+enum ConversationStatus {
+  OPEN
+  PENDING
+  RESOLVED
+}
+
+model Conversation {
+  id        String              @id @default(cuid())
+  tenantId  String
+  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   WhatsAppSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status    ConversationStatus  @default(OPEN)
+  assignedToId String?
+  assignedTo   User?            @relation("AssignedAgent", fields: [assignedToId], references: [id])
+  lastMessageAt DateTime        @default(now())
+  createdAt DateTime            @default(now())
+
+  messages Message[]
+
+  @@index([tenantId, status])
+  @@index([sessionId])
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageStatus {
+  PENDING   // outbound, ainda não enviada pelo worker
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+model Message {
+  id             String            @id @default(cuid())
+  conversationId String
+  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sessionId      String
+  session        WhatsAppSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  direction      MessageDirection
+  status         MessageStatus     @default(SENT)
+  body           String
+  waMessageId    String? // id da mensagem no WhatsApp, útil para status de entrega
+  errorMessage   String?
+  createdAt      DateTime          @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([sessionId, status]) // worker consulta PENDING por sessão
+}
