@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
+import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatPhone, formatTime, PIPELINE_STAGES, type ContactRef, type PipelineStage } from "@/lib/contact";
 
@@ -444,29 +445,20 @@ function ConversationThread({
   );
 }
 
-const EMOJIS = [
-  "😀", "😁", "😂", "🤣", "😊", "🙂", "😉", "😍", "😘", "😎",
-  "🤔", "😅", "😢", "😭", "😡", "🥳", "😴", "🤝", "🙏", "👏",
-  "👍", "👎", "💪", "✌️", "🤞", "❤️", "💚", "💙", "💛", "🧡",
-  "🔥", "✨", "🎉", "🎁", "⭐", "✅", "❌", "⚠️", "⏰", "📌",
-  "💰", "💳", "🛍️", "📦", "🚚", "📅", "📍", "📞", "💬", "🙌",
-];
-
 function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-10" onClick={onClose} />
-      <div className="absolute bottom-full left-4 mb-2 z-20 w-72 max-h-48 overflow-y-auto rounded-lg border border-neutral-200 bg-white p-2 shadow-lg grid grid-cols-8 gap-1">
-        {EMOJIS.map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            onClick={() => onPick(emoji)}
-            className="text-xl rounded hover:bg-neutral-100 py-1"
-          >
-            {emoji}
-          </button>
-        ))}
+      <div className="absolute bottom-full left-4 mb-2 z-20">
+        <EmojiPickerReact
+          onEmojiClick={(data) => onPick(data.emoji)}
+          emojiStyle={EmojiStyle.NATIVE}
+          searchPlaceHolder="Pesquisar"
+          previewConfig={{ showPreview: false }}
+          width={320}
+          height={380}
+          lazyLoadEmojis
+        />
       </div>
     </>
   );
