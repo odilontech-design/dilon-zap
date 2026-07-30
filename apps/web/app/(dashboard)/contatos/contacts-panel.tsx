@@ -33,21 +33,59 @@ export function ContactsPanel() {
   });
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<PipelineStage | "">("");
+  const [dupeOnly, setDupeOnly] = useState(false);
   const [editing, setEditing] = useState<Contact | "new" | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Duas pistas fracas, mas úteis juntas: mesmo número digitado (pega
+  // reimportação por engano) e mesmo nome (pega o caso de um contato com
+  // privacidade de número — @lid — cadastrado com o nome que já existia).
+  // Nenhuma das duas pega TODO caso real, mas cobrem a maioria.
+  const duplicateReasons = useMemo(() => {
+    const reasons = new Map<string, string>();
+    if (!contacts) return reasons;
+
+    const byDigits = new Map<string, Contact[]>();
+    const byName = new Map<string, Contact[]>();
+
+    for (const c of contacts) {
+      const digits = c.waJid.split("@")[0];
+      byDigits.set(digits, [...(byDigits.get(digits) ?? []), c]);
+
+      if (c.name) {
+        const normalized = c.name.trim().toLowerCase();
+        byName.set(normalized, [...(byName.get(normalized) ?? []), c]);
+      }
+    }
+
+    for (const group of byDigits.values()) {
+      if (group.length < 2) continue;
+      for (const c of group) reasons.set(c.id, "mesmo número");
+    }
+    for (const group of byName.values()) {
+      if (group.length < 2) continue;
+      for (const c of group) {
+        const existing = reasons.get(c.id);
+        reasons.set(c.id, existing ? "mesmo número e nome" : "nome igual a outro contato");
+      }
+    }
+
+    return reasons;
+  }, [contacts]);
 
   const filtered = useMemo(() => {
     if (!contacts) return undefined;
     const term = search.trim().toLowerCase();
     return contacts.filter((c) => {
+      if (dupeOnly && !duplicateReasons.has(c.id)) return false;
       if (stageFilter && c.pipelineStage !== stageFilter) return false;
       if (!term) return true;
       return (
         contactLabel(c).toLowerCase().includes(term) || formatPhone(c.waJid).includes(term)
       );
     });
-  }, [contacts, search, stageFilter]);
+  }, [contacts, search, stageFilter, dupeOnly, duplicateReasons]);
 
   async function handleStartConversation(contact: Contact) {
     const res = await fetch(`/api/contacts/${contact.id}/start-conversation`, { method: "POST" });
@@ -180,6 +218,12 @@ export function ContactsPanel() {
             </option>
           ))}
         </select>
+        {duplicateReasons.size > 0 && (
+          <label className="flex items-center gap-1.5 text-xs text-amber-700">
+            <input type="checkbox" checked={dupeOnly} onChange={(e) => setDupeOnly(e.target.checked)} />
+            Só possíveis duplicatas ({duplicateReasons.size})
+          </label>
+        )}
       </div>
 
       <div className="rounded-lg border border-neutral-200 bg-white overflow-x-auto">
@@ -207,7 +251,14 @@ export function ContactsPanel() {
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">
                     <Avatar contact={c} size={28} />
-                    <span className="font-medium">{contactLabel(c)}</span>
+                    <div>
+                      <span className="font-medium">{contactLabel(c)}</span>
+                      {duplicateReasons.has(c.id) && (
+                        <p className="text-[10px] text-amber-700" title="Confira se não é o mesmo contato duas vezes">
+                          ⚠ possível duplicata — {duplicateReasons.get(c.id)}
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </td>
                 <td className="px-4 py-2.5 text-neutral-600">{formatPhone(c.waJid)}</td>
