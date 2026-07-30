@@ -25,3 +25,17 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   return NextResponse.json(updated);
 }
+
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const user = await requireUser();
+
+  const contact = await prisma.contact.findFirst({
+    where: { id: params.id, tenantId: user.tenantId },
+  });
+  if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  // onDelete: Cascade no schema cuida de apagar junto as conversas e mensagens desse contato.
+  await prisma.contact.delete({ where: { id: contact.id } });
+
+  return NextResponse.json({ ok: true });
+}

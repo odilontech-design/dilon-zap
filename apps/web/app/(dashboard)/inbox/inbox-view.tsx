@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
+import { Avatar } from "@/components/avatar";
+import { contactLabel, formatPhone, formatTime, PIPELINE_STAGES, type ContactRef, type PipelineStage } from "@/lib/contact";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
-type PipelineStage = "NOVO_LEAD" | "EM_CONTATO" | "PROPOSTA_ENVIADA" | "FECHADO" | "PERDIDO";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
-
-type ContactRef = { id: string; name: string | null; waJid: string; avatarUrl: string | null };
 
 type ConversationSummary = {
   id: string;
@@ -52,56 +52,9 @@ const STATUS_ACTION_LABEL: Record<ConversationStatus, string> = {
   RESOLVED: "Resolver",
 };
 
-const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
-  { key: "NOVO_LEAD", label: "Novo lead" },
-  { key: "EM_CONTATO", label: "Em contato" },
-  { key: "PROPOSTA_ENVIADA", label: "Proposta enviada" },
-  { key: "FECHADO", label: "Fechado" },
-  { key: "PERDIDO", label: "Perdido" },
-];
-
-function contactLabel(contact: { name: string | null; waJid: string }) {
-  return contact.name ?? contact.waJid.replace("@s.whatsapp.net", "");
-}
-
-function formatPhone(waJid: string) {
-  return waJid.replace("@s.whatsapp.net", "").replace("@lid", "");
-}
-
-function formatTime(iso: string) {
-  return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-}
-
-function Avatar({ contact, size = 36 }: { contact: ContactRef; size?: number }) {
-  const [broken, setBroken] = useState(false);
-  const label = contactLabel(contact);
-
-  if (contact.avatarUrl && !broken) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element -- foto vem de um CDN do WhatsApp, domínio não é fixo
-      <img
-        src={contact.avatarUrl}
-        alt={label}
-        width={size}
-        height={size}
-        onError={() => setBroken(true)}
-        className="rounded-full object-cover shrink-0"
-        style={{ width: size, height: size }}
-      />
-    );
-  }
-
-  return (
-    <div
-      className="rounded-full bg-accent/15 text-accent flex items-center justify-center font-medium shrink-0"
-      style={{ width: size, height: size, fontSize: size * 0.4 }}
-    >
-      {label.charAt(0).toUpperCase()}
-    </div>
-  );
-}
-
 export function InboxView() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [tab, setTab] = useState<ConversationStatus>("OPEN");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: conversations, mutate: mutateList } = useSWR<ConversationSummary[]>(
@@ -109,6 +62,21 @@ export function InboxView() {
     fetcher,
     { refreshInterval: 3000 }
   );
+
+  // Vindo de "Conversar" na tela de Contatos: abre direto a conversa criada,
+  // na aba certa pro status dela, sem precisar procurar na lista.
+  useEffect(() => {
+    const openId = searchParams.get("open");
+    if (!openId) return;
+
+    fetcher(`/api/conversations/${openId}`).then((conversation: ConversationDetail) => {
+      if (!conversation?.id) return;
+      setTab(conversation.status);
+      setSelectedId(conversation.id);
+    });
+    router.replace("/inbox");
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só na primeira renderização, com o ?open= inicial
+  }, []);
 
   return (
     <div className="flex h-screen">
