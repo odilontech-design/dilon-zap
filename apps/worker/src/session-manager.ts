@@ -13,8 +13,14 @@ const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
 // Uma entrada por sessão ativa nesta instância do worker. Evita abrir duas
 // conexões Baileys pro mesmo número se o loop de polling rodar de novo antes
-// da conexão anterior terminar de subir.
-const activeSessions = new Map<string, { stop: () => void }>();
+// da conexão anterior terminar de subir. Guarda o socket + tenantId também,
+// pra dar pro servidor HTTP interno resolver JID (ver http-server.ts).
+type ActiveSession = {
+  stop: () => void;
+  socket: ReturnType<typeof makeWASocket> | null;
+  tenantId: string;
+};
+const activeSessions = new Map<string, ActiveSession>();
 
 const OUTBOX_POLL_INTERVAL_MS = 2_000;
 const NEW_SESSION_POLL_INTERVAL_MS = 5_000;
@@ -23,11 +29,25 @@ export function isSessionActive(sessionId: string) {
   return activeSessions.has(sessionId);
 }
 
+/** Usado pelo servidor HTTP interno pra achar a conexão ativa de um tenant. */
+export function getSocketForTenant(tenantId: string) {
+  for (const entry of activeSessions.values()) {
+    if (entry.tenantId === tenantId && entry.socket) return entry.socket;
+  }
+  return null;
+}
+
 export async function startSession(sessionId: string) {
   if (activeSessions.has(sessionId)) return;
 
+  const sessionRow = await prisma.whatsAppSession.findUniqueOrThrow({
+    where: { id: sessionId },
+    select: { tenantId: true },
+  });
+
   let stopped = false;
-  activeSessions.set(sessionId, { stop: () => (stopped = true) });
+  const entry: ActiveSession = { stop: () => (stopped = true), socket: null, tenantId: sessionRow.tenantId };
+  activeSessions.set(sessionId, entry);
 
   const { state, saveCreds } = await usePostgresAuthState(sessionId);
   const { version } = await fetchLatestBaileysVersion();
@@ -40,6 +60,7 @@ export async function startSession(sessionId: string) {
     // Fase 0: um número por tenant, throttling de disparo em massa entra na
     // fase de Campanhas — aqui só garantimos que a conexão em si é estável.
   });
+  entry.socket = socket;
 
   socket.ev.on("creds.update", saveCreds);
 

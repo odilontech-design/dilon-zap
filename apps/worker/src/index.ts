@@ -10,10 +10,12 @@ async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
   const { syncSessions, watchForNewSessions } = await import("./session-manager");
+  const { startInternalServer } = await import("./http-server");
 
   console.log("[dilon-zap worker] iniciando...");
   await syncSessions();
   watchForNewSessions();
+  startInternalServer();
   console.log("[dilon-zap worker] no ar, observando sessões a cada 5s.");
 }
 

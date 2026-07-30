@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { upsertContactByPhone } from "@/lib/contact-server";
 
 export async function GET() {
   const user = await requireUser();
@@ -34,13 +35,8 @@ export async function POST(req: Request) {
 
   const digits = parsed.data.phone.replace(/\D/g, "");
   if (!digits) return NextResponse.json({ error: "telefone inválido" }, { status: 400 });
-  const waJid = `${digits}@s.whatsapp.net`;
 
-  const contact = await prisma.contact.upsert({
-    where: { tenantId_waJid: { tenantId: user.tenantId, waJid } },
-    create: { tenantId: user.tenantId, waJid, name: parsed.data.name || null },
-    update: parsed.data.name ? { name: parsed.data.name } : {},
-  });
+  const { contact } = await upsertContactByPhone(user.tenantId, digits, parsed.data.name);
 
   return NextResponse.json(contact);
 }
