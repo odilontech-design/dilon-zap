@@ -175,9 +175,11 @@ function ConversationThread({
 }) {
   const [draft, setDraft] = useState("");
   const [showContact, setShowContact] = useState(false);
+  const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const draftInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const { data: conversation, mutate: mutateConversation } = useSWR<ConversationDetail>(
@@ -199,6 +201,18 @@ function ConversationThread({
     });
     mutateConversation();
     onChanged();
+  }
+
+  function insertEmoji(emoji: string) {
+    const input = draftInputRef.current;
+    const start = input?.selectionStart ?? draft.length;
+    const end = input?.selectionEnd ?? draft.length;
+    const next = draft.slice(0, start) + emoji + draft.slice(end);
+    setDraft(next);
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
   }
 
   async function handleSend(e: React.FormEvent) {
@@ -358,7 +372,10 @@ function ConversationThread({
             </div>
           ))}
         </div>
-        <form onSubmit={handleSend} className="border-t border-neutral-200 p-4 flex gap-2 items-center">
+        <form onSubmit={handleSend} className="relative border-t border-neutral-200 p-4 flex gap-2 items-center">
+          {showEmoji && (
+            <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
+          )}
           <input
             ref={fileInputRef}
             type="file"
@@ -369,6 +386,15 @@ function ConversationThread({
               e.target.value = "";
             }}
           />
+          <button
+            type="button"
+            onClick={() => setShowEmoji((v) => !v)}
+            disabled={uploading || recording}
+            title="Emoji"
+            className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+          >
+            😊
+          </button>
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -388,6 +414,7 @@ function ConversationThread({
             {recording ? "⏹" : "🎤"}
           </button>
           <input
+            ref={draftInputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder={uploading ? "Enviando anexo..." : recording ? "Gravando áudio..." : "Escreva uma mensagem..."}
@@ -414,6 +441,34 @@ function ConversationThread({
         />
       )}
     </div>
+  );
+}
+
+const EMOJIS = [
+  "😀", "😁", "😂", "🤣", "😊", "🙂", "😉", "😍", "😘", "😎",
+  "🤔", "😅", "😢", "😭", "😡", "🥳", "😴", "🤝", "🙏", "👏",
+  "👍", "👎", "💪", "✌️", "🤞", "❤️", "💚", "💙", "💛", "🧡",
+  "🔥", "✨", "🎉", "🎁", "⭐", "✅", "❌", "⚠️", "⏰", "📌",
+  "💰", "💳", "🛍️", "📦", "🚚", "📅", "📍", "📞", "💬", "🙌",
+];
+
+function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
+  return (
+    <>
+      <div className="fixed inset-0 z-10" onClick={onClose} />
+      <div className="absolute bottom-full left-4 mb-2 z-20 w-72 max-h-48 overflow-y-auto rounded-lg border border-neutral-200 bg-white p-2 shadow-lg grid grid-cols-8 gap-1">
+        {EMOJIS.map((emoji) => (
+          <button
+            key={emoji}
+            type="button"
+            onClick={() => onPick(emoji)}
+            className="text-xl rounded hover:bg-neutral-100 py-1"
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }
 
