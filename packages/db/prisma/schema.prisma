@@ -187,6 +187,12 @@ enum MessageStatus {
   FAILED
 }
 
+enum MediaType {
+  AUDIO
+  IMAGE
+  DOCUMENT
+}
+
 model Message {
   id             String            @id @default(cuid())
   conversationId String
@@ -195,10 +201,16 @@ model Message {
   session        WhatsAppSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   direction      MessageDirection
   status         MessageStatus     @default(SENT)
-  body           String
+  body           String // legenda/texto — pode ser vazio quando é só mídia
   waMessageId    String? // id da mensagem no WhatsApp, útil para status de entrega
   errorMessage   String?
   createdAt      DateTime          @default(now())
+
+  mediaType         MediaType?
+  mediaKey          String?  // chave do objeto no bucket R2
+  mediaMimeType     String?
+  mediaFileName     String?  // nome original, relevante pra DOCUMENT
+  mediaDurationSeconds Int?  // relevante pra AUDIO
 
   @@index([conversationId, createdAt])
   @@index([sessionId, status]) // worker consulta PENDING por sessão

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
@@ -28,12 +28,18 @@ type ConversationDetail = {
   assignedTo: { id: string; name: string } | null;
 };
 
+type MediaType = "AUDIO" | "IMAGE" | "DOCUMENT";
+
 type Message = {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
   status: MessageStatus;
   body: string;
   createdAt: string;
+  mediaType: MediaType | null;
+  mediaMimeType: string | null;
+  mediaFileName: string | null;
+  mediaDurationSeconds: number | null;
 };
 
 type TenantUser = { id: string; name: string };
@@ -169,6 +175,11 @@ function ConversationThread({
 }) {
   const [draft, setDraft] = useState("");
   const [showContact, setShowContact] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordedChunksRef = useRef<Blob[]>([]);
   const { data: conversation, mutate: mutateConversation } = useSWR<ConversationDetail>(
     `/api/conversations/${conversationId}`,
     fetcher
@@ -200,6 +211,53 @@ function ConversationThread({
       body: JSON.stringify({ conversationId, text: draft }),
     });
     mutateMessages();
+  }
+
+  async function uploadAndSend(file: File) {
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      form.append("conversationId", conversationId);
+      const uploadRes = await fetch("/api/messages/attachments", { method: "POST", body: form });
+      if (!uploadRes.ok) {
+        const body = await uploadRes.json();
+        alert(typeof body.error === "string" ? body.error : "não deu pra enviar o anexo");
+        return;
+      }
+      const media = await uploadRes.json();
+      await fetch("/api/messages/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, media }),
+      });
+      mutateMessages();
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function startRecording() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const recorder = new MediaRecorder(stream);
+    recordedChunksRef.current = [];
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) recordedChunksRef.current.push(e.data);
+    };
+    recorder.onstop = () => {
+      stream.getTracks().forEach((track) => track.stop());
+      const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+      const ext = blob.type.includes("ogg") ? "ogg" : "webm";
+      uploadAndSend(new File([blob], `audio.${ext}`, { type: blob.type }));
+    };
+    recorder.start();
+    mediaRecorderRef.current = recorder;
+    setRecording(true);
+  }
+
+  function stopRecording() {
+    mediaRecorderRef.current?.stop();
+    setRecording(false);
   }
 
   async function handleBlock() {
@@ -277,7 +335,8 @@ function ConversationThread({
                   : "self-start bg-neutral-100 text-neutral-900"
               }`}
             >
-              <p className="whitespace-pre-wrap">{m.body}</p>
+              {m.mediaType && <MessageMedia message={m} />}
+              {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
               <div
                 className={`flex items-center gap-1 justify-end mt-1 text-[10px] ${
                   m.direction === "OUTBOUND" ? "text-white/75" : "text-neutral-400"
@@ -299,16 +358,46 @@ function ConversationThread({
             </div>
           ))}
         </div>
-        <form onSubmit={handleSend} className="border-t border-neutral-200 p-4 flex gap-2">
+        <form onSubmit={handleSend} className="border-t border-neutral-200 p-4 flex gap-2 items-center">
+          <input
+            ref={fileInputRef}
+            type="file"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) uploadAndSend(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || recording}
+            title="Anexar imagem, áudio ou arquivo"
+            className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+          >
+            📎
+          </button>
+          <button
+            type="button"
+            onClick={recording ? stopRecording : startRecording}
+            disabled={uploading}
+            title={recording ? "Parar gravação" : "Gravar áudio"}
+            className={`text-lg px-1 disabled:opacity-40 ${recording ? "text-red-600" : "text-neutral-500 hover:text-accent"}`}
+          >
+            {recording ? "⏹" : "🎤"}
+          </button>
           <input
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
-            placeholder="Escreva uma mensagem..."
-            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            placeholder={uploading ? "Enviando anexo..." : recording ? "Gravando áudio..." : "Escreva uma mensagem..."}
+            disabled={uploading || recording}
+            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
           />
           <button
             type="submit"
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+            disabled={uploading || recording}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             Enviar
           </button>
@@ -325,6 +414,36 @@ function ConversationThread({
         />
       )}
     </div>
+  );
+}
+
+function MessageMedia({ message }: { message: Message }) {
+  const src = `/api/messages/${message.id}/media`;
+
+  if (message.mediaType === "AUDIO") {
+    return (
+      <audio controls preload="none" src={src} className="max-w-full mb-1" style={{ height: 36 }}>
+        Seu navegador não suporta áudio.
+      </audio>
+    );
+  }
+
+  if (message.mediaType === "IMAGE") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- vem via redirect assinado do R2, sem domínio fixo
+      <img src={src} alt={message.body || "imagem"} className="max-w-full rounded-md mb-1" />
+    );
+  }
+
+  return (
+    <a
+      href={src}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center gap-2 rounded-md border border-current/20 px-2.5 py-2 mb-1 text-sm hover:opacity-80"
+    >
+      📄 {message.mediaFileName ?? "arquivo"}
+    </a>
   );
 }
 

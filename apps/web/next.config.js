@@ -7,7 +7,7 @@ require("dotenv").config({ path: path.resolve(__dirname, "../../.env") });
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@dilon-zap/db"],
+  transpilePackages: ["@dilon-zap/db", "@dilon-zap/storage"],
 };
 
 module.exports = nextConfig;

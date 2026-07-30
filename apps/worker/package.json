@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@dilon-zap/db": "*",
+    "@dilon-zap/storage": "*",
     "@whiskeysockets/baileys": "^6.7.9",
     "@hapi/boom": "^10.0.1",
     "dotenv": "^16.4.5",

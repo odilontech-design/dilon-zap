@@ -3,13 +3,28 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 
-const bodySchema = z.object({
-  conversationId: z.string(),
-  text: z.string().min(1).max(4096),
+const mediaSchema = z.object({
+  mediaKey: z.string(),
+  mediaType: z.enum(["AUDIO", "IMAGE", "DOCUMENT"]),
+  mediaMimeType: z.string(),
+  mediaFileName: z.string().optional(),
+  durationSeconds: z.number().int().positive().optional(),
 });
+
+const bodySchema = z
+  .object({
+    conversationId: z.string(),
+    text: z.string().max(4096).optional(),
+    media: mediaSchema.optional(),
+  })
+  .refine((v) => (v.text && v.text.trim().length > 0) || v.media, {
+    message: "mensagem precisa de texto ou anexo",
+  });
 
 // Só cria a mensagem como PENDING — quem efetivamente manda pro WhatsApp é o
 // worker, que fica varrendo a fila (ver apps/worker/src/session-manager.ts).
+// O anexo já foi subido pro R2 antes (ver /api/messages/attachments) — aqui
+// só referenciamos a mediaKey.
 export async function POST(req: Request) {
   const user = await requireUser();
   const parsed = bodySchema.safeParse(await req.json());
@@ -26,7 +41,12 @@ export async function POST(req: Request) {
       sessionId: conversation.sessionId,
       direction: "OUTBOUND",
       status: "PENDING",
-      body: parsed.data.text,
+      body: parsed.data.text ?? "",
+      mediaType: parsed.data.media?.mediaType,
+      mediaKey: parsed.data.media?.mediaKey,
+      mediaMimeType: parsed.data.media?.mediaMimeType,
+      mediaFileName: parsed.data.media?.mediaFileName,
+      mediaDurationSeconds: parsed.data.media?.durationSeconds,
     },
   });
 

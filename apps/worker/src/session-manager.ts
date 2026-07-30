@@ -1,12 +1,16 @@
 import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
+  downloadMediaMessage,
   WAMessageStatus,
+  type proto,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 import pino from "pino";
+import { randomUUID } from "node:crypto";
 import { prisma } from "@dilon-zap/db";
+import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
@@ -117,12 +121,22 @@ export async function startSession(sessionId: string) {
     for (const msg of messages) {
       if (msg.key.fromMe) continue;
       const waJid = msg.key.remoteJid;
-      const text =
-        msg.message?.conversation ?? msg.message?.extendedTextMessage?.text ?? null;
+      if (!waJid) continue;
 
-      if (!waJid || !text) continue; // Fase 0: só texto. Mídia entra depois.
+      const content = await extractInboundContent(msg, socket).catch((err) => {
+        logger.error({ err }, "falha ao baixar mídia recebida");
+        return null;
+      });
+      if (!content) continue;
 
-      await recordInboundMessage({ sessionId, waJid, text, waMessageId: msg.key.id ?? undefined, socket });
+      await recordInboundMessage({
+        sessionId,
+        waJid,
+        text: content.text,
+        media: content.media,
+        waMessageId: msg.key.id ?? undefined,
+        socket,
+      });
     }
   });
 
@@ -163,10 +177,75 @@ function mapReceiptStatus(waStatus: number): "SENT" | "DELIVERED" | "READ" | "FA
   }
 }
 
+type InboundMedia = {
+  type: "AUDIO" | "IMAGE" | "DOCUMENT";
+  buffer: Buffer;
+  mimeType: string;
+  fileName?: string;
+  durationSeconds?: number;
+};
+
+// Detecta o tipo de conteúdo da mensagem e baixa a mídia (já descriptografada
+// pelo Baileys) quando aplicável. Mensagem sem texto e sem mídia reconhecida
+// (figurinha, localização, enquete etc.) volta null e é ignorada por ora.
+async function extractInboundContent(
+  msg: proto.IWebMessageInfo,
+  socket: ReturnType<typeof makeWASocket>
+): Promise<{ text: string; media?: InboundMedia } | null> {
+  const m = msg.message;
+  if (!m) return null;
+
+  const plainText = m.conversation ?? m.extendedTextMessage?.text ?? "";
+  const downloadOpts = { logger, reuploadRequest: socket.updateMediaMessage };
+
+  if (m.audioMessage) {
+    const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
+    return {
+      text: plainText,
+      media: {
+        type: "AUDIO",
+        buffer,
+        mimeType: m.audioMessage.mimetype ?? "audio/ogg",
+        durationSeconds: m.audioMessage.seconds ?? undefined,
+      },
+    };
+  }
+
+  if (m.imageMessage) {
+    const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
+    return {
+      text: m.imageMessage.caption ?? plainText,
+      media: { type: "IMAGE", buffer, mimeType: m.imageMessage.mimetype ?? "image/jpeg" },
+    };
+  }
+
+  if (m.documentMessage) {
+    const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
+    return {
+      text: m.documentMessage.caption ?? plainText,
+      media: {
+        type: "DOCUMENT",
+        buffer,
+        mimeType: m.documentMessage.mimetype ?? "application/octet-stream",
+        fileName: m.documentMessage.fileName ?? undefined,
+      },
+    };
+  }
+
+  if (!plainText) return null;
+  return { text: plainText };
+}
+
+function extensionFromMime(mimeType: string): string {
+  const subtype = mimeType.split(";")[0]?.split("/")[1] ?? "bin";
+  return `.${subtype.replace("+xml", "")}`;
+}
+
 async function recordInboundMessage(params: {
   sessionId: string;
   waJid: string;
   text: string;
+  media?: InboundMedia;
   waMessageId?: string;
   socket: ReturnType<typeof makeWASocket>;
 }) {
@@ -206,6 +285,30 @@ async function recordInboundMessage(params: {
         },
       });
 
+  let mediaFields: Partial<{
+    mediaType: "AUDIO" | "IMAGE" | "DOCUMENT";
+    mediaKey: string;
+    mediaMimeType: string;
+    mediaFileName: string;
+    mediaDurationSeconds: number;
+  }> = {};
+
+  if (params.media) {
+    if (isStorageConfigured()) {
+      const key = `${session.tenantId}/${conversation.id}/${randomUUID()}${extensionFromMime(params.media.mimeType)}`;
+      await uploadMedia(key, params.media.buffer, params.media.mimeType);
+      mediaFields = {
+        mediaType: params.media.type,
+        mediaKey: key,
+        mediaMimeType: params.media.mimeType,
+        mediaFileName: params.media.fileName,
+        mediaDurationSeconds: params.media.durationSeconds,
+      };
+    } else {
+      logger.warn("mídia recebida mas R2 não está configurado (.env) — só a legenda/texto foi salva");
+    }
+  }
+
   await prisma.message.create({
     data: {
       conversationId: conversation.id,
@@ -214,6 +317,7 @@ async function recordInboundMessage(params: {
       status: "DELIVERED",
       body: params.text,
       waMessageId: params.waMessageId,
+      ...mediaFields,
     },
   });
 
@@ -270,6 +374,38 @@ async function maybeAutoReply(params: {
   });
 }
 
+// Baixa a mídia do R2 e manda pro WhatsApp no formato certo pro tipo. Áudio
+// sempre como nota de voz (ptt) — é o formato que casa com o player estilo
+// WhatsApp que a gente mostra no inbox.
+async function sendOutboundMedia(
+  socket: ReturnType<typeof makeWASocket>,
+  jid: string,
+  message: {
+    mediaType: string | null;
+    mediaKey: string | null;
+    mediaMimeType: string | null;
+    mediaFileName: string | null;
+    body: string;
+  }
+) {
+  if (!message.mediaKey) throw new Error("mensagem marcada como mídia mas sem mediaKey");
+  const buffer = await downloadMedia(message.mediaKey);
+  const mimetype = message.mediaMimeType ?? undefined;
+
+  if (message.mediaType === "AUDIO") {
+    return socket.sendMessage(jid, { audio: buffer, mimetype: mimetype ?? "audio/ogg; codecs=opus", ptt: true });
+  }
+  if (message.mediaType === "IMAGE") {
+    return socket.sendMessage(jid, { image: buffer, mimetype, caption: message.body || undefined });
+  }
+  return socket.sendMessage(jid, {
+    document: buffer,
+    mimetype: mimetype ?? "application/octet-stream",
+    fileName: message.mediaFileName ?? "arquivo",
+    caption: message.body || undefined,
+  });
+}
+
 // Fase 0 mantém a fila simples de propósito: sem Redis/BullMQ ainda, o
 // worker só varre mensagens PENDING da própria sessão a cada 2s. Isso já
 // resolve o caso de uso (1 atendente respondendo), e a fila de verdade com
@@ -304,9 +440,11 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
       }
 
       try {
-        const sent = await socket.sendMessage(message.conversation.contact.waJid, {
-          text: message.body,
-        });
+        const jid = message.conversation.contact.waJid;
+        const sent = message.mediaType && message.mediaKey
+          ? await sendOutboundMedia(socket, jid, message)
+          : await socket.sendMessage(jid, { text: message.body });
+
         await prisma.message.update({
           where: { id: message.id },
           data: { status: "SENT", waMessageId: sent?.key.id ?? undefined },
