@@ -138,6 +138,7 @@ export async function startSession(sessionId: string) {
         text: content.text,
         media: content.media,
         waMessageId: msg.key.id ?? undefined,
+        pushName: msg.pushName ?? undefined,
         socket,
       });
     }
@@ -163,9 +164,9 @@ export async function startSession(sessionId: string) {
   // um número novo, e às vezes um resumo de "o que rolou enquanto eu tava
   // offline" em reconexões. Sem esse listener, o Inbox só teria conversa
   // a partir do momento em que o worker ligou.
-  socket.ev.on("messaging-history.set", async ({ messages, isLatest }) => {
+  socket.ev.on("messaging-history.set", async ({ messages, contacts, isLatest }) => {
     try {
-      await importHistoricalMessages(sessionId, messages, socket);
+      await importHistoricalMessages(sessionId, messages, contacts, socket);
     } catch (err) {
       logger.error({ err }, "falha ao importar histórico do WhatsApp");
     }
@@ -265,6 +266,7 @@ async function recordInboundMessage(params: {
   text: string;
   media?: InboundMedia;
   waMessageId?: string;
+  pushName?: string;
   socket: ReturnType<typeof makeWASocket>;
 }) {
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
@@ -274,7 +276,7 @@ async function recordInboundMessage(params: {
 
   const contact = await prisma.contact.upsert({
     where: { tenantId_waJid: { tenantId: session.tenantId, waJid: params.waJid } },
-    create: { tenantId: session.tenantId, waJid: params.waJid },
+    create: { tenantId: session.tenantId, waJid: params.waJid, name: params.pushName },
     update: {},
   });
 
@@ -358,6 +360,7 @@ async function recordInboundMessage(params: {
 async function importHistoricalMessages(
   sessionId: string,
   messages: proto.IWebMessageInfo[],
+  historyContacts: Array<{ id?: string | null; name?: string | null; notify?: string | null }> | undefined,
   socket: ReturnType<typeof makeWASocket>
 ) {
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
@@ -365,12 +368,30 @@ async function importHistoricalMessages(
     select: { tenantId: true },
   });
 
+  // WhatsApp manda o nome salvo/pushName num payload separado das mensagens
+  // — sem isso o contato fica só com o JID (o bug que apareceu no primeiro
+  // teste de importação).
+  const nameByJid = new Map<string, string>();
+  for (const c of historyContacts ?? []) {
+    const name = c.name || c.notify;
+    if (c.id && name) nameByJid.set(c.id, name);
+  }
+
   const candidates = messages.filter((msg) => {
     const jid = msg.key.remoteJid;
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast") return false;
     return !!msg.message && !!msg.key.id;
   });
   if (candidates.length === 0) return;
+
+  // Fallback pro nome: quando não veio no payload de contatos, cada mensagem
+  // recebida carrega o pushName de quem mandou.
+  for (const msg of candidates) {
+    const jid = msg.key.remoteJid!;
+    if (!msg.key.fromMe && msg.pushName && !nameByJid.has(jid)) {
+      nameByJid.set(jid, msg.pushName);
+    }
+  }
 
   const existing = await prisma.message.findMany({
     where: { sessionId, waMessageId: { in: candidates.map((m) => m.key.id as string) } },
@@ -388,11 +409,15 @@ async function importHistoricalMessages(
     const waJid = msg.key.remoteJid!;
     if (conversationByJid.has(waJid)) continue;
 
+    const resolvedName = nameByJid.get(waJid);
     const contact = await prisma.contact.upsert({
       where: { tenantId_waJid: { tenantId: session.tenantId, waJid } },
-      create: { tenantId: session.tenantId, waJid },
+      create: { tenantId: session.tenantId, waJid, name: resolvedName },
       update: {},
     });
+    if (!contact.name && resolvedName) {
+      await prisma.contact.update({ where: { id: contact.id }, data: { name: resolvedName } });
+    }
     if (!contact.avatarUrl) {
       fetchAndSaveAvatar(socket, contact.id, waJid).catch(() => {});
     }
@@ -420,6 +445,7 @@ async function importHistoricalMessages(
       body: extractHistoricalText(msg),
       waMessageId: msg.key.id as string,
       createdAt: timestamp,
+      readAt: timestamp, // histórico entra como já lido, não é mensagem nova
     };
   });
 
@@ -536,50 +562,58 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
   const tick = async () => {
     if (isStopped()) return;
 
-    const pending = await prisma.message.findMany({
-      where: { sessionId, direction: "OUTBOUND", status: "PENDING" },
-      orderBy: { createdAt: "asc" },
-      take: 5,
-      include: { conversation: { include: { contact: true } } },
-    });
-
-    for (const message of pending) {
-      const blocked = await prisma.contactBlock.findUnique({
-        where: {
-          tenantId_waJid: {
-            tenantId: message.conversation.tenantId,
-            waJid: message.conversation.contact.waJid,
-          },
-        },
+    // Try/finally garante que o polling continua mesmo se o Postgres soltar
+    // a conexão no meio (comum em provedores serverless tipo Neon depois de
+    // ociosidade) — sem isso, um erro aqui parava a fila pra sempre sem
+    // avisar ninguém, e derrubava o processo do worker inteiro.
+    try {
+      const pending = await prisma.message.findMany({
+        where: { sessionId, direction: "OUTBOUND", status: "PENDING" },
+        orderBy: { createdAt: "asc" },
+        take: 5,
+        include: { conversation: { include: { contact: true } } },
       });
 
-      if (blocked) {
-        await prisma.message.update({
-          where: { id: message.id },
-          data: { status: "FAILED", errorMessage: "Contato está na lista de bloqueios" },
+      for (const message of pending) {
+        const blocked = await prisma.contactBlock.findUnique({
+          where: {
+            tenantId_waJid: {
+              tenantId: message.conversation.tenantId,
+              waJid: message.conversation.contact.waJid,
+            },
+          },
         });
-        continue;
-      }
 
-      try {
-        const jid = message.conversation.contact.waJid;
-        const sent = message.mediaType && message.mediaKey
-          ? await sendOutboundMedia(socket, jid, message)
-          : await socket.sendMessage(jid, { text: message.body });
+        if (blocked) {
+          await prisma.message.update({
+            where: { id: message.id },
+            data: { status: "FAILED", errorMessage: "Contato está na lista de bloqueios" },
+          });
+          continue;
+        }
 
-        await prisma.message.update({
-          where: { id: message.id },
-          data: { status: "SENT", waMessageId: sent?.key.id ?? undefined },
-        });
-      } catch (error) {
-        await prisma.message.update({
-          where: { id: message.id },
-          data: { status: "FAILED", errorMessage: (error as Error).message },
-        });
+        try {
+          const jid = message.conversation.contact.waJid;
+          const sent = message.mediaType && message.mediaKey
+            ? await sendOutboundMedia(socket, jid, message)
+            : await socket.sendMessage(jid, { text: message.body });
+
+          await prisma.message.update({
+            where: { id: message.id },
+            data: { status: "SENT", waMessageId: sent?.key.id ?? undefined },
+          });
+        } catch (error) {
+          await prisma.message.update({
+            where: { id: message.id },
+            data: { status: "FAILED", errorMessage: (error as Error).message },
+          });
+        }
       }
+    } catch (err) {
+      logger.error({ err, sessionId }, "falha ao processar fila de saída");
+    } finally {
+      setTimeout(tick, OUTBOX_POLL_INTERVAL_MS);
     }
-
-    setTimeout(tick, OUTBOX_POLL_INTERVAL_MS);
   };
 
   tick();
@@ -587,20 +621,28 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
 
 /** Sobe conexões para sessões que ainda não estão ativas nesta instância. */
 export async function syncSessions() {
-  const sessions = await prisma.whatsAppSession.findMany({
-    where: { status: { in: ["PENDING_QR", "CONNECTED", "DISCONNECTED"] } },
-    select: { id: true },
-  });
+  try {
+    const sessions = await prisma.whatsAppSession.findMany({
+      where: { status: { in: ["PENDING_QR", "CONNECTED", "DISCONNECTED"] } },
+      select: { id: true },
+    });
 
-  for (const session of sessions) {
-    if (!isSessionActive(session.id)) {
-      startSession(session.id).catch((err) =>
-        logger.error({ err, sessionId: session.id }, "falha ao iniciar sessão")
-      );
+    for (const session of sessions) {
+      if (!isSessionActive(session.id)) {
+        startSession(session.id).catch((err) =>
+          logger.error({ err, sessionId: session.id }, "falha ao iniciar sessão")
+        );
+      }
     }
+  } catch (err) {
+    // Ex: Postgres soltou a conexão por ociosidade — tenta de novo no
+    // próximo tick em vez de derrubar o worker inteiro (unhandled rejection).
+    logger.error({ err }, "falha ao verificar sessões");
   }
 }
 
 export function watchForNewSessions() {
-  setInterval(syncSessions, NEW_SESSION_POLL_INTERVAL_MS);
+  setInterval(() => {
+    syncSessions();
+  }, NEW_SESSION_POLL_INTERVAL_MS);
 }

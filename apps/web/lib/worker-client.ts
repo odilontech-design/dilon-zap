@@ -24,3 +24,22 @@ export async function resolveWhatsAppJid(
     return { jid: null, exists: null };
   }
 }
+
+export async function disconnectWhatsApp(tenantId: string): Promise<{ ok: boolean; reason?: string }> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret) return { ok: false, reason: "worker não configurado" };
+
+  try {
+    const res = await fetch(`${baseUrl}/internal/disconnect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };
+    return await res.json();
+  } catch {
+    return { ok: false, reason: "worker fora do ar" };
+  }
+}

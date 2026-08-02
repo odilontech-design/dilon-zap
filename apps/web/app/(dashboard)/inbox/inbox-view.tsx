@@ -17,6 +17,7 @@ type ConversationSummary = {
   tags: string[];
   contact: ContactRef;
   assignedTo: { id: string; name: string } | null;
+  unreadCount: number;
   messages: { body: string; direction: "INBOUND" | "OUTBOUND"; createdAt: string }[];
 };
 
@@ -59,6 +60,31 @@ const STATUS_ACTION_LABEL: Record<ConversationStatus, string> = {
   RESOLVED: "Resolver",
 };
 
+// Bipe curto gerado na hora via Web Audio — sem precisar de um arquivo de
+// áudio externo pra empacotar. Dois tons subindo, parecido com o "pop" do
+// WhatsApp.
+function playNotificationSound() {
+  try {
+    const ctx = new AudioContext();
+    const now = ctx.currentTime;
+    [880, 1108].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.0001, now + i * 0.09);
+      gain.gain.exponentialRampToValueAtTime(0.2, now + i * 0.09 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.09 + 0.15);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(now + i * 0.09);
+      osc.stop(now + i * 0.09 + 0.16);
+    });
+    setTimeout(() => ctx.close(), 500);
+  } catch {
+    // navegador sem suporte a Web Audio, ou bloqueou por falta de interação — sem som mesmo
+  }
+}
+
 export function InboxView() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -70,6 +96,20 @@ export function InboxView() {
     { refreshInterval: 3000 }
   );
 
+  // Contagem global (todas as abas) só pra saber quando tocar o som — uma
+  // mensagem nova pode chegar numa conversa que não está na aba aberta agora.
+  const { data: unread } = useSWR<{ count: number }>("/api/conversations/unread-count", fetcher, {
+    refreshInterval: 4000,
+  });
+  const previousUnreadRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (unread === undefined) return;
+    if (previousUnreadRef.current !== null && unread.count > previousUnreadRef.current) {
+      playNotificationSound();
+    }
+    previousUnreadRef.current = unread.count;
+  }, [unread]);
+
   // Vindo de "Conversar" na tela de Contatos: abre direto a conversa criada,
   // na aba certa pro status dela, sem precisar procurar na lista.
   useEffect(() => {
@@ -79,11 +119,16 @@ export function InboxView() {
     fetcher(`/api/conversations/${openId}`).then((conversation: ConversationDetail) => {
       if (!conversation?.id) return;
       setTab(conversation.status);
-      setSelectedId(conversation.id);
+      handleSelectConversation(conversation.id);
     });
     router.replace("/inbox");
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só na primeira renderização, com o ?open= inicial
   }, []);
+
+  function handleSelectConversation(id: string) {
+    setSelectedId(id);
+    fetch(`/api/conversations/${id}/read`, { method: "POST" }).then(() => mutateList());
+  }
 
   return (
     <div className="flex h-screen">
@@ -114,7 +159,7 @@ export function InboxView() {
           {conversations?.map((c) => (
             <button
               key={c.id}
-              onClick={() => setSelectedId(c.id)}
+              onClick={() => handleSelectConversation(c.id)}
               className={`w-full text-left px-4 py-3 border-b border-neutral-100 hover:bg-neutral-50 ${
                 selectedId === c.id ? "bg-neutral-100" : ""
               }`}
@@ -124,7 +169,9 @@ export function InboxView() {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-1.5 min-w-0">
-                      <p className="text-sm font-medium truncate">{contactLabel(c.contact)}</p>
+                      <p className={`text-sm truncate ${c.unreadCount > 0 ? "font-semibold" : "font-medium"}`}>
+                        {contactLabel(c.contact)}
+                      </p>
                       <span className="text-[10px] font-mono text-neutral-400 shrink-0">
                         #{c.ticketNumber}
                       </span>
@@ -135,7 +182,18 @@ export function InboxView() {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-neutral-500 truncate mt-0.5">{c.messages[0]?.body ?? ""}</p>
+                  <div className="flex items-center justify-between gap-2 mt-0.5">
+                    <p
+                      className={`text-xs truncate ${c.unreadCount > 0 ? "text-neutral-800" : "text-neutral-500"}`}
+                    >
+                      {c.messages[0]?.body ?? ""}
+                    </p>
+                    {c.unreadCount > 0 && (
+                      <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-semibold flex items-center justify-center">
+                        {c.unreadCount > 9 ? "9+" : c.unreadCount}
+                      </span>
+                    )}
+                  </div>
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                     {c.assignedTo && (
                       <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">

@@ -205,6 +205,7 @@ model Message {
   waMessageId    String? // id da mensagem no WhatsApp, útil para status de entrega
   errorMessage   String?
   createdAt      DateTime          @default(now())
+  readAt         DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
 
   mediaType         MediaType?
   mediaKey          String?  // chave do objeto no bucket R2
@@ -214,4 +215,5 @@ model Message {
 
   @@index([conversationId, createdAt])
   @@index([sessionId, status]) // worker consulta PENDING por sessão
+  @@index([conversationId, direction, readAt]) // contagem de não lidas
 }

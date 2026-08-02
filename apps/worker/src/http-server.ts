@@ -26,11 +26,46 @@ export function startInternalServer() {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/internal/disconnect") {
+      handleDisconnect(req, res);
+      return;
+    }
+
     res.writeHead(404).end();
   });
 
   server.listen(PORT, "127.0.0.1", () => {
     console.log(`[dilon-zap worker] servidor interno ouvindo em 127.0.0.1:${PORT}`);
+  });
+}
+
+// Logout de verdade (revoga a sessão no WhatsApp) — diferente de só derrubar
+// o socket, isso já deixa a sessão pronta pra pedir um QR novo, que é o que
+// dispara a sincronização de histórico de novo (ver session-manager.ts).
+function handleDisconnect(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId } = JSON.parse(body) as { tenantId?: string };
+      if (!tenantId) {
+        res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "tenantId é obrigatório" }));
+        return;
+      }
+
+      const socket = getSocketForTenant(tenantId);
+      if (!socket) {
+        res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: false, reason: "sem conexão ativa" }));
+        return;
+      }
+
+      await socket.logout();
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
   });
 }
 

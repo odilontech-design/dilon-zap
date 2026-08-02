@@ -18,8 +18,11 @@ export async function GET(req: Request) {
       contact: true,
       assignedTo: { select: { id: true, name: true } },
       messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      _count: { select: { messages: { where: { direction: "INBOUND", readAt: null } } } },
     },
   });
 
-  return NextResponse.json(conversations);
+  const withUnread = conversations.map(({ _count, ...c }) => ({ ...c, unreadCount: _count.messages }));
+
+  return NextResponse.json(withUnread);
 }
