@@ -1,7 +1,7 @@
 export type ContactRef = { id: string; name: string | null; waJid: string; avatarUrl: string | null };
 
 export function contactLabel(contact: { name: string | null; waJid: string }) {
-  return contact.name ?? contact.waJid.replace("@s.whatsapp.net", "");
+  return contact.name ?? contact.waJid.replace("@s.whatsapp.net", "").replace("@lid", "");
 }
 
 export function formatPhone(waJid: string) {
