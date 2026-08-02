@@ -3,10 +3,15 @@ import { getSocketForTenant } from "./session-manager";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
 const SECRET = process.env.WORKER_INTERNAL_SECRET;
+// Dev local: 127.0.0.1 (só o próprio processo web, no mesmo host, acessa).
+// Produção (Docker): 0.0.0.0, porque o container do web é outro host na rede
+// interna do Docker — o isolamento vem de não publicar essa porta pro host/
+// internet (ver docker-compose.prod.yml, que só usa "expose", nunca "ports"
+// pra esse serviço), não do bind em si.
+const HOST = process.env.WORKER_INTERNAL_HOST ?? "127.0.0.1";
 
 // API interna, só pro apps/web perguntar coisas que só o worker sabe (porque
-// só ele tem a conexão Baileys viva) — hoje só resolve-jid. Escuta em
-// 127.0.0.1 de propósito: não deve ser alcançável fora desta máquina/host.
+// só ele tem a conexão Baileys viva) — hoje só resolve-jid e disconnect.
 export function startInternalServer() {
   if (!SECRET) {
     console.warn(
@@ -34,8 +39,8 @@ export function startInternalServer() {
     res.writeHead(404).end();
   });
 
-  server.listen(PORT, "127.0.0.1", () => {
-    console.log(`[dilon-zap worker] servidor interno ouvindo em 127.0.0.1:${PORT}`);
+  server.listen(PORT, HOST, () => {
+    console.log(`[dilon-zap worker] servidor interno ouvindo em ${HOST}:${PORT}`);
   });
 }
 

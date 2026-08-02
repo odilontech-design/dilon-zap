@@ -1,0 +1,39 @@
+# Produção: web e worker cada um no seu container, Caddy na frente cuidando
+# de HTTPS automático (Let's Encrypt) pro domínio configurado no Caddyfile.
+# Postgres (Neon) e storage de mídia (R2) já são serviços na nuvem — não tem
+# banco nem storage aqui, só as duas aplicações + o proxy.
+services:
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "3000"
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "4001"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+
+volumes:
+  caddy_data:
+  caddy_config:

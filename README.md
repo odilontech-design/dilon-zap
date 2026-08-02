@@ -52,3 +52,18 @@ Fluxo de teste: entre no dashboard → **Conectar número** → escaneie o QR Co
 ## Variáveis de ambiente
 
 Ver `.env.example`. Um único `.env` na raiz serve pro `web`, `worker` e Prisma — cada um carrega esse arquivo explicitamente (ver `next.config.js`, `apps/worker/src/index.ts` e os scripts `db:*` em `packages/db/package.json`).
+
+## Deploy em produção
+
+Rodando numa VM (Oracle Cloud Always Free, `zap.dilontech.com.br`) via Docker Compose: `web` e `worker` cada um no seu container, [Caddy](https://caddyserver.com/) na frente cuidando de HTTPS automático (Let's Encrypt) — ver `docker-compose.prod.yml` e `Caddyfile`. Postgres (Neon) e mídia (Cloudflare R2) continuam sendo os mesmos serviços na nuvem usados em desenvolvimento, não rodam na VM.
+
+```bash
+# na VM, com o repositório clonado e o .env de produção configurado
+# (ver .env.production.example — principal diferença do .env local é
+# WORKER_INTERNAL_URL/HOST, porque web e worker viram hosts diferentes)
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+DNS: registro tipo A apontando `zap` pro IP público da VM, configurado no provedor do domínio (Registro.br). Firewall: a VM precisa liberar as portas 80 e 443 (na Oracle Cloud isso é na Security List da VCN, além do firewall do sistema operacional).
+
+A sessão do WhatsApp persiste no Postgres — subir o worker numa VM nova não exige escanear QR Code de novo, desde que aponte pro mesmo banco.
