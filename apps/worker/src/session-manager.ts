@@ -61,6 +61,9 @@ export async function startSession(sessionId: string) {
     auth: state,
     logger,
     printQRInTerminal: false,
+    // Pede o histórico mais completo que o WhatsApp aceitar mandar no
+    // pareamento — só faz efeito num QR novo, não numa sessão já pareada.
+    syncFullHistory: true,
     // Fase 0: um número por tenant, throttling de disparo em massa entra na
     // fase de Campanhas — aqui só garantimos que a conexão em si é estável.
   });
@@ -153,6 +156,21 @@ export async function startSession(sessionId: string) {
         where: { sessionId, waMessageId: key.id, direction: "OUTBOUND" },
         data: { status },
       });
+    }
+  });
+
+  // WhatsApp manda o histórico existente (em blocos) logo depois de parear
+  // um número novo, e às vezes um resumo de "o que rolou enquanto eu tava
+  // offline" em reconexões. Sem esse listener, o Inbox só teria conversa
+  // a partir do momento em que o worker ligou.
+  socket.ev.on("messaging-history.set", async ({ messages, isLatest }) => {
+    try {
+      await importHistoricalMessages(sessionId, messages, socket);
+    } catch (err) {
+      logger.error({ err }, "falha ao importar histórico do WhatsApp");
+    }
+    if (isLatest) {
+      logger.info({ sessionId }, "sincronização de histórico do WhatsApp concluída");
     }
   });
 
@@ -329,6 +347,110 @@ async function recordInboundMessage(params: {
       inboundText: params.text,
     });
   }
+}
+
+// Importa o histórico que o WhatsApp manda ao parear/reconectar. Fase 0: só
+// texto/legenda — baixar mídia de centenas de mensagens antigas de uma vez
+// pesaria demais no R2 e na API do WhatsApp, então mídia histórica entra
+// como um placeholder ("[imagem]" etc.) em vez do arquivo de verdade.
+// Conversa importada nasce RESOLVED (é histórico, não fila de atendimento);
+// volta pra Ativos sozinha assim que o cliente manda mensagem nova de verdade.
+async function importHistoricalMessages(
+  sessionId: string,
+  messages: proto.IWebMessageInfo[],
+  socket: ReturnType<typeof makeWASocket>
+) {
+  const session = await prisma.whatsAppSession.findUniqueOrThrow({
+    where: { id: sessionId },
+    select: { tenantId: true },
+  });
+
+  const candidates = messages.filter((msg) => {
+    const jid = msg.key.remoteJid;
+    if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast") return false;
+    return !!msg.message && !!msg.key.id;
+  });
+  if (candidates.length === 0) return;
+
+  const existing = await prisma.message.findMany({
+    where: { sessionId, waMessageId: { in: candidates.map((m) => m.key.id as string) } },
+    select: { waMessageId: true },
+  });
+  const existingIds = new Set(existing.map((m) => m.waMessageId));
+  const fresh = candidates.filter((m) => !existingIds.has(m.key.id ?? null));
+  if (fresh.length === 0) return;
+
+  logger.info({ count: fresh.length }, "importando histórico de mensagens do WhatsApp");
+
+  const conversationByJid = new Map<string, { id: string }>();
+
+  for (const msg of fresh) {
+    const waJid = msg.key.remoteJid!;
+    if (conversationByJid.has(waJid)) continue;
+
+    const contact = await prisma.contact.upsert({
+      where: { tenantId_waJid: { tenantId: session.tenantId, waJid } },
+      create: { tenantId: session.tenantId, waJid },
+      update: {},
+    });
+    if (!contact.avatarUrl) {
+      fetchAndSaveAvatar(socket, contact.id, waJid).catch(() => {});
+    }
+
+    const existingConv = await prisma.conversation.findFirst({
+      where: { tenantId: session.tenantId, contactId: contact.id, sessionId },
+      select: { id: true },
+    });
+    const conversation =
+      existingConv ??
+      (await prisma.conversation.create({
+        data: { tenantId: session.tenantId, sessionId, contactId: contact.id, status: "RESOLVED" },
+      }));
+    conversationByJid.set(waJid, conversation);
+  }
+
+  const rows = fresh.map((msg) => {
+    const waJid = msg.key.remoteJid!;
+    const timestamp = msg.messageTimestamp ? new Date(Number(msg.messageTimestamp) * 1000) : new Date();
+    return {
+      conversationId: conversationByJid.get(waJid)!.id,
+      sessionId,
+      direction: msg.key.fromMe ? ("OUTBOUND" as const) : ("INBOUND" as const),
+      status: (msg.key.fromMe ? "SENT" : "DELIVERED") as "SENT" | "DELIVERED",
+      body: extractHistoricalText(msg),
+      waMessageId: msg.key.id as string,
+      createdAt: timestamp,
+    };
+  });
+
+  await prisma.message.createMany({ data: rows, skipDuplicates: true });
+
+  const latestByJid = new Map<string, number>();
+  for (const msg of fresh) {
+    const waJid = msg.key.remoteJid!;
+    const ts = Number(msg.messageTimestamp ?? 0);
+    if (ts > (latestByJid.get(waJid) ?? 0)) latestByJid.set(waJid, ts);
+  }
+  for (const [waJid, ts] of latestByJid) {
+    const conversation = conversationByJid.get(waJid)!;
+    await prisma.conversation.updateMany({
+      where: { id: conversation.id, lastMessageAt: { lt: new Date(ts * 1000) } },
+      data: { lastMessageAt: new Date(ts * 1000) },
+    });
+  }
+}
+
+function extractHistoricalText(msg: proto.IWebMessageInfo): string {
+  const m = msg.message;
+  if (!m) return "";
+  if (m.conversation) return m.conversation;
+  if (m.extendedTextMessage?.text) return m.extendedTextMessage.text;
+  if (m.imageMessage) return m.imageMessage.caption || "[imagem]";
+  if (m.audioMessage) return "[áudio]";
+  if (m.videoMessage) return m.videoMessage.caption || "[vídeo]";
+  if (m.stickerMessage) return "[figurinha]";
+  if (m.documentMessage) return m.documentMessage.caption || `[arquivo: ${m.documentMessage.fileName ?? "sem nome"}]`;
+  return "";
 }
 
 // Busca a foto de perfil só na primeira mensagem de um contato (evita bater
