@@ -97,11 +97,27 @@ export function InboxView() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<ConversationStatus>("OPEN");
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [tagFilter, setTagFilter] = useState("");
+  const [assigneeFilter, setAssigneeFilter] = useState("");
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const [showNewConversation, setShowNewConversation] = useState(false);
+
+  const query = new URLSearchParams({ status: tab });
+  if (search.trim()) query.set("search", search.trim());
+  if (tagFilter) query.set("tag", tagFilter);
+  if (assigneeFilter) query.set("assignedToId", assigneeFilter);
+  if (unreadOnly) query.set("unreadOnly", "1");
+
   const { data: conversations, mutate: mutateList } = useSWR<ConversationSummary[]>(
-    `/api/conversations?status=${tab}`,
+    `/api/conversations?${query.toString()}`,
     fetcher,
     { refreshInterval: 3000 }
   );
+  const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
+  const availableTags = Array.from(new Set((conversations ?? []).flatMap((c) => c.tags))).sort();
+  const activeFilterCount = [tagFilter, assigneeFilter, unreadOnly ? "1" : ""].filter(Boolean).length;
 
   // Contagem global (todas as abas) só pra saber quando tocar o som — uma
   // mensagem nova pode chegar numa conversa que não está na aba aberta agora.
@@ -140,7 +156,15 @@ export function InboxView() {
   return (
     <div className="flex h-screen">
       <div className="w-80 shrink-0 border-r border-neutral-200 flex flex-col">
-        <h1 className="text-lg font-semibold px-4 py-4 border-b border-neutral-200">Inbox</h1>
+        <div className="flex items-center justify-between px-4 py-4 border-b border-neutral-200">
+          <h1 className="text-lg font-semibold">Inbox</h1>
+          <button
+            onClick={() => setShowNewConversation(true)}
+            className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+          >
+            + Nova conversa
+          </button>
+        </div>
         <div className="flex border-b border-neutral-200">
           {TABS.map((t) => (
             <button
@@ -159,6 +183,77 @@ export function InboxView() {
             </button>
           ))}
         </div>
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-neutral-200">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar por nome, número ou mensagem..."
+            className="flex-1 rounded-md border border-neutral-300 px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <button
+            onClick={() => setShowFilters((v) => !v)}
+            className={`relative shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-medium ${
+              showFilters ? "border-accent text-accent" : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+            }`}
+          >
+            Filtros
+            {activeFilterCount > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-accent text-white text-[9px] flex items-center justify-center">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
+        {showFilters && (
+          <div className="flex flex-col gap-2 px-3 py-3 border-b border-neutral-200 bg-neutral-50 text-xs">
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-1">Tag</label>
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+              >
+                <option value="">Todas</option>
+                {availableTags.map((tag) => (
+                  <option key={tag} value={tag}>
+                    {tag}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium text-neutral-500 mb-1">Atribuído a</label>
+              <select
+                value={assigneeFilter}
+                onChange={(e) => setAssigneeFilter(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+              >
+                <option value="">Todos</option>
+                {users?.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <label className="flex items-center gap-1.5 text-neutral-600">
+              <input type="checkbox" checked={unreadOnly} onChange={(e) => setUnreadOnly(e.target.checked)} />
+              Só não lidas
+            </label>
+            {activeFilterCount > 0 && (
+              <button
+                onClick={() => {
+                  setTagFilter("");
+                  setAssigneeFilter("");
+                  setUnreadOnly(false);
+                }}
+                className="self-start text-accent hover:underline"
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex-1 overflow-y-auto">
           {conversations?.length === 0 && (
             <p className="text-sm text-neutral-500 px-4 py-6">Nenhuma conversa nessa aba.</p>
@@ -227,6 +322,102 @@ export function InboxView() {
             Selecione uma conversa
           </div>
         )}
+      </div>
+
+      {showNewConversation && (
+        <NewConversationModal
+          onClose={() => setShowNewConversation(false)}
+          onStarted={(conversationId) => {
+            setShowNewConversation(false);
+            setTab("OPEN");
+            mutateList();
+            handleSelectConversation(conversationId);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function NewConversationModal({
+  onClose,
+  onStarted,
+}: {
+  onClose: () => void;
+  onStarted: (conversationId: string) => void;
+}) {
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    const contactRes = await fetch("/api/contacts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() || undefined, phone }),
+    });
+    if (!contactRes.ok) {
+      setSaving(false);
+      const body = await contactRes.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "telefone inválido");
+      return;
+    }
+    const contact = await contactRes.json();
+
+    const convRes = await fetch(`/api/contacts/${contact.id}/start-conversation`, { method: "POST" });
+    setSaving(false);
+    if (!convRes.ok) {
+      const body = await convRes.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "não deu pra iniciar a conversa");
+      return;
+    }
+    const conversation = await convRes.json();
+    onStarted(conversation.id);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-lg">
+        <h2 className="text-base font-semibold mb-4">Nova conversa</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-medium text-neutral-700 mb-1">Nome (opcional)</label>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone (com DDD)</label>
+            <input
+              required
+              autoFocus
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="21967411481"
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2 mt-2">
+            <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-800">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "Iniciando..." : "Iniciar conversa"}
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   );

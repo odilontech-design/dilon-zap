@@ -462,7 +462,17 @@ async function importHistoricalMessages(
     const conversation =
       existingConv ??
       (await prisma.conversation.create({
-        data: { tenantId: session.tenantId, sessionId, contactId: contact.id, status: "RESOLVED" },
+        // lastMessageAt nasce no passado de propósito (schema default seria
+        // "agora") — senão o updateMany de baixo, que só sobe a data se for
+        // mais recente, nunca dispara pra mensagem de histórico (sempre no
+        // passado em relação ao momento do import).
+        data: {
+          tenantId: session.tenantId,
+          sessionId,
+          contactId: contact.id,
+          status: "RESOLVED",
+          lastMessageAt: new Date(0),
+        },
       }));
     conversationByJid.set(waJid, conversation);
   }
