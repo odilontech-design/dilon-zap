@@ -44,32 +44,54 @@ export function getSocketForTenant(tenantId: string) {
 export async function startSession(sessionId: string) {
   if (activeSessions.has(sessionId)) return;
 
-  const sessionRow = await prisma.whatsAppSession.findUniqueOrThrow({
-    where: { id: sessionId },
-    select: { tenantId: true },
-  });
-
+  // Reserva a vaga ANTES de qualquer await — guard-check + set precisam ser
+  // atômicos (sem await entre os dois), senão duas chamadas concorrentes
+  // (syncSessions a cada 5s + o retry de 3s daqui embaixo, por exemplo)
+  // podem passar pelo `has()` juntas e a que terminar depois sobrescreve a
+  // entrada da que terminou antes — aí o catch de baixo apaga do mapa a
+  // sessão saudável (com socket de verdade rodando) em vez da que falhou,
+  // e tanto pollOutbox quanto getSocketForTenant ficam "cegos" pra uma
+  // conexão que continua viva, podendo até duplicar envio de mensagem.
   let stopped = false;
-  const entry: ActiveSession = { stop: () => (stopped = true), socket: null, tenantId: sessionRow.tenantId };
+  const entry: ActiveSession = { stop: () => (stopped = true), socket: null, tenantId: "" };
   activeSessions.set(sessionId, entry);
 
-  const { state, saveCreds } = await usePostgresAuthState(sessionId);
-  const { version } = await fetchLatestBaileysVersion();
+  let socket: ReturnType<typeof makeWASocket>;
+  try {
+    const sessionRow = await prisma.whatsAppSession.findUniqueOrThrow({
+      where: { id: sessionId },
+      select: { tenantId: true },
+    });
+    entry.tenantId = sessionRow.tenantId;
 
-  const socket = makeWASocket({
-    version,
-    auth: state,
-    logger,
-    printQRInTerminal: false,
-    // Pede o histórico mais completo que o WhatsApp aceitar mandar no
-    // pareamento — só faz efeito num QR novo, não numa sessão já pareada.
-    syncFullHistory: true,
-    // Fase 0: um número por tenant, throttling de disparo em massa entra na
-    // fase de Campanhas — aqui só garantimos que a conexão em si é estável.
-  });
+    const { state, saveCreds } = await usePostgresAuthState(sessionId);
+    const { version } = await fetchLatestBaileysVersion();
+
+    socket = makeWASocket({
+      version,
+      auth: state,
+      logger,
+      printQRInTerminal: false,
+      // Pede o histórico mais completo que o WhatsApp aceitar mandar no
+      // pareamento — só faz efeito num QR novo, não numa sessão já pareada.
+      syncFullHistory: true,
+      // Fase 0: um número por tenant, throttling de disparo em massa entra na
+      // fase de Campanhas — aqui só garantimos que a conexão em si é estável.
+    });
+    socket.ev.on("creds.update", saveCreds);
+  } catch (err) {
+    // Sem isso, uma falha transitória bem aqui (ex: Neon derrubou a conexão
+    // por ociosidade nesse instante — já aconteceu antes neste projeto)
+    // deixava a sessão "zumbi": marcada como ativa em activeSessions pra
+    // sempre, sem socket de verdade e sem nunca chegar no pollOutbox, e
+    // syncSessions() nunca mais tentava de novo — só reiniciando o worker
+    // inteiro destravava. Agora tenta de novo sozinho em 3s, igual reconexão normal.
+    activeSessions.delete(sessionId);
+    logger.error({ err, sessionId }, "falha ao iniciar sessão — tentando de novo em 3s");
+    if (!stopped) setTimeout(() => startSession(sessionId), 3_000);
+    return;
+  }
   entry.socket = socket;
-
-  socket.ev.on("creds.update", saveCreds);
 
   socket.ev.on("connection.update", async (update) => {
     const { connection, qr, lastDisconnect } = update;
@@ -134,7 +156,7 @@ export async function startSession(sessionId: string) {
         if (posterJid && !msg.key.fromMe) {
           await prisma.contact
             .updateMany({
-              where: { tenantId: sessionRow.tenantId, waJid: posterJid },
+              where: { tenantId: entry.tenantId, waJid: posterJid },
               data: { lastStatusAt: new Date() },
             })
             .catch((err) => logger.error({ err }, "falha ao marcar status do contato"));
@@ -155,6 +177,11 @@ export async function startSession(sessionId: string) {
       // aqui, o worker já sabe que mandou) — é uma mensagem enviada direto
       // do celular, fora do Inbox. Sem tratar isso, o histórico ficava sem
       // as respostas dadas fora do sistema.
+      //
+      // .catch em vez de deixar propagar: um erro aqui (ex: Postgres soltou
+      // a conexão bem nessa hora) não pode derrubar o resto do lote — sem
+      // isso, uma mensagem problemática fazia o for parar e todo o resto das
+      // mensagens desse evento (podem ser várias) ficava sem ser gravado.
       await recordMessage({
         sessionId,
         waJid,
@@ -165,7 +192,7 @@ export async function startSession(sessionId: string) {
         pushName: msg.pushName ?? undefined,
         senderPn: msg.key.senderPn ?? undefined,
         socket,
-      });
+      }).catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
     }
   });
 
@@ -306,14 +333,20 @@ async function recordMessage(params: {
 }) {
   const isInbound = params.direction === "INBOUND";
 
-  // Mensagem OUTBOUND mandada pelo próprio Inbox já foi gravada por
-  // /api/messages/send e marcada SENT pelo pollOutbox — o messages.upsert
-  // que o Baileys dispara pra ela de volta (eco de confirmação) é a MESMA
-  // mensagem, não uma nova. Sem essa checagem duplicava toda mensagem
-  // enviada pelo sistema.
-  if (!isInbound && params.waMessageId) {
+  // Dedupe por waMessageId: mensagem OUTBOUND mandada pelo próprio Inbox já
+  // foi gravada por /api/messages/send e marcada SENT pelo pollOutbox — o
+  // messages.upsert que o Baileys dispara de volta (eco de confirmação) é a
+  // MESMA mensagem, não uma nova. E o Baileys também reemite messages.upsert
+  // pra mensagens INBOUND já vistas em alguns casos (ex: replay num
+  // reconnect) — sem essa checagem em ambas as direções, duplicava mensagem.
+  // Inclui waJid no filtro: o id da mensagem é gerado pelo aparelho de quem
+  // manda, não é uma sequência global do WhatsApp — sem isso, duas mensagens
+  // de CONTATOS diferentes que por coincidência gerassem o mesmo id fariam a
+  // segunda ser descartada como "duplicata" mesmo sendo uma mensagem nova de
+  // verdade.
+  if (params.waMessageId) {
     const existing = await prisma.message.findFirst({
-      where: { sessionId: params.sessionId, waMessageId: params.waMessageId },
+      where: { sessionId: params.sessionId, waMessageId: params.waMessageId, conversation: { contact: { waJid: params.waJid } } },
       select: { id: true },
     });
     if (existing) return;
