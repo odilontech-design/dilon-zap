@@ -25,6 +25,7 @@ model Tenant {
 enum UserRole {
   OWNER
   AGENT
+  SUPERADMIN // Dilon Tech — acesso cross-tenant pelo painel /admin, não pertence a um tenant "cliente"
 }
 
 model User {
@@ -216,4 +217,25 @@ model Message {
   @@index([conversationId, createdAt])
   @@index([sessionId, status]) // worker consulta PENDING por sessão
   @@index([conversationId, direction, readAt]) // contagem de não lidas
+}
+
+// Trilha de auditoria pro painel /admin da Dilon Tech. Sem @relation de
+// propósito: campos denormalizados (snapshot de nome/e-mail/tenant no
+// momento da ação) pra o registro sobreviver a edição/exclusão do
+// usuário/tenant e não exigir join pra exibir a lista.
+model AuditLog {
+  id             String   @id @default(cuid())
+  actorUserId    String
+  actorName      String
+  actorEmail     String
+  actorTenantId  String
+  targetTenantId String // igual a actorTenantId pra ação normal; diferente quando super-admin age sobre outro tenant
+  targetTenantName String
+  action         String // ex: "login", "contact.create", "whatsapp.connect", "tenant.create"
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  @@index([targetTenantId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([action, createdAt])
 }

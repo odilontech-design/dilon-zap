@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 
 const bodySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED"]).optional(),
@@ -47,6 +48,14 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     where: { id: conversation.id },
     data: parsed.data,
   });
+
+  if (Object.keys(parsed.data).length > 0) {
+    await logAudit({
+      actor: user,
+      action: "conversation.update",
+      metadata: { conversationId: conversation.id, ticketNumber: conversation.ticketNumber, changes: parsed.data },
+    });
+  }
 
   return NextResponse.json(updated);
 }

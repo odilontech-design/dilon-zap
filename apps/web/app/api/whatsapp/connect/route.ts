@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 
 // Fase 0: um número por tenant. Se já existe uma sessão que não está
 // deslogada permanentemente, não cria outra — só devolve a existente.
@@ -15,6 +16,8 @@ export async function POST() {
   const session = await prisma.whatsAppSession.create({
     data: { tenantId: user.tenantId, status: "PENDING_QR" },
   });
+
+  await logAudit({ actor: user, action: "whatsapp.connect_requested", metadata: { sessionId: session.id } });
 
   return NextResponse.json(session);
 }

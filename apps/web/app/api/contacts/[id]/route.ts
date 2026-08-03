@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 
 const bodySchema = z.object({
   pipelineStage: z.enum(["NOVO_LEAD", "EM_CONTATO", "PROPOSTA_ENVIADA", "FECHADO", "PERDIDO"]).optional(),
@@ -36,6 +37,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   // onDelete: Cascade no schema cuida de apagar junto as conversas e mensagens desse contato.
   await prisma.contact.delete({ where: { id: contact.id } });
+
+  await logAudit({ actor: user, action: "contact.delete", metadata: { waJid: contact.waJid, name: contact.name } });
 
   return NextResponse.json({ ok: true });
 }

@@ -23,7 +23,7 @@ export function LoginForm() {
       setError("Email ou senha incorretos.");
       return;
     }
-    router.push("/painel");
+    router.push("/");
     router.refresh();
   }
 

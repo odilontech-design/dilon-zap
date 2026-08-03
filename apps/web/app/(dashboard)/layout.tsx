@@ -1,9 +1,11 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/session";
 import { SignOutButton } from "@/components/sign-out-button";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  if (user.role === "SUPERADMIN") redirect("/admin");
 
   return (
     <div className="min-h-screen flex">

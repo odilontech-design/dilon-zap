@@ -2,6 +2,7 @@ import { type NextAuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@dilon-zap/db";
+import { logAudit } from "./audit";
 
 // Sem adapter de propósito: só temos Credentials (email+senha) por enquanto,
 // e o adapter do NextAuth exige tabelas Account/Session/VerificationToken
@@ -55,6 +56,15 @@ export const authOptions: NextAuthOptions = {
         (session.user as any).tenantId = token.tenantId;
       }
       return session;
+    },
+  },
+  events: {
+    // Estratégia JWT não bate no adapter (não tem tabela Session), então
+    // esse evento só dispara no login de verdade — não em toda requisição
+    // autenticada — o que é exatamente o que a trilha de auditoria precisa.
+    async signIn({ user }) {
+      const u = user as unknown as { id: string; name: string; email: string; tenantId: string };
+      await logAudit({ actor: { id: u.id, name: u.name, email: u.email, tenantId: u.tenantId }, action: "login" });
     },
   },
 };

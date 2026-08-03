@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUser } from "@/lib/session";
 import { upsertContactByPhone } from "@/lib/contact-server";
+import { logAudit } from "@/lib/audit";
 
 // O parsing do CSV acontece no cliente (arquivo pode ter formatação regional
 // estranha, mais fácil ajustar com feedback visual imediato) — aqui só recebe
@@ -34,6 +35,8 @@ export async function POST(req: Request) {
     if (wasCreated) created++;
     else updated++;
   }
+
+  await logAudit({ actor: user, action: "contact.import", metadata: { created, updated, skipped, total: parsed.data.rows.length } });
 
   return NextResponse.json({ created, updated, skipped });
 }

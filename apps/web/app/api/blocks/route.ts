@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 
 export async function GET() {
   const user = await requireUser();
@@ -29,6 +30,8 @@ export async function POST(req: Request) {
     create: { tenantId: user.tenantId, waJid: parsed.data.waJid, reason: parsed.data.reason },
     update: { reason: parsed.data.reason },
   });
+
+  await logAudit({ actor: user, action: "contact.block", metadata: { waJid: parsed.data.waJid, reason: parsed.data.reason } });
 
   return NextResponse.json(block);
 }

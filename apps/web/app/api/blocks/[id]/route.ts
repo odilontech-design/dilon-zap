@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { logAudit } from "@/lib/audit";
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
@@ -11,5 +12,6 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   if (!block) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   await prisma.contactBlock.delete({ where: { id: block.id } });
+  await logAudit({ actor: user, action: "contact.unblock", metadata: { waJid: block.waJid } });
   return NextResponse.json({ ok: true });
 }
