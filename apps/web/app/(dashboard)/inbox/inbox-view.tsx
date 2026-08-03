@@ -49,6 +49,7 @@ type Message = {
   mediaMimeType: string | null;
   mediaFileName: string | null;
   mediaDurationSeconds: number | null;
+  sender: { name: string } | null;
 };
 
 type TenantUser = { id: string; name: string };
@@ -606,6 +607,9 @@ function ConversationThread({
                   : "self-start bg-neutral-100 text-neutral-900"
               }`}
             >
+              {m.direction === "OUTBOUND" && m.sender && (
+                <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
+              )}
               {m.mediaType && <MessageMedia message={m} />}
               {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
               <div

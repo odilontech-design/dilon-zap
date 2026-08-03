@@ -614,7 +614,7 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
         where: { sessionId, direction: "OUTBOUND", status: "PENDING" },
         orderBy: { createdAt: "asc" },
         take: 5,
-        include: { conversation: { include: { contact: true } } },
+        include: { conversation: { include: { contact: true } }, sender: { select: { name: true } } },
       });
 
       for (const message of pending) {
@@ -637,9 +637,19 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
 
         try {
           const jid = message.conversation.contact.waJid;
+          // Vários atendentes dividem o mesmo número — sem isso o cliente não
+          // sabe quem está falando. *negrito* é sintaxe nativa do WhatsApp.
+          // Áudio não tem legenda, então o prefixo nele é ignorado mesmo.
+          const displayBody = message.sender
+            ? message.body
+              ? `*${message.sender.name}:* ${message.body}`
+              : `*${message.sender.name}*`
+            : message.body;
+          const messageForSend = { ...message, body: displayBody };
+
           const sent = message.mediaType && message.mediaKey
-            ? await sendOutboundMedia(socket, jid, message)
-            : await socket.sendMessage(jid, { text: message.body });
+            ? await sendOutboundMedia(socket, jid, messageForSend)
+            : await socket.sendMessage(jid, { text: displayBody });
 
           await prisma.message.update({
             where: { id: message.id },

@@ -41,6 +41,7 @@ model User {
   createdAt    DateTime @default(now())
 
   assignedConversations Conversation[] @relation("AssignedAgent")
+  sentMessages          Message[]      @relation("MessageSender")
 
   @@index([tenantId])
 }
@@ -213,6 +214,12 @@ model Message {
   errorMessage   String?
   createdAt      DateTime          @default(now())
   readAt         DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
+
+  // Quem mandou (OUTBOUND enviada por um atendente pelo Inbox) — null pra
+  // auto-resposta, histórico importado e tudo que é INBOUND. O worker usa
+  // isso pra prefixar o nome na mensagem de verdade mandada ao WhatsApp.
+  senderUserId String?
+  sender       User?   @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
 
   mediaType         MediaType?
   mediaKey          String?  // chave do objeto no bucket R2

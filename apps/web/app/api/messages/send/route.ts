@@ -42,6 +42,7 @@ export async function POST(req: Request) {
       direction: "OUTBOUND",
       status: "PENDING",
       body: parsed.data.text ?? "",
+      senderUserId: user.id,
       mediaType: parsed.data.media?.mediaType,
       mediaKey: parsed.data.media?.mediaKey,
       mediaMimeType: parsed.data.media?.mediaMimeType,
