@@ -440,6 +440,9 @@ function ConversationThread({
   const draftInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const isNearBottomRef = useRef(true);
   const { data: conversation, mutate: mutateConversation } = useSWR<ConversationDetail>(
     `/api/conversations/${conversationId}`,
     fetcher
@@ -450,6 +453,33 @@ function ConversationThread({
     { refreshInterval: 2000 }
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
+
+  // Ao trocar de conversa, sempre volta a acompanhar o final (igual WhatsApp).
+  useEffect(() => {
+    isNearBottomRef.current = true;
+  }, [conversationId]);
+
+  // Rola pro final quando as mensagens chegam (inclui a abertura inicial —
+  // messages?.length vai de undefined pra N assim que o SWR resolve) e de
+  // novo a cada mensagem nova via polling, mas só se o atendente já estava
+  // perto do final (senão puxaria ele pra baixo no meio da leitura de um
+  // histórico antigo). Imagem/áudio tem seu próprio gatilho em scrollToBottom
+  // via onLoad, porque termina de carregar bem depois desse efeito rodar.
+  function scrollToBottom(behavior: ScrollBehavior = "auto") {
+    if (isNearBottomRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
+  }
+
+  useEffect(() => {
+    scrollToBottom();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scrollToBottom não precisa disparar o efeito de novo
+  }, [conversationId, messages?.length]);
+
+  function handleMessagesScroll(e: React.UIEvent<HTMLDivElement>) {
+    const el = e.currentTarget;
+    isNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 150;
+  }
 
   async function patchConversation(body: Record<string, unknown>) {
     await fetch(`/api/conversations/${conversationId}`, {
@@ -597,7 +627,11 @@ function ConversationThread({
           </div>
           <TagEditor tags={conversation.tags} onChange={(tags) => patchConversation({ tags })} />
         </div>
-        <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2">
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2"
+          onScroll={handleMessagesScroll}
+        >
           {messages?.map((m) => (
             <div
               key={m.id}
@@ -610,7 +644,7 @@ function ConversationThread({
               {m.direction === "OUTBOUND" && m.sender && (
                 <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
               )}
-              {m.mediaType && <MessageMedia message={m} />}
+              {m.mediaType && <MessageMedia message={m} onLoad={() => scrollToBottom()} />}
               {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
               <div
                 className={`flex items-center gap-1 justify-end mt-1 text-[10px] ${
@@ -632,6 +666,7 @@ function ConversationThread({
               </div>
             </div>
           ))}
+          <div ref={messagesEndRef} />
         </div>
         <form onSubmit={handleSend} className="relative border-t border-neutral-200 p-4 flex gap-2 items-center">
           {showEmoji && (
@@ -724,7 +759,7 @@ function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onC
   );
 }
 
-function MessageMedia({ message }: { message: Message }) {
+function MessageMedia({ message, onLoad }: { message: Message; onLoad?: () => void }) {
   const src = `/api/messages/${message.id}/media`;
 
   if (message.mediaType === "AUDIO") {
@@ -738,7 +773,7 @@ function MessageMedia({ message }: { message: Message }) {
   if (message.mediaType === "IMAGE") {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- vem via redirect assinado do R2, sem domínio fixo
-      <img src={src} alt={message.body || "imagem"} className="max-w-full rounded-md mb-1" />
+      <img src={src} alt={message.body || "imagem"} className="max-w-full rounded-md mb-1" onLoad={onLoad} />
     );
   }
 
