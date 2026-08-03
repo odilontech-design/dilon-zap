@@ -20,6 +20,8 @@ model Tenant {
   conversations Conversation[]
   contactBlocks ContactBlock[]
   autoReplies   AutoReply[]
+  subscription  Subscription?
+  invoices      Invoice[]
 }
 
 enum UserRole {
@@ -238,4 +240,57 @@ model AuditLog {
   @@index([targetTenantId, createdAt])
   @@index([actorUserId, createdAt])
   @@index([action, createdAt])
+}
+
+enum BillingStatus {
+  ACTIVE
+  PAUSED
+  CANCELED
+}
+
+// Plano de cada cliente — preço negociado individualmente (não tem
+// catálogo fixo de planos), um por tenant. Cobrança automática via
+// Mercado Pago é um passo futuro (mpPreapprovalId fica pronto pra isso);
+// por ora o controle é manual pelo painel /admin.
+model Subscription {
+  id              String        @id @default(cuid())
+  tenantId        String        @unique
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  amountCents     Int
+  cycleDay        Int // dia do mês em que vence a próxima fatura (1-28)
+  status          BillingStatus @default(ACTIVE)
+  notes           String?
+  mpPreapprovalId String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  invoices Invoice[]
+}
+
+enum InvoiceStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+// Uma cobrança de um ciclo — gerada manualmente pelo painel por enquanto
+// ("+ Gerar próxima cobrança"). status OVERDUE é calculado on-the-fly (ver
+// lib/billing.ts) a partir de PENDING + dueDate vencida, não escrito direto.
+model Invoice {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  tenantId       String
+  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  amountCents    Int
+  dueDate        DateTime
+  status         InvoiceStatus @default(PENDING)
+  paidAt         DateTime?
+  mpPaymentId    String?
+  createdAt      DateTime     @default(now())
+
+  @@index([tenantId, dueDate])
+  @@index([subscriptionId, dueDate])
+  @@index([status])
 }

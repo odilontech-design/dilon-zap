@@ -10,6 +10,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     include: {
       users: { orderBy: { createdAt: "asc" } },
       sessions: { orderBy: { createdAt: "desc" } },
+      subscription: true,
+      invoices: { orderBy: { dueDate: "desc" }, take: 24 },
       _count: { select: { contacts: true, conversations: true } },
     },
   });

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { formatDate, formatTime } from "@/lib/contact";
+import { centsToBRL, effectiveInvoiceStatus } from "@/lib/billing";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -32,6 +33,22 @@ type AuditEntry = {
   createdAt: string;
 };
 
+type Subscription = {
+  id: string;
+  amountCents: number;
+  cycleDay: number;
+  status: "ACTIVE" | "PAUSED" | "CANCELED";
+  notes: string | null;
+};
+
+type Invoice = {
+  id: string;
+  amountCents: number;
+  dueDate: string;
+  status: "PENDING" | "PAID" | "OVERDUE" | "CANCELED";
+  paidAt: string | null;
+};
+
 type TenantDetailResponse = {
   tenant: {
     id: string;
@@ -40,6 +57,8 @@ type TenantDetailResponse = {
     createdAt: string;
     users: User[];
     sessions: Session[];
+    subscription: Subscription | null;
+    invoices: Invoice[];
     _count: { contacts: number; conversations: number };
   };
   recentAudit: AuditEntry[];
@@ -79,6 +98,8 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
           ))}
         </div>
       </section>
+
+      <BillingSection tenantId={tenant.id} subscription={tenant.subscription} invoices={tenant.invoices} onChanged={mutate} />
 
       <section className="mb-8">
         <div className="flex items-center justify-between mb-2">
@@ -140,6 +161,246 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+const SUB_STATUS_COLOR: Record<string, string> = {
+  ACTIVE: "bg-emerald-900/60 text-emerald-300",
+  PAUSED: "bg-amber-900/60 text-amber-300",
+  CANCELED: "bg-neutral-800 text-neutral-400",
+};
+
+const INVOICE_STATUS_LABEL: Record<string, string> = {
+  PENDING: "Aguardando pagamento",
+  OVERDUE: "Atrasada",
+  PAID: "Paga",
+  CANCELED: "Cancelada",
+};
+
+const INVOICE_STATUS_COLOR: Record<string, string> = {
+  PENDING: "bg-amber-900/60 text-amber-300",
+  OVERDUE: "bg-red-900/60 text-red-300",
+  PAID: "bg-emerald-900/60 text-emerald-300",
+  CANCELED: "bg-neutral-800 text-neutral-400",
+};
+
+function BillingSection({
+  tenantId,
+  subscription,
+  invoices,
+  onChanged,
+}: {
+  tenantId: string;
+  subscription: Subscription | null;
+  invoices: Invoice[];
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleGenerateInvoice() {
+    setGenerating(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/invoices`, { method: "POST" });
+    setGenerating(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "não deu pra gerar a cobrança");
+      return;
+    }
+    onChanged();
+  }
+
+  async function handleMarkPaid(invoiceId: string) {
+    await fetch(`/api/admin/invoices/${invoiceId}/pay`, { method: "POST" });
+    onChanged();
+  }
+
+  return (
+    <section className="mb-8">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-sm font-medium text-neutral-200">Cobrança</h2>
+        <button onClick={() => setEditing(true)} className="text-xs text-emerald-400 hover:underline">
+          {subscription ? "Editar plano" : "+ Configurar plano"}
+        </button>
+      </div>
+
+      <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
+        {!subscription && <p className="text-sm text-neutral-500">Nenhum plano configurado ainda.</p>}
+        {subscription && (
+          <div className="flex items-center justify-between text-sm mb-3">
+            <div>
+              <span className="text-neutral-100 font-medium">{centsToBRL(subscription.amountCents)}</span>
+              <span className="text-neutral-500"> / mês · vence todo dia {subscription.cycleDay}</span>
+              {subscription.notes && <p className="text-xs text-neutral-500 mt-1">{subscription.notes}</p>}
+            </div>
+            <div className="flex items-center gap-3">
+              <span className={`text-xs rounded-full px-2 py-0.5 ${SUB_STATUS_COLOR[subscription.status]}`}>
+                {subscription.status}
+              </span>
+              <button
+                onClick={handleGenerateInvoice}
+                disabled={generating || subscription.status !== "ACTIVE"}
+                className="text-xs text-emerald-400 hover:underline disabled:opacity-40 disabled:no-underline"
+              >
+                {generating ? "Gerando..." : "+ Gerar próxima cobrança"}
+              </button>
+            </div>
+          </div>
+        )}
+        {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
+
+        {invoices.length > 0 && (
+          <div className="divide-y divide-neutral-800 border-t border-neutral-800 -mx-4 mt-3">
+            {invoices.map((inv) => {
+              const status = effectiveInvoiceStatus(inv);
+              return (
+                <div key={inv.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
+                  <span className="text-neutral-300">
+                    {centsToBRL(inv.amountCents)} · vence {formatDate(inv.dueDate)}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-xs rounded-full px-2 py-0.5 ${INVOICE_STATUS_COLOR[status]}`}>
+                      {INVOICE_STATUS_LABEL[status]}
+                    </span>
+                    {(status === "PENDING" || status === "OVERDUE") && (
+                      <button onClick={() => handleMarkPaid(inv.id)} className="text-xs text-emerald-400 hover:underline">
+                        Marcar como paga
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {editing && (
+        <SubscriptionForm
+          tenantId={tenantId}
+          subscription={subscription}
+          onClose={() => setEditing(false)}
+          onSaved={() => {
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      )}
+    </section>
+  );
+}
+
+function SubscriptionForm({
+  tenantId,
+  subscription,
+  onClose,
+  onSaved,
+}: {
+  tenantId: string;
+  subscription: Subscription | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [amount, setAmount] = useState(subscription ? (subscription.amountCents / 100).toFixed(2) : "");
+  const [cycleDay, setCycleDay] = useState(subscription?.cycleDay ?? 5);
+  const [status, setStatus] = useState<"ACTIVE" | "PAUSED" | "CANCELED">(subscription?.status ?? "ACTIVE");
+  const [notes, setNotes] = useState(subscription?.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    const amountCents = Math.round(parseFloat(amount.replace(",", ".")) * 100);
+    if (!Number.isFinite(amountCents) || amountCents < 0) {
+      setSaving(false);
+      setError("valor inválido");
+      return;
+    }
+
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ amountCents, cycleDay, status, notes: notes || undefined }),
+    });
+    setSaving(false);
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "não deu pra salvar o plano");
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-sm text-neutral-100">
+        <h2 className="text-base font-semibold mb-4">Plano da empresa</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Valor mensal (R$)</label>
+            <input
+              required
+              inputMode="decimal"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="ex: 197.00"
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Dia do vencimento</label>
+            <input
+              required
+              type="number"
+              min={1}
+              max={28}
+              value={cycleDay}
+              onChange={(e) => setCycleDay(Number(e.target.value))}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Status</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as "ACTIVE" | "PAUSED" | "CANCELED")}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
+            >
+              <option value="ACTIVE">Ativo</option>
+              <option value="PAUSED">Pausado</option>
+              <option value="CANCELED">Cancelado</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Observações (opcional)</label>
+            <input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <div className="flex justify-end gap-2 mt-2">
+            <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

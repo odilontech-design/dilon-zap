@@ -27,6 +27,8 @@ export async function GET() {
     include: {
       _count: { select: { users: true, contacts: true, conversations: true } },
       sessions: { select: { id: true, label: true, phoneNumber: true, status: true, lastConnectedAt: true } },
+      subscription: true,
+      invoices: { where: { status: "PENDING" }, select: { id: true, dueDate: true }, orderBy: { dueDate: "asc" }, take: 1 },
     },
   });
 

@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { formatDate } from "@/lib/contact";
+import { centsToBRL } from "@/lib/billing";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -18,7 +19,7 @@ const STATUS_COLOR: Record<string, string> = {
   PENDING_QR: "bg-amber-100 text-amber-700",
   CONNECTED: "bg-emerald-100 text-emerald-700",
   DISCONNECTED: "bg-red-100 text-red-700",
-  LOGGED_OUT: "bg-neutral-200 text-neutral-600",
+  LOGGED_OUT: "bg-neutral-800 text-neutral-300",
 };
 
 type TenantSession = {
@@ -29,6 +30,9 @@ type TenantSession = {
   lastConnectedAt: string | null;
 };
 
+type Subscription = { amountCents: number; status: "ACTIVE" | "PAUSED" | "CANCELED" };
+type OpenInvoice = { id: string; dueDate: string };
+
 type Tenant = {
   id: string;
   name: string;
@@ -36,7 +40,21 @@ type Tenant = {
   createdAt: string;
   _count: { users: number; contacts: number; conversations: number };
   sessions: TenantSession[];
+  subscription: Subscription | null;
+  invoices: OpenInvoice[]; // só as PENDING, ver API
 };
+
+function billingBadge(tenant: Tenant): { label: string; color: string } {
+  if (!tenant.subscription) return { label: "Sem plano", color: "bg-neutral-800 text-neutral-400" };
+  if (tenant.subscription.status !== "ACTIVE") {
+    return { label: tenant.subscription.status === "PAUSED" ? "Pausado" : "Cancelado", color: "bg-neutral-800 text-neutral-400" };
+  }
+  const openInvoice = tenant.invoices[0];
+  if (openInvoice && new Date(openInvoice.dueDate) < new Date()) {
+    return { label: "Atrasado", color: "bg-red-900/60 text-red-300" };
+  }
+  return { label: "Em dia", color: "bg-emerald-900/60 text-emerald-300" };
+}
 
 export function AdminDashboard() {
   const { data: tenants, mutate } = useSWR<Tenant[]>("/api/admin/tenants", fetcher, { refreshInterval: 15000 });
@@ -45,12 +63,18 @@ export function AdminDashboard() {
     null
   );
 
+  const mrrCents = (tenants ?? [])
+    .filter((t) => t.subscription?.status === "ACTIVE")
+    .reduce((sum, t) => sum + (t.subscription?.amountCents ?? 0), 0);
+
   return (
     <div className="p-8 max-w-6xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-lg font-semibold text-neutral-100">Empresas na plataforma</h1>
-          <p className="text-sm text-neutral-400">{tenants?.length ?? "—"} empresas usando o Dilon Zap</p>
+          <p className="text-sm text-neutral-400">
+            {tenants?.length ?? "—"} empresas usando o Dilon Zap · MRR ativo: <span className="text-emerald-400">{centsToBRL(mrrCents)}</span>
+          </p>
         </div>
         <button
           onClick={() => setCreating(true)}
@@ -78,6 +102,7 @@ export function AdminDashboard() {
               <th className="text-left px-4 py-2 font-medium">Número WhatsApp</th>
               <th className="text-left px-4 py-2 font-medium">Usuários</th>
               <th className="text-left px-4 py-2 font-medium">Contatos</th>
+              <th className="text-left px-4 py-2 font-medium">Cobrança</th>
               <th className="text-left px-4 py-2 font-medium">Criada em</th>
               <th className="text-left px-4 py-2 font-medium"></th>
             </tr>
@@ -85,13 +110,14 @@ export function AdminDashboard() {
           <tbody className="text-neutral-200">
             {tenants?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-neutral-500">
+                <td colSpan={7} className="px-4 py-8 text-center text-neutral-500">
                   Nenhuma empresa cadastrada ainda.
                 </td>
               </tr>
             )}
             {tenants?.map((t) => {
               const session = t.sessions[0];
+              const billing = billingBadge(t);
               return (
                 <tr key={t.id} className="border-t border-neutral-800">
                   <td className="px-4 py-2.5 font-medium">{t.name}</td>
@@ -109,6 +135,12 @@ export function AdminDashboard() {
                   </td>
                   <td className="px-4 py-2.5">{t._count.users}</td>
                   <td className="px-4 py-2.5">{t._count.contacts}</td>
+                  <td className="px-4 py-2.5">
+                    <span className="flex items-center gap-2">
+                      <span className={`text-xs rounded-full px-2 py-0.5 ${billing.color}`}>{billing.label}</span>
+                      {t.subscription && <span className="text-neutral-400 text-xs">{centsToBRL(t.subscription.amountCents)}</span>}
+                    </span>
+                  </td>
                   <td className="px-4 py-2.5 text-neutral-400">{formatDate(t.createdAt)}</td>
                   <td className="px-4 py-2.5">
                     <Link href={`/admin/tenants/${t.id}`} className="text-emerald-400 hover:underline text-xs">
