@@ -26,7 +26,7 @@ type ActiveSession = {
 };
 const activeSessions = new Map<string, ActiveSession>();
 
-const OUTBOX_POLL_INTERVAL_MS = 2_000;
+const OUTBOX_POLL_INTERVAL_MS = 1_000;
 const NEW_SESSION_POLL_INTERVAL_MS = 5_000;
 
 export function isSessionActive(sessionId: string) {
@@ -122,7 +122,6 @@ export async function startSession(sessionId: string) {
     if (type !== "notify") return;
 
     for (const msg of messages) {
-      if (msg.key.fromMe) continue;
       const waJid = msg.key.remoteJid;
       if (!waJid) continue;
       // status@broadcast = atualização de Status de QUALQUER contato, não uma
@@ -132,7 +131,7 @@ export async function startSession(sessionId: string) {
       // de gente que nunca conversou com o número não deveria virar contato.
       if (waJid === "status@broadcast") {
         const posterJid = msg.key.participant;
-        if (posterJid) {
+        if (posterJid && !msg.key.fromMe) {
           await prisma.contact
             .updateMany({
               where: { tenantId: sessionRow.tenantId, waJid: posterJid },
@@ -147,14 +146,19 @@ export async function startSession(sessionId: string) {
       if (waJid.endsWith("@g.us")) continue;
 
       const content = await extractInboundContent(msg, socket).catch((err) => {
-        logger.error({ err }, "falha ao baixar mídia recebida");
+        logger.error({ err }, "falha ao processar mensagem");
         return null;
       });
       if (!content) continue;
 
-      await recordInboundMessage({
+      // fromMe aqui não é "mandada pelo nosso outbox" (essa nunca passa por
+      // aqui, o worker já sabe que mandou) — é uma mensagem enviada direto
+      // do celular, fora do Inbox. Sem tratar isso, o histórico ficava sem
+      // as respostas dadas fora do sistema.
+      await recordMessage({
         sessionId,
         waJid,
+        direction: msg.key.fromMe ? "OUTBOUND" : "INBOUND",
         text: content.text,
         media: content.media,
         waMessageId: msg.key.id ?? undefined,
@@ -289,9 +293,10 @@ function phoneDigitsFromJid(jid?: string | null): string | undefined {
   return digits || undefined;
 }
 
-async function recordInboundMessage(params: {
+async function recordMessage(params: {
   sessionId: string;
   waJid: string;
+  direction: "INBOUND" | "OUTBOUND";
   text: string;
   media?: InboundMedia;
   waMessageId?: string;
@@ -299,16 +304,34 @@ async function recordInboundMessage(params: {
   senderPn?: string;
   socket: ReturnType<typeof makeWASocket>;
 }) {
+  const isInbound = params.direction === "INBOUND";
+
+  // Mensagem OUTBOUND mandada pelo próprio Inbox já foi gravada por
+  // /api/messages/send e marcada SENT pelo pollOutbox — o messages.upsert
+  // que o Baileys dispara pra ela de volta (eco de confirmação) é a MESMA
+  // mensagem, não uma nova. Sem essa checagem duplicava toda mensagem
+  // enviada pelo sistema.
+  if (!isInbound && params.waMessageId) {
+    const existing = await prisma.message.findFirst({
+      where: { sessionId: params.sessionId, waMessageId: params.waMessageId },
+      select: { id: true },
+    });
+    if (existing) return;
+  }
+
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
     where: { id: params.sessionId },
     select: { tenantId: true },
   });
-
   const resolvedPhone = params.waJid.endsWith("@lid") ? phoneDigitsFromJid(params.senderPn) : undefined;
+  // pushName só identifica quem MANDOU a mensagem — numa mensagem OUTBOUND
+  // (mandada do próprio celular, fora do Inbox) isso seria o nome do próprio
+  // negócio, não do contato, então não pode virar o nome do contato.
+  const contactName = isInbound ? params.pushName : undefined;
 
   const contact = await prisma.contact.upsert({
     where: { tenantId_waJid: { tenantId: session.tenantId, waJid: params.waJid } },
-    create: { tenantId: session.tenantId, waJid: params.waJid, name: params.pushName, phoneNumber: resolvedPhone },
+    create: { tenantId: session.tenantId, waJid: params.waJid, name: contactName, phoneNumber: resolvedPhone },
     update: resolvedPhone ? { phoneNumber: resolvedPhone } : {},
   });
 
@@ -323,10 +346,13 @@ async function recordInboundMessage(params: {
     select: { id: true },
   });
 
+  // Mensagem OUTBOUND vinda do celular (fora do Inbox) só atualiza a data —
+  // não força status "OPEN" como faz uma mensagem nova do cliente, porque
+  // não é uma demanda nova que precisa de atendimento.
   const conversation = existingConversation
     ? await prisma.conversation.update({
         where: { id: existingConversation.id },
-        data: { lastMessageAt: new Date(), status: "OPEN" },
+        data: isInbound ? { lastMessageAt: new Date(), status: "OPEN" } : { lastMessageAt: new Date() },
       })
     : await prisma.conversation.create({
         data: {
@@ -334,6 +360,7 @@ async function recordInboundMessage(params: {
           sessionId: params.sessionId,
           contactId: contact.id,
           lastMessageAt: new Date(),
+          status: isInbound ? "OPEN" : "RESOLVED",
         },
       });
 
@@ -365,15 +392,15 @@ async function recordInboundMessage(params: {
     data: {
       conversationId: conversation.id,
       sessionId: params.sessionId,
-      direction: "INBOUND",
-      status: "DELIVERED",
+      direction: params.direction,
+      status: isInbound ? "DELIVERED" : "SENT",
       body: params.text,
       waMessageId: params.waMessageId,
       ...mediaFields,
     },
   });
 
-  if (!conversation.assignedToId) {
+  if (isInbound && !conversation.assignedToId) {
     await maybeAutoReply({
       tenantId: session.tenantId,
       sessionId: params.sessionId,

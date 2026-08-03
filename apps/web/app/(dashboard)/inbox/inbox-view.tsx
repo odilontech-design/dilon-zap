@@ -114,7 +114,7 @@ export function InboxView() {
   const { data: conversations, mutate: mutateList } = useSWR<ConversationSummary[]>(
     `/api/conversations?${query.toString()}`,
     fetcher,
-    { refreshInterval: 3000 }
+    { refreshInterval: 2000 }
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const availableTags = Array.from(new Set((conversations ?? []).flatMap((c) => c.tags))).sort();
@@ -123,7 +123,7 @@ export function InboxView() {
   // Contagem global (todas as abas) só pra saber quando tocar o som — uma
   // mensagem nova pode chegar numa conversa que não está na aba aberta agora.
   const { data: unread } = useSWR<{ count: number }>("/api/conversations/unread-count", fetcher, {
-    refreshInterval: 4000,
+    refreshInterval: 3000,
   });
   const previousUnreadRef = useRef<number | null>(null);
   useEffect(() => {
@@ -450,7 +450,7 @@ function ConversationThread({
   const { data: messages, mutate: mutateMessages } = useSWR<Message[]>(
     `/api/conversations/${conversationId}/messages`,
     fetcher,
-    { refreshInterval: 2000 }
+    { refreshInterval: 1500 }
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
 
