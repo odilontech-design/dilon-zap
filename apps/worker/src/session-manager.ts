@@ -126,10 +126,25 @@ export async function startSession(sessionId: string) {
       const waJid = msg.key.remoteJid;
       if (!waJid) continue;
       // status@broadcast = atualização de Status de QUALQUER contato, não uma
-      // conversa de verdade — sem esse filtro, todo Status de todo mundo caía
-      // misturado num único pseudo-contato. Grupo (@g.us) também não é 1:1,
-      // fica de fora até a Fase de campanhas/grupos decidir como tratar.
-      if (waJid === "status@broadcast" || waJid.endsWith("@g.us")) continue;
+      // conversa de verdade — remoteJid é sempre esse valor fixo, quem postou
+      // é msg.key.participant (mesmo padrão de mensagem de grupo). Só marca
+      // lastStatusAt em contato que JÁ existe (updateMany não cria) — Status
+      // de gente que nunca conversou com o número não deveria virar contato.
+      if (waJid === "status@broadcast") {
+        const posterJid = msg.key.participant;
+        if (posterJid) {
+          await prisma.contact
+            .updateMany({
+              where: { tenantId: sessionRow.tenantId, waJid: posterJid },
+              data: { lastStatusAt: new Date() },
+            })
+            .catch((err) => logger.error({ err }, "falha ao marcar status do contato"));
+        }
+        continue;
+      }
+      // Grupo (@g.us) também não é 1:1, fica de fora até a Fase de
+      // campanhas/grupos decidir como tratar.
+      if (waJid.endsWith("@g.us")) continue;
 
       const content = await extractInboundContent(msg, socket).catch((err) => {
         logger.error({ err }, "falha ao baixar mídia recebida");

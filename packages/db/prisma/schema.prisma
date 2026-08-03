@@ -114,6 +114,10 @@ model Contact {
   // opaco por padrão, isso só existe quando conseguimos capturar o par.
   phoneNumber String?
   avatarUrl   String? // URL da foto de perfil do WhatsApp, quando disponível/pública
+  // Último Status (Stories) que esse contato postou — "tem Status disponível"
+  // é calculado na hora (últimas 24h), não guardado como boolean, porque
+  // Status expira sozinho e não teria como saber quando "desligar" a flag.
+  lastStatusAt DateTime?
   pipelineStage PipelineStage @default(NOVO_LEAD)
   createdAt   DateTime      @default(now())
 

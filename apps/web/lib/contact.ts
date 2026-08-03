@@ -4,7 +4,14 @@ export type ContactRef = {
   waJid: string;
   phoneNumber: string | null;
   avatarUrl: string | null;
+  lastStatusAt: string | null;
 };
+
+const STATUS_TTL_MS = 24 * 60 * 60 * 1000; // Status do WhatsApp expira em 24h
+
+export function hasActiveStatus(contact: { lastStatusAt: string | null }) {
+  return !!contact.lastStatusAt && Date.now() - new Date(contact.lastStatusAt).getTime() < STATUS_TTL_MS;
+}
 
 // Telefone real (dígitos) do contato quando dá pra saber: direto do JID se
 // ele é @s.whatsapp.net, ou o phoneNumber resolvido quando é @lid (ver
