@@ -106,8 +106,12 @@ model Contact {
   id          String        @id @default(cuid())
   tenantId    String
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  waJid       String // ex: 5511999999999@s.whatsapp.net
+  waJid       String // ex: 5511999999999@s.whatsapp.net — pode ser @lid quando o WhatsApp esconde o número real
   name        String?
+  // Número de telefone real (dígitos, sem sufixo de JID) quando waJid é @lid
+  // e o WhatsApp revelou o par via senderPn/jid em alguma mensagem — @lid é
+  // opaco por padrão, isso só existe quando conseguimos capturar o par.
+  phoneNumber String?
   avatarUrl   String? // URL da foto de perfil do WhatsApp, quando disponível/pública
   pipelineStage PipelineStage @default(NOVO_LEAD)
   createdAt   DateTime      @default(now())

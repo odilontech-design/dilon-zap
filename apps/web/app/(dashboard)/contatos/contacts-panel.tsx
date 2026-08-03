@@ -8,6 +8,7 @@ import {
   contactLabel,
   formatDate,
   formatPhone,
+  formatPhoneDisplay,
   PIPELINE_STAGES,
   type ContactRef,
   type PipelineStage,
@@ -261,7 +262,7 @@ export function ContactsPanel() {
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-neutral-600">{formatPhone(c.waJid)}</td>
+                <td className="px-4 py-2.5 text-neutral-600">{formatPhoneDisplay(c)}</td>
                 <td className="px-4 py-2.5">
                   <span className="text-xs rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
                     {STAGE_LABEL[c.pipelineStage]}

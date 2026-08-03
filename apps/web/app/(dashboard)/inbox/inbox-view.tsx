@@ -5,7 +5,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
-import { contactLabel, formatPhone, formatTime, PIPELINE_STAGES, type ContactRef, type PipelineStage } from "@/lib/contact";
+import {
+  contactLabel,
+  formatPhoneDisplay,
+  formatTime,
+  PIPELINE_STAGES,
+  type ContactRef,
+  type PipelineStage,
+} from "@/lib/contact";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
@@ -596,13 +603,13 @@ function ContactPanel({
           value={name}
           onChange={(e) => setName(e.target.value)}
           onBlur={() => name.trim() !== (contact.name ?? "") && save({ name: name.trim() || null })}
-          placeholder={formatPhone(contact.waJid)}
+          placeholder={formatPhoneDisplay(contact)}
           className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </div>
       <div>
         <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone</label>
-        <p className="text-sm text-neutral-600">{formatPhone(contact.waJid)}</p>
+        <p className="text-sm text-neutral-600">{formatPhoneDisplay(contact)}</p>
       </div>
       <div>
         <label className="block text-xs font-medium text-neutral-700 mb-1">Status do lead</label>

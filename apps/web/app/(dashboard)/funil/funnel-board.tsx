@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { contactLabel } from "@/lib/contact";
 
 type PipelineStage = "NOVO_LEAD" | "EM_CONTATO" | "PROPOSTA_ENVIADA" | "FECHADO" | "PERDIDO";
 
@@ -8,6 +9,7 @@ type Contact = {
   id: string;
   name: string | null;
   waJid: string;
+  phoneNumber: string | null;
   pipelineStage: PipelineStage;
 };
 
@@ -20,10 +22,6 @@ const STAGES: { key: PipelineStage; label: string }[] = [
   { key: "FECHADO", label: "Fechado" },
   { key: "PERDIDO", label: "Perdido" },
 ];
-
-function contactLabel(contact: Contact) {
-  return contact.name ?? contact.waJid.replace("@s.whatsapp.net", "");
-}
 
 export function FunnelBoard() {
   const { data: contacts, mutate } = useSWR<Contact[]>("/api/contacts", fetcher, {

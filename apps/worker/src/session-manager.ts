@@ -139,6 +139,7 @@ export async function startSession(sessionId: string) {
         media: content.media,
         waMessageId: msg.key.id ?? undefined,
         pushName: msg.pushName ?? undefined,
+        senderPn: msg.key.senderPn ?? undefined,
         socket,
       });
     }
@@ -260,6 +261,14 @@ function extensionFromMime(mimeType: string): string {
   return `.${subtype.replace("+xml", "")}`;
 }
 
+// senderPn/jid do Baileys vêm como JID completo (ex: "5511999999999@s.whatsapp.net")
+// — aqui só interessam os dígitos, é o que Contact.phoneNumber guarda.
+function phoneDigitsFromJid(jid?: string | null): string | undefined {
+  if (!jid) return undefined;
+  const digits = jid.split("@")[0]?.replace(/\D/g, "");
+  return digits || undefined;
+}
+
 async function recordInboundMessage(params: {
   sessionId: string;
   waJid: string;
@@ -267,6 +276,7 @@ async function recordInboundMessage(params: {
   media?: InboundMedia;
   waMessageId?: string;
   pushName?: string;
+  senderPn?: string;
   socket: ReturnType<typeof makeWASocket>;
 }) {
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
@@ -274,10 +284,12 @@ async function recordInboundMessage(params: {
     select: { tenantId: true },
   });
 
+  const resolvedPhone = params.waJid.endsWith("@lid") ? phoneDigitsFromJid(params.senderPn) : undefined;
+
   const contact = await prisma.contact.upsert({
     where: { tenantId_waJid: { tenantId: session.tenantId, waJid: params.waJid } },
-    create: { tenantId: session.tenantId, waJid: params.waJid, name: params.pushName },
-    update: {},
+    create: { tenantId: session.tenantId, waJid: params.waJid, name: params.pushName, phoneNumber: resolvedPhone },
+    update: resolvedPhone ? { phoneNumber: resolvedPhone } : {},
   });
 
   if (!contact.avatarUrl) {
@@ -360,7 +372,9 @@ async function recordInboundMessage(params: {
 async function importHistoricalMessages(
   sessionId: string,
   messages: proto.IWebMessageInfo[],
-  historyContacts: Array<{ id?: string | null; name?: string | null; notify?: string | null }> | undefined,
+  historyContacts:
+    | Array<{ id?: string | null; lid?: string | null; jid?: string | null; name?: string | null; notify?: string | null }>
+    | undefined,
   socket: ReturnType<typeof makeWASocket>
 ) {
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
@@ -372,9 +386,16 @@ async function importHistoricalMessages(
   // — sem isso o contato fica só com o JID (o bug que apareceu no primeiro
   // teste de importação).
   const nameByJid = new Map<string, string>();
+  // @lid é opaco por padrão — quando o WhatsApp revela o par lid/jid (aqui)
+  // ou o senderPn de uma mensagem (abaixo), guarda o telefone real pra exibir.
+  const phoneByJid = new Map<string, string>();
   for (const c of historyContacts ?? []) {
     const name = c.name || c.notify;
     if (c.id && name) nameByJid.set(c.id, name);
+    if (c.lid && c.jid) {
+      const digits = phoneDigitsFromJid(c.jid);
+      if (digits) phoneByJid.set(c.lid, digits);
+    }
   }
 
   const candidates = messages.filter((msg) => {
@@ -385,11 +406,19 @@ async function importHistoricalMessages(
   if (candidates.length === 0) return;
 
   // Fallback pro nome: quando não veio no payload de contatos, cada mensagem
-  // recebida carrega o pushName de quem mandou.
+  // recebida carrega o pushName de quem mandou. senderPn faz o mesmo papel
+  // pro telefone real quando o remoteJid é @lid.
   for (const msg of candidates) {
     const jid = msg.key.remoteJid!;
     if (!msg.key.fromMe && msg.pushName && !nameByJid.has(jid)) {
       nameByJid.set(jid, msg.pushName);
+    }
+    if (jid.endsWith("@lid") && !phoneByJid.has(jid)) {
+      // proto.IMessageKey (tipo cru do histórico) não declara senderPn, mas o
+      // Baileys populada em runtime igual faz no WAMessageKey de mensagens ao vivo.
+      const senderPn = (msg.key as { senderPn?: string }).senderPn;
+      const digits = phoneDigitsFromJid(senderPn);
+      if (digits) phoneByJid.set(jid, digits);
     }
   }
 
@@ -410,13 +439,17 @@ async function importHistoricalMessages(
     if (conversationByJid.has(waJid)) continue;
 
     const resolvedName = nameByJid.get(waJid);
+    const resolvedPhone = phoneByJid.get(waJid);
     const contact = await prisma.contact.upsert({
       where: { tenantId_waJid: { tenantId: session.tenantId, waJid } },
-      create: { tenantId: session.tenantId, waJid, name: resolvedName },
+      create: { tenantId: session.tenantId, waJid, name: resolvedName, phoneNumber: resolvedPhone },
       update: {},
     });
     if (!contact.name && resolvedName) {
       await prisma.contact.update({ where: { id: contact.id }, data: { name: resolvedName } });
+    }
+    if (!contact.phoneNumber && resolvedPhone) {
+      await prisma.contact.update({ where: { id: contact.id }, data: { phoneNumber: resolvedPhone } });
     }
     if (!contact.avatarUrl) {
       fetchAndSaveAvatar(socket, contact.id, waJid).catch(() => {});
