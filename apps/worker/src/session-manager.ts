@@ -125,6 +125,11 @@ export async function startSession(sessionId: string) {
       if (msg.key.fromMe) continue;
       const waJid = msg.key.remoteJid;
       if (!waJid) continue;
+      // status@broadcast = atualização de Status de QUALQUER contato, não uma
+      // conversa de verdade — sem esse filtro, todo Status de todo mundo caía
+      // misturado num único pseudo-contato. Grupo (@g.us) também não é 1:1,
+      // fica de fora até a Fase de campanhas/grupos decidir como tratar.
+      if (waJid === "status@broadcast" || waJid.endsWith("@g.us")) continue;
 
       const content = await extractInboundContent(msg, socket).catch((err) => {
         logger.error({ err }, "falha ao baixar mídia recebida");
