@@ -1,5 +1,5 @@
 import http from "node:http";
-import { getSocketForTenant } from "./session-manager";
+import { getSocketForTenant, editOutboundMessage, deleteOutboundMessage } from "./session-manager";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
 const SECRET = process.env.WORKER_INTERNAL_SECRET;
@@ -36,6 +36,16 @@ export function startInternalServer() {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/internal/messages/edit") {
+      handleEditMessage(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/messages/delete") {
+      handleDeleteMessage(req, res);
+      return;
+    }
+
     res.writeHead(404).end();
   });
 
@@ -66,6 +76,61 @@ function handleDisconnect(req: http.IncomingMessage, res: http.ServerResponse) {
 
       await socket.logout();
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+function handleEditMessage(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId, waJid, waMessageId, text } = JSON.parse(body) as {
+        tenantId?: string;
+        waJid?: string;
+        waMessageId?: string;
+        text?: string;
+      };
+      if (!tenantId || !waJid || !waMessageId || !text) {
+        res
+          .writeHead(400, { "Content-Type": "application/json" })
+          .end(JSON.stringify({ error: "tenantId, waJid, waMessageId e text são obrigatórios" }));
+        return;
+      }
+
+      const result = await editOutboundMessage(tenantId, waJid, waMessageId, text);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+function handleDeleteMessage(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId, waJid, waMessageId } = JSON.parse(body) as {
+        tenantId?: string;
+        waJid?: string;
+        waMessageId?: string;
+      };
+      if (!tenantId || !waJid || !waMessageId) {
+        res
+          .writeHead(400, { "Content-Type": "application/json" })
+          .end(JSON.stringify({ error: "tenantId, waJid e waMessageId são obrigatórios" }));
+        return;
+      }
+
+      const result = await deleteOutboundMessage(tenantId, waJid, waMessageId);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
     } catch (err) {
       res
         .writeHead(500, { "Content-Type": "application/json" })

@@ -14,7 +14,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const messages = await prisma.message.findMany({
     where: { conversationId: params.id },
     orderBy: { createdAt: "asc" },
-    include: { sender: { select: { name: true } } },
+    include: {
+      sender: { select: { name: true } },
+      quotedMessage: {
+        select: { id: true, body: true, direction: true, mediaType: true, isDeleted: true, sender: { select: { name: true } } },
+      },
+    },
   });
 
   return NextResponse.json(messages);

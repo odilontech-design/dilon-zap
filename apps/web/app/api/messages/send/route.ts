@@ -16,6 +16,7 @@ const bodySchema = z
     conversationId: z.string(),
     text: z.string().max(4096).optional(),
     media: mediaSchema.optional(),
+    quotedMessageId: z.string().optional(),
   })
   .refine((v) => (v.text && v.text.trim().length > 0) || v.media, {
     message: "mensagem precisa de texto ou anexo",
@@ -35,6 +36,15 @@ export async function POST(req: Request) {
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 
+  // Só permite citar mensagem da MESMA conversa — igual WhatsApp, e evita
+  // vazar/citar conteúdo de outro atendimento.
+  const quotedMessage = parsed.data.quotedMessageId
+    ? await prisma.message.findFirst({
+        where: { id: parsed.data.quotedMessageId, conversationId: conversation.id },
+        select: { id: true },
+      })
+    : null;
+
   const message = await prisma.message.create({
     data: {
       conversationId: conversation.id,
@@ -48,6 +58,7 @@ export async function POST(req: Request) {
       mediaMimeType: parsed.data.media?.mediaMimeType,
       mediaFileName: parsed.data.media?.mediaFileName,
       mediaDurationSeconds: parsed.data.media?.durationSeconds,
+      quotedMessageId: quotedMessage?.id,
     },
   });
 

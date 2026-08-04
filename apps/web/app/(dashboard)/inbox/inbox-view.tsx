@@ -41,6 +41,15 @@ type ConversationDetail = {
 
 type MediaType = "AUDIO" | "IMAGE" | "DOCUMENT";
 
+type QuotedMessage = {
+  id: string;
+  body: string;
+  direction: "INBOUND" | "OUTBOUND";
+  mediaType: MediaType | null;
+  isDeleted: boolean;
+  sender: { name: string } | null;
+};
+
 type Message = {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
@@ -52,7 +61,25 @@ type Message = {
   mediaFileName: string | null;
   mediaDurationSeconds: number | null;
   sender: { name: string } | null;
+  isEdited: boolean;
+  isDeleted: boolean;
+  quotedMessage: QuotedMessage | null;
 };
+
+const SENT_STATUSES: MessageStatus[] = ["SENT", "DELIVERED", "READ"];
+
+function quotedLabel(quoted: QuotedMessage, contact: ContactRef) {
+  return quoted.direction === "OUTBOUND" ? quoted.sender?.name ?? "Você" : contactLabel(contact);
+}
+
+function quotedSnippet(quoted: QuotedMessage) {
+  if (quoted.isDeleted) return "Mensagem apagada";
+  if (quoted.body) return quoted.body;
+  if (quoted.mediaType === "IMAGE") return "📷 Imagem";
+  if (quoted.mediaType === "AUDIO") return "🎤 Áudio";
+  if (quoted.mediaType === "DOCUMENT") return "📄 Documento";
+  return "";
+}
 
 type TenantUser = { id: string; name: string };
 
@@ -120,6 +147,11 @@ export function InboxView() {
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
+  const { data: statusCounts } = useSWR<Record<ConversationStatus, number>>(
+    "/api/conversations/status-counts",
+    fetcher,
+    { refreshInterval: 5000 }
+  );
   const availableTags = Array.from(new Set((conversations ?? []).flatMap((c) => c.tags))).sort();
   const activeFilterCount = [tagFilter, assigneeFilter, unreadOnly ? "1" : ""].filter(Boolean).length;
 
@@ -181,13 +213,22 @@ export function InboxView() {
                 setTab(t.key);
                 setSelectedId(null);
               }}
-              className={`flex-1 px-2 py-2 text-xs font-medium border-b-2 ${
+              className={`flex-1 px-2 py-2 text-xs font-medium border-b-2 flex items-center justify-center gap-1.5 ${
                 tab === t.key
                   ? "border-accent text-accent"
                   : "border-transparent text-neutral-500 hover:text-neutral-800"
               }`}
             >
               {t.label}
+              {!!statusCounts?.[t.key] && (
+                <span
+                  className={`text-[10px] rounded-full px-1.5 py-0.5 ${
+                    tab === t.key ? "bg-accent/15 text-accent" : "bg-neutral-200 text-neutral-600"
+                  }`}
+                >
+                  {statusCounts[t.key]}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -456,6 +497,8 @@ function ConversationThread({
   const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [replyTo, setReplyTo] = useState<Message | null>(null);
+  const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -478,6 +521,13 @@ function ConversationThread({
   // Ao trocar de conversa, sempre volta a acompanhar o final (igual WhatsApp).
   useEffect(() => {
     isNearBottomRef.current = true;
+  }, [conversationId]);
+
+  // Resposta/edição em andamento não deve "vazar" pra outra conversa que o
+  // atendente abra em seguida.
+  useEffect(() => {
+    setReplyTo(null);
+    setEditingMessage(null);
   }, [conversationId]);
 
   // Rola pro final quando as mensagens chegam (inclui a abertura inicial —
@@ -527,12 +577,54 @@ function ConversationThread({
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!draft.trim()) return;
+    const text = draft;
     setDraft("");
+
+    if (editingMessage) {
+      setEditingMessage(null);
+      const res = await fetch(`/api/messages/${editingMessage.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(typeof body.error === "string" ? body.error : "não deu pra editar a mensagem");
+      }
+      mutateMessages();
+      return;
+    }
+
+    setReplyTo(null);
     await fetch("/api/messages/send", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId, text: draft }),
+      body: JSON.stringify({ conversationId, text, quotedMessageId: replyTo?.id }),
     });
+    mutateMessages();
+  }
+
+  function handleReply(message: Message) {
+    setEditingMessage(null);
+    setReplyTo(message);
+    draftInputRef.current?.focus();
+  }
+
+  function handleEdit(message: Message) {
+    setReplyTo(null);
+    setEditingMessage(message);
+    setDraft(message.body);
+    draftInputRef.current?.focus();
+  }
+
+  async function handleDelete(message: Message) {
+    if (!confirm("Apagar essa mensagem pra todos?")) return;
+    if (editingMessage?.id === message.id) setEditingMessage(null);
+    const res = await fetch(`/api/messages/${message.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(typeof body.error === "string" ? body.error : "não deu pra apagar a mensagem");
+    }
     mutateMessages();
   }
 
@@ -664,99 +756,189 @@ function ConversationThread({
           className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
           onScroll={handleMessagesScroll}
         >
-          {messages?.map((m) => (
-            <div
-              key={m.id}
-              className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
-                m.direction === "OUTBOUND"
-                  ? "self-end bg-accent text-white"
-                  : "self-start bg-neutral-100 text-neutral-900"
-              }`}
-            >
-              {m.direction === "OUTBOUND" && m.sender && (
-                <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
-              )}
-              {m.mediaType && <MessageMedia message={m} onLoad={() => scrollToBottom()} />}
-              {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
+          {messages?.map((m) => {
+            const editable = m.direction === "OUTBOUND" && !m.isDeleted && !m.mediaType && SENT_STATUSES.includes(m.status);
+            const deletable = m.direction === "OUTBOUND" && !m.isDeleted;
+            return (
               <div
-                className={`flex items-center gap-1 justify-end mt-1 text-[10px] ${
-                  m.direction === "OUTBOUND" ? "text-white/75" : "text-neutral-400"
+                key={m.id}
+                className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
+                  m.direction === "OUTBOUND"
+                    ? "self-end bg-accent text-white"
+                    : "self-start bg-neutral-100 text-neutral-900"
                 }`}
               >
-                {m.status === "PENDING" ? (
-                  <span>enviando...</span>
-                ) : m.status === "FAILED" ? (
-                  <span className={m.direction === "OUTBOUND" ? "text-red-100" : "text-red-500"}>
-                    falhou
-                  </span>
+                {m.direction === "OUTBOUND" && m.sender && (
+                  <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
+                )}
+                {m.isDeleted ? (
+                  <p className={`italic ${m.direction === "OUTBOUND" ? "text-white/60" : "text-neutral-400"}`}>
+                    🚫 Mensagem apagada
+                  </p>
                 ) : (
                   <>
-                    <span>{formatTime(m.createdAt)}</span>
-                    {m.direction === "OUTBOUND" && <MessageTicks status={m.status} />}
+                    {m.quotedMessage && (
+                      <div
+                        className={`mb-1.5 rounded border-l-2 pl-2 py-1 ${
+                          m.direction === "OUTBOUND" ? "border-white/50 bg-white/10" : "border-accent/50 bg-black/5"
+                        }`}
+                      >
+                        <p className={`text-xs font-medium ${m.direction === "OUTBOUND" ? "text-white/90" : "text-accent"}`}>
+                          {quotedLabel(m.quotedMessage, conversation.contact)}
+                        </p>
+                        <p className={`text-xs truncate ${m.direction === "OUTBOUND" ? "text-white/70" : "text-neutral-500"}`}>
+                          {quotedSnippet(m.quotedMessage)}
+                        </p>
+                      </div>
+                    )}
+                    {m.mediaType && <MessageMedia message={m} onLoad={() => scrollToBottom()} />}
+                    {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
                   </>
                 )}
+                <div
+                  className={`flex items-center justify-between gap-2 mt-1 text-[10px] ${
+                    m.direction === "OUTBOUND" ? "text-white/75" : "text-neutral-400"
+                  }`}
+                >
+                  {!m.isDeleted ? (
+                    <div className="flex items-center gap-1.5">
+                      <button onClick={() => handleReply(m)} title="Responder" className="opacity-70 hover:opacity-100">
+                        ↩
+                      </button>
+                      {editable && (
+                        <button onClick={() => handleEdit(m)} title="Editar" className="opacity-70 hover:opacity-100">
+                          ✎
+                        </button>
+                      )}
+                      {deletable && (
+                        <button onClick={() => handleDelete(m)} title="Apagar" className="opacity-70 hover:opacity-100">
+                          🗑
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {m.isEdited && !m.isDeleted && <span className="italic">editado</span>}
+                    {m.status === "PENDING" ? (
+                      <span>enviando...</span>
+                    ) : m.status === "FAILED" ? (
+                      <span className={m.direction === "OUTBOUND" ? "text-red-100" : "text-red-500"}>falhou</span>
+                    ) : (
+                      <>
+                        <span>{formatTime(m.createdAt)}</span>
+                        {m.direction === "OUTBOUND" && <MessageTicks status={m.status} />}
+                      </>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
-        <form onSubmit={handleSend} className="relative border-t border-neutral-200 p-2.5 md:p-4 flex gap-1.5 md:gap-2 items-center">
-          {showEmoji && (
-            <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
+        <div className="border-t border-neutral-200">
+          {(replyTo || editingMessage) && (
+            <div className="bg-neutral-50 border-b border-neutral-200 px-3 md:px-6 py-2 flex items-center gap-2">
+              <div className="flex-1 min-w-0 border-l-2 border-accent pl-2">
+                <p className="text-xs font-medium text-accent truncate">
+                  {editingMessage ? "Editando mensagem" : `Respondendo a ${quotedLabel(
+                    {
+                      id: replyTo!.id,
+                      body: replyTo!.body,
+                      direction: replyTo!.direction,
+                      mediaType: replyTo!.mediaType,
+                      isDeleted: replyTo!.isDeleted,
+                      sender: replyTo!.sender,
+                    },
+                    conversation.contact
+                  )}`}
+                </p>
+                <p className="text-xs text-neutral-500 truncate">
+                  {editingMessage
+                    ? editingMessage.body
+                    : quotedSnippet({
+                        id: replyTo!.id,
+                        body: replyTo!.body,
+                        direction: replyTo!.direction,
+                        mediaType: replyTo!.mediaType,
+                        isDeleted: replyTo!.isDeleted,
+                        sender: replyTo!.sender,
+                      })}
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setReplyTo(null);
+                  setEditingMessage(null);
+                  setDraft("");
+                }}
+                aria-label="Cancelar"
+                className="text-neutral-400 hover:text-neutral-700 text-lg leading-none shrink-0"
+              >
+                ×
+              </button>
+            </div>
           )}
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) uploadAndSend(file);
-              e.target.value = "";
-            }}
-          />
-          <button
-            type="button"
-            onClick={() => setShowEmoji((v) => !v)}
-            disabled={uploading || recording}
-            title="Emoji"
-            className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
-          >
-            😊
-          </button>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading || recording}
-            title="Anexar imagem, áudio ou arquivo"
-            className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
-          >
-            📎
-          </button>
-          <button
-            type="button"
-            onClick={recording ? stopRecording : startRecording}
-            disabled={uploading}
-            title={recording ? "Parar gravação" : "Gravar áudio"}
-            className={`text-lg px-1 disabled:opacity-40 ${recording ? "text-red-600" : "text-neutral-500 hover:text-accent"}`}
-          >
-            {recording ? "⏹" : "🎤"}
-          </button>
-          <input
-            ref={draftInputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={uploading ? "Enviando anexo..." : recording ? "Gravando áudio..." : "Escreva uma mensagem..."}
-            disabled={uploading || recording}
-            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
-          />
-          <button
-            type="submit"
-            disabled={uploading || recording}
-            className="rounded-md bg-accent px-3 md:px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-          >
-            Enviar
-          </button>
-        </form>
+          <form onSubmit={handleSend} className="relative p-2.5 md:p-4 flex gap-1.5 md:gap-2 items-center">
+            {showEmoji && (
+              <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
+            )}
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadAndSend(file);
+                e.target.value = "";
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowEmoji((v) => !v)}
+              disabled={uploading || recording}
+              title="Emoji"
+              className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+            >
+              😊
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || recording || !!editingMessage}
+              title="Anexar imagem, áudio ou arquivo"
+              className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+            >
+              📎
+            </button>
+            <button
+              type="button"
+              onClick={recording ? stopRecording : startRecording}
+              disabled={uploading || !!editingMessage}
+              title={recording ? "Parar gravação" : "Gravar áudio"}
+              className={`text-lg px-1 disabled:opacity-40 ${recording ? "text-red-600" : "text-neutral-500 hover:text-accent"}`}
+            >
+              {recording ? "⏹" : "🎤"}
+            </button>
+            <input
+              ref={draftInputRef}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={uploading ? "Enviando anexo..." : recording ? "Gravando áudio..." : "Escreva uma mensagem..."}
+              disabled={uploading || recording}
+              className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
+            />
+            <button
+              type="submit"
+              disabled={uploading || recording}
+              className="rounded-md bg-accent px-3 md:px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {editingMessage ? "Salvar" : "Enviar"}
+            </button>
+          </form>
+        </div>
       </div>
       {showContact && (
         <>

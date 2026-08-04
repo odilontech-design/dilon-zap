@@ -41,6 +41,33 @@ export function getSocketForTenant(tenantId: string) {
   return null;
 }
 
+/** Edita o texto de uma mensagem já enviada — WhatsApp só deixa editar mensagem própria (fromMe). */
+export async function editOutboundMessage(
+  tenantId: string,
+  waJid: string,
+  waMessageId: string,
+  newText: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "sem conexão ativa" };
+
+  await socket.sendMessage(waJid, { text: newText, edit: { remoteJid: waJid, id: waMessageId, fromMe: true } });
+  return { ok: true };
+}
+
+/** Revoga (apaga pra todos) uma mensagem já enviada. */
+export async function deleteOutboundMessage(
+  tenantId: string,
+  waJid: string,
+  waMessageId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "sem conexão ativa" };
+
+  await socket.sendMessage(waJid, { delete: { remoteJid: waJid, id: waMessageId, fromMe: true } });
+  return { ok: true };
+}
+
 export async function startSession(sessionId: string) {
   if (activeSessions.has(sessionId)) return;
 
@@ -191,6 +218,7 @@ export async function startSession(sessionId: string) {
         waMessageId: msg.key.id ?? undefined,
         pushName: msg.pushName ?? undefined,
         senderPn: msg.key.senderPn ?? undefined,
+        quotedWaMessageId: content.quotedWaMessageId,
         socket,
       }).catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
     }
@@ -256,23 +284,38 @@ type InboundMedia = {
   durationSeconds?: number;
 };
 
+// contextInfo (onde mora a citação, quando a mensagem é uma resposta a outra)
+// vem aninhado dentro do tipo específico da mensagem, não solto no nível de
+// cima — cada branch tem seu próprio campo.
+function getQuotedWaMessageId(m: proto.IMessage): string | undefined {
+  const contextInfo =
+    m.extendedTextMessage?.contextInfo ??
+    m.imageMessage?.contextInfo ??
+    m.videoMessage?.contextInfo ??
+    m.audioMessage?.contextInfo ??
+    m.documentMessage?.contextInfo;
+  return contextInfo?.stanzaId ?? undefined;
+}
+
 // Detecta o tipo de conteúdo da mensagem e baixa a mídia (já descriptografada
 // pelo Baileys) quando aplicável. Mensagem sem texto e sem mídia reconhecida
 // (figurinha, localização, enquete etc.) volta null e é ignorada por ora.
 async function extractInboundContent(
   msg: proto.IWebMessageInfo,
   socket: ReturnType<typeof makeWASocket>
-): Promise<{ text: string; media?: InboundMedia } | null> {
+): Promise<{ text: string; media?: InboundMedia; quotedWaMessageId?: string } | null> {
   const m = msg.message;
   if (!m) return null;
 
   const plainText = m.conversation ?? m.extendedTextMessage?.text ?? "";
+  const quotedWaMessageId = getQuotedWaMessageId(m);
   const downloadOpts = { logger, reuploadRequest: socket.updateMediaMessage };
 
   if (m.audioMessage) {
     const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
     return {
       text: plainText,
+      quotedWaMessageId,
       media: {
         type: "AUDIO",
         buffer,
@@ -286,6 +329,7 @@ async function extractInboundContent(
     const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
     return {
       text: m.imageMessage.caption ?? plainText,
+      quotedWaMessageId,
       media: { type: "IMAGE", buffer, mimeType: m.imageMessage.mimetype ?? "image/jpeg" },
     };
   }
@@ -294,6 +338,7 @@ async function extractInboundContent(
     const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
     return {
       text: m.documentMessage.caption ?? plainText,
+      quotedWaMessageId,
       media: {
         type: "DOCUMENT",
         buffer,
@@ -304,7 +349,7 @@ async function extractInboundContent(
   }
 
   if (!plainText) return null;
-  return { text: plainText };
+  return { text: plainText, quotedWaMessageId };
 }
 
 function extensionFromMime(mimeType: string): string {
@@ -329,6 +374,7 @@ async function recordMessage(params: {
   waMessageId?: string;
   pushName?: string;
   senderPn?: string;
+  quotedWaMessageId?: string;
   socket: ReturnType<typeof makeWASocket>;
 }) {
   const isInbound = params.direction === "INBOUND";
@@ -421,6 +467,16 @@ async function recordMessage(params: {
     }
   }
 
+  // Citação só existe dentro da mesma conversa — se não achar (ex: citou
+  // mensagem de antes da gente rastrear, ou o stanzaId não bate por algum
+  // motivo), segue sem quote em vez de falhar a mensagem inteira.
+  const quotedMessage = params.quotedWaMessageId
+    ? await prisma.message.findFirst({
+        where: { conversationId: conversation.id, waMessageId: params.quotedWaMessageId },
+        select: { id: true },
+      })
+    : null;
+
   await prisma.message.create({
     data: {
       conversationId: conversation.id,
@@ -429,6 +485,7 @@ async function recordMessage(params: {
       status: isInbound ? "DELIVERED" : "SENT",
       body: params.text,
       waMessageId: params.waMessageId,
+      quotedMessageId: quotedMessage?.id,
       ...mediaFields,
     },
   });
@@ -657,24 +714,33 @@ async function sendOutboundMedia(
     mediaMimeType: string | null;
     mediaFileName: string | null;
     body: string;
-  }
+  },
+  options?: Parameters<ReturnType<typeof makeWASocket>["sendMessage"]>[2]
 ) {
   if (!message.mediaKey) throw new Error("mensagem marcada como mídia mas sem mediaKey");
   const buffer = await downloadMedia(message.mediaKey);
   const mimetype = message.mediaMimeType ?? undefined;
 
   if (message.mediaType === "AUDIO") {
-    return socket.sendMessage(jid, { audio: buffer, mimetype: mimetype ?? "audio/ogg; codecs=opus", ptt: true });
+    return socket.sendMessage(
+      jid,
+      { audio: buffer, mimetype: mimetype ?? "audio/ogg; codecs=opus", ptt: true },
+      options
+    );
   }
   if (message.mediaType === "IMAGE") {
-    return socket.sendMessage(jid, { image: buffer, mimetype, caption: message.body || undefined });
+    return socket.sendMessage(jid, { image: buffer, mimetype, caption: message.body || undefined }, options);
   }
-  return socket.sendMessage(jid, {
-    document: buffer,
-    mimetype: mimetype ?? "application/octet-stream",
-    fileName: message.mediaFileName ?? "arquivo",
-    caption: message.body || undefined,
-  });
+  return socket.sendMessage(
+    jid,
+    {
+      document: buffer,
+      mimetype: mimetype ?? "application/octet-stream",
+      fileName: message.mediaFileName ?? "arquivo",
+      caption: message.body || undefined,
+    },
+    options
+  );
 }
 
 // Fase 0 mantém a fila simples de propósito: sem Redis/BullMQ ainda, o
@@ -694,7 +760,11 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
         where: { sessionId, direction: "OUTBOUND", status: "PENDING" },
         orderBy: { createdAt: "asc" },
         take: 5,
-        include: { conversation: { include: { contact: true } }, sender: { select: { name: true } } },
+        include: {
+          conversation: { include: { contact: true } },
+          sender: { select: { name: true } },
+          quotedMessage: { select: { waMessageId: true, direction: true, body: true } },
+        },
       });
 
       for (const message of pending) {
@@ -727,9 +797,23 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
             : message.body;
           const messageForSend = { ...message, body: displayBody };
 
+          // Reconstrói um WAMessage mínimo só com o que o Baileys precisa pra
+          // renderizar a citação (key + texto) — não guardamos a mensagem
+          // crua do WhatsApp, só o necessário fica salvo no nosso Message.
+          const quoted = message.quotedMessage?.waMessageId
+            ? {
+                key: {
+                  remoteJid: jid,
+                  id: message.quotedMessage.waMessageId,
+                  fromMe: message.quotedMessage.direction === "OUTBOUND",
+                },
+                message: { conversation: message.quotedMessage.body || "" },
+              }
+            : undefined;
+
           const sent = message.mediaType && message.mediaKey
-            ? await sendOutboundMedia(socket, jid, messageForSend)
-            : await socket.sendMessage(jid, { text: displayBody });
+            ? await sendOutboundMedia(socket, jid, messageForSend, { quoted })
+            : await socket.sendMessage(jid, { text: displayBody }, { quoted });
 
           await prisma.message.update({
             where: { id: message.id },

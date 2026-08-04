@@ -252,6 +252,17 @@ model Message {
   mediaFileName     String?  // nome original, relevante pra DOCUMENT
   mediaDurationSeconds Int?  // relevante pra AUDIO
 
+  isEdited  Boolean   @default(false)
+  editedAt  DateTime?
+  isDeleted Boolean   @default(false) // "apagar pra todos" — mantém a linha (auditoria), esconde o conteúdo na UI
+  deletedAt DateTime?
+
+  // Resposta citando outra mensagem da mesma conversa — WhatsApp não permite
+  // citar mensagem de outra conversa, então não precisa reforçar isso aqui.
+  quotedMessageId String?
+  quotedMessage   Message?  @relation("MessageReply", fields: [quotedMessageId], references: [id], onDelete: SetNull)
+  quotedBy        Message[] @relation("MessageReply")
+
   @@index([conversationId, createdAt])
   @@index([sessionId, status]) // worker consulta PENDING por sessão
   @@index([conversationId, direction, readAt]) // contagem de não lidas
