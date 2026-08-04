@@ -53,7 +53,7 @@ export function AutomationsPanel() {
       </p>
 
       <form onSubmit={handleCreate} className="rounded-lg border border-neutral-200 bg-white p-4 mb-6 flex flex-col gap-3">
-        <div className="flex gap-3">
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <label className="block text-xs font-medium text-neutral-700 mb-1">Palavra-chave</label>
             <input
@@ -64,7 +64,7 @@ export function AutomationsPanel() {
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
-          <label className="flex items-center gap-1.5 text-xs text-neutral-600 pt-5">
+          <label className="flex items-center gap-1.5 text-xs text-neutral-600 sm:pt-5">
             <input type="checkbox" checked={isDefault} onChange={(e) => setIsDefault(e.target.checked)} />
             Resposta padrão (fallback)
           </label>

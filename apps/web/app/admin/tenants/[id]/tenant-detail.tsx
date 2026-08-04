@@ -69,11 +69,11 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
   const [addingUser, setAddingUser] = useState(false);
   const [newUserPassword, setNewUserPassword] = useState<{ email: string; password: string } | null>(null);
 
-  if (!data) return <div className="p-8 text-neutral-400">Carregando...</div>;
+  if (!data) return <div className="p-4 md:p-8 text-neutral-400">Carregando...</div>;
   const { tenant, recentAudit } = data;
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-4 md:p-8 max-w-4xl">
       <Link href="/admin" className="text-xs text-emerald-400 hover:underline">
         ← Empresas
       </Link>
@@ -88,7 +88,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
           {tenant.sessions.length === 0 && <p className="px-4 py-3 text-sm text-neutral-500">Nenhuma sessão.</p>}
           {tenant.sessions.map((s) => (
-            <div key={s.id} className="px-4 py-3 flex items-center justify-between text-sm">
+            <div key={s.id} className="px-4 py-3 flex items-center justify-between gap-2 flex-wrap text-sm">
               <span className="text-neutral-200">{s.phoneNumber ?? s.label}</span>
               <span className="text-neutral-400">
                 {STATUS_LABEL[s.status] ?? s.status}
@@ -122,12 +122,12 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
 
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
           {tenant.users.map((u) => (
-            <div key={u.id} className="px-4 py-3 flex items-center justify-between text-sm">
+            <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-2 flex-wrap text-sm">
               <div>
                 <span className="text-neutral-200 font-medium">{u.name}</span>{" "}
                 <span className="text-neutral-500">{u.email}</span>
               </div>
-              <span className="text-xs rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300">{u.role}</span>
+              <span className="text-xs rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300 shrink-0">{u.role}</span>
             </div>
           ))}
         </div>
@@ -150,11 +150,11 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
           {recentAudit.length === 0 && <p className="px-4 py-3 text-sm text-neutral-500">Nenhuma ação registrada ainda.</p>}
           {recentAudit.map((a) => (
-            <div key={a.id} className="px-4 py-2.5 text-sm flex items-center justify-between">
+            <div key={a.id} className="px-4 py-2.5 text-sm flex items-center justify-between gap-2 flex-wrap">
               <span className="text-neutral-200">
                 <span className="font-mono text-xs text-emerald-400">{a.action}</span> — {a.actorName}
               </span>
-              <span className="text-xs text-neutral-500">
+              <span className="text-xs text-neutral-500 shrink-0">
                 {formatDate(a.createdAt)} {formatTime(a.createdAt)}
               </span>
             </div>
@@ -230,13 +230,13 @@ function BillingSection({
       <div className="rounded-lg border border-neutral-800 bg-neutral-900 p-4">
         {!subscription && <p className="text-sm text-neutral-500">Nenhum plano configurado ainda.</p>}
         {subscription && (
-          <div className="flex items-center justify-between text-sm mb-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap text-sm mb-3">
             <div>
               <span className="text-neutral-100 font-medium">{centsToBRL(subscription.amountCents)}</span>
               <span className="text-neutral-500"> / mês · vence todo dia {subscription.cycleDay}</span>
               {subscription.notes && <p className="text-xs text-neutral-500 mt-1">{subscription.notes}</p>}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               <span className={`text-xs rounded-full px-2 py-0.5 ${SUB_STATUS_COLOR[subscription.status]}`}>
                 {subscription.status}
               </span>
@@ -257,11 +257,11 @@ function BillingSection({
             {invoices.map((inv) => {
               const status = effectiveInvoiceStatus(inv);
               return (
-                <div key={inv.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
+                <div key={inv.id} className="px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap text-sm">
                   <span className="text-neutral-300">
                     {centsToBRL(inv.amountCents)} · vence {formatDate(inv.dueDate)}
                   </span>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     <span className={`text-xs rounded-full px-2 py-0.5 ${INVOICE_STATUS_COLOR[status]}`}>
                       {INVOICE_STATUS_LABEL[status]}
                     </span>
@@ -447,7 +447,7 @@ function NewUserForm({
       onSubmit={handleSubmit}
       className="mt-3 rounded-lg border border-neutral-800 bg-neutral-900 p-4 flex flex-col gap-3"
     >
-      <div className="flex gap-3">
+      <div className="flex flex-col sm:flex-row gap-3">
         <input
           required
           placeholder="Nome"

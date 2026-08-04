@@ -39,11 +39,11 @@ export function AuditLogPanel() {
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 
   return (
-    <div className="p-8 max-w-5xl">
+    <div className="p-4 md:p-8 max-w-5xl">
       <h1 className="text-lg font-semibold text-neutral-100 mb-1">Auditoria</h1>
       <p className="text-sm text-neutral-400 mb-6">Login e ações relevantes em todas as empresas.</p>
 
-      <div className="flex gap-3 mb-4">
+      <div className="flex gap-3 mb-4 flex-wrap">
         <select
           value={tenantId}
           onChange={(e) => {

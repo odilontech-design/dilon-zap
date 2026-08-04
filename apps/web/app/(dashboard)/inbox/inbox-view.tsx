@@ -157,8 +157,12 @@ export function InboxView() {
   }
 
   return (
-    <div className="flex h-screen">
-      <div className="w-80 shrink-0 border-r border-neutral-200 flex flex-col">
+    <div className="flex h-[calc(100dvh-3rem)] md:h-screen">
+      <div
+        className={`${
+          selectedId ? "hidden" : "flex"
+        } md:flex w-full md:w-80 shrink-0 border-r border-neutral-200 flex-col`}
+      >
         <div className="flex items-center justify-between px-4 py-4 border-b border-neutral-200">
           <h1 className="text-lg font-semibold">Inbox</h1>
           <button
@@ -324,9 +328,13 @@ export function InboxView() {
           ))}
         </div>
       </div>
-      <div className="flex-1 min-w-0">
+      <div className={`${selectedId ? "block" : "hidden"} md:block flex-1 min-w-0`}>
         {selectedId ? (
-          <ConversationThread conversationId={selectedId} onChanged={() => mutateList()} />
+          <ConversationThread
+            conversationId={selectedId}
+            onChanged={() => mutateList()}
+            onBack={() => setSelectedId(null)}
+          />
         ) : (
           <div className="flex items-center justify-center h-full text-sm text-neutral-400">
             Selecione uma conversa
@@ -436,9 +444,11 @@ function NewConversationModal({
 function ConversationThread({
   conversationId,
   onChanged,
+  onBack,
 }: {
   conversationId: string;
   onChanged: () => void;
+  onBack: () => void;
 }) {
   const [draft, setDraft] = useState("");
   const [showContact, setShowContact] = useState(false);
@@ -590,19 +600,30 @@ function ConversationThread({
   return (
     <div className="flex h-full">
       <div className="flex flex-col flex-1 min-w-0">
-        <div className="border-b border-neutral-200 px-6 py-3 flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-4">
-            <button
-              onClick={() => setShowContact((v) => !v)}
-              className="flex items-center gap-2.5 text-left hover:opacity-70"
-            >
-              <Avatar contact={conversation.contact} />
-              <div>
-                <p className="text-sm font-semibold">{contactLabel(conversation.contact)}</p>
-                <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
-              </div>
-            </button>
-            <div className="flex items-center gap-2">
+        <div className="border-b border-neutral-200 px-3 md:px-6 py-3 flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={onBack}
+                aria-label="Voltar para a lista"
+                className="md:hidden -ml-1 p-1 text-neutral-500 hover:text-accent"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setShowContact((v) => !v)}
+                className="flex items-center gap-2.5 text-left hover:opacity-70"
+              >
+                <Avatar contact={conversation.contact} />
+                <div>
+                  <p className="text-sm font-semibold">{contactLabel(conversation.contact)}</p>
+                  <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
+                </div>
+              </button>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
               {TABS.filter((t) => t.key !== conversation.status).map((t) => (
                 <button
                   key={t.key}
@@ -639,13 +660,13 @@ function ConversationThread({
         </div>
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-2"
+          className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
           onScroll={handleMessagesScroll}
         >
           {messages?.map((m) => (
             <div
               key={m.id}
-              className={`max-w-md rounded-lg px-3 py-2 text-sm ${
+              className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
                 m.direction === "OUTBOUND"
                   ? "self-end bg-accent text-white"
                   : "self-start bg-neutral-100 text-neutral-900"
@@ -678,7 +699,7 @@ function ConversationThread({
           ))}
           <div ref={messagesEndRef} />
         </div>
-        <form onSubmit={handleSend} className="relative border-t border-neutral-200 p-4 flex gap-2 items-center">
+        <form onSubmit={handleSend} className="relative border-t border-neutral-200 p-2.5 md:p-4 flex gap-1.5 md:gap-2 items-center">
           {showEmoji && (
             <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
           )}
@@ -730,21 +751,28 @@ function ConversationThread({
           <button
             type="submit"
             disabled={uploading || recording}
-            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-md bg-accent px-3 md:px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
           >
             Enviar
           </button>
         </form>
       </div>
       {showContact && (
-        <ContactPanel
-          contact={conversation.contact}
-          onClose={() => setShowContact(false)}
-          onSaved={() => {
-            mutateConversation();
-            onChanged();
-          }}
-        />
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-30 md:hidden"
+            onClick={() => setShowContact(false)}
+            aria-hidden
+          />
+          <ContactPanel
+            contact={conversation.contact}
+            onClose={() => setShowContact(false)}
+            onSaved={() => {
+              mutateConversation();
+              onChanged();
+            }}
+          />
+        </>
       )}
     </div>
   );
@@ -827,7 +855,7 @@ function ContactPanel({
   }
 
   return (
-    <div className="w-72 shrink-0 border-l border-neutral-200 bg-white p-4 flex flex-col gap-4">
+    <div className="fixed inset-y-0 right-0 z-40 w-72 md:static md:z-auto shrink-0 border-l border-neutral-200 bg-white p-4 flex flex-col gap-4 overflow-y-auto">
       <div className="flex items-center justify-between">
         <h2 className="text-sm font-semibold">Contato</h2>
         <button onClick={onClose} className="text-neutral-400 hover:text-neutral-700" aria-label="Fechar">

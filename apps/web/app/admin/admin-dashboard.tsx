@@ -68,8 +68,8 @@ export function AdminDashboard() {
     .reduce((sum, t) => sum + (t.subscription?.amountCents ?? 0), 0);
 
   return (
-    <div className="p-8 max-w-6xl">
-      <div className="flex items-center justify-between mb-6">
+    <div className="p-4 md:p-8 max-w-6xl">
+      <div className="flex items-center justify-between gap-3 mb-6 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold text-neutral-100">Empresas na plataforma</h1>
           <p className="text-sm text-neutral-400">
