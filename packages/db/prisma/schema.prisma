@@ -22,6 +22,7 @@ model Tenant {
   autoReplies   AutoReply[]
   subscription  Subscription?
   invoices      Invoice[]
+  tags          Tag[]
 }
 
 enum UserRole {
@@ -183,6 +184,26 @@ model AutoReply {
   isDefault Boolean  @default(false)
   createdAt DateTime @default(now())
 
+  @@index([tenantId])
+}
+
+// Etiqueta cadastrada pelo tenant (nome + cor) — Conversation.tags continua
+// sendo String[] guardando o NOME da etiqueta, não uma FK, de propósito:
+// os tenants já têm tags em texto livre em produção, e criar uma relação
+// de verdade exigiria migrar esse histórico. Isso aqui só define a lista
+// "oficial" com cor/status pra alimentar o seletor — uma conversa marcada
+// com um nome que não está mais aqui (etiqueta apagada/renomeada) continua
+// mostrando o texto puro, sem quebrar nada.
+model Tag {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#0000F5") // hex
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, name])
   @@index([tenantId])
 }
 

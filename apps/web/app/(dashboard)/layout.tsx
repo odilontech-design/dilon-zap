@@ -33,6 +33,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
           <Link href="/automacoes" className="rounded-md px-3 py-2 hover:bg-neutral-100">
             Automações
           </Link>
+          <Link href="/etiquetas" className="rounded-md px-3 py-2 hover:bg-neutral-100">
+            Etiquetas
+          </Link>
           <Link href="/bloqueios" className="rounded-md px-3 py-2 hover:bg-neutral-100">
             Bloqueios
           </Link>

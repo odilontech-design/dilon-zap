@@ -13,6 +13,7 @@ import {
   type ContactRef,
   type PipelineStage,
 } from "@/lib/contact";
+import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 
 type Contact = ContactRef & {
   pipelineStage: PipelineStage;
@@ -32,6 +33,7 @@ export function ContactsPanel() {
   const { data: contacts, mutate } = useSWR<Contact[]>("/api/contacts", fetcher, {
     refreshInterval: 8000,
   });
+  const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<PipelineStage | "">("");
   const [dupeOnly, setDupeOnly] = useState(false);
@@ -270,11 +272,18 @@ export function ContactsPanel() {
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex gap-1 flex-wrap">
-                    {c.tags.map((tag) => (
-                      <span key={tag} className="text-[10px] rounded-full bg-accent/10 text-accent px-2 py-0.5">
-                        {tag}
-                      </span>
-                    ))}
+                    {c.tags.map((tag) => {
+                      const color = tagColor(tagDefs, tag);
+                      return (
+                        <span
+                          key={tag}
+                          className="text-[10px] rounded-full px-2 py-0.5"
+                          style={{ backgroundColor: color, color: readableTextColor(color) }}
+                        >
+                          {tag}
+                        </span>
+                      );
+                    })}
                   </div>
                 </td>
                 <td className="px-4 py-2.5 text-neutral-500">{formatDate(c.createdAt)}</td>

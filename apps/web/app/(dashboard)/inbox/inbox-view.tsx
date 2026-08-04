@@ -13,6 +13,7 @@ import {
   type ContactRef,
   type PipelineStage,
 } from "@/lib/contact";
+import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
@@ -117,6 +118,7 @@ export function InboxView() {
     { refreshInterval: 2000 }
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
+  const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
   const availableTags = Array.from(new Set((conversations ?? []).flatMap((c) => c.tags))).sort();
   const activeFilterCount = [tagFilter, assigneeFilter, unreadOnly ? "1" : ""].filter(Boolean).length;
 
@@ -303,11 +305,18 @@ export function InboxView() {
                         {c.assignedTo.name}
                       </span>
                     )}
-                    {c.tags.map((tag) => (
-                      <span key={tag} className="text-[10px] rounded-full bg-accent/10 text-accent px-2 py-0.5">
-                        {tag}
-                      </span>
-                    ))}
+                    {c.tags.map((tag) => {
+                      const color = tagColor(tagDefs, tag);
+                      return (
+                        <span
+                          key={tag}
+                          className="text-[10px] rounded-full px-2 py-0.5"
+                          style={{ backgroundColor: color, color: readableTextColor(color) }}
+                        >
+                          {tag}
+                        </span>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
@@ -453,6 +462,7 @@ function ConversationThread({
     { refreshInterval: 1500 }
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
+  const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
 
   // Ao trocar de conversa, sempre volta a acompanhar o final (igual WhatsApp).
   useEffect(() => {
@@ -625,7 +635,7 @@ function ConversationThread({
               </button>
             </div>
           </div>
-          <TagEditor tags={conversation.tags} onChange={(tags) => patchConversation({ tags })} />
+          <TagEditor tags={conversation.tags} tagDefs={tagDefs} onChange={(tags) => patchConversation({ tags })} />
         </div>
         <div
           ref={messagesContainerRef}
@@ -859,49 +869,64 @@ function ContactPanel({
   );
 }
 
-function TagEditor({ tags, onChange }: { tags: string[]; onChange: (tags: string[]) => void }) {
-  const [draft, setDraft] = useState("");
-
-  function addTag(e: React.FormEvent) {
-    e.preventDefault();
-    const value = draft.trim();
-    if (!value || tags.includes(value)) return;
-    onChange([...tags, value]);
-    setDraft("");
+function TagEditor({
+  tags,
+  tagDefs,
+  onChange,
+}: {
+  tags: string[];
+  tagDefs: TagDef[] | undefined;
+  onChange: (tags: string[]) => void;
+}) {
+  function addTag(name: string) {
+    if (!name || tags.includes(name)) return;
+    onChange([...tags, name]);
   }
 
   function removeTag(tag: string) {
     onChange(tags.filter((t) => t !== tag));
   }
 
+  // Só etiquetas ativas e ainda não aplicadas aparecem pra escolher — igual
+  // JetSales, quem cria/gerencia a lista é a página Etiquetas, não digitando
+  // aqui. Uma tag já aplicada que não bate com nenhuma cadastrada (texto
+  // livre de antes desse cadastro existir) continua aparecendo normal, só
+  // com a cor neutra de fallback.
+  const options = (tagDefs ?? []).filter((t) => t.isActive && !tags.includes(t.name));
+
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
-      {tags.map((tag) => (
-        <span
-          key={tag}
-          className="text-[11px] rounded-full bg-accent/10 text-accent pl-2 pr-1 py-0.5 flex items-center gap-1"
+      {tags.map((tag) => {
+        const color = tagColor(tagDefs, tag);
+        return (
+          <span
+            key={tag}
+            className="text-[11px] rounded-full pl-2 pr-1 py-0.5 flex items-center gap-1"
+            style={{ backgroundColor: color, color: readableTextColor(color) }}
+          >
+            {tag}
+            <button onClick={() => removeTag(tag)} className="hover:opacity-70" aria-label={`Remover ${tag}`}>
+              ×
+            </button>
+          </span>
+        );
+      })}
+      {options.length > 0 && (
+        <select
+          value=""
+          onChange={(e) => addTag(e.target.value)}
+          className="text-[11px] rounded-full border border-neutral-300 bg-white px-2 py-0.5 text-neutral-500 focus:outline-none focus:ring-1 focus:ring-accent"
         >
-          {tag}
-          <button onClick={() => removeTag(tag)} className="hover:opacity-70" aria-label={`Remover ${tag}`}>
-            ×
-          </button>
-        </span>
-      ))}
-      <form onSubmit={addTag} className="flex items-center gap-1">
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder="+ tag"
-          className="text-[11px] w-16 focus:w-24 transition-all rounded-full border border-neutral-300 px-2 py-0.5 focus:outline-none focus:ring-1 focus:ring-accent"
-        />
-        <button
-          type="submit"
-          className="text-[11px] text-neutral-500 hover:text-accent px-1"
-          aria-label="Adicionar tag"
-        >
-          adicionar
-        </button>
-      </form>
+          <option value="" disabled>
+            + etiqueta
+          </option>
+          {options.map((t) => (
+            <option key={t.id} value={t.name}>
+              {t.name}
+            </option>
+          ))}
+        </select>
+      )}
     </div>
   );
 }
