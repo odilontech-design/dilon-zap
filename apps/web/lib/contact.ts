@@ -60,6 +60,20 @@ export function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
+/** Hora se for hoje, "Ontem", dia da semana se for essa semana, senão a data — igual WhatsApp. */
+export function formatListTimestamp(iso: string) {
+  const date = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startOfToday.getTime() - startOfDate.getTime()) / 86_400_000);
+
+  if (diffDays === 0) return formatTime(iso);
+  if (diffDays === 1) return "Ontem";
+  if (diffDays > 1 && diffDays < 7) return date.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
+  return formatDate(iso);
+}
+
 export type PipelineStage = "NOVO_LEAD" | "EM_CONTATO" | "PROPOSTA_ENVIADA" | "FECHADO" | "PERDIDO";
 
 export const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [

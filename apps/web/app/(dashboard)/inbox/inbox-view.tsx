@@ -7,6 +7,7 @@ import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
 import {
   contactLabel,
+  formatListTimestamp,
   formatPhoneDisplay,
   formatTime,
   PIPELINE_STAGES,
@@ -287,7 +288,7 @@ export function InboxView() {
                     </div>
                     {c.messages[0] && (
                       <span className="text-[11px] text-neutral-400 shrink-0">
-                        {formatTime(c.messages[0].createdAt)}
+                        {formatListTimestamp(c.messages[0].createdAt)}
                       </span>
                     )}
                   </div>

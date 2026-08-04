@@ -10,7 +10,7 @@ const NAV_ITEMS = [
   { href: "/admin/auditoria", label: "Auditoria" },
 ];
 
-export function AdminSidebar({ email }: { email: string }) {
+export function AdminSidebar({ name }: { name: string }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -62,7 +62,7 @@ export function AdminSidebar({ email }: { email: string }) {
           })}
         </nav>
         <div className="mt-auto pt-4 border-t border-neutral-800 text-xs text-neutral-400">
-          <p className="mb-2 break-all">{email}</p>
+          <p className="mb-2 font-medium text-neutral-200 truncate">{name}</p>
           <SignOutButton />
         </div>
       </aside>

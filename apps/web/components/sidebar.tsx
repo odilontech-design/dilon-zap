@@ -17,7 +17,7 @@ const NAV_ITEMS = [
   { href: "/bloqueios", label: "Bloqueios" },
 ];
 
-export function Sidebar({ email }: { email: string }) {
+export function Sidebar({ name }: { name: string }) {
   // Fechado por padrão — no desktop (md:) fica sempre visível via CSS,
   // independente desse estado; ele só controla o comportamento no mobile.
   const [open, setOpen] = useState(false);
@@ -80,7 +80,7 @@ export function Sidebar({ email }: { email: string }) {
           })}
         </nav>
         <div className="mt-auto pt-4 border-t border-neutral-200 text-xs text-neutral-500">
-          <p className="mb-2 break-all">{email}</p>
+          <p className="mb-2 font-medium text-neutral-700 truncate">{name}</p>
           <SignOutButton />
         </div>
       </aside>
