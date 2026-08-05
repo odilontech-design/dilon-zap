@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { href: "/connect", label: "Conectar número" },
   { href: "/automacoes", label: "Automações" },
   { href: "/etiquetas", label: "Etiquetas" },
+  { href: "/etapas", label: "Etapas do funil" },
   { href: "/bloqueios", label: "Bloqueios" },
 ];
 

@@ -5,7 +5,8 @@ import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 
 const bodySchema = z.object({
-  pipelineStage: z.enum(["NOVO_LEAD", "EM_CONTATO", "PROPOSTA_ENVIADA", "FECHADO", "PERDIDO"]).optional(),
+  stageId: z.string().nullable().optional(),
+  dealValueCents: z.number().int().min(0).optional(),
   name: z.string().max(120).nullable().optional(),
 });
 
@@ -18,6 +19,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     where: { id: params.id, tenantId: user.tenantId },
   });
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  // Confere que a etapa é do mesmo tenant — senão dá pra mover contato da
+  // Believe pra uma etapa cadastrada por outro negócio.
+  if (parsed.data.stageId) {
+    const stage = await prisma.stage.findFirst({ where: { id: parsed.data.stageId, tenantId: user.tenantId } });
+    if (!stage) return NextResponse.json({ error: "etapa inválida" }, { status: 400 });
+  }
 
   const updated = await prisma.contact.update({
     where: { id: contact.id },

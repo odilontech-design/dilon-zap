@@ -23,6 +23,7 @@ model Tenant {
   subscription  Subscription?
   invoices      Invoice[]
   tags          Tag[]
+  stages        Stage[]
 }
 
 enum UserRole {
@@ -94,12 +95,22 @@ model WhatsAppSignalKey {
   @@index([sessionId, category])
 }
 
-enum PipelineStage {
-  NOVO_LEAD
-  EM_CONTATO
-  PROPOSTA_ENVIADA
-  FECHADO
-  PERDIDO
+// Etapa do funil de vendas — configurável por empresa (cada negócio tem seu
+// próprio processo; uma agência de viagens não tem "Em separação", por
+// exemplo). position define a ordem das colunas no kanban.
+model Stage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  color     String   @default("#0000F5") // hex
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  contacts Contact[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId, position])
 }
 
 // Um contato de WhatsApp dentro de um tenant (o mesmo número em tenants
@@ -119,14 +130,18 @@ model Contact {
   // é calculado na hora (últimas 24h), não guardado como boolean, porque
   // Status expira sozinho e não teria como saber quando "desligar" a flag.
   lastStatusAt DateTime?
-  pipelineStage PipelineStage @default(NOVO_LEAD)
-  createdAt   DateTime      @default(now())
+  // null = ainda não triado no funil (aparece numa coluna "Sem etapa" à
+  // parte, nunca chuta o contato pra uma etapa que possa estar errada).
+  stageId        String?
+  stage          Stage?   @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  dealValueCents Int      @default(0) // valor do negócio — soma no total de cada coluna do funil
+  createdAt      DateTime @default(now())
 
   conversations Conversation[]
 
   @@unique([tenantId, waJid])
   @@index([tenantId])
-  @@index([tenantId, pipelineStage])
+  @@index([tenantId, stageId])
 }
 
 enum ConversationStatus {

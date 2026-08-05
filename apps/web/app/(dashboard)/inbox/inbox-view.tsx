@@ -5,19 +5,12 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
-import {
-  contactLabel,
-  formatListTimestamp,
-  formatPhoneDisplay,
-  formatTime,
-  PIPELINE_STAGES,
-  type ContactRef,
-  type PipelineStage,
-} from "@/lib/contact";
+import { contactLabel, formatListTimestamp, formatPhoneDisplay, formatTime, type ContactRef } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
+type StageDef = { id: string; name: string; color: string };
 
 type ConversationSummary = {
   id: string;
@@ -35,7 +28,7 @@ type ConversationDetail = {
   ticketNumber: number;
   status: ConversationStatus;
   tags: string[];
-  contact: ContactRef & { pipelineStage: PipelineStage };
+  contact: ContactRef & { stageId: string | null };
   assignedTo: { id: string; name: string } | null;
 };
 
@@ -1217,10 +1210,11 @@ function ContactPanel({
   onClose,
   onSaved,
 }: {
-  contact: ContactRef & { pipelineStage: PipelineStage };
+  contact: ContactRef & { stageId: string | null };
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
   const [name, setName] = useState(contact.name ?? "");
 
   async function save(body: Record<string, unknown>) {
@@ -1258,15 +1252,16 @@ function ContactPanel({
         <p className="text-sm text-neutral-600">{formatPhoneDisplay(contact)}</p>
       </div>
       <div>
-        <label className="block text-xs font-medium text-neutral-700 mb-1">Status do lead</label>
+        <label className="block text-xs font-medium text-neutral-700 mb-1">Etapa</label>
         <select
-          value={contact.pipelineStage}
-          onChange={(e) => save({ pipelineStage: e.target.value })}
+          value={contact.stageId ?? ""}
+          onChange={(e) => save({ stageId: e.target.value || null })}
           className="w-full text-sm rounded-md border border-neutral-300 px-2 py-1.5"
         >
-          {PIPELINE_STAGES.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
+          <option value="">Sem etapa</option>
+          {stages?.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
             </option>
           ))}
         </select>

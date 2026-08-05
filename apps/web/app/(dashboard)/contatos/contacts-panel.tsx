@@ -4,29 +4,20 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
-import {
-  contactLabel,
-  formatDate,
-  formatPhone,
-  formatPhoneDisplay,
-  PIPELINE_STAGES,
-  type ContactRef,
-  type PipelineStage,
-} from "@/lib/contact";
+import { contactLabel, formatDate, formatPhone, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 
+type StageDef = { id: string; name: string; color: string };
+
 type Contact = ContactRef & {
-  pipelineStage: PipelineStage;
+  stageId: string | null;
+  stage: StageDef | null;
+  dealValueCents: number;
   tags: string[];
   createdAt: string;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
-
-const STAGE_LABEL = Object.fromEntries(PIPELINE_STAGES.map((s) => [s.key, s.label])) as Record<
-  PipelineStage,
-  string
->;
 
 export function ContactsPanel() {
   const router = useRouter();
@@ -34,8 +25,9 @@ export function ContactsPanel() {
     refreshInterval: 8000,
   });
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
+  const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
   const [search, setSearch] = useState("");
-  const [stageFilter, setStageFilter] = useState<PipelineStage | "">("");
+  const [stageFilter, setStageFilter] = useState("");
   const [dupeOnly, setDupeOnly] = useState(false);
   const [editing, setEditing] = useState<Contact | "new" | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
@@ -82,7 +74,7 @@ export function ContactsPanel() {
     const term = search.trim().toLowerCase();
     return contacts.filter((c) => {
       if (dupeOnly && !duplicateReasons.has(c.id)) return false;
-      if (stageFilter && c.pipelineStage !== stageFilter) return false;
+      if (stageFilter && c.stageId !== stageFilter) return false;
       if (!term) return true;
       return (
         contactLabel(c).toLowerCase().includes(term) || formatPhone(c.waJid).includes(term)
@@ -211,13 +203,13 @@ export function ContactsPanel() {
         />
         <select
           value={stageFilter}
-          onChange={(e) => setStageFilter(e.target.value as PipelineStage | "")}
+          onChange={(e) => setStageFilter(e.target.value)}
           className="text-sm rounded-md border border-neutral-300 px-2 py-2"
         >
-          <option value="">Status do lead: todos</option>
-          {PIPELINE_STAGES.map((s) => (
-            <option key={s.key} value={s.key}>
-              {s.label}
+          <option value="">Etapa: todas</option>
+          {stages?.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name}
             </option>
           ))}
         </select>
@@ -235,7 +227,7 @@ export function ContactsPanel() {
             <tr>
               <th className="text-left px-4 py-2 font-medium">Contato</th>
               <th className="text-left px-4 py-2 font-medium">Número</th>
-              <th className="text-left px-4 py-2 font-medium">Status lead</th>
+              <th className="text-left px-4 py-2 font-medium">Etapa</th>
               <th className="text-left px-4 py-2 font-medium">Tags</th>
               <th className="text-left px-4 py-2 font-medium">Criado em</th>
               <th className="text-left px-4 py-2 font-medium">Ações</th>
@@ -266,9 +258,16 @@ export function ContactsPanel() {
                 </td>
                 <td className="px-4 py-2.5 text-neutral-600">{formatPhoneDisplay(c)}</td>
                 <td className="px-4 py-2.5">
-                  <span className="text-xs rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
-                    {STAGE_LABEL[c.pipelineStage]}
-                  </span>
+                  {c.stage ? (
+                    <span
+                      className="text-xs rounded-full px-2 py-0.5"
+                      style={{ backgroundColor: c.stage.color, color: readableTextColor(c.stage.color) }}
+                    >
+                      {c.stage.name}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-neutral-400">Sem etapa</span>
+                  )}
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex gap-1 flex-wrap">
@@ -332,9 +331,11 @@ function ContactFormModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
   const [name, setName] = useState(contact?.name ?? "");
   const [phone, setPhone] = useState(contact ? formatPhone(contact.waJid) : "");
-  const [pipelineStage, setPipelineStage] = useState<PipelineStage>(contact?.pipelineStage ?? "NOVO_LEAD");
+  const [stageId, setStageId] = useState(contact?.stageId ?? "");
+  const [dealValue, setDealValue] = useState(contact ? (contact.dealValueCents / 100).toFixed(2) : "0.00");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -344,10 +345,15 @@ function ContactFormModal({
     setError(null);
 
     if (contact) {
+      const dealValueCents = Math.round(parseFloat(dealValue.replace(",", ".")) * 100);
       await fetch(`/api/contacts/${contact.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: name.trim() || null, pipelineStage }),
+        body: JSON.stringify({
+          name: name.trim() || null,
+          stageId: stageId || null,
+          dealValueCents: Number.isFinite(dealValueCents) ? dealValueCents : 0,
+        }),
       });
     } else {
       const res = await fetch("/api/contacts", {
@@ -391,20 +397,35 @@ function ContactFormModal({
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
-          <div>
-            <label className="block text-xs font-medium text-neutral-700 mb-1">Status do lead</label>
-            <select
-              value={pipelineStage}
-              onChange={(e) => setPipelineStage(e.target.value as PipelineStage)}
-              className="w-full text-sm rounded-md border border-neutral-300 px-2 py-2"
-            >
-              {PIPELINE_STAGES.map((s) => (
-                <option key={s.key} value={s.key}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </div>
+          {contact && (
+            <>
+              <div>
+                <label className="block text-xs font-medium text-neutral-700 mb-1">Etapa</label>
+                <select
+                  value={stageId}
+                  onChange={(e) => setStageId(e.target.value)}
+                  className="w-full text-sm rounded-md border border-neutral-300 px-2 py-2"
+                >
+                  <option value="">Sem etapa</option>
+                  {stages?.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-neutral-700 mb-1">Valor do negócio (R$)</label>
+                <input
+                  inputMode="decimal"
+                  value={dealValue}
+                  onChange={(e) => setDealValue(e.target.value)}
+                  placeholder="0.00"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+                />
+              </div>
+            </>
+          )}
           {error && <p className="text-xs text-red-600">{error}</p>}
           <div className="flex justify-end gap-2 mt-2">
             <button

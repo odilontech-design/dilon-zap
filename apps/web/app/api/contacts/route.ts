@@ -10,14 +10,23 @@ export async function GET() {
   const contacts = await prisma.contact.findMany({
     where: { tenantId: user.tenantId },
     orderBy: { createdAt: "desc" },
-    include: { conversations: { select: { tags: true } } },
+    include: {
+      conversations: {
+        select: { id: true, tags: true, status: true, assignedToId: true },
+        orderBy: { lastMessageAt: "desc" },
+        take: 1,
+      },
+      stage: { select: { id: true, name: true, color: true } },
+    },
   });
 
-  // Contato não tem tag própria — agrega as tags de todas as conversas dele,
-  // que é onde elas realmente vivem (ver /inbox).
+  // Contato não tem tag própria — usa as tags da conversa mais recente, que
+  // é onde elas realmente vivem (ver /inbox). Também expõe essa conversa
+  // (id + atendente) pro Funil linkar direto pro Inbox.
   const withTags = contacts.map(({ conversations, ...contact }) => ({
     ...contact,
-    tags: Array.from(new Set(conversations.flatMap((c) => c.tags))),
+    tags: conversations[0]?.tags ?? [],
+    latestConversation: conversations[0] ? { id: conversations[0].id, assignedToId: conversations[0].assignedToId } : null,
   }));
 
   return NextResponse.json(withTags);

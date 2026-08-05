@@ -73,13 +73,3 @@ export function formatListTimestamp(iso: string) {
   if (diffDays > 1 && diffDays < 7) return date.toLocaleDateString("pt-BR", { weekday: "short" }).replace(".", "");
   return formatDate(iso);
 }
-
-export type PipelineStage = "NOVO_LEAD" | "EM_CONTATO" | "PROPOSTA_ENVIADA" | "FECHADO" | "PERDIDO";
-
-export const PIPELINE_STAGES: { key: PipelineStage; label: string }[] = [
-  { key: "NOVO_LEAD", label: "Novo lead" },
-  { key: "EM_CONTATO", label: "Em contato" },
-  { key: "PROPOSTA_ENVIADA", label: "Proposta enviada" },
-  { key: "FECHADO", label: "Fechado" },
-  { key: "PERDIDO", label: "Perdido" },
-];

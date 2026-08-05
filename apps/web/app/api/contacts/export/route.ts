@@ -13,11 +13,12 @@ export async function GET() {
   const contacts = await prisma.contact.findMany({
     where: { tenantId: user.tenantId },
     orderBy: { createdAt: "desc" },
+    include: { stage: { select: { name: true } } },
   });
 
-  const header = ["nome", "telefone", "status_lead", "criado_em"];
+  const header = ["nome", "telefone", "etapa", "valor", "criado_em"];
   const rows = contacts.map((c) =>
-    [c.name ?? "", formatPhone(c.waJid), c.pipelineStage, c.createdAt.toISOString()]
+    [c.name ?? "", formatPhone(c.waJid), c.stage?.name ?? "", (c.dealValueCents / 100).toFixed(2), c.createdAt.toISOString()]
       .map((v) => csvEscape(String(v)))
       .join(",")
   );
