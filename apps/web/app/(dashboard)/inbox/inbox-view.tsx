@@ -500,7 +500,9 @@ function ConversationThread({
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
-  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
+  const [forwardBatch, setForwardBatch] = useState<Message[] | null>(null);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -525,11 +527,13 @@ function ConversationThread({
     isNearBottomRef.current = true;
   }, [conversationId]);
 
-  // Resposta/edição em andamento não deve "vazar" pra outra conversa que o
-  // atendente abra em seguida.
+  // Resposta/edição/seleção em andamento não deve "vazar" pra outra conversa
+  // que o atendente abra em seguida.
   useEffect(() => {
     setReplyTo(null);
     setEditingMessage(null);
+    setSelectionMode(false);
+    setSelectedMessageIds([]);
   }, [conversationId]);
 
   // Rola pro final quando as mensagens chegam (inclui a abertura inicial —
@@ -631,7 +635,24 @@ function ConversationThread({
   }
 
   function handleForward(message: Message) {
-    setForwardingMessage(message);
+    setForwardBatch([message]);
+  }
+
+  function toggleSelectionMode() {
+    setSelectionMode((v) => !v);
+    setSelectedMessageIds([]);
+  }
+
+  function toggleMessageSelected(id: string) {
+    setSelectedMessageIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function openBatchForward() {
+    // messages já vem em ordem cronológica (asc) — preserva essa ordem no
+    // encaminhamento, independente da ordem em que foram marcadas.
+    const batch = (messages ?? []).filter((m) => selectedMessageIds.includes(m.id));
+    if (batch.length === 0) return;
+    setForwardBatch(batch);
   }
 
   async function uploadAndSend(file: File) {
@@ -750,6 +771,14 @@ function ConversationThread({
               >
                 Ver contato
               </button>
+              <button
+                onClick={toggleSelectionMode}
+                className={`text-xs rounded-md border px-2.5 py-1.5 ${
+                  selectionMode ? "border-accent text-accent bg-accent/5" : "border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                {selectionMode ? "Cancelar seleção" : "Selecionar"}
+              </button>
               <button onClick={handleBlock} className="text-xs text-red-600 hover:underline">
                 Bloquear
               </button>
@@ -757,6 +786,20 @@ function ConversationThread({
           </div>
           <TagEditor tags={conversation.tags} tagDefs={tagDefs} onChange={(tags) => patchConversation({ tags })} />
         </div>
+        {selectionMode && (
+          <div className="flex items-center justify-between gap-2 border-b border-neutral-200 bg-accent/5 px-3 md:px-6 py-2 text-sm">
+            <span className="text-neutral-700">
+              {selectedMessageIds.length > 0 ? `${selectedMessageIds.length} selecionada(s)` : "Toque nas mensagens pra selecionar"}
+            </span>
+            <button
+              onClick={openBatchForward}
+              disabled={selectedMessageIds.length === 0}
+              className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40"
+            >
+              Encaminhar
+            </button>
+          </div>
+        )}
         <div
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
@@ -768,12 +811,21 @@ function ConversationThread({
             return (
               <div
                 key={m.id}
-                className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
-                  m.direction === "OUTBOUND"
-                    ? "self-end bg-accent text-white"
-                    : "self-start bg-neutral-100 text-neutral-900"
-                }`}
+                className={`flex items-center gap-2 ${m.direction === "OUTBOUND" ? "self-end" : "self-start"}`}
               >
+                {selectionMode && !m.isDeleted && (
+                  <input
+                    type="checkbox"
+                    checked={selectedMessageIds.includes(m.id)}
+                    onChange={() => toggleMessageSelected(m.id)}
+                    className="shrink-0"
+                  />
+                )}
+                <div
+                  className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
+                    m.direction === "OUTBOUND" ? "bg-accent text-white" : "bg-neutral-100 text-neutral-900"
+                  }`}
+                >
                 {m.direction === "OUTBOUND" && m.sender && (
                   <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
                 )}
@@ -811,7 +863,7 @@ function ConversationThread({
                     m.direction === "OUTBOUND" ? "text-white/75" : "text-neutral-400"
                   }`}
                 >
-                  {!m.isDeleted ? (
+                  {!m.isDeleted && !selectionMode ? (
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => handleReply(m)} title="Responder" className="opacity-70 hover:opacity-100">
                         ↩
@@ -846,6 +898,7 @@ function ConversationThread({
                       </>
                     )}
                   </div>
+                </div>
                 </div>
               </div>
             );
@@ -971,12 +1024,14 @@ function ConversationThread({
           />
         </>
       )}
-      {forwardingMessage && (
+      {forwardBatch && (
         <ForwardModal
-          message={forwardingMessage}
-          onClose={() => setForwardingMessage(null)}
+          messages={forwardBatch}
+          onClose={() => setForwardBatch(null)}
           onForwarded={() => {
-            setForwardingMessage(null);
+            setForwardBatch(null);
+            setSelectionMode(false);
+            setSelectedMessageIds([]);
             onChanged();
           }}
         />
@@ -992,11 +1047,11 @@ type ForwardTarget = {
 };
 
 function ForwardModal({
-  message,
+  messages,
   onClose,
   onForwarded,
 }: {
-  message: Message;
+  messages: Message[];
   onClose: () => void;
   onForwarded: () => void;
 }) {
@@ -1014,21 +1069,26 @@ function ForwardModal({
     setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   }
 
+  // Manda cada mensagem em sequência (não em paralelo) pra chegar na
+  // conversa de destino na mesma ordem cronológica em que foram selecionadas.
   async function handleForward() {
     if (selected.length === 0) return;
     setSending(true);
     setError(null);
-    const res = await fetch(`/api/messages/${message.id}/forward`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationIds: selected }),
-    });
-    setSending(false);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      setError(typeof body.error === "string" ? body.error : "não deu pra encaminhar");
-      return;
+    for (const message of messages) {
+      const res = await fetch(`/api/messages/${message.id}/forward`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationIds: selected }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setSending(false);
+        setError(typeof body.error === "string" ? body.error : "não deu pra encaminhar");
+        return;
+      }
     }
+    setSending(false);
     onForwarded();
   }
 
@@ -1038,13 +1098,15 @@ function ForwardModal({
         <div className="p-4 border-b border-neutral-200">
           <h2 className="text-base font-semibold mb-1">Encaminhar mensagem</h2>
           <p className="text-xs text-neutral-500 truncate">
-            {message.mediaType
-              ? message.mediaType === "IMAGE"
-                ? "📷 Imagem"
-                : message.mediaType === "AUDIO"
-                  ? "🎤 Áudio"
-                  : "📄 Documento"
-              : message.body}
+            {messages.length > 1
+              ? `${messages.length} mensagens selecionadas`
+              : messages[0].mediaType
+                ? messages[0].mediaType === "IMAGE"
+                  ? "📷 Imagem"
+                  : messages[0].mediaType === "AUDIO"
+                    ? "🎤 Áudio"
+                    : "📄 Documento"
+                : messages[0].body}
           </p>
         </div>
         <div className="p-3 border-b border-neutral-200">
