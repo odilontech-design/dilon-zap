@@ -257,6 +257,10 @@ model Message {
   isDeleted Boolean   @default(false) // "apagar pra todos" — mantém a linha (auditoria), esconde o conteúdo na UI
   deletedAt DateTime?
 
+  // Só o rótulo visual "Encaminhada" — sem referência à mensagem original
+  // (igual WhatsApp, que também não guarda esse vínculo).
+  isForwarded Boolean @default(false)
+
   // Resposta citando outra mensagem da mesma conversa — WhatsApp não permite
   // citar mensagem de outra conversa, então não precisa reforçar isso aqui.
   quotedMessageId String?

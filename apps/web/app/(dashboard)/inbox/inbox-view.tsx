@@ -63,6 +63,7 @@ type Message = {
   sender: { name: string } | null;
   isEdited: boolean;
   isDeleted: boolean;
+  isForwarded: boolean;
   quotedMessage: QuotedMessage | null;
 };
 
@@ -499,6 +500,7 @@ function ConversationThread({
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
+  const [forwardingMessage, setForwardingMessage] = useState<Message | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -626,6 +628,10 @@ function ConversationThread({
       alert(typeof body.error === "string" ? body.error : "não deu pra apagar a mensagem");
     }
     mutateMessages();
+  }
+
+  function handleForward(message: Message) {
+    setForwardingMessage(message);
   }
 
   async function uploadAndSend(file: File) {
@@ -777,6 +783,11 @@ function ConversationThread({
                   </p>
                 ) : (
                   <>
+                    {m.isForwarded && (
+                      <p className={`text-[10px] italic flex items-center gap-1 mb-0.5 ${m.direction === "OUTBOUND" ? "text-white/60" : "text-neutral-400"}`}>
+                        ↪ Encaminhada
+                      </p>
+                    )}
                     {m.quotedMessage && (
                       <div
                         className={`mb-1.5 rounded border-l-2 pl-2 py-1 ${
@@ -804,6 +815,9 @@ function ConversationThread({
                     <div className="flex items-center gap-1.5">
                       <button onClick={() => handleReply(m)} title="Responder" className="opacity-70 hover:opacity-100">
                         ↩
+                      </button>
+                      <button onClick={() => handleForward(m)} title="Encaminhar" className="opacity-70 hover:opacity-100">
+                        ↪
                       </button>
                       {editable && (
                         <button onClick={() => handleEdit(m)} title="Editar" className="opacity-70 hover:opacity-100">
@@ -957,6 +971,125 @@ function ConversationThread({
           />
         </>
       )}
+      {forwardingMessage && (
+        <ForwardModal
+          message={forwardingMessage}
+          onClose={() => setForwardingMessage(null)}
+          onForwarded={() => {
+            setForwardingMessage(null);
+            onChanged();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+type ForwardTarget = {
+  id: string;
+  ticketNumber: number;
+  contact: ContactRef;
+};
+
+function ForwardModal({
+  message,
+  onClose,
+  onForwarded,
+}: {
+  message: Message;
+  onClose: () => void;
+  onForwarded: () => void;
+}) {
+  const { data: targets } = useSWR<ForwardTarget[]>("/api/conversations/forward-targets", fetcher);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState<string[]>([]);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const filtered = (targets ?? []).filter((t) =>
+    contactLabel(t.contact).toLowerCase().includes(search.trim().toLowerCase())
+  );
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function handleForward() {
+    if (selected.length === 0) return;
+    setSending(true);
+    setError(null);
+    const res = await fetch(`/api/messages/${message.id}/forward`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationIds: selected }),
+    });
+    setSending(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "não deu pra encaminhar");
+      return;
+    }
+    onForwarded();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-sm shadow-lg flex flex-col max-h-[80vh]">
+        <div className="p-4 border-b border-neutral-200">
+          <h2 className="text-base font-semibold mb-1">Encaminhar mensagem</h2>
+          <p className="text-xs text-neutral-500 truncate">
+            {message.mediaType
+              ? message.mediaType === "IMAGE"
+                ? "📷 Imagem"
+                : message.mediaType === "AUDIO"
+                  ? "🎤 Áudio"
+                  : "📄 Documento"
+              : message.body}
+          </p>
+        </div>
+        <div className="p-3 border-b border-neutral-200">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar contato..."
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {filtered.length === 0 && (
+            <p className="text-sm text-neutral-400 px-4 py-6">Nenhum contato encontrado.</p>
+          )}
+          {filtered.map((t) => (
+            <label key={t.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-neutral-50 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={selected.includes(t.id)}
+                onChange={() => toggle(t.id)}
+                className="shrink-0"
+              />
+              <Avatar contact={t.contact} size={32} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm truncate">{contactLabel(t.contact)}</p>
+                <p className="text-[10px] font-mono text-neutral-400">#{t.ticketNumber}</p>
+              </div>
+            </label>
+          ))}
+        </div>
+        {error && <p className="text-sm text-red-600 px-4 pt-2">{error}</p>}
+        <div className="flex justify-end gap-2 p-4 border-t border-neutral-200">
+          <button onClick={onClose} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-800">
+            Cancelar
+          </button>
+          <button
+            onClick={handleForward}
+            disabled={selected.length === 0 || sending}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {sending ? "Encaminhando..." : `Encaminhar${selected.length > 0 ? ` (${selected.length})` : ""}`}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
