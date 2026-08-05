@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@dilon-zap/db";
 import { uploadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
+import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 const MAX_SIZE_BYTES = 16 * 1024 * 1024; // 16MB — mesmo teto que o WhatsApp usa pra mídia
 
@@ -41,7 +42,7 @@ export async function POST(req: Request) {
   }
 
   const conversation = await prisma.conversation.findFirst({
-    where: { id: conversationId, tenantId: user.tenantId },
+    where: { id: conversationId, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 

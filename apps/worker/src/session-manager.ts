@@ -28,6 +28,7 @@ const activeSessions = new Map<string, ActiveSession>();
 
 const OUTBOX_POLL_INTERVAL_MS = 1_000;
 const NEW_SESSION_POLL_INTERVAL_MS = 5_000;
+const RETRY_WINDOW_MS = 60_000; // quanto tempo tenta de novo sozinho antes de marcar FAILED de vez
 
 export function isSessionActive(sessionId: string) {
   return activeSessions.has(sessionId);
@@ -365,6 +366,49 @@ function phoneDigitsFromJid(jid?: string | null): string | undefined {
   return digits || undefined;
 }
 
+// Acha (ou cria) o contato certo pro JID que chegou nessa mensagem —
+// reconciliando com um contato JÁ EXISTENTE do MESMO telefone real, mesmo
+// que o JID literal seja diferente. Sem isso, o rollout de privacidade de
+// número do WhatsApp (a mesma pessoa passa a aparecer como @lid em vez do
+// @s.whatsapp.net de antes, ou vice-versa) cria um Contact/Conversation
+// NOVO do zero pra alguém que já tinha atendimento em andamento — a
+// conversa "duplica" (na prática, vira duas conversas separadas pra
+// mesma pessoa, cada resposta dela caindo ora numa ora noutra).
+async function resolveContact(params: {
+  tenantId: string;
+  waJid: string;
+  contactName?: string;
+  resolvedPhone?: string; // só quando waJid é @lid e o senderPn resolveu o telefone
+}) {
+  const phoneDigits = params.waJid.endsWith("@s.whatsapp.net")
+    ? params.waJid.replace("@s.whatsapp.net", "")
+    : params.resolvedPhone;
+
+  if (phoneDigits) {
+    const other = await prisma.contact.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        waJid: { not: params.waJid },
+        OR: [{ waJid: `${phoneDigits}@s.whatsapp.net` }, { phoneNumber: phoneDigits }],
+      },
+    });
+    if (other) {
+      const updateData: { name?: string; phoneNumber?: string } = {};
+      if (params.contactName && !other.name) updateData.name = params.contactName;
+      if (!other.phoneNumber) updateData.phoneNumber = phoneDigits;
+      return Object.keys(updateData).length > 0
+        ? prisma.contact.update({ where: { id: other.id }, data: updateData })
+        : other;
+    }
+  }
+
+  return prisma.contact.upsert({
+    where: { tenantId_waJid: { tenantId: params.tenantId, waJid: params.waJid } },
+    create: { tenantId: params.tenantId, waJid: params.waJid, name: params.contactName, phoneNumber: phoneDigits && params.waJid.endsWith("@lid") ? phoneDigits : undefined },
+    update: phoneDigits && params.waJid.endsWith("@lid") ? { phoneNumber: phoneDigits } : {},
+  });
+}
+
 async function recordMessage(params: {
   sessionId: string;
   waJid: string;
@@ -379,25 +423,6 @@ async function recordMessage(params: {
 }) {
   const isInbound = params.direction === "INBOUND";
 
-  // Dedupe por waMessageId: mensagem OUTBOUND mandada pelo próprio Inbox já
-  // foi gravada por /api/messages/send e marcada SENT pelo pollOutbox — o
-  // messages.upsert que o Baileys dispara de volta (eco de confirmação) é a
-  // MESMA mensagem, não uma nova. E o Baileys também reemite messages.upsert
-  // pra mensagens INBOUND já vistas em alguns casos (ex: replay num
-  // reconnect) — sem essa checagem em ambas as direções, duplicava mensagem.
-  // Inclui waJid no filtro: o id da mensagem é gerado pelo aparelho de quem
-  // manda, não é uma sequência global do WhatsApp — sem isso, duas mensagens
-  // de CONTATOS diferentes que por coincidência gerassem o mesmo id fariam a
-  // segunda ser descartada como "duplicata" mesmo sendo uma mensagem nova de
-  // verdade.
-  if (params.waMessageId) {
-    const existing = await prisma.message.findFirst({
-      where: { sessionId: params.sessionId, waMessageId: params.waMessageId, conversation: { contact: { waJid: params.waJid } } },
-      select: { id: true },
-    });
-    if (existing) return;
-  }
-
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
     where: { id: params.sessionId },
     select: { tenantId: true },
@@ -408,11 +433,30 @@ async function recordMessage(params: {
   // negócio, não do contato, então não pode virar o nome do contato.
   const contactName = isInbound ? params.pushName : undefined;
 
-  const contact = await prisma.contact.upsert({
-    where: { tenantId_waJid: { tenantId: session.tenantId, waJid: params.waJid } },
-    create: { tenantId: session.tenantId, waJid: params.waJid, name: contactName, phoneNumber: resolvedPhone },
-    update: resolvedPhone ? { phoneNumber: resolvedPhone } : {},
+  const contact = await resolveContact({
+    tenantId: session.tenantId,
+    waJid: params.waJid,
+    contactName,
+    resolvedPhone,
   });
+
+  // Dedupe por waMessageId: mensagem OUTBOUND mandada pelo próprio Inbox já
+  // foi gravada por /api/messages/send e marcada SENT pelo pollOutbox — o
+  // messages.upsert que o Baileys dispara de volta (eco de confirmação) é a
+  // MESMA mensagem, não uma nova. E o Baileys também reemite messages.upsert
+  // pra mensagens INBOUND já vistas em alguns casos (ex: replay num
+  // reconnect) — sem essa checagem em ambas as direções, duplicava mensagem.
+  // Escopado pelo CONTATO já reconciliado (não pelo waJid literal da
+  // mensagem) — o mesmo contato pode receber mensagens sob mais de um JID
+  // (ver resolveContact), e o dedupe precisa continuar achando a mensagem
+  // já gravada nesse caso.
+  if (params.waMessageId) {
+    const existing = await prisma.message.findFirst({
+      where: { sessionId: params.sessionId, waMessageId: params.waMessageId, conversation: { contactId: contact.id } },
+      select: { id: true },
+    });
+    if (existing) return;
+  }
 
   if (!contact.avatarUrl) {
     fetchAndSaveAvatar(params.socket, contact.id, params.waJid).catch(() => {
@@ -577,10 +621,11 @@ async function importHistoricalMessages(
 
     const resolvedName = nameByJid.get(waJid);
     const resolvedPhone = phoneByJid.get(waJid);
-    const contact = await prisma.contact.upsert({
-      where: { tenantId_waJid: { tenantId: session.tenantId, waJid } },
-      create: { tenantId: session.tenantId, waJid, name: resolvedName, phoneNumber: resolvedPhone },
-      update: {},
+    const contact = await resolveContact({
+      tenantId: session.tenantId,
+      waJid,
+      contactName: resolvedName,
+      resolvedPhone,
     });
     if (!contact.name && resolvedName) {
       await prisma.contact.update({ where: { id: contact.id }, data: { name: resolvedName } });
@@ -817,13 +862,30 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
 
           await prisma.message.update({
             where: { id: message.id },
-            data: { status: "SENT", waMessageId: sent?.key.id ?? undefined },
+            data: { status: "SENT", waMessageId: sent?.key?.id ?? undefined },
           });
         } catch (error) {
-          await prisma.message.update({
-            where: { id: message.id },
-            data: { status: "FAILED", errorMessage: (error as Error).message },
-          });
+          const errorMessage = (error as Error).message;
+          // Queda passageira da conexão (o socket cai e reconecta sozinho em
+          // segundos) não devia exigir o atendente perceber e reenviar na mão
+          // — foi exatamente isso que aconteceu com uma mensagem de chave pix
+          // que "sumiu" pro cliente. Enquanto a mensagem for recente e o erro
+          // for desse tipo, mantém PENDING (sem marcar FAILED) pra próxima
+          // volta do polling tentar de novo sozinha; só desiste de verdade
+          // depois de RETRY_WINDOW_MS ou se o erro não parecer transitório.
+          const isTransient = /connection closed|timed out|econnreset|socket.*closed|not connected/i.test(errorMessage);
+          const ageMs = Date.now() - message.createdAt.getTime();
+          if (isTransient && ageMs < RETRY_WINDOW_MS) {
+            await prisma.message.update({
+              where: { id: message.id },
+              data: { errorMessage: `tentando de novo — ${errorMessage}` },
+            });
+          } else {
+            await prisma.message.update({
+              where: { id: message.id },
+              data: { status: "FAILED", errorMessage },
+            });
+          }
         }
       }
     } catch (err) {

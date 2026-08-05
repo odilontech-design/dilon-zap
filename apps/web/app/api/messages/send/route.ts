@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 const mediaSchema = z.object({
   mediaKey: z.string(),
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const conversation = await prisma.conversation.findFirst({
-    where: { id: parsed.data.conversationId, tenantId: user.tenantId },
+    where: { id: parsed.data.conversationId, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 

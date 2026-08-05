@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 // Chamado quando o atendente abre a conversa no Inbox — marca as mensagens
 // recebidas ainda não vistas como lidas (badge de não lida no dashboard,
@@ -9,7 +10,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const user = await requireUser();
 
   const conversation = await prisma.conversation.findFirst({
-    where: { id: params.id, tenantId: user.tenantId },
+    where: { id: params.id, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 

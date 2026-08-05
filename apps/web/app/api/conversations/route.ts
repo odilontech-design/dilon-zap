@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 const VALID_STATUS = ["OPEN", "PENDING", "RESOLVED"] as const;
 
@@ -27,16 +28,21 @@ export async function GET(req: Request) {
     ...(tag ? { tags: { has: tag } } : {}),
     ...(assignedToId ? { assignedToId } : {}),
     ...(unreadOnly ? { messages: { some: { direction: "INBOUND", readAt: null } } } : {}),
-    ...(search
-      ? {
-          OR: [
-            { contact: { name: { contains: search, mode: "insensitive" } } },
-            ...(searchDigits ? [{ contact: { waJid: { contains: searchDigits } } }] : []),
-            ...(searchDigits ? [{ contact: { phoneNumber: { contains: searchDigits } } }] : []),
-            { messages: { some: { body: { contains: search, mode: "insensitive" } } } },
-          ],
-        }
-      : {}),
+    AND: [
+      conversationVisibilityWhere(user),
+      ...(search
+        ? [
+            {
+              OR: [
+                { contact: { name: { contains: search, mode: "insensitive" as const } } },
+                ...(searchDigits ? [{ contact: { waJid: { contains: searchDigits } } }] : []),
+                ...(searchDigits ? [{ contact: { phoneNumber: { contains: searchDigits } } }] : []),
+                { messages: { some: { body: { contains: search, mode: "insensitive" as const } } } },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 
   const conversations = await prisma.conversation.findMany({

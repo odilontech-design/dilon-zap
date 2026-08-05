@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 // Só a contagem por status (pro badge nas abas do Inbox) — separado de
 // /api/reports/summary porque aquele endpoint é pesado (amostra de 50
@@ -11,7 +12,7 @@ export async function GET() {
 
   const counts = await prisma.conversation.groupBy({
     by: ["status"],
-    where: { tenantId: user.tenantId },
+    where: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
     _count: true,
   });
 
