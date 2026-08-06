@@ -437,6 +437,7 @@ async function resolveContact(params: {
   waJid: string;
   contactName?: string;
   resolvedPhone?: string; // só quando waJid é @lid e o senderPn resolveu o telefone
+  socket?: ReturnType<typeof makeWASocket>; // habilita o fallback por foto de perfil, ver abaixo
 }) {
   const phoneDigits = params.waJid.endsWith("@s.whatsapp.net")
     ? params.waJid.replace("@s.whatsapp.net", "")
@@ -460,11 +461,68 @@ async function resolveContact(params: {
     }
   }
 
+  // Sem telefone resolvido (o proto do Baileys instalado não expõe senderPn
+  // por mensagem — resolvedPhone só vem de fato do histórico) e é um @lid
+  // que ainda não existe: antes de criar um contato novo, tenta casar pela
+  // FOTO DE PERFIL (mesmo arquivo no CDN da Meta, ignorando os parâmetros de
+  // assinatura da URL que mudam a cada request) com outro contato já
+  // existente desse tenant. Cobre o caso real que causou a duplicata da
+  // Isabella Virginio: WhatsApp trocou o @lid dela e a mensagem nova chegou
+  // sem nenhum jeito de ligar ao telefone já conhecido.
+  if (!phoneDigits && params.waJid.endsWith("@lid") && params.socket) {
+    const existsByJid = await prisma.contact.findUnique({
+      where: { tenantId_waJid: { tenantId: params.tenantId, waJid: params.waJid } },
+      select: { id: true },
+    });
+    if (!existsByJid) {
+      const photoId = await fetchAvatarPhotoId(params.socket, params.waJid);
+      if (photoId) {
+        const candidates = await prisma.contact.findMany({
+          where: { tenantId: params.tenantId, waJid: { not: params.waJid }, avatarUrl: { not: null } },
+          select: { id: true, avatarUrl: true, name: true },
+        });
+        const match = candidates.find((c) => avatarPhotoId(c.avatarUrl!) === photoId);
+        if (match) {
+          // Atualiza o waJid pro valor novo — daqui pra frente essa pessoa
+          // resolve direto pelo caminho rápido (upsert por waJid literal),
+          // sem precisar buscar a foto de novo a cada mensagem.
+          return prisma.contact.update({
+            where: { id: match.id },
+            data: { waJid: params.waJid, name: match.name ?? params.contactName },
+          });
+        }
+      }
+    }
+  }
+
   return prisma.contact.upsert({
     where: { tenantId_waJid: { tenantId: params.tenantId, waJid: params.waJid } },
     create: { tenantId: params.tenantId, waJid: params.waJid, name: params.contactName, phoneNumber: phoneDigits && params.waJid.endsWith("@lid") ? phoneDigits : undefined },
     update: phoneDigits && params.waJid.endsWith("@lid") ? { phoneNumber: phoneDigits } : {},
   });
+}
+
+// Parte estável de uma URL de foto de perfil do WhatsApp (o nome do arquivo
+// no CDN da Meta) — ignora ?ccb=/oh=/oe=/... que mudam a cada request mas
+// apontam pro mesmo arquivo. Duas URLs com esse mesmo trecho são a mesma foto.
+function avatarPhotoId(url: string): string | null {
+  try {
+    return new URL(url).pathname.split("/").pop() || null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchAvatarPhotoId(
+  socket: ReturnType<typeof makeWASocket>,
+  waJid: string
+): Promise<string | null> {
+  try {
+    const url = await socket.profilePictureUrl(waJid, "image");
+    return url ? avatarPhotoId(url) : null;
+  } catch {
+    return null; // sem foto ou privacidade bloqueando — segue sem esse sinal, não é erro
+  }
 }
 
 async function recordMessage(params: {
@@ -496,6 +554,7 @@ async function recordMessage(params: {
     waJid: params.waJid,
     contactName,
     resolvedPhone,
+    socket: params.socket,
   });
 
   // Dedupe por waMessageId: mensagem OUTBOUND mandada pelo próprio Inbox já
@@ -683,6 +742,7 @@ async function importHistoricalMessages(
       waJid,
       contactName: resolvedName,
       resolvedPhone,
+      socket,
     });
     if (!contact.name && resolvedName) {
       await prisma.contact.update({ where: { id: contact.id }, data: { name: resolvedName } });
