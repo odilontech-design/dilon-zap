@@ -21,15 +21,14 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "Nenhum número de WhatsApp conectado ainda." }, { status: 400 });
   }
 
-  const existing = await prisma.conversation.findFirst({
-    where: { tenantId: user.tenantId, contactId: contact.id, sessionId: session.id },
+  // upsert em vez de find-then-create: dois cliques rápidos em "iniciar
+  // conversa" (ou um clique concorrente com uma mensagem chegando ao mesmo
+  // tempo pelo worker) não podem criar duas conversas pro mesmo contato.
+  const conversation = await prisma.conversation.upsert({
+    where: { contactId_sessionId: { contactId: contact.id, sessionId: session.id } },
+    update: {},
+    create: { tenantId: user.tenantId, contactId: contact.id, sessionId: session.id },
   });
-
-  const conversation =
-    existing ??
-    (await prisma.conversation.create({
-      data: { tenantId: user.tenantId, contactId: contact.id, sessionId: session.id },
-    }));
 
   return NextResponse.json(conversation);
 }

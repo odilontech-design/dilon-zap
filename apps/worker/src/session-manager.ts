@@ -522,28 +522,27 @@ async function recordMessage(params: {
     });
   }
 
-  const existingConversation = await prisma.conversation.findFirst({
-    where: { tenantId: session.tenantId, contactId: contact.id, sessionId: params.sessionId },
-    select: { id: true },
-  });
-
+  // upsert (não find-then-create) é essencial aqui: duas mensagens chegando
+  // quase juntas (poucos ms de diferença, cada uma num evento messages.upsert
+  // separado que o Baileys não serializa) disparavam dois recordMessage()
+  // concorrentes — nenhum via o create do outro a tempo, e cada um criava
+  // sua própria Conversation pro mesmo contato. upsert é uma operação atômica
+  // no Postgres (INSERT ... ON CONFLICT), não tem essa janela de corrida.
+  //
   // Mensagem OUTBOUND vinda do celular (fora do Inbox) só atualiza a data —
   // não força status "OPEN" como faz uma mensagem nova do cliente, porque
   // não é uma demanda nova que precisa de atendimento.
-  const conversation = existingConversation
-    ? await prisma.conversation.update({
-        where: { id: existingConversation.id },
-        data: isInbound ? { lastMessageAt: new Date(), status: "OPEN" } : { lastMessageAt: new Date() },
-      })
-    : await prisma.conversation.create({
-        data: {
-          tenantId: session.tenantId,
-          sessionId: params.sessionId,
-          contactId: contact.id,
-          lastMessageAt: new Date(),
-          status: isInbound ? "OPEN" : "RESOLVED",
-        },
-      });
+  const conversation = await prisma.conversation.upsert({
+    where: { contactId_sessionId: { contactId: contact.id, sessionId: params.sessionId } },
+    update: isInbound ? { lastMessageAt: new Date(), status: "OPEN" } : { lastMessageAt: new Date() },
+    create: {
+      tenantId: session.tenantId,
+      sessionId: params.sessionId,
+      contactId: contact.id,
+      lastMessageAt: new Date(),
+      status: isInbound ? "OPEN" : "RESOLVED",
+    },
+  });
 
   let mediaFields: Partial<{
     mediaType: "AUDIO" | "IMAGE" | "DOCUMENT";
@@ -695,25 +694,25 @@ async function importHistoricalMessages(
       fetchAndSaveAvatar(socket, contact.id, waJid).catch(() => {});
     }
 
-    const existingConv = await prisma.conversation.findFirst({
-      where: { tenantId: session.tenantId, contactId: contact.id, sessionId },
-      select: { id: true },
-    });
-    const conversation =
-      existingConv ??
-      (await prisma.conversation.create({
+    // upsert (não find-then-create) — mesmo motivo do recordMessage(): evita
+    // criar duas conversas pro mesmo contato se o histórico de mais de um
+    // chat importar em paralelo. update vazio de propósito: se a conversa já
+    // existe, usa como está, sem mexer em nada.
+    const conversation = await prisma.conversation.upsert({
+      where: { contactId_sessionId: { contactId: contact.id, sessionId } },
+      update: {},
+      create: {
         // lastMessageAt nasce no passado de propósito (schema default seria
         // "agora") — senão o updateMany de baixo, que só sobe a data se for
         // mais recente, nunca dispara pra mensagem de histórico (sempre no
         // passado em relação ao momento do import).
-        data: {
-          tenantId: session.tenantId,
-          sessionId,
-          contactId: contact.id,
-          status: "RESOLVED",
-          lastMessageAt: new Date(0),
-        },
-      }));
+        tenantId: session.tenantId,
+        sessionId,
+        contactId: contact.id,
+        status: "RESOLVED",
+        lastMessageAt: new Date(0),
+      },
+    });
     conversationByJid.set(waJid, conversation);
   }
 

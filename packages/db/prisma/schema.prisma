@@ -169,6 +169,11 @@ model Conversation {
 
   messages Message[]
 
+  // Impede duas conversas pro mesmo contato na mesma sessão — sem isso, duas
+  // mensagens chegando quase juntas (poucos ms de diferença) podem disparar
+  // dois recordMessage() concorrentes que criam a conversa em paralelo, cada
+  // um sem ver o create do outro ainda (find-then-create não é atômico).
+  @@unique([contactId, sessionId])
   @@index([tenantId, status])
   @@index([sessionId])
 }
