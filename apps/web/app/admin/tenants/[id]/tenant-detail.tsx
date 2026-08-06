@@ -68,6 +68,16 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
   const { data, mutate } = useSWR<TenantDetailResponse>(`/api/admin/tenants/${tenantId}`, fetcher);
   const [addingUser, setAddingUser] = useState(false);
   const [newUserPassword, setNewUserPassword] = useState<{ email: string; password: string } | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
+
+  async function handleResetPassword(userId: string) {
+    setResettingId(userId);
+    const res = await fetch(`/api/admin/users/${userId}/reset-password`, { method: "POST" });
+    setResettingId(null);
+    if (!res.ok) return;
+    const data = await res.json();
+    setNewUserPassword({ email: data.email, password: data.password });
+  }
 
   if (!data) return <div className="p-4 md:p-8 text-neutral-400">Carregando...</div>;
   const { tenant, recentAudit } = data;
@@ -127,7 +137,16 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
                 <span className="text-neutral-200 font-medium">{u.name}</span>{" "}
                 <span className="text-neutral-500">{u.email}</span>
               </div>
-              <span className="text-xs rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300 shrink-0">{u.role}</span>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-xs rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300">{u.role}</span>
+                <button
+                  onClick={() => handleResetPassword(u.id)}
+                  disabled={resettingId === u.id}
+                  className="text-xs text-emerald-400 hover:underline disabled:opacity-40 disabled:no-underline"
+                >
+                  {resettingId === u.id ? "Redefinindo..." : "Redefinir senha"}
+                </button>
+              </div>
             </div>
           ))}
         </div>
