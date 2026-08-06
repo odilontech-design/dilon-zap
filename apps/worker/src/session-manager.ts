@@ -69,6 +69,28 @@ export async function deleteOutboundMessage(
   return { ok: true };
 }
 
+/**
+ * Reage (ou remove a reação) numa mensagem — nossa ou do contato.
+ * `targetFromMe` é a identidade de QUEM MANDOU a mensagem alvo (não de quem
+ * está reagindo — reagir é sempre "nós"): o WhatsApp exige isso pra localizar
+ * a mensagem certa. emoji vazio remove a reação, igual ao app oficial.
+ */
+export async function reactToMessage(
+  tenantId: string,
+  waJid: string,
+  targetWaMessageId: string,
+  targetFromMe: boolean,
+  emoji: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "sem conexão ativa" };
+
+  await socket.sendMessage(waJid, {
+    react: { text: emoji, key: { remoteJid: waJid, id: targetWaMessageId, fromMe: targetFromMe } },
+  });
+  return { ok: true };
+}
+
 export async function startSession(sessionId: string) {
   if (activeSessions.has(sessionId)) return;
 
@@ -238,6 +260,42 @@ export async function startSession(sessionId: string) {
         where: { sessionId, waMessageId: key.id, direction: "OUTBOUND" },
         data: { status },
       });
+    }
+  });
+
+  // Reação (emoji) numa mensagem — tanto a do contato quanto o eco de uma
+  // reação que nós mesmos mandamos (pelo Inbox ou direto do celular). Só
+  // existem duas identidades possíveis num chat 1:1: fromMe true (nós) ou
+  // false (contato) — ver comentário do model MessageReaction no schema.
+  socket.ev.on("messages.reaction", async (reactionEvents) => {
+    for (const { key, reaction } of reactionEvents) {
+      if (!key.id) continue;
+      const fromMe = !!reaction.key?.fromMe;
+      const emoji = reaction.text ?? "";
+
+      const message = await prisma.message
+        .findFirst({ where: { sessionId, waMessageId: key.id }, select: { id: true } })
+        .catch(() => null);
+      if (!message) continue;
+
+      if (!emoji) {
+        await prisma.messageReaction
+          .deleteMany({ where: { messageId: message.id, fromMe } })
+          .catch((err) => logger.error({ err }, "falha ao remover reação"));
+        continue;
+      }
+
+      // update só troca o emoji, nunca reactorUserId — se essa reação já foi
+      // registrada pela API (reação mandada pelo Inbox), isso aqui é só o eco
+      // da confirmação do WhatsApp chegando depois, e não pode apagar a
+      // autoria que a API já gravou.
+      await prisma.messageReaction
+        .upsert({
+          where: { messageId_fromMe: { messageId: message.id, fromMe } },
+          create: { messageId: message.id, fromMe, emoji },
+          update: { emoji },
+        })
+        .catch((err) => logger.error({ err }, "falha ao gravar reação"));
     }
   });
 

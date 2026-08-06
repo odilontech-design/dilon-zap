@@ -44,6 +44,7 @@ model User {
 
   assignedConversations Conversation[] @relation("AssignedAgent")
   sentMessages          Message[]      @relation("MessageSender")
+  messageReactions      MessageReaction[]
 
   @@index([tenantId])
 }
@@ -282,9 +283,32 @@ model Message {
   quotedMessage   Message?  @relation("MessageReply", fields: [quotedMessageId], references: [id], onDelete: SetNull)
   quotedBy        Message[] @relation("MessageReply")
 
+  reactions MessageReaction[]
+
   @@index([conversationId, createdAt])
   @@index([sessionId, status]) // worker consulta PENDING por sessão
   @@index([conversationId, direction, readAt]) // contagem de não lidas
+}
+
+// Reação (emoji) numa mensagem — igual ao "curtir"/reagir do WhatsApp. Como
+// aqui só existem chats 1:1 (sem grupo), só há duas identidades possíveis
+// reagindo a uma mensagem: a empresa (fromMe=true) e o contato (fromMe=false)
+// — por isso a unicidade é [messageId, fromMe], não por usuário.
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fromMe    Boolean // true = reação da empresa, false = reação do contato
+  emoji     String
+  // Atendente que reagiu pelo Inbox — só preenchido quando a reação partiu
+  // do sistema (não quando alguém reagiu direto pelo celular, e nunca
+  // quando fromMe=false).
+  reactorUserId String?
+  reactorUser   User?   @relation(fields: [reactorUserId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([messageId, fromMe])
 }
 
 // Trilha de auditoria pro painel /admin da Dilon Tech. Sem @relation de

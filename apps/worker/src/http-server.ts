@@ -1,5 +1,5 @@
 import http from "node:http";
-import { getSocketForTenant, editOutboundMessage, deleteOutboundMessage } from "./session-manager";
+import { getSocketForTenant, editOutboundMessage, deleteOutboundMessage, reactToMessage } from "./session-manager";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
 const SECRET = process.env.WORKER_INTERNAL_SECRET;
@@ -43,6 +43,11 @@ export function startInternalServer() {
 
     if (req.method === "POST" && req.url === "/internal/messages/delete") {
       handleDeleteMessage(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/messages/react") {
+      handleReactMessage(req, res);
       return;
     }
 
@@ -130,6 +135,35 @@ function handleDeleteMessage(req: http.IncomingMessage, res: http.ServerResponse
       }
 
       const result = await deleteOutboundMessage(tenantId, waJid, waMessageId);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+function handleReactMessage(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId, waJid, waMessageId, targetFromMe, emoji } = JSON.parse(body) as {
+        tenantId?: string;
+        waJid?: string;
+        waMessageId?: string;
+        targetFromMe?: boolean;
+        emoji?: string;
+      };
+      if (!tenantId || !waJid || !waMessageId || typeof targetFromMe !== "boolean" || emoji === undefined) {
+        res
+          .writeHead(400, { "Content-Type": "application/json" })
+          .end(JSON.stringify({ error: "tenantId, waJid, waMessageId, targetFromMe e emoji são obrigatórios" }));
+        return;
+      }
+
+      const result = await reactToMessage(tenantId, waJid, waMessageId, targetFromMe, emoji);
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
     } catch (err) {
       res

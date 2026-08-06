@@ -43,6 +43,8 @@ type QuotedMessage = {
   sender: { name: string } | null;
 };
 
+type MessageReaction = { id: string; emoji: string; fromMe: boolean };
+
 type Message = {
   id: string;
   direction: "INBOUND" | "OUTBOUND";
@@ -58,7 +60,10 @@ type Message = {
   isDeleted: boolean;
   isForwarded: boolean;
   quotedMessage: QuotedMessage | null;
+  reactions: MessageReaction[];
 };
+
+const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 const SENT_STATUSES: MessageStatus[] = ["SENT", "DELIVERED", "READ"];
 
@@ -496,6 +501,8 @@ function ConversationThread({
   const [forwardBatch, setForwardBatch] = useState<Message[] | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
+  const [reactionBarFor, setReactionBarFor] = useState<string | null>(null);
+  const [fullReactionPickerFor, setFullReactionPickerFor] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -629,6 +636,24 @@ function ConversationThread({
 
   function handleForward(message: Message) {
     setForwardBatch([message]);
+  }
+
+  // Clicar no mesmo emoji que já é a nossa reação atual remove — igual ao
+  // app oficial do WhatsApp (não dá pra "somar" duas reações da mesma pessoa).
+  async function handleReact(message: Message, emoji: string) {
+    setReactionBarFor(null);
+    setFullReactionPickerFor(null);
+    const mine = message.reactions.find((r) => r.fromMe);
+    if (mine?.emoji === emoji) {
+      await fetch(`/api/messages/${message.id}/react`, { method: "DELETE" });
+    } else {
+      await fetch(`/api/messages/${message.id}/react`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ emoji }),
+      });
+    }
+    mutateMessages();
   }
 
   function toggleSelectionMode() {
@@ -801,10 +826,13 @@ function ConversationThread({
           {messages?.map((m) => {
             const editable = m.direction === "OUTBOUND" && !m.isDeleted && !m.mediaType && SENT_STATUSES.includes(m.status);
             const deletable = m.direction === "OUTBOUND" && !m.isDeleted;
+            const myReaction = m.reactions.find((r) => r.fromMe);
+            const theirReaction = m.reactions.find((r) => !r.fromMe);
+            const hasReaction = !m.isDeleted && (myReaction || theirReaction);
             return (
               <div
                 key={m.id}
-                className={`flex items-center gap-2 ${m.direction === "OUTBOUND" ? "self-end" : "self-start"}`}
+                className={`flex items-center gap-2 ${m.direction === "OUTBOUND" ? "self-end" : "self-start"} ${hasReaction ? "mb-2" : ""}`}
               >
                 {selectionMode && !m.isDeleted && (
                   <input
@@ -814,6 +842,7 @@ function ConversationThread({
                     className="shrink-0"
                   />
                 )}
+                <div className="relative">
                 <div
                   className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
                     m.direction === "OUTBOUND" ? "bg-accent text-white" : "bg-neutral-100 text-neutral-900"
@@ -861,6 +890,13 @@ function ConversationThread({
                       <button onClick={() => handleReply(m)} title="Responder" className="opacity-70 hover:opacity-100">
                         ↩
                       </button>
+                      <button
+                        onClick={() => setReactionBarFor(reactionBarFor === m.id ? null : m.id)}
+                        title="Reagir"
+                        className="opacity-70 hover:opacity-100"
+                      >
+                        😊
+                      </button>
                       <button onClick={() => handleForward(m)} title="Encaminhar" className="opacity-70 hover:opacity-100">
                         ↪
                       </button>
@@ -891,6 +927,71 @@ function ConversationThread({
                       </>
                     )}
                   </div>
+                </div>
+                {hasReaction && (
+                  <div
+                    className={`absolute -bottom-2.5 flex items-center gap-0.5 ${
+                      m.direction === "OUTBOUND" ? "right-1" : "left-1"
+                    }`}
+                  >
+                    {theirReaction && (
+                      <span className="rounded-full border border-neutral-200 bg-white shadow-sm text-xs leading-none px-1 py-0.5">
+                        {theirReaction.emoji}
+                      </span>
+                    )}
+                    {myReaction && (
+                      <span className="rounded-full border border-neutral-200 bg-white shadow-sm text-xs leading-none px-1 py-0.5">
+                        {myReaction.emoji}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {reactionBarFor === m.id && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setReactionBarFor(null)} />
+                    <div
+                      className={`absolute bottom-full mb-1 z-20 flex items-center gap-1 rounded-full bg-neutral-900 px-2 py-1.5 shadow-lg ${
+                        m.direction === "OUTBOUND" ? "right-0" : "left-0"
+                      }`}
+                    >
+                      {QUICK_REACTIONS.map((emoji) => (
+                        <button
+                          key={emoji}
+                          onClick={() => handleReact(m, emoji)}
+                          className="px-0.5 text-lg leading-none transition-transform hover:scale-125"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => {
+                          setReactionBarFor(null);
+                          setFullReactionPickerFor(m.id);
+                        }}
+                        title="Mais emojis"
+                        className="px-1 text-lg leading-none text-white/70 hover:text-white"
+                      >
+                        +
+                      </button>
+                    </div>
+                  </>
+                )}
+                {fullReactionPickerFor === m.id && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setFullReactionPickerFor(null)} />
+                    <div className={`absolute bottom-full mb-1 z-20 ${m.direction === "OUTBOUND" ? "right-0" : "left-0"}`}>
+                      <EmojiPickerReact
+                        onEmojiClick={(data) => handleReact(m, data.emoji)}
+                        emojiStyle={EmojiStyle.NATIVE}
+                        searchPlaceHolder="Pesquisar"
+                        previewConfig={{ showPreview: false }}
+                        width={320}
+                        height={380}
+                        lazyLoadEmojis
+                      />
+                    </div>
+                  </>
+                )}
                 </div>
                 </div>
               </div>
