@@ -2,6 +2,7 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
   downloadMediaMessage,
+  makeCacheableSignalKeyStore,
   WAMessageStatus,
   type proto,
 } from "@whiskeysockets/baileys";
@@ -119,7 +120,12 @@ export async function startSession(sessionId: string) {
 
     socket = makeWASocket({
       version,
-      auth: state,
+      // Sem esse cache, toda leitura/escrita de chave de sessão bate direto
+      // no Postgres — sob volume alto (vários atendentes mandando mensagem
+      // ao mesmo tempo), isso alarga a janela de corrida entre operações
+      // concorrentes de criptografia e pode corromper o estado da sessão do
+      // Signal Protocol (erros "Bad MAC" / "No matching sessions found").
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
       logger,
       printQRInTerminal: false,
       // Pede o histórico mais completo que o WhatsApp aceitar mandar no
