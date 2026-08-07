@@ -83,7 +83,18 @@ function quotedSnippet(quoted: QuotedMessage) {
 
 type TenantUser = { id: string; name: string };
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
+// Lança em resposta não-OK em vez de devolver o corpo de erro como se fosse
+// dado válido — sem isso, um { error: "..." } de um 404/400 era tratado como
+// se fosse o objeto esperado (ex: a conversa), e a tela quebrava tentando ler
+// campos que não existem nesse corpo de erro.
+async function fetcher(url: string) {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(typeof body.error === "string" ? body.error : `falha ao buscar ${url}`);
+  }
+  return res.json();
+}
 
 const TABS: { key: ConversationStatus; label: string }[] = [
   { key: "OPEN", label: "Ativos" },
@@ -511,10 +522,11 @@ function ConversationThread({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
-  const { data: conversation, mutate: mutateConversation } = useSWR<ConversationDetail>(
-    `/api/conversations/${conversationId}`,
-    fetcher
-  );
+  const {
+    data: conversation,
+    error: conversationError,
+    mutate: mutateConversation,
+  } = useSWR<ConversationDetail>(`/api/conversations/${conversationId}`, fetcher);
   const { data: messages, mutate: mutateMessages } = useSWR<Message[]>(
     `/api/conversations/${conversationId}/messages`,
     fetcher,
@@ -732,6 +744,23 @@ function ConversationThread({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ waJid: conversation.contact.waJid, reason: "Bloqueado pelo inbox" }),
     });
+  }
+
+  // Acontece quando a conversa foi atribuída a outra pessoa (ou desatribuída
+  // de você) enquanto estava aberta — ela sai da sua visibilidade na hora e
+  // o servidor passa a responder 404. Sem esse aviso, a tela quebrava tentando
+  // ler os dados de uma conversa que o fetch nem trouxe.
+  if (conversationError) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm text-neutral-600">
+          Essa conversa não está mais disponível pra você — provavelmente foi atribuída a outra pessoa.
+        </p>
+        <button onClick={onBack} className="text-sm text-accent hover:underline">
+          ← Voltar pra lista
+        </button>
+      </div>
+    );
   }
 
   if (!conversation) return <div className="p-6 text-sm text-neutral-400">Carregando...</div>;
