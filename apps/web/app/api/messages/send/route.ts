@@ -6,7 +6,7 @@ import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 const mediaSchema = z.object({
   mediaKey: z.string(),
-  mediaType: z.enum(["AUDIO", "IMAGE", "DOCUMENT"]),
+  mediaType: z.enum(["AUDIO", "IMAGE", "DOCUMENT", "VIDEO"]),
   mediaMimeType: z.string(),
   mediaFileName: z.string().optional(),
   durationSeconds: z.number().int().positive().optional(),

@@ -336,7 +336,7 @@ function mapReceiptStatus(waStatus: number): "SENT" | "DELIVERED" | "READ" | "FA
 }
 
 type InboundMedia = {
-  type: "AUDIO" | "IMAGE" | "DOCUMENT";
+  type: "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO";
   buffer: Buffer;
   mimeType: string;
   fileName?: string;
@@ -390,6 +390,20 @@ async function extractInboundContent(
       text: m.imageMessage.caption ?? plainText,
       quotedWaMessageId,
       media: { type: "IMAGE", buffer, mimeType: m.imageMessage.mimetype ?? "image/jpeg" },
+    };
+  }
+
+  if (m.videoMessage) {
+    const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
+    return {
+      text: m.videoMessage.caption ?? plainText,
+      quotedWaMessageId,
+      media: {
+        type: "VIDEO",
+        buffer,
+        mimeType: m.videoMessage.mimetype ?? "video/mp4",
+        durationSeconds: m.videoMessage.seconds ?? undefined,
+      },
     };
   }
 
@@ -557,24 +571,6 @@ async function recordMessage(params: {
     socket: params.socket,
   });
 
-  // Dedupe por waMessageId: mensagem OUTBOUND mandada pelo próprio Inbox já
-  // foi gravada por /api/messages/send e marcada SENT pelo pollOutbox — o
-  // messages.upsert que o Baileys dispara de volta (eco de confirmação) é a
-  // MESMA mensagem, não uma nova. E o Baileys também reemite messages.upsert
-  // pra mensagens INBOUND já vistas em alguns casos (ex: replay num
-  // reconnect) — sem essa checagem em ambas as direções, duplicava mensagem.
-  // Escopado pelo CONTATO já reconciliado (não pelo waJid literal da
-  // mensagem) — o mesmo contato pode receber mensagens sob mais de um JID
-  // (ver resolveContact), e o dedupe precisa continuar achando a mensagem
-  // já gravada nesse caso.
-  if (params.waMessageId) {
-    const existing = await prisma.message.findFirst({
-      where: { sessionId: params.sessionId, waMessageId: params.waMessageId, conversation: { contactId: contact.id } },
-      select: { id: true },
-    });
-    if (existing) return;
-  }
-
   if (!contact.avatarUrl) {
     fetchAndSaveAvatar(params.socket, contact.id, params.waJid).catch(() => {
       // sem foto de perfil ou privacidade bloqueando — segue sem avatar, não é erro
@@ -603,8 +599,21 @@ async function recordMessage(params: {
     },
   });
 
+  // Pré-checagem barata (só otimização, não a garantia de atomicidade — essa
+  // vem do upsert lá embaixo): evita baixar/reenviar mídia à toa quando é um
+  // reenvio óbvio (mensagem OUTBOUND mandada pelo próprio Inbox já foi
+  // gravada por /api/messages/send, e o Baileys também reemite messages.upsert
+  // pra mensagens INBOUND já vistas em alguns casos, ex: replay num reconnect).
+  if (params.waMessageId) {
+    const existing = await prisma.message.findFirst({
+      where: { conversationId: conversation.id, waMessageId: params.waMessageId },
+      select: { id: true },
+    });
+    if (existing) return;
+  }
+
   let mediaFields: Partial<{
-    mediaType: "AUDIO" | "IMAGE" | "DOCUMENT";
+    mediaType: "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO";
     mediaKey: string;
     mediaMimeType: string;
     mediaFileName: string;
@@ -637,18 +646,31 @@ async function recordMessage(params: {
       })
     : null;
 
-  await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      sessionId: params.sessionId,
-      direction: params.direction,
-      status: isInbound ? "DELIVERED" : "SENT",
-      body: params.text,
-      waMessageId: params.waMessageId,
-      quotedMessageId: quotedMessage?.id,
-      ...mediaFields,
-    },
-  });
+  const messageData = {
+    conversationId: conversation.id,
+    sessionId: params.sessionId,
+    direction: params.direction,
+    status: isInbound ? ("DELIVERED" as const) : ("SENT" as const),
+    body: params.text,
+    waMessageId: params.waMessageId,
+    quotedMessageId: quotedMessage?.id,
+    ...mediaFields,
+  };
+
+  // upsert (não create) fecha a mesma janela de corrida da Conversation: se
+  // duas cópias da mesma mensagem passarem pela pré-checagem acima quase
+  // juntas (nenhuma via o create da outra a tempo), o upsert garante que só
+  // uma linha existe no fim — update vazio de propósito, a segunda cópia não
+  // deve sobrescrever nada da primeira.
+  if (params.waMessageId) {
+    await prisma.message.upsert({
+      where: { conversationId_waMessageId: { conversationId: conversation.id, waMessageId: params.waMessageId } },
+      create: messageData,
+      update: {},
+    });
+  } else {
+    await prisma.message.create({ data: messageData });
+  }
 
   if (isInbound && !conversation.assignedToId) {
     await maybeAutoReply({
@@ -892,6 +914,9 @@ async function sendOutboundMedia(
   }
   if (message.mediaType === "IMAGE") {
     return socket.sendMessage(jid, { image: buffer, mimetype, caption: message.body || undefined }, options);
+  }
+  if (message.mediaType === "VIDEO") {
+    return socket.sendMessage(jid, { video: buffer, mimetype: mimetype ?? "video/mp4", caption: message.body || undefined }, options);
   }
   return socket.sendMessage(
     jid,

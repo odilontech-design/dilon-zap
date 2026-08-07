@@ -7,9 +7,10 @@ import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 const MAX_SIZE_BYTES = 16 * 1024 * 1024; // 16MB — mesmo teto que o WhatsApp usa pra mídia
 
-function classify(mimeType: string): "AUDIO" | "IMAGE" | "DOCUMENT" {
+function classify(mimeType: string): "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO" {
   if (mimeType.startsWith("audio/")) return "AUDIO";
   if (mimeType.startsWith("image/")) return "IMAGE";
+  if (mimeType.startsWith("video/")) return "VIDEO";
   return "DOCUMENT";
 }
 

@@ -32,7 +32,7 @@ type ConversationDetail = {
   assignedTo: { id: string; name: string } | null;
 };
 
-type MediaType = "AUDIO" | "IMAGE" | "DOCUMENT";
+type MediaType = "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO";
 
 type QuotedMessage = {
   id: string;
@@ -76,6 +76,7 @@ function quotedSnippet(quoted: QuotedMessage) {
   if (quoted.body) return quoted.body;
   if (quoted.mediaType === "IMAGE") return "📷 Imagem";
   if (quoted.mediaType === "AUDIO") return "🎤 Áudio";
+  if (quoted.mediaType === "VIDEO") return "🎥 Vídeo";
   if (quoted.mediaType === "DOCUMENT") return "📄 Documento";
   return "";
 }
@@ -1199,7 +1200,9 @@ function ForwardModal({
                   ? "📷 Imagem"
                   : messages[0].mediaType === "AUDIO"
                     ? "🎤 Áudio"
-                    : "📄 Documento"
+                    : messages[0].mediaType === "VIDEO"
+                      ? "🎥 Vídeo"
+                      : "📄 Documento"
                 : messages[0].body}
           </p>
         </div>
@@ -1284,6 +1287,14 @@ function MessageMedia({ message, onLoad }: { message: Message; onLoad?: () => vo
     return (
       // eslint-disable-next-line @next/next/no-img-element -- vem via redirect assinado do R2, sem domínio fixo
       <img src={src} alt={message.body || "imagem"} className="max-w-full rounded-md mb-1" onLoad={onLoad} />
+    );
+  }
+
+  if (message.mediaType === "VIDEO") {
+    return (
+      <video controls preload="metadata" src={src} className="max-w-full rounded-md mb-1" style={{ maxHeight: 320 }} onLoadedData={onLoad}>
+        Seu navegador não suporta vídeo.
+      </video>
     );
   }
 

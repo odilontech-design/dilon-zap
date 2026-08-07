@@ -245,6 +245,7 @@ enum MediaType {
   AUDIO
   IMAGE
   DOCUMENT
+  VIDEO
 }
 
 model Message {
@@ -271,7 +272,7 @@ model Message {
   mediaKey          String?  // chave do objeto no bucket R2
   mediaMimeType     String?
   mediaFileName     String?  // nome original, relevante pra DOCUMENT
-  mediaDurationSeconds Int?  // relevante pra AUDIO
+  mediaDurationSeconds Int?  // relevante pra AUDIO e VIDEO
 
   isEdited  Boolean   @default(false)
   editedAt  DateTime?
@@ -290,6 +291,12 @@ model Message {
 
   reactions MessageReaction[]
 
+  // Evita duplicar a mesma mensagem do WhatsApp quando ela chega mais de uma
+  // vez (retry de rede, reconexão) quase ao mesmo tempo — mesmo motivo do
+  // unique de Conversation: find-then-create não é atômico, upsert é. NULL
+  // não conflita com NULL no Postgres, então mensagens sem waMessageId
+  // (auto-resposta antiga etc.) não são afetadas.
+  @@unique([conversationId, waMessageId])
   @@index([conversationId, createdAt])
   @@index([sessionId, status]) // worker consulta PENDING por sessão
   @@index([conversationId, direction, readAt]) // contagem de não lidas
