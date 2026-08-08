@@ -1,5 +1,11 @@
 import http from "node:http";
-import { getSocketForTenant, editOutboundMessage, deleteOutboundMessage, reactToMessage } from "./session-manager";
+import {
+  getSocketForTenant,
+  editOutboundMessage,
+  deleteOutboundMessage,
+  reactToMessage,
+  wakeOutboxForTenant,
+} from "./session-manager";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
 const SECRET = process.env.WORKER_INTERNAL_SECRET;
@@ -48,6 +54,11 @@ export function startInternalServer() {
 
     if (req.method === "POST" && req.url === "/internal/messages/react") {
       handleReactMessage(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/outbox/wake") {
+      handleWakeOutbox(req, res);
       return;
     }
 
@@ -165,6 +176,31 @@ function handleReactMessage(req: http.IncomingMessage, res: http.ServerResponse)
 
       const result = await reactToMessage(tenantId, waJid, waMessageId, targetFromMe, emoji);
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+// Aviso de "tem coisa nova na fila" — deixa o polling da fila de saída ficar
+// folgado quando está ocioso sem custar atraso no envio (ver pollOutbox).
+// Best-effort de propósito: se falhar, o próximo ciclo do polling pega a
+// mensagem do mesmo jeito, só um pouco depois.
+function handleWakeOutbox(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", () => {
+    try {
+      const { tenantId } = JSON.parse(body) as { tenantId?: string };
+      if (!tenantId) {
+        res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "tenantId é obrigatório" }));
+        return;
+      }
+
+      wakeOutboxForTenant(tenantId);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
     } catch (err) {
       res
         .writeHead(500, { "Content-Type": "application/json" })

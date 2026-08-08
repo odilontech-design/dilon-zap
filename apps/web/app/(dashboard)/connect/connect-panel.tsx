@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { DASHBOARD_INTERVAL, WHATSAPP_STATUS_INTERVAL } from "@/lib/polling";
 
 type WhatsAppSessionView = {
   id: string;
@@ -21,8 +22,13 @@ const STATUS_LABEL: Record<NonNullable<WhatsAppSessionView>["status"], string> =
 };
 
 export function ConnectPanel() {
+  // Ritmo rápido só enquanto a tela espera algo mudar (QR aparecer,
+  // pareamento concluir, reconexão voltar). Já conectado, cai pro ritmo lento
+  // — continua percebendo se a conexão cair, sem ficar consultando de 3 em 3
+  // segundos uma tela onde nada acontece (ver lib/polling.ts).
   const { data: session, mutate } = useSWR<WhatsAppSessionView>("/api/whatsapp/status", fetcher, {
-    refreshInterval: 2000,
+    refreshInterval: (latest) =>
+      latest?.status === "CONNECTED" ? DASHBOARD_INTERVAL : WHATSAPP_STATUS_INTERVAL,
   });
   const [disconnecting, setDisconnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);

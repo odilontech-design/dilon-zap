@@ -98,6 +98,29 @@ export async function reactWhatsAppMessage(
   }
 }
 
+/**
+ * Avisa o worker que tem mensagem nova na fila de saída, pra ele sair do
+ * ritmo ocioso e enviar na hora. Best-effort e sem await obrigatório: se o
+ * worker estiver fora do ar ou a chamada falhar, o polling normal pega a
+ * mensagem no ciclo seguinte — nada se perde, só sai alguns segundos depois.
+ */
+export async function wakeOutbox(tenantId: string): Promise<void> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret) return;
+
+  try {
+    await fetch(`${baseUrl}/internal/outbox/wake`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId }),
+      signal: AbortSignal.timeout(2_000),
+    });
+  } catch {
+    // silêncio proposital — ver comentário acima
+  }
+}
+
 export async function disconnectWhatsApp(tenantId: string): Promise<{ ok: boolean; reason?: string }> {
   const baseUrl = process.env.WORKER_INTERNAL_URL;
   const secret = process.env.WORKER_INTERNAL_SECRET;

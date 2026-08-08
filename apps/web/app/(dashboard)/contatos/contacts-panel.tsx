@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatDate, formatPhone, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
+import { LISTING_INTERVAL } from "@/lib/polling";
 
 type StageDef = { id: string; name: string; color: string };
 
@@ -22,7 +23,7 @@ const fetcher = (url: string) => fetch(url).then((r) => r.json());
 export function ContactsPanel() {
   const router = useRouter();
   const { data: contacts, mutate } = useSWR<Contact[]>("/api/contacts", fetcher, {
-    refreshInterval: 8000,
+    refreshInterval: LISTING_INTERVAL,
   });
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
   const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);

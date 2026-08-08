@@ -7,16 +7,29 @@ import { upsertContactByPhone } from "@/lib/contact-server";
 export async function GET() {
   const user = await requireUser();
 
+  // select explícito: essa rota alimenta o Funil (poll) e a página de
+  // Contatos, devolvendo a base inteira de contatos a cada consulta — cada
+  // campo a mais aqui vira tráfego repetido o dia todo. Só entra o que as
+  // duas telas leem de fato (ver o type Contact de cada uma).
   const contacts = await prisma.contact.findMany({
     where: { tenantId: user.tenantId },
     orderBy: { createdAt: "desc" },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      waJid: true,
+      phoneNumber: true,
+      avatarUrl: true,
+      lastStatusAt: true,
+      stageId: true,
+      dealValueCents: true,
+      createdAt: true,
       conversations: {
-        select: { id: true, tags: true, status: true, assignedToId: true },
+        select: { id: true, tags: true, assignedToId: true },
         orderBy: { lastMessageAt: "desc" },
         take: 1,
       },
-      stage: { select: { id: true, name: true, color: true } },
+      stage: { select: { id: true, name: true, color: true, position: true } },
     },
   });
 

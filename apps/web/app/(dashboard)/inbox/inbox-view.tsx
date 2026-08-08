@@ -7,6 +7,12 @@ import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatListTimestamp, formatPhoneDisplay, formatTime, type ContactRef } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
+import {
+  CONVERSATION_LIST_INTERVAL,
+  MESSAGES_INTERVAL,
+  STATUS_COUNTS_INTERVAL,
+  UNREAD_COUNT_INTERVAL,
+} from "@/lib/polling";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
@@ -154,14 +160,14 @@ export function InboxView() {
   const { data: conversations, mutate: mutateList } = useSWR<ConversationSummary[]>(
     `/api/conversations?${query.toString()}`,
     fetcher,
-    { refreshInterval: 2000 }
+    { refreshInterval: CONVERSATION_LIST_INTERVAL }
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
   const { data: statusCounts } = useSWR<Record<ConversationStatus, number>>(
     "/api/conversations/status-counts",
     fetcher,
-    { refreshInterval: 5000 }
+    { refreshInterval: STATUS_COUNTS_INTERVAL }
   );
   const availableTags = Array.from(new Set((conversations ?? []).flatMap((c) => c.tags))).sort();
   const activeFilterCount = [tagFilter, assigneeFilter, unreadOnly ? "1" : ""].filter(Boolean).length;
@@ -169,7 +175,7 @@ export function InboxView() {
   // Contagem global (todas as abas) só pra saber quando tocar o som — uma
   // mensagem nova pode chegar numa conversa que não está na aba aberta agora.
   const { data: unread } = useSWR<{ count: number }>("/api/conversations/unread-count", fetcher, {
-    refreshInterval: 3000,
+    refreshInterval: UNREAD_COUNT_INTERVAL,
   });
   const previousUnreadRef = useRef<number | null>(null);
   useEffect(() => {
@@ -530,7 +536,7 @@ function ConversationThread({
   const { data: messages, mutate: mutateMessages } = useSWR<Message[]>(
     `/api/conversations/${conversationId}/messages`,
     fetcher,
-    { refreshInterval: 1500 }
+    { refreshInterval: MESSAGES_INTERVAL }
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);

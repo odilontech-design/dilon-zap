@@ -45,18 +45,41 @@ export async function GET(req: Request) {
     ],
   };
 
+  // select explícito (não `include: { contact: true }`) porque essa rota é
+  // consultada em loop pelo Inbox de cada atendente — trazer a linha inteira
+  // de Conversation/Contact/Message a cada poucos segundos gerava dezenas de
+  // KB por consulta só de campo que a tela nem usa (era ~71KB por chamada,
+  // ~4GB/dia com 4 atendentes). Aqui só entra o que ConversationSummary lê.
   const conversations = await prisma.conversation.findMany({
     where,
     orderBy: { lastMessageAt: "desc" },
-    include: {
-      contact: true,
+    select: {
+      id: true,
+      ticketNumber: true,
+      status: true,
+      tags: true,
+      contact: {
+        select: { id: true, name: true, waJid: true, phoneNumber: true, avatarUrl: true, lastStatusAt: true },
+      },
       assignedTo: { select: { id: true, name: true } },
-      messages: { orderBy: { createdAt: "desc" }, take: 1 },
+      messages: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { body: true, direction: true, createdAt: true },
+      },
       _count: { select: { messages: { where: { direction: "INBOUND", readAt: null } } } },
     },
   });
 
-  const withUnread = conversations.map(({ _count, ...c }) => ({ ...c, unreadCount: _count.messages }));
+  // A prévia da lista é uma linha só com `truncate` no CSS — mandar a mensagem
+  // inteira (algumas passam de 400 caracteres) é byte jogado fora numa rota
+  // consultada em loop. 120 caracteres cobrem qualquer largura de tela.
+  const PREVIEW_MAX = 120;
+  const withUnread = conversations.map(({ _count, messages, ...c }) => ({
+    ...c,
+    messages: messages.map((m) => ({ ...m, body: m.body.slice(0, PREVIEW_MAX) })),
+    unreadCount: _count.messages,
+  }));
 
   return NextResponse.json(withUnread);
 }

@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { centsToBRL } from "@/lib/billing";
+import { LISTING_INTERVAL } from "@/lib/polling";
 
 type StageDef = { id: string; name: string; color: string; position: number };
 type TenantUser = { id: string; name: string };
@@ -22,7 +23,9 @@ const UNSTAGED = "__unstaged__";
 
 export function FunnelBoard() {
   const router = useRouter();
-  const { data: contacts, mutate } = useSWR<Contact[]>("/api/contacts", fetcher, { refreshInterval: 5000 });
+  const { data: contacts, mutate } = useSWR<Contact[]>("/api/contacts", fetcher, {
+    refreshInterval: LISTING_INTERVAL,
+  });
   const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const [userFilter, setUserFilter] = useState("");

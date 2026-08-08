@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { LISTING_INTERVAL } from "@/lib/polling";
 
 type Summary = {
   messages24h: number;
@@ -18,7 +19,7 @@ function formatMinutes(minutes: number) {
 }
 
 export function ReportsPanel() {
-  const { data } = useSWR<Summary>("/api/reports/summary", fetcher, { refreshInterval: 10000 });
+  const { data } = useSWR<Summary>("/api/reports/summary", fetcher, { refreshInterval: LISTING_INTERVAL });
 
   if (!data) return <p className="text-sm text-neutral-400">Carregando...</p>;
 

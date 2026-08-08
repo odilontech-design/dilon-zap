@@ -24,10 +24,18 @@ type ActiveSession = {
   stop: () => void;
   socket: ReturnType<typeof makeWASocket> | null;
   tenantId: string;
+  /** Tira a fila de saída do ritmo ocioso — chamado quando o web enfileira algo. */
+  wakeOutbox?: () => void;
 };
 const activeSessions = new Map<string, ActiveSession>();
 
-const OUTBOX_POLL_INTERVAL_MS = 1_000;
+// A fila de saída é consultada em ritmo adaptativo: 1s logo depois de mandar
+// alguma coisa (rajada de mensagens do atendente sai sem atraso perceptível),
+// e vai afrouxando até 5s quando não há nada pendente. Em ritmo fixo de 1s
+// eram 86.400 consultas por dia por sessão mesmo com a fila vazia — puro
+// tráfego e carga de banco à toa, 24h por dia.
+const OUTBOX_POLL_MIN_MS = 1_000;
+const OUTBOX_POLL_MAX_MS = 5_000;
 const NEW_SESSION_POLL_INTERVAL_MS = 5_000;
 const RETRY_WINDOW_MS = 60_000; // quanto tempo tenta de novo sozinho antes de marcar FAILED de vez
 
@@ -890,6 +898,11 @@ async function maybeAutoReply(params: {
       body: match.response,
     },
   });
+
+  // Auto-resposta é justamente o caso em que a fila pode estar no ritmo mais
+  // lento (ninguém enviando nada há um tempo) — sem isso, a resposta
+  // automática sairia com alguns segundos de atraso à toa.
+  wakeOutboxForTenant(params.tenantId);
 }
 
 // Baixa a mídia do R2 e manda pro WhatsApp no formato certo pro tipo. Áudio
@@ -937,12 +950,36 @@ async function sendOutboundMedia(
 }
 
 // Fase 0 mantém a fila simples de propósito: sem Redis/BullMQ ainda, o
-// worker só varre mensagens PENDING da própria sessão a cada 2s. Isso já
-// resolve o caso de uso (1 atendente respondendo), e a fila de verdade com
-// throttling anti-ban entra na fase de Campanhas.
+// worker só varre mensagens PENDING da própria sessão em ritmo adaptativo
+// (ver OUTBOX_POLL_MIN_MS). Isso já resolve o caso de uso (1 atendente
+// respondendo), e a fila de verdade com throttling anti-ban entra na fase
+// de Campanhas.
 function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, isStopped: () => boolean) {
+  let idleDelayMs = OUTBOX_POLL_MIN_MS;
+  let timer: NodeJS.Timeout | null = null;
+  let running = false;
+
+  const schedule = (delayMs: number) => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(tick, delayMs);
+  };
+
+  // Chamado pelo web assim que uma mensagem entra na fila (ver
+  // /internal/outbox/wake): volta pro ritmo rápido e, se não houver ciclo em
+  // andamento, dispara um agora — assim o ritmo ocioso mais folgado não custa
+  // atraso nenhum pro atendente. Se já estiver rodando, o finally lá embaixo
+  // já vai reagendar com o intervalo mínimo restaurado aqui.
+  const wake = () => {
+    idleDelayMs = OUTBOX_POLL_MIN_MS;
+    if (!running) schedule(0);
+  };
+
+  const entry = activeSessions.get(sessionId);
+  if (entry) entry.wakeOutbox = wake;
+
   const tick = async () => {
     if (isStopped()) return;
+    running = true;
 
     // Try/finally garante que o polling continua mesmo se o Postgres soltar
     // a conexão no meio (comum em provedores serverless tipo Neon depois de
@@ -959,6 +996,11 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
           quotedMessage: { select: { waMessageId: true, direction: true, body: true } },
         },
       });
+
+      // Teve o que enviar: volta pro ritmo rápido, porque provavelmente vem
+      // mais coisa logo atrás (atendente mandando várias seguidas). Fila
+      // vazia: vai dobrando o intervalo até o teto.
+      idleDelayMs = pending.length > 0 ? OUTBOX_POLL_MIN_MS : Math.min(idleDelayMs * 2, OUTBOX_POLL_MAX_MS);
 
       for (const message of pending) {
         const blocked = await prisma.contactBlock.findUnique({
@@ -1039,11 +1081,19 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
     } catch (err) {
       logger.error({ err, sessionId }, "falha ao processar fila de saída");
     } finally {
-      setTimeout(tick, OUTBOX_POLL_INTERVAL_MS);
+      running = false;
+      schedule(idleDelayMs);
     }
   };
 
   tick();
+}
+
+/** Acorda a fila de saída do tenant — usado pelo web ao enfileirar mensagem. */
+export function wakeOutboxForTenant(tenantId: string) {
+  for (const entry of activeSessions.values()) {
+    if (entry.tenantId === tenantId) entry.wakeOutbox?.();
+  }
 }
 
 /** Sobe conexões para sessões que ainda não estão ativas nesta instância. */

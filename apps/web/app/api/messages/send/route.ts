@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { wakeOutbox } from "@/lib/worker-client";
 
 const mediaSchema = z.object({
   mediaKey: z.string(),
@@ -67,6 +68,9 @@ export async function POST(req: Request) {
     where: { id: conversation.id },
     data: { lastMessageAt: new Date() },
   });
+
+  // Tira o worker do ritmo ocioso pra essa mensagem sair na hora.
+  await wakeOutbox(user.tenantId);
 
   return NextResponse.json(message);
 }

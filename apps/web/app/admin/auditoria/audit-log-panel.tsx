@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { formatDate, formatTime } from "@/lib/contact";
+import { ADMIN_INTERVAL } from "@/lib/polling";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -34,7 +35,7 @@ export function AuditLogPanel() {
   if (tenantId) params.set("tenantId", tenantId);
   if (action) params.set("action", action);
 
-  const { data } = useSWR<AuditResponse>(`/api/admin/audit?${params.toString()}`, fetcher, { refreshInterval: 15000 });
+  const { data } = useSWR<AuditResponse>(`/api/admin/audit?${params.toString()}`, fetcher, { refreshInterval: ADMIN_INTERVAL });
 
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
 

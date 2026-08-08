@@ -5,6 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { formatDate } from "@/lib/contact";
 import { centsToBRL } from "@/lib/billing";
+import { ADMIN_INTERVAL } from "@/lib/polling";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -57,7 +58,7 @@ function billingBadge(tenant: Tenant): { label: string; color: string } {
 }
 
 export function AdminDashboard() {
-  const { data: tenants, mutate } = useSWR<Tenant[]>("/api/admin/tenants", fetcher, { refreshInterval: 15000 });
+  const { data: tenants, mutate } = useSWR<Tenant[]>("/api/admin/tenants", fetcher, { refreshInterval: ADMIN_INTERVAL });
   const [creating, setCreating] = useState(false);
   const [credentials, setCredentials] = useState<{ ownerEmail: string; ownerPassword: string; tenantName: string } | null>(
     null

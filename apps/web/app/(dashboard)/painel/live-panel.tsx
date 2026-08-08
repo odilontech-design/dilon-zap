@@ -1,6 +1,7 @@
 "use client";
 
 import useSWR from "swr";
+import { DASHBOARD_INTERVAL } from "@/lib/polling";
 
 type Summary = {
   statusCounts: { OPEN: number; PENDING: number; RESOLVED: number };
@@ -32,7 +33,7 @@ function Tile({ label, value, tone }: { label: string; value: string | number; t
 }
 
 export function LivePanel() {
-  const { data } = useSWR<Summary>("/api/reports/summary", fetcher, { refreshInterval: 5000 });
+  const { data } = useSWR<Summary>("/api/reports/summary", fetcher, { refreshInterval: DASHBOARD_INTERVAL });
 
   if (!data) return <p className="text-sm text-neutral-400">Carregando...</p>;
 
