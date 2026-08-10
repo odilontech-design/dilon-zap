@@ -13,7 +13,11 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      # A partir da 18 a imagem oficial espera o volume em /var/lib/postgresql
+      # (e não mais em .../data) — ela cria um subdiretório por major dentro,
+      # pra permitir pg_upgrade sem cruzar fronteira de mount. Montar direto
+      # em .../data faz o container recusar a subir.
+      - postgres_data:/var/lib/postgresql
       - ./backups:/backups
     # Sem `ports:` de propósito — o banco fica só na rede interna do Docker,
     # alcançável por web/worker e por nada mais. Publicar 5432 no host abriria
