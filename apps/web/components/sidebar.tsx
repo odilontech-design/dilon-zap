@@ -1,28 +1,104 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/sign-out-button";
+import { AppVersion } from "@/components/app-version";
+
+// Ícones inline (sem lib externa: são poucos e assim não entra mais um
+// pacote no bundle). Todos no mesmo padrão — traço, 24x24, herdando a cor
+// do texto — pra ficarem coerentes entre si e com o resto do sistema.
+const icon = (d: React.ReactNode) => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="1.8"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className="w-[18px] h-[18px] shrink-0"
+    aria-hidden
+  >
+    {d}
+  </svg>
+);
 
 const NAV_ITEMS = [
-  { href: "/painel", label: "Painel" },
-  { href: "/inbox", label: "Inbox" },
-  { href: "/contatos", label: "Contatos" },
-  { href: "/funil", label: "Funil" },
-  { href: "/relatorios", label: "Relatórios" },
-  { href: "/connect", label: "Conectar número" },
-  { href: "/automacoes", label: "Automações" },
-  { href: "/etiquetas", label: "Etiquetas" },
-  { href: "/etapas", label: "Etapas do funil" },
-  { href: "/bloqueios", label: "Bloqueios" },
+  {
+    href: "/painel",
+    label: "Painel",
+    icon: icon(<><rect x="3" y="3" width="7" height="9" rx="1" /><rect x="14" y="3" width="7" height="5" rx="1" /><rect x="14" y="12" width="7" height="9" rx="1" /><rect x="3" y="16" width="7" height="5" rx="1" /></>),
+  },
+  {
+    href: "/inbox",
+    label: "Inbox",
+    icon: icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />),
+  },
+  {
+    href: "/contatos",
+    label: "Contatos",
+    icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>),
+  },
+  {
+    href: "/funil",
+    label: "Funil",
+    icon: icon(<><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="11" rx="1" /><rect x="17" y="4" width="4" height="7" rx="1" /></>),
+  },
+  {
+    href: "/relatorios",
+    label: "Relatórios",
+    icon: icon(<><path d="M3 3v18h18" /><path d="M7 15l4-5 3 3 5-7" /></>),
+  },
+  {
+    href: "/connect",
+    label: "Conectar número",
+    icon: icon(<><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><path d="M14 14h3v3M20 20h1M17 20v1" /></>),
+  },
+  {
+    href: "/automacoes",
+    label: "Automações",
+    icon: icon(<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />),
+  },
+  {
+    href: "/etiquetas",
+    label: "Etiquetas",
+    icon: icon(<><path d="M20.6 13.4 12 4.8A2 2 0 0 0 10.6 4.2H5a1 1 0 0 0-1 1v5.6a2 2 0 0 0 .6 1.4l8.6 8.6a2 2 0 0 0 2.8 0l4.6-4.6a2 2 0 0 0 0-2.8Z" /><circle cx="7.8" cy="8" r="1.2" fill="currentColor" stroke="none" /></>),
+  },
+  {
+    href: "/etapas",
+    label: "Etapas do funil",
+    icon: icon(<><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="3.5" cy="6" r="1.5" /><circle cx="3.5" cy="12" r="1.5" /><circle cx="3.5" cy="18" r="1.5" /></>),
+  },
+  {
+    href: "/bloqueios",
+    label: "Bloqueios",
+    icon: icon(<><circle cx="12" cy="12" r="9" /><path d="m5.6 5.6 12.8 12.8" /></>),
+  },
 ];
 
+const COLLAPSE_KEY = "dilonzap:sidebar-collapsed";
+
 export function Sidebar({ name }: { name: string }) {
-  // Fechado por padrão — no desktop (md:) fica sempre visível via CSS,
-  // independente desse estado; ele só controla o comportamento no mobile.
+  // `open` é só pro mobile (gaveta). No desktop a barra está sempre visível
+  // e quem manda é `collapsed`, que alterna entre rótulo + ícone e só ícone.
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+
+  // Lido depois da montagem, não no estado inicial: localStorage não existe
+  // no servidor, e usar lá quebraria a hidratação do React.
+  useEffect(() => {
+    setCollapsed(window.localStorage.getItem(COLLAPSE_KEY) === "1");
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      window.localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
 
   return (
     <>
@@ -49,12 +125,21 @@ export function Sidebar({ name }: { name: string }) {
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 md:w-56 shrink-0 border-r border-neutral-200 bg-white p-4 flex flex-col transition-transform duration-200 ease-out ${
+        className={`fixed md:static inset-y-0 left-0 z-50 w-64 shrink-0 border-r border-neutral-200 bg-white flex flex-col transition-[transform,width] duration-200 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0`}
+        } md:translate-x-0 ${collapsed ? "md:w-16 md:px-2 px-4" : "md:w-56 px-4"} py-4`}
       >
-        <div className="flex items-center justify-between mb-6">
-          <p className="text-xs font-mono uppercase tracking-wide text-accent">Dilon Zap</p>
+        <div className={`flex items-center mb-6 ${collapsed ? "md:justify-center justify-between" : "justify-between"}`}>
+          <p className={`text-xs font-mono uppercase tracking-wide text-accent ${collapsed ? "md:hidden" : ""}`}>
+            Dilon Zap
+          </p>
+          {/* No modo recolhido a marca vira só a inicial, pra barra não ficar
+              sem nenhuma identificação. */}
+          {collapsed && (
+            <span className="hidden md:block text-sm font-mono font-bold text-accent" title="Dilon Zap">
+              DZ
+            </span>
+          )}
           <button
             onClick={() => setOpen(false)}
             aria-label="Fechar menu"
@@ -63,6 +148,7 @@ export function Sidebar({ name }: { name: string }) {
             ×
           </button>
         </div>
+
         <nav className="flex flex-col gap-1 text-sm overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const active = pathname === item.href || pathname?.startsWith(item.href + "/");
@@ -71,18 +157,57 @@ export function Sidebar({ name }: { name: string }) {
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
-                className={`rounded-md px-3 py-2 ${
-                  active ? "bg-accent/10 text-accent font-medium" : "hover:bg-neutral-100"
-                }`}
+                // O title vira a dica de qual item é quando só o ícone aparece.
+                title={collapsed ? item.label : undefined}
+                className={`flex items-center gap-3 rounded-md py-2 ${
+                  collapsed ? "md:justify-center md:px-0 px-3" : "px-3"
+                } ${active ? "bg-accent/10 text-accent font-medium" : "text-neutral-700 hover:bg-neutral-100"}`}
               >
-                {item.label}
+                {item.icon}
+                <span className={collapsed ? "md:hidden" : ""}>{item.label}</span>
               </Link>
             );
           })}
         </nav>
-        <div className="mt-auto pt-4 border-t border-neutral-200 text-xs text-neutral-500">
-          <p className="mb-2 font-medium text-neutral-700 truncate">{name}</p>
-          <SignOutButton />
+
+        <div
+          className={`mt-auto pt-4 border-t border-neutral-200 text-xs text-neutral-500 ${
+            collapsed ? "md:flex md:flex-col md:items-center" : ""
+          }`}
+        >
+          <p className={`mb-2 font-medium text-neutral-700 truncate ${collapsed ? "md:hidden" : ""}`}>{name}</p>
+          <div className={collapsed ? "md:hidden" : ""}>
+            <SignOutButton />
+          </div>
+
+          {/* Recolher só faz sentido no desktop — no celular a barra já é uma
+              gaveta que abre e fecha por cima do conteúdo. */}
+          <button
+            onClick={toggleCollapsed}
+            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+            title={collapsed ? "Expandir menu" : "Recolher menu"}
+            className={`hidden md:flex items-center gap-2 mt-3 w-full rounded-md py-1.5 text-neutral-400 hover:text-accent hover:bg-neutral-100 ${
+              collapsed ? "justify-center px-0" : "px-2"
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`w-4 h-4 transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`}
+              aria-hidden
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
+            {!collapsed && <span>Recolher</span>}
+          </button>
+
+          <div className={`mt-3 ${collapsed ? "md:text-center" : ""}`}>
+            <AppVersion compact={collapsed} />
+          </div>
         </div>
       </aside>
     </>
