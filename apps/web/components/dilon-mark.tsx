@@ -1,55 +1,62 @@
+"use client";
+
+import { useId } from "react";
+
 /**
  * Símbolo da marca Dilon Tech: o 'D' segmentado em polígonos (dados, módulos
  * de software, processos organizados) atravessado pela seta ascendente
  * projetada pro quadrante superior direito (crescimento, ganho de eficiência).
  * Ver Manual de Identidade Visual v1.0, seção 2.
  *
- * Vem sobre o círculo Deep Navy Blue igual ao ativo oficial — além de ser a
- * aplicação que a marca já usa como avatar, garante o contraste do azul e do
- * teal em qualquer fundo onde a barra lateral for parar.
+ * Sem o círculo Deep Navy da versão avatar: a 28px (tamanho no menu recolhido)
+ * o 'D' azul sobre o azul-marinho perdia contraste e sobrava só a seta. Solto,
+ * o 'D' pega o fundo da barra e volta a ser reconhecível no tamanho pequeno.
  *
- * Desenhado pra continuar legível a 28px (tamanho no menu recolhido): a
- * silhueta do 'D' e o vazado interno vêm primeiro, a seta é fina o bastante
- * pra cruzar sem tapar a letra, e há só dois cortes de segmentação — mais do
- * que isso vira ruído nesse tamanho.
+ * Os cortes de segmentação são vazados por máscara, não pintados por cima.
+ * Pintar exigiria saber a cor do fundo — e a barra principal é branca enquanto
+ * a do painel admin é quase preta, onde traços brancos viravam riscos berrantes.
+ * Vazando, o corte simplesmente mostra o que estiver atrás.
  *
- * Cores travadas nos valores do manual de propósito (alterar a paleta é
- * proibido): Deep Navy #03254C e Electric Teal #00F5D4.
+ * O teal é #00C9AE e não o Electric Teal #00F5D4 do manual: o valor original é
+ * claro demais pra ficar legível sobre branco, que é o fundo da barra principal.
+ * Mesma matiz, só rebaixado o suficiente pra funcionar nos dois fundos.
  */
 export function DilonMark({ className = "w-7 h-7" }: { className?: string }) {
+  // Dois DilonMark coexistem no DOM (cabeçalho mobile e barra lateral); IDs
+  // fixos colidiriam e um pegaria o gradiente/máscara do outro.
+  const uid = useId().replace(/:/g, "");
+
   return (
     <svg viewBox="0 0 48 48" className={`${className} shrink-0`} role="img" aria-label="Dilon Tech">
       <defs>
-        <linearGradient id="dilon-d" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#4A90E2" />
-          <stop offset="100%" stopColor="#1257A0" />
+        <linearGradient id={`dilon-d-${uid}`} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stopColor="#3B86DA" />
+          <stop offset="100%" stopColor="#1B5FA6" />
         </linearGradient>
+        <mask id={`dilon-cuts-${uid}`} maskUnits="userSpaceOnUse" x="0" y="0" width="48" height="48">
+          <rect width="48" height="48" fill="#fff" />
+          <path d="M6 24h9M21 6l-6 8.5" stroke="#000" strokeWidth="2" fill="none" />
+        </mask>
       </defs>
-
-      <circle cx="24" cy="24" r="24" fill="#03254C" />
 
       {/* 'D': contorno externo e contraforma no mesmo path, evenodd vaza o miolo. */}
       <path
         fillRule="evenodd"
         clipRule="evenodd"
-        fill="url(#dilon-d)"
-        d="M11 9h13.5C33.6 9 40 15.3 40 24s-6.4 15-15.5 15H11V9zm8 7.5v15h5.2c4.7 0 7.6-2.9 7.6-7.5s-2.9-7.5-7.6-7.5H19z"
+        fill={`url(#dilon-d-${uid})`}
+        mask={`url(#dilon-cuts-${uid})`}
+        d="M6 6h15C31.5 6 39 13.6 39 24s-7.5 18-18 18H6V6zm9 8.5v19h6c5.4 0 9-3.7 9-9.5s-3.6-9.5-9-9.5h-6z"
       />
-
-      {/* Cortes que dão a leitura de polígonos montados, na cor do fundo. */}
-      <g stroke="#03254C" strokeWidth="1.6">
-        <path d="M11 24h8M24.5 9 19 16.5" />
-      </g>
 
       {/* Seta ascendente cruzando o símbolo. */}
       <path
-        d="M9 36C17 34 26 28 33 16.5"
+        d="M4 40C14 37 26 29 34 14"
         fill="none"
-        stroke="#00F5D4"
-        strokeWidth="2.8"
+        stroke="#00C9AE"
+        strokeWidth="3.4"
         strokeLinecap="round"
       />
-      <path d="M38.5 10.5 28.5 13.5l7 7z" fill="#00F5D4" />
+      <path d="M41 7 29 10.5l8 8z" fill="#00C9AE" />
     </svg>
   );
 }
