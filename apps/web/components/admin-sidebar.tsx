@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AppVersion } from "@/components/app-version";
+import { DilonMark } from "@/components/dilon-mark";
 
 const icon = (d: React.ReactNode) => (
   <svg
@@ -60,7 +61,10 @@ export function AdminSidebar({ name }: { name: string }) {
         } md:translate-x-0`}
       >
         <div className="flex items-center justify-between mb-1">
-          <p className="text-xs font-mono uppercase tracking-wide text-emerald-400">Dilon Zap</p>
+          <span className="flex items-center gap-2">
+            <DilonMark className="w-7 h-7" />
+            <p className="text-xs font-mono uppercase tracking-wide text-emerald-400">Dilon Zap</p>
+          </span>
           <button
             onClick={() => setOpen(false)}
             aria-label="Fechar menu"

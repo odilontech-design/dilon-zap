@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AppVersion } from "@/components/app-version";
+import { DilonMark } from "@/components/dilon-mark";
 
 // Ícones inline (sem lib externa: são poucos e assim não entra mais um
 // pacote no bundle). Todos no mesmo padrão — traço, 24x24, herdando a cor
@@ -112,7 +113,10 @@ export function Sidebar({ name }: { name: string }) {
             <path d="M3 6h18M3 12h18M3 18h18" strokeLinecap="round" />
           </svg>
         </button>
-        <span className="text-xs font-mono uppercase tracking-wide text-accent">Dilon Zap</span>
+        <span className="flex items-center gap-2">
+          <DilonMark className="w-6 h-6" />
+          <span className="text-xs font-mono uppercase tracking-wide text-accent">Dilon Zap</span>
+        </span>
         <span className="w-6" aria-hidden />
       </div>
 
@@ -129,24 +133,76 @@ export function Sidebar({ name }: { name: string }) {
           open ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0 ${collapsed ? "md:w-16 md:px-2 px-4" : "md:w-56 px-4"} py-4`}
       >
-        <div className={`flex items-center mb-6 ${collapsed ? "md:justify-center justify-between" : "justify-between"}`}>
-          <p className={`text-xs font-mono uppercase tracking-wide text-accent ${collapsed ? "md:hidden" : ""}`}>
-            Dilon Zap
-          </p>
-          {/* No modo recolhido a marca vira só a inicial, pra barra não ficar
-              sem nenhuma identificação. */}
+        {/* Recolhido, a barra tem 64px: marca e botão não cabem lado a lado,
+            então viram uma coluna centralizada. */}
+        <div className={`mb-6 ${collapsed ? "md:flex md:flex-col md:items-center md:gap-2" : ""}`}>
+          <div className={`flex items-center gap-2 ${collapsed ? "justify-between md:justify-center" : "justify-between"}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <DilonMark className="w-7 h-7" />
+              <p
+                className={`text-xs font-mono uppercase tracking-wide text-accent whitespace-nowrap ${
+                  collapsed ? "md:hidden" : ""
+                }`}
+              >
+                Dilon Zap
+              </p>
+            </div>
+
+            {/* Recolher só existe no desktop — no celular a barra já é uma
+                gaveta que abre e fecha por cima do conteúdo. */}
+            <button
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
+              title={collapsed ? "Expandir menu" : "Recolher menu"}
+              className={`hidden md:grid place-items-center w-7 h-7 rounded-md text-neutral-400 hover:text-accent hover:bg-neutral-100 ${
+                collapsed ? "md:hidden" : ""
+              }`}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+                aria-hidden
+              >
+                <path d="M15 18 9 12l6-6" />
+              </svg>
+            </button>
+
+            <button
+              onClick={() => setOpen(false)}
+              aria-label="Fechar menu"
+              className="md:hidden text-neutral-400 hover:text-neutral-700 text-lg leading-none"
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Versão recolhida do mesmo botão, embaixo da marca. */}
           {collapsed && (
-            <span className="hidden md:block text-sm font-mono font-bold text-accent" title="Dilon Zap">
-              DZ
-            </span>
+            <button
+              onClick={toggleCollapsed}
+              aria-label="Expandir menu"
+              title="Expandir menu"
+              className="hidden md:grid place-items-center w-7 h-7 rounded-md text-neutral-400 hover:text-accent hover:bg-neutral-100"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="w-4 h-4"
+                aria-hidden
+              >
+                <path d="m9 18 6-6-6-6" />
+              </svg>
+            </button>
           )}
-          <button
-            onClick={() => setOpen(false)}
-            aria-label="Fechar menu"
-            className="md:hidden text-neutral-400 hover:text-neutral-700 text-lg leading-none"
-          >
-            ×
-          </button>
         </div>
 
         <nav className="flex flex-col gap-1 text-sm overflow-y-auto">
@@ -179,31 +235,6 @@ export function Sidebar({ name }: { name: string }) {
           <div className={collapsed ? "md:hidden" : ""}>
             <SignOutButton />
           </div>
-
-          {/* Recolher só faz sentido no desktop — no celular a barra já é uma
-              gaveta que abre e fecha por cima do conteúdo. */}
-          <button
-            onClick={toggleCollapsed}
-            aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-            title={collapsed ? "Expandir menu" : "Recolher menu"}
-            className={`hidden md:flex items-center gap-2 mt-3 w-full rounded-md py-1.5 text-neutral-400 hover:text-accent hover:bg-neutral-100 ${
-              collapsed ? "justify-center px-0" : "px-2"
-            }`}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className={`w-4 h-4 transition-transform duration-200 ${collapsed ? "rotate-180" : ""}`}
-              aria-hidden
-            >
-              <path d="m15 18-6-6 6-6" />
-            </svg>
-            {!collapsed && <span>Recolher</span>}
-          </button>
 
           <div className={`mt-3 ${collapsed ? "md:text-center" : ""}`}>
             <AppVersion compact={collapsed} />
