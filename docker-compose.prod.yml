@@ -1,8 +1,42 @@
-# Produção: web e worker cada um no seu container, Caddy na frente cuidando
-# de HTTPS automático (Let's Encrypt) pro domínio configurado no Caddyfile.
-# Postgres (Neon) e storage de mídia (R2) já são serviços na nuvem — não tem
-# banco nem storage aqui, só as duas aplicações + o proxy.
+# Produção: Postgres, web e worker cada um no seu container, Caddy na frente
+# cuidando de HTTPS automático (Let's Encrypt) pro domínio configurado no
+# Caddyfile. O storage de mídia (R2) continua na nuvem — só o banco é local.
 services:
+  postgres:
+    # Precisa acompanhar a major do dump que foi restaurado aqui (veio do
+    # Neon, Postgres 18) — pg_restore não aceita restaurar de uma major mais
+    # nova do que o servidor.
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backups:/backups
+    # Sem `ports:` de propósito — o banco fica só na rede interna do Docker,
+    # alcançável por web/worker e por nada mais. Publicar 5432 no host abriria
+    # o Postgres pra internet inteira.
+    expose:
+      - "5432"
+    # Ajustado pra VPS pequena (1 vCPU / 2GB): os padrões do Postgres assumem
+    # uma máquina bem maior e brigariam por memória com web + worker.
+    command: >
+      postgres
+      -c shared_buffers=256MB
+      -c effective_cache_size=768MB
+      -c maintenance_work_mem=64MB
+      -c work_mem=4MB
+      -c max_connections=50
+      -c wal_compression=on
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   web:
     build:
       context: .
@@ -11,6 +45,9 @@ services:
     env_file: .env
     expose:
       - "3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   worker:
     build:
@@ -20,6 +57,9 @@ services:
     env_file: .env
     expose:
       - "4001"
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   caddy:
     image: caddy:2-alpine
@@ -37,3 +77,4 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+  postgres_data:
