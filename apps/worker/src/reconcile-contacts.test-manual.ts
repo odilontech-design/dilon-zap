@@ -10,8 +10,10 @@
 //
 // Rodar com: npx tsx apps/worker/src/reconcile-contacts.test-manual.ts
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
 const FOTO = "https://pps.whatsapp.net/v/t61.24694-24/999_teste_reconciliacao_n.jpg";

@@ -1,5 +1,11 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
+
+// __dirname não existe em ESM (o worker virou "type": "module" na migração
+// pro Baileys 7.x, que só publica exports ESM) — reconstrói o equivalente a
+// partir da URL do próprio módulo.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Rede de segurança: o worker precisa ficar de pé o tempo todo (é ele que
 // segura a conexão com o WhatsApp). Sem isso, uma promise rejeitada sem

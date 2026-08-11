@@ -2,6 +2,7 @@
   "name": "@dilon-zap/worker",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "start": "tsx src/index.ts",
@@ -10,7 +11,7 @@
   "dependencies": {
     "@dilon-zap/db": "*",
     "@dilon-zap/storage": "*",
-    "@whiskeysockets/baileys": "^6.7.9",
+    "@whiskeysockets/baileys": "^7.0.0-rc14",
     "@hapi/boom": "^10.0.1",
     "dotenv": "^16.4.5",
     "pino": "^9.4.0",
