@@ -14,8 +14,14 @@ import { prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
+import { criarBaileysLogger } from "./baileys-logger";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
+
+// O Baileys recebe um logger separado e filtrado — ver baileys-logger.ts. Sem
+// isso não temos como saber quando o cliente não conseguiu abrir a mensagem:
+// ela consta como entregue e lida do nosso lado de qualquer jeito.
+const baileysLogger = criarBaileysLogger();
 
 // Uma entrada por sessão ativa nesta instância do worker. Evita abrir duas
 // conexões Baileys pro mesmo número se o loop de polling rodar de novo antes
@@ -140,8 +146,8 @@ export async function startSession(sessionId: string) {
       // ao mesmo tempo), isso alarga a janela de corrida entre operações
       // concorrentes de criptografia e pode corromper o estado da sessão do
       // Signal Protocol (erros "Bad MAC" / "No matching sessions found").
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, logger) },
-      logger,
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger) },
+      logger: baileysLogger,
       printQRInTerminal: false,
       // Pede o histórico mais completo que o WhatsApp aceitar mandar no
       // pareamento — só faz efeito num QR novo, não numa sessão já pareada.
