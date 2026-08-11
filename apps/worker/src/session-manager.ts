@@ -5,6 +5,7 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   WAMessageStatus,
   type proto,
+  type WAMessage,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
@@ -267,7 +268,11 @@ export async function startSession(sessionId: string) {
         media: content.media,
         waMessageId: msg.key.id ?? undefined,
         pushName: msg.pushName ?? undefined,
-        senderPn: msg.key.senderPn ?? undefined,
+        // Na 7.x o par LID/telefone virou campo de primeira classe: quando a
+        // mensagem chega endereçada por LID, remoteJidAlt traz o telefone
+        // correspondente (e vice-versa). Substitui o antigo senderPn, que a
+        // 6.x populava sem declarar no tipo — e nem sempre populava.
+        remoteJidAlt: msg.key.remoteJidAlt ?? undefined,
         quotedWaMessageId: content.quotedWaMessageId,
         socket,
       }).catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
@@ -386,8 +391,11 @@ function getQuotedWaMessageId(m: proto.IMessage): string | undefined {
 // Detecta o tipo de conteúdo da mensagem e baixa a mídia (já descriptografada
 // pelo Baileys) quando aplicável. Mensagem sem texto e sem mídia reconhecida
 // (figurinha, localização, enquete etc.) volta null e é ignorada por ora.
+// WAMessage e não proto.IWebMessageInfo: downloadMediaMessage exige a chave
+// não-nula, e quem chama aqui já garantiu isso (mensagem ao vivo sempre tem,
+// e o histórico passa pelo type guard de `candidates`).
 async function extractInboundContent(
-  msg: proto.IWebMessageInfo,
+  msg: WAMessage,
   socket: ReturnType<typeof makeWASocket>
 ): Promise<{ text: string; media?: InboundMedia; quotedWaMessageId?: string } | null> {
   const m = msg.message;
@@ -574,7 +582,7 @@ async function recordMessage(params: {
   media?: InboundMedia;
   waMessageId?: string;
   pushName?: string;
-  senderPn?: string;
+  remoteJidAlt?: string;
   quotedWaMessageId?: string;
   socket: ReturnType<typeof makeWASocket>;
 }) {
@@ -584,7 +592,9 @@ async function recordMessage(params: {
     where: { id: params.sessionId },
     select: { tenantId: true },
   });
-  const resolvedPhone = params.waJid.endsWith("@lid") ? phoneDigitsFromJid(params.senderPn) : undefined;
+  const resolvedPhone = params.waJid.endsWith("@lid")
+    ? phoneDigitsFromJid(params.remoteJidAlt)
+    : undefined;
   // pushName só identifica quem MANDOU a mensagem — numa mensagem OUTBOUND
   // (mandada do próprio celular, fora do Inbox) isso seria o nome do próprio
   // negócio, não do contato, então não pode virar o nome do contato.
@@ -778,10 +788,13 @@ async function importHistoricalMessages(
     }
   }
 
-  const candidates = messages.filter((msg) => {
-    const jid = msg.key.remoteJid;
+  // Type guard e não filtro comum: na 7.x o `key` do histórico é opcional no
+  // tipo, e sem estreitar aqui cada uso lá embaixo viraria um `!` solto — que
+  // é justamente o que esconde um `key` faltando virando crash em produção.
+  const candidates = messages.filter((msg): msg is WAMessage => {
+    const jid = msg.key?.remoteJid;
     if (!jid || jid.endsWith("@g.us") || jid === "status@broadcast") return false;
-    return !!msg.message && !!msg.key.id;
+    return !!msg.message && !!msg.key?.id;
   });
   if (candidates.length === 0) return;
 
@@ -794,10 +807,10 @@ async function importHistoricalMessages(
       nameByJid.set(jid, msg.pushName);
     }
     if (jid.endsWith("@lid") && !phoneByJid.has(jid)) {
-      // proto.IMessageKey (tipo cru do histórico) não declara senderPn, mas o
-      // Baileys populada em runtime igual faz no WAMessageKey de mensagens ao vivo.
-      const senderPn = (msg.key as { senderPn?: string }).senderPn;
-      const digits = phoneDigitsFromJid(senderPn);
+      // Mesmo campo das mensagens ao vivo: com o remoteJid em @lid, o
+      // remoteJidAlt traz o telefone. Na 6.x isso era um senderPn não
+      // declarado no tipo, que exigia cast e nem sempre vinha preenchido.
+      const digits = phoneDigitsFromJid(msg.key.remoteJidAlt ?? undefined);
       if (digits) phoneByJid.set(jid, digits);
     }
   }
