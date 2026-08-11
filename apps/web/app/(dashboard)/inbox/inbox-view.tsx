@@ -73,6 +73,20 @@ const QUICK_REACTIONS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
 
 const SENT_STATUSES: MessageStatus[] = ["SENT", "DELIVERED", "READ"];
 
+// Depois disso sem o WhatsApp confirmar a entrega, o Inbox avisa em vez de
+// mostrar só o ✓ de "saiu daqui".
+//
+// Existe porque a falha era SILENCIOSA: quando o aparelho do cliente não
+// consegue decifrar a mensagem (ele mostra "Aguardando mensagem" no lugar do
+// texto), pra atendente estava tudo certo — ela achava que respondeu e o
+// cliente achava que foi ignorado, e ninguém descobria até o cliente reclamar.
+//
+// 10 min é folgado de propósito: confirmação normal chega em segundos, e
+// cliente sem sinal pode legitimamente demorar. Por isso o aviso fala em "sem
+// confirmação", nunca em "não entregue" — não é prova de falha, é um "confere
+// isso". Avisar demais treina a atendente a ignorar o aviso.
+const DELIVERY_WARN_AFTER_MS = 10 * 60 * 1000;
+
 function quotedLabel(quoted: QuotedMessage, contact: ContactRef) {
   return quoted.direction === "OUTBOUND" ? quoted.sender?.name ?? "Você" : contactLabel(contact);
 }
@@ -959,7 +973,13 @@ function ConversationThread({
                     ) : (
                       <>
                         <span>{formatTime(m.createdAt)}</span>
-                        {m.direction === "OUTBOUND" && <MessageTicks status={m.status} />}
+                        {m.direction === "OUTBOUND" && (
+                          <MessageTicks
+                            status={m.status}
+                            createdAt={m.createdAt}
+                            viaPlatform={Boolean(m.sender)}
+                          />
+                        )}
                       </>
                     )}
                   </div>
@@ -1345,8 +1365,33 @@ function MessageMedia({ message, onLoad }: { message: Message; onLoad?: () => vo
   );
 }
 
-function MessageTicks({ status }: { status: MessageStatus }) {
-  if (status === "SENT") return <span aria-label="Enviada">✓</span>;
+function MessageTicks({
+  status,
+  createdAt,
+  viaPlatform,
+}: {
+  status: MessageStatus;
+  createdAt: string;
+  viaPlatform: boolean;
+}) {
+  if (status === "SENT") {
+    // Só pra mensagem que saiu daqui: a atendente não tem como reenviar o que
+    // foi mandado direto do celular, então avisar sobre essas seria ruído.
+    const semConfirmacao =
+      viaPlatform && Date.now() - new Date(createdAt).getTime() > DELIVERY_WARN_AFTER_MS;
+
+    if (semConfirmacao) {
+      return (
+        <span
+          className="text-amber-100 font-medium"
+          title="O WhatsApp ainda não confirmou a entrega desta mensagem. Se o cliente disser que não recebeu, reenvie."
+        >
+          sem confirmação
+        </span>
+      );
+    }
+    return <span aria-label="Enviada">✓</span>;
+  }
   if (status === "DELIVERED") return <span aria-label="Entregue">✓✓</span>;
   if (status === "READ") return <span className="text-sky-300" aria-label="Lida">✓✓</span>;
   return null;
