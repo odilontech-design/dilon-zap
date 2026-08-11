@@ -45,9 +45,26 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!agent) return NextResponse.json({ error: "agente inválido" }, { status: 400 });
   }
 
+  // Transferência: só conta quando o responsável REALMENTE muda. Sem essa
+  // comparação, salvar etiqueta ou status numa conversa já atribuída
+  // reacenderia o aviso de "transferida pra você" do nada.
+  const transferiu =
+    parsed.data.assignedToId !== undefined && parsed.data.assignedToId !== conversation.assignedToId;
+
   const updated = await prisma.conversation.update({
     where: { id: conversation.id },
-    data: parsed.data,
+    data: {
+      ...parsed.data,
+      ...(transferiu
+        ? {
+            assignedAt: parsed.data.assignedToId ? new Date() : null,
+            assignedById: parsed.data.assignedToId ? user.id : null,
+            // Quem pega a conversa pra si não precisa ser avisado de que
+            // pegou — já marca como visto pra não nascer um aviso inútil.
+            assignmentSeenAt: parsed.data.assignedToId === user.id ? new Date() : null,
+          }
+        : {}),
+    },
   });
 
   if (Object.keys(parsed.data).length > 0) {

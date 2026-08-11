@@ -26,6 +26,10 @@ type ConversationSummary = {
   contact: ContactRef;
   assignedTo: { id: string; name: string } | null;
   unreadCount: number;
+  // Calculado no servidor em relação a quem pediu: o mesmo registro é aviso
+  // pra quem recebeu a conversa e nada pros outros.
+  transferidaParaMim: boolean;
+  transferidaPor: string | null;
   messages: { body: string; direction: "INBOUND" | "OUTBOUND"; createdAt: string }[];
 };
 
@@ -377,6 +381,20 @@ export function InboxView() {
                     )}
                   </div>
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+                    {/* Some sozinho quando o responsável abre a conversa (ver
+                        a rota /read) — não precisa de botão de "ok, vi". */}
+                    {c.transferidaParaMim && (
+                      <span
+                        className="text-[10px] rounded-full bg-amber-100 text-amber-900 px-2 py-0.5 font-medium"
+                        title={
+                          c.transferidaPor
+                            ? `${c.transferidaPor} passou esta conversa pra você`
+                            : "Esta conversa foi passada pra você"
+                        }
+                      >
+                        ⤷ transferida pra você
+                      </span>
+                    )}
                     {c.assignedTo && (
                       <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
                         {c.assignedTo.name}

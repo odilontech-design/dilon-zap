@@ -14,6 +14,15 @@ model Tenant {
   slug      String   @unique
   createdAt DateTime @default(now())
 
+  // Fuso usado pra decidir se estamos dentro do horário de atendimento. Fica
+  // no tenant e não fixo no código porque quem calcula é o worker, que roda
+  // em UTC dentro do container — sem isso, "18:00" viraria 15:00 pro cliente.
+  timezone String @default("America/Sao_Paulo")
+
+  // Mensagem de ausência. Vazia ou nula desliga o recurso inteiro: é o jeito
+  // de a empresa que atende 24h simplesmente não configurar nada.
+  outOfHoursMessage String?
+
   users         User[]
   sessions      WhatsAppSession[]
   contacts      Contact[]
@@ -24,6 +33,27 @@ model Tenant {
   invoices      Invoice[]
   tags          Tag[]
   stages        Stage[]
+  businessHours BusinessHour[]
+}
+
+// Horário de atendimento, uma linha por dia da semana. Dia sem linha é
+// tratado como fechado — assim uma empresa nova não começa "aberta 24h" por
+// acidente só porque ninguém configurou nada (o que desligaria a mensagem de
+// ausência sem ninguém perceber).
+model BusinessHour {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  weekday  Int     // 0 = domingo … 6 = sábado, igual Date#getDay()
+  isOpen   Boolean @default(true)
+  // "HH:MM" no fuso do tenant. String e não DateTime de propósito: é hora do
+  // relógio, não instante no tempo — guardar como DateTime traria uma data
+  // junto e o horário passaria a "andar" com o horário de verão.
+  opensAt  String  @default("08:00")
+  closesAt String  @default("18:00")
+
+  @@unique([tenantId, weekday])
 }
 
 enum UserRole {
@@ -43,6 +73,7 @@ model User {
   createdAt    DateTime @default(now())
 
   assignedConversations Conversation[] @relation("AssignedAgent")
+  transfersMade         Conversation[] @relation("AssignedBy")
   sentMessages          Message[]      @relation("MessageSender")
   messageReactions      MessageReaction[]
 
@@ -166,6 +197,19 @@ model Conversation {
   assignedTo   User?            @relation("AssignedAgent", fields: [assignedToId], references: [id])
   lastMessageAt DateTime        @default(now())
   createdAt DateTime            @default(now())
+
+  // Última vez que a mensagem de ausência foi mandada nesta conversa. É a
+  // trava que impede o cliente levar cinco respostas iguais por mandar cinco
+  // mensagens de madrugada — sem ela a automação vira motivo de reclamação.
+  outOfHoursNotifiedAt DateTime?
+
+  // Transferência entre atendentes. assignedAt/assignedById dizem quando e
+  // por quem; assignmentSeenAt marca quando o novo responsável abriu — o
+  // aviso no Inbox vive enquanto assignmentSeenAt for anterior a assignedAt.
+  assignedAt       DateTime?
+  assignedById     String?
+  assignedBy       User?     @relation("AssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  assignmentSeenAt DateTime?
 
   messages Message[]
 

@@ -62,6 +62,13 @@ export async function GET(req: Request) {
         select: { id: true, name: true, waJid: true, phoneNumber: true, avatarUrl: true, lastStatusAt: true },
       },
       assignedTo: { select: { id: true, name: true } },
+      // Campos da transferência entram só pra virar o booleano abaixo — não
+      // vão crus pro cliente, porque essa rota é consultada em loop e cada
+      // campo extra vira tráfego multiplicado por atendente por minuto.
+      assignedToId: true,
+      assignedAt: true,
+      assignmentSeenAt: true,
+      assignedBy: { select: { name: true } },
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
@@ -75,11 +82,22 @@ export async function GET(req: Request) {
   // inteira (algumas passam de 400 caracteres) é byte jogado fora numa rota
   // consultada em loop. 120 caracteres cobrem qualquer largura de tela.
   const PREVIEW_MAX = 120;
-  const withUnread = conversations.map(({ _count, messages, ...c }) => ({
-    ...c,
-    messages: messages.map((m) => ({ ...m, body: m.body.slice(0, PREVIEW_MAX) })),
-    unreadCount: _count.messages,
-  }));
+  const withUnread = conversations.map(
+    ({ _count, messages, assignedToId, assignedAt, assignmentSeenAt, assignedBy, ...c }) => ({
+      ...c,
+      messages: messages.map((m) => ({ ...m, body: m.body.slice(0, PREVIEW_MAX) })),
+      unreadCount: _count.messages,
+      // "Passaram esta conversa pra mim e eu ainda não abri". Calculado aqui
+      // porque a regra (é minha + tem transferência + ainda não vi) só faz
+      // sentido em relação a QUEM está pedindo — o mesmo registro é aviso
+      // pra uma pessoa e nada pras outras.
+      transferidaParaMim:
+        assignedToId === user.id &&
+        assignedAt != null &&
+        (assignmentSeenAt == null || assignmentSeenAt < assignedAt),
+      transferidaPor: assignedBy?.name ?? null,
+    })
+  );
 
   return NextResponse.json(withUnread);
 }

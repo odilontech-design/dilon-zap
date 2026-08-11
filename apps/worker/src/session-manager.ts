@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
+import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
@@ -36,6 +37,12 @@ const activeSessions = new Map<string, ActiveSession>();
 // tráfego e carga de banco à toa, 24h por dia.
 const OUTBOX_POLL_MIN_MS = 1_000;
 const OUTBOX_POLL_MAX_MS = 5_000;
+
+// Intervalo mínimo entre dois avisos de ausência na MESMA conversa. 6h cobre
+// uma madrugada inteira: o cliente que escreve 23h, 23h05 e 01h leva um aviso
+// só, e quem volta na tarde seguinte (ainda fora do horário) recebe de novo,
+// porque aí já é outro contato e o silêncio pareceria descaso.
+const AUSENCIA_INTERVALO_MS = 6 * 60 * 60 * 1000;
 const NEW_SESSION_POLL_INTERVAL_MS = 5_000;
 const RETRY_WINDOW_MS = 60_000; // quanto tempo tenta de novo sozinho antes de marcar FAILED de vez
 
@@ -687,13 +694,47 @@ async function recordMessage(params: {
   }
 
   if (isInbound && !conversation.assignedToId) {
+    const atendimento = await carregarAtendimento(session.tenantId);
     await maybeAutoReply({
       tenantId: session.tenantId,
       sessionId: params.sessionId,
       conversationId: conversation.id,
       inboundText: params.text,
+      foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone),
+      mensagemAusencia: atendimento.outOfHoursMessage,
+      ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
     });
   }
+}
+
+// Horário e mensagem de ausência mudam raramente e são lidos a cada mensagem
+// recebida — sem cache, cada mensagem viraria duas consultas a mais num
+// Postgres de 1 vCPU. 60s é curto o bastante pra mudança na tela valer quase
+// na hora e longo o bastante pra tirar o peso do caminho quente.
+const CACHE_ATENDIMENTO_MS = 60_000;
+const cacheAtendimento = new Map<
+  string,
+  { em: number; dados: { timezone: string; outOfHoursMessage: string | null; dias: DiaDeAtendimento[] } }
+>();
+
+async function carregarAtendimento(tenantId: string) {
+  const guardado = cacheAtendimento.get(tenantId);
+  if (guardado && Date.now() - guardado.em < CACHE_ATENDIMENTO_MS) return guardado.dados;
+
+  const [tenant, dias] = await Promise.all([
+    prisma.tenant.findUniqueOrThrow({
+      where: { id: tenantId },
+      select: { timezone: true, outOfHoursMessage: true },
+    }),
+    prisma.businessHour.findMany({
+      where: { tenantId },
+      select: { weekday: true, isOpen: true, opensAt: true, closesAt: true },
+    }),
+  ]);
+
+  const dados = { timezone: tenant.timezone, outOfHoursMessage: tenant.outOfHoursMessage, dias };
+  cacheAtendimento.set(tenantId, { em: Date.now(), dados });
+  return dados;
 }
 
 // Importa o histórico que o WhatsApp manda ao parear/reconectar. Fase 0: só
@@ -873,21 +914,52 @@ async function fetchAndSaveAvatar(
 // v1 do construtor de fluxos: casamento simples por palavra-chave. Só dispara
 // pra conversa sem atendente atribuído — assim que um humano assume, a
 // automação para de responder no lugar dele.
+// Uma mensagem recebida gera NO MÁXIMO uma resposta automática. Por isso
+// ausência e resposta padrão são decididas aqui juntas, e não em automações
+// separadas: separadas, um cliente escrevendo às 22h levaria a resposta da
+// palavra-chave E o aviso de que estamos fechados, duas mensagens seguidas do
+// nada.
+//
+// Ordem: palavra-chave ganha sempre (é específica e útil a qualquer hora);
+// fora do horário, o aviso de ausência ocupa o lugar da resposta padrão; e se
+// a empresa não configurou ausência, tudo se comporta como antes.
 async function maybeAutoReply(params: {
   tenantId: string;
   sessionId: string;
   conversationId: string;
   inboundText: string;
+  foraDoHorario: boolean;
+  mensagemAusencia: string | null;
+  ausenciaAvisadaEm: Date | null;
 }) {
   const rules = await prisma.autoReply.findMany({ where: { tenantId: params.tenantId } });
-  if (rules.length === 0) return;
 
   const lowerText = params.inboundText.toLowerCase();
-  const match =
-    rules.find((r) => !r.isDefault && r.keyword && lowerText.includes(r.keyword.toLowerCase())) ??
-    rules.find((r) => r.isDefault);
+  const porPalavraChave = rules.find(
+    (r) => !r.isDefault && r.keyword && lowerText.includes(r.keyword.toLowerCase())
+  );
 
-  if (!match) return;
+  const ausenciaLigada = params.foraDoHorario && Boolean(params.mensagemAusencia);
+  // Trava anti-spam: cliente que manda cinco mensagens de madrugada recebe UM
+  // aviso, não cinco. Sem isso a automação vira motivo de reclamação.
+  const jaAvisou =
+    params.ausenciaAvisadaEm != null &&
+    Date.now() - params.ausenciaAvisadaEm.getTime() < AUSENCIA_INTERVALO_MS;
+
+  let texto: string | null = null;
+  let marcarAusencia = false;
+
+  if (porPalavraChave) {
+    texto = porPalavraChave.response;
+  } else if (ausenciaLigada) {
+    if (jaAvisou) return; // já avisamos há pouco — fica quieto de propósito
+    texto = params.mensagemAusencia;
+    marcarAusencia = true;
+  } else {
+    texto = rules.find((r) => r.isDefault)?.response ?? null;
+  }
+
+  if (!texto) return;
 
   await prisma.message.create({
     data: {
@@ -895,9 +967,16 @@ async function maybeAutoReply(params: {
       sessionId: params.sessionId,
       direction: "OUTBOUND",
       status: "PENDING",
-      body: match.response,
+      body: texto,
     },
   });
+
+  if (marcarAusencia) {
+    await prisma.conversation.update({
+      where: { id: params.conversationId },
+      data: { outOfHoursNotifiedAt: new Date() },
+    });
+  }
 
   // Auto-resposta é justamente o caso em que a fila pode estar no ritmo mais
   // lento (ninguém enviando nada há um tempo) — sem isso, a resposta

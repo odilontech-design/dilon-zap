@@ -19,5 +19,16 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     data: { readAt: new Date() },
   });
 
+  // Abrir a conversa é justamente o "eu vi que me passaram isso" — apagar o
+  // aviso de transferência aqui evita um botão de "marcar como visto" que
+  // ninguém clicaria. Só quem recebeu a transferência apaga: se outra pessoa
+  // abrir a conversa, o responsável continua com o aviso esperando por ele.
+  if (conversation.assignedToId === user.id && conversation.assignedAt) {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: { assignmentSeenAt: new Date() },
+    });
+  }
+
   return NextResponse.json({ ok: true });
 }
