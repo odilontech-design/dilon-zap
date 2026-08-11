@@ -49,6 +49,21 @@ Login criado pelo seed: `contato@believecosmeticos.com.br` / `troque-esta-senha`
 
 Fluxo de teste: entre no dashboard → **Conectar número** → escaneie o QR Code com um WhatsApp (Aparelhos conectados → Conectar um aparelho) → mande uma mensagem de teste pro número conectado → ela aparece em **Inbox** em poucos segundos.
 
+### Rodando contra o banco de produção
+
+O Postgres de produção roda num container na VPS e **não publica porta no host** — fica só na rede interna do Docker. Pra alcançá-lo de fora, suba o túnel SSH:
+
+```bash
+./scripts/db-tunnel.sh
+```
+
+Ele resolve o IP do container na hora (esse IP muda a cada recriação, fixar dá túnel apontando pro lugar errado em silêncio) e abre `localhost:5433`. Deixe rodando num terminal e aponte o `DATABASE_URL` do `.env` pra ele.
+
+Duas armadilhas que já custaram tempo:
+
+- **Túnel fora do ar não dá erro claro**, só timeout de conexão do Prisma. Se o app local "travou" no banco, confira o túnel primeiro.
+- **É produção de verdade.** Mensagem enviada pelo Inbox local entra na fila que o worker de produção consome, e vai parar no WhatsApp do cliente. Pra mexer à vontade, use a cópia congelada do Neon (a URL está comentada no `.env`) — mas lembre que os dados são do dia da migração, e isso não aparece em lugar nenhum na tela: o app sobe normal e mostra dados plausíveis, só velhos.
+
 ## Variáveis de ambiente
 
 Ver `.env.example`. Um único `.env` na raiz serve pro `web`, `worker` e Prisma — cada um carrega esse arquivo explicitamente (ver `next.config.js`, `apps/worker/src/index.ts` e os scripts `db:*` em `packages/db/package.json`).
