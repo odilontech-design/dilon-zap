@@ -153,6 +153,32 @@ export async function startSession(sessionId: string) {
       // Pede o histórico mais completo que o WhatsApp aceitar mandar no
       // pareamento — só faz efeito num QR novo, não numa sessão já pareada.
       syncFullHistory: true,
+      // Quando o aparelho do cliente não consegue decifrar uma mensagem nossa,
+      // ele pede reenvio. O Baileys procura a original primeiro no cache em
+      // memória e, se não achar, chama este gancho. Sem implementá-lo o
+      // reenvio morre com "recv retry request, but message not available" e a
+      // pessoa fica com "Aguardando mensagem" pra sempre — mesmo com a
+      // mensagem constando ENTREGUE do nosso lado, porque o recibo de entrega
+      // é do envelope, não da decifragem. Foi o caso da Renata (#1327).
+      //
+      // Só texto: reconstruir mídia exigiria rebaixar do R2 e recifrar, e o
+      // ganho não paga o custo — o texto é o que a atendente precisa que
+      // chegue. Mídia sem retry continua caindo no reenvio manual.
+      getMessage: async (key) => {
+        if (!key.id) return undefined;
+        try {
+          const salva = await prisma.message.findFirst({
+            where: { waMessageId: key.id, direction: "OUTBOUND" },
+            select: { body: true },
+          });
+          if (!salva?.body) return undefined;
+          return { conversation: salva.body };
+        } catch (err) {
+          // Postgres fora do ar não pode derrubar o fluxo de retry.
+          logger.error({ err, waMessageId: key.id }, "falha ao buscar mensagem pro reenvio");
+          return undefined;
+        }
+      },
       // Fase 0: um número por tenant, throttling de disparo em massa entra na
       // fase de Campanhas — aqui só garantimos que a conexão em si é estável.
     });
