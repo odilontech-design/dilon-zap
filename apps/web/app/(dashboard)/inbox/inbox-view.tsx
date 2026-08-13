@@ -69,6 +69,8 @@ type Message = {
   isEdited: boolean;
   isDeleted: boolean;
   isForwarded: boolean;
+  retryRequestedAt: string | null;
+  retryServedAt: string | null;
   quotedMessage: QuotedMessage | null;
   reactions: MessageReaction[];
 };
@@ -996,6 +998,8 @@ function ConversationThread({
                             status={m.status}
                             createdAt={m.createdAt}
                             viaPlatform={Boolean(m.sender)}
+                            retryRequestedAt={m.retryRequestedAt}
+                            retryServedAt={m.retryServedAt}
                           />
                         )}
                       </>
@@ -1387,11 +1391,40 @@ function MessageTicks({
   status,
   createdAt,
   viaPlatform,
+  retryRequestedAt,
+  retryServedAt,
 }: {
   status: MessageStatus;
   createdAt: string;
   viaPlatform: boolean;
+  retryRequestedAt: string | null;
+  retryServedAt: string | null;
 }) {
+  // Vem ANTES do status de propósito. O aparelho do cliente pediu reenvio
+  // porque não conseguiu decifrar — e mesmo assim a mensagem pode constar
+  // ENTREGUE ou até LIDA, porque o recibo é do envelope, não do conteúdo.
+  // Se olhássemos o status primeiro, o ✓✓ azul esconderia justamente o caso
+  // que a atendente precisa ver.
+  if (retryRequestedAt) {
+    if (!retryServedAt) {
+      return (
+        <span
+          className="text-red-100 font-medium"
+          title="O aparelho do cliente pediu esta mensagem de novo e não conseguimos reenviar (normalmente mídia). Ele está vendo 'Aguardando mensagem'. Reenvie."
+        >
+          não chegou — reenvie
+        </span>
+      );
+    }
+    return (
+      <span
+        className="text-white/70"
+        title="O aparelho do cliente não conseguiu abrir esta mensagem de primeira e o sistema reenviou sozinho. Nada a fazer."
+      >
+        reenviada
+      </span>
+    );
+  }
   if (status === "SENT") {
     // Só pra mensagem que saiu daqui: a atendente não tem como reenviar o que
     // foi mandado direto do celular, então avisar sobre essas seria ruído.

@@ -169,10 +169,31 @@ export async function startSession(sessionId: string) {
         try {
           const salva = await prisma.message.findFirst({
             where: { waMessageId: key.id, direction: "OUTBOUND" },
-            select: { body: true },
+            select: { id: true, body: true },
           });
-          if (!salva?.body) return undefined;
-          return { conversation: salva.body };
+          if (!salva) return undefined;
+
+          // Registra o pedido mesmo quando não dá pra servir: é isso que
+          // permite o Inbox avisar a atendente em vez de a falha morrer no log.
+          //
+          // Conferido no Baileys 7.x: o gancho só é chamado em dois lugares —
+          // sendMessagesAgain (retry, o nosso caso) e resposta a evento de
+          // calendário. Nunca criamos eventos, então marcar aqui não gera falso
+          // positivo. O caminho de enquete está comentado na lib.
+          const servida = Boolean(salva.body);
+          await prisma.message
+            .update({
+              where: { id: salva.id },
+              data: {
+                retryRequestedAt: new Date(),
+                ...(servida ? { retryServedAt: new Date() } : {}),
+              },
+            })
+            .catch(() => {
+              // Não pode impedir o reenvio em si — o registro é secundário.
+            });
+
+          return servida ? { conversation: salva.body } : undefined;
         } catch (err) {
           // Postgres fora do ar não pode derrubar o fluxo de retry.
           logger.error({ err, waMessageId: key.id }, "falha ao buscar mensagem pro reenvio");

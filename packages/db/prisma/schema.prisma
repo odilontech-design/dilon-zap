@@ -327,6 +327,18 @@ model Message {
   // (igual WhatsApp, que também não guarda esse vínculo).
   isForwarded Boolean @default(false)
 
+  // O aparelho do cliente não conseguiu decifrar esta mensagem e pediu
+  // reenvio. Falha de decifragem é inerente ao Signal com múltiplos
+  // dispositivos (o WhatsApp oficial também sofre) — por isso o protocolo tem
+  // reenvio. O que não pode acontecer é a falha ser invisível: a mensagem
+  // consta ENTREGUE e até LIDA, porque o recibo é do envelope, não do
+  // conteúdo. Sem registrar aqui, ninguém descobre até o cliente reclamar.
+  retryRequestedAt DateTime?
+  // Conseguimos reenviar (buscamos o original no banco e devolvemos pro
+  // Baileys recifrar). Pedido sem entrega servida = a atendente precisa
+  // reenviar na mão, e o Inbox avisa.
+  retryServedAt    DateTime?
+
   // Resposta citando outra mensagem da mesma conversa — WhatsApp não permite
   // citar mensagem de outra conversa, então não precisa reforçar isso aqui.
   quotedMessageId String?
