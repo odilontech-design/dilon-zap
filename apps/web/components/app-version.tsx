@@ -20,7 +20,7 @@ export function AppVersion({ compact = false }: { compact?: boolean }) {
   return (
     <p
       title={title}
-      className={`font-mono tabular-nums text-[10px] text-neutral-400 ${compact ? "text-center" : ""}`}
+      className={`font-mono tabular-nums text-[10px] text-neutral-400 shrink-0 ${compact ? "text-center" : ""}`}
     >
       v{VERSION}
     </p>

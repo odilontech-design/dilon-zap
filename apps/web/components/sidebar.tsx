@@ -243,18 +243,32 @@ export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" 
             collapsed ? "md:flex md:flex-col md:items-center" : ""
           }`}
         >
-          <p className={`mb-2 font-medium text-neutral-700 truncate ${collapsed ? "md:hidden" : ""}`}>{name}</p>
-          <div className={collapsed ? "md:hidden" : ""}>
-            <SignOutButton />
+          {/* Rodapé em duas linhas, não quatro. Nome + tema em cima, sair +
+              versão embaixo: numa tela baixa, quatro linhas empilhadas
+              empurravam a lista de menu e criavam rolagem dentro da barra.
+              O alternador aqui é só o ícone — o rótulo "Modo noite" era o
+              que mais ocupava largura, e sol/lua já diz o que faz. */}
+          <div className={`flex items-center gap-2 mb-1.5 ${collapsed ? "md:justify-center" : ""}`}>
+            <p className={`font-medium text-neutral-700 truncate flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>
+              {name}
+            </p>
+            <ThemeToggle compact />
           </div>
 
-          <div className={`mt-2 ${collapsed ? "md:flex md:justify-center" : ""}`}>
-            <ThemeToggle compact={collapsed} />
+          <div className={`flex items-center gap-2 ${collapsed ? "md:hidden" : ""}`}>
+            <div className="flex-1 min-w-0">
+              <SignOutButton />
+            </div>
+            <AppVersion />
           </div>
 
-          <div className={`mt-3 ${collapsed ? "md:text-center" : ""}`}>
-            <AppVersion compact={collapsed} />
-          </div>
+          {/* Recolhida a barra tem 64px: nome e Sair já somem, e sobra só a
+              versão embaixo do ícone de tema. */}
+          {collapsed && (
+            <div className="hidden md:block mt-2 text-center">
+              <AppVersion compact />
+            </div>
+          )}
         </div>
       </aside>
     </>
