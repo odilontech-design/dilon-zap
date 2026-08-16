@@ -4,10 +4,17 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 
 /**
- * Atendente lê o catálogo (vai precisar pra montar pedido); só o Responsável
- * cadastra e muda preço. Preço é decisão da empresa — se cada atendente
- * puder editar, deixa de existir tabela.
+ * Atendente lê o catálogo (vai precisar pra montar pedido). Cadastrar e
+ * mudar preço é do Responsável e do Financeiro — quem negocia valor com o
+ * cliente é o financeiro, então prendê-lo fora da tabela criaria uma volta
+ * inútil pelo Responsável toda vez que um preço muda.
+ *
+ * A consultora continua de fora: preço é decisão da empresa, e se cada
+ * atendente puder editar deixa de existir tabela.
  */
+function podeEditarCatalogo(role: string) {
+  return role === "OWNER" || role === "FINANCEIRO";
+}
 export async function GET(req: Request) {
   const user = await requireUser();
   const incluirInativos = new URL(req.url).searchParams.get("incluirInativos") === "1";
@@ -30,7 +37,7 @@ const criarSchema = z.object({
 
 export async function POST(req: Request) {
   const user = await requireUser();
-  if (user.role !== "OWNER") return NextResponse.json({ error: "sem permissão" }, { status: 403 });
+  if (!podeEditarCatalogo(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
   const parsed = criarSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

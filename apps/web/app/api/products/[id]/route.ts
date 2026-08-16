@@ -11,9 +11,15 @@ const patchSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+// Responsável e Financeiro editam o catálogo, inclusive preço. Ver o
+// comentário em ../route.ts.
+function podeEditarCatalogo(role: string) {
+  return role === "OWNER" || role === "FINANCEIRO";
+}
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
-  if (user.role !== "OWNER") return NextResponse.json({ error: "sem permissão" }, { status: 403 });
+  if (!podeEditarCatalogo(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
   const parsed = patchSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });

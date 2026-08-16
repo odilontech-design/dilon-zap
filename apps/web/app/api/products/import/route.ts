@@ -22,7 +22,10 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   const user = await requireUser();
-  if (user.role !== "OWNER") return NextResponse.json({ error: "sem permissão" }, { status: 403 });
+  // Mesma permissão do cadastro manual: Responsável e Financeiro.
+  if (user.role !== "OWNER" && user.role !== "FINANCEIRO") {
+    return NextResponse.json({ error: "sem permissão" }, { status: 403 });
+  }
 
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
