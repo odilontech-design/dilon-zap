@@ -63,6 +63,11 @@ const NAV_ITEMS = [
     icon: icon(<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" />),
   },
   {
+    href: "/pedidos",
+    label: "Pedidos",
+    icon: icon(<><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" /><path d="M3 6h18M16 10a4 4 0 0 1-8 0" /></>),
+  },
+  {
     href: "/produtos",
     label: "Produtos",
     icon: icon(<><path d="M20.5 7.5 12 3 3.5 7.5v9L12 21l8.5-4.5v-9Z" /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" /></>),

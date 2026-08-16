@@ -27,6 +27,7 @@ model Tenant {
   sessions      WhatsAppSession[]
   contacts      Contact[]
   conversations Conversation[]
+  orders        Order[]
   contactBlocks ContactBlock[]
   autoReplies   AutoReply[]
   subscription  Subscription?
@@ -97,6 +98,8 @@ model User {
   sentMessages          Message[]      @relation("MessageSender")
   messageReactions      MessageReaction[]
   scheduledMessages     ScheduledMessage[] @relation("ScheduledBy")
+  ordersCreated         Order[]            @relation("OrderCreatedBy")
+  ordersClosed          Order[]            @relation("OrderClosedBy")
   stockMovements        StockMovement[]    @relation("StockMovementBy")
 
   @@index([tenantId])
@@ -211,6 +214,7 @@ model Contact {
   createdAt      DateTime @default(now())
 
   conversations Conversation[]
+  orders        Order[]
 
   @@unique([tenantId, waJid])
   @@index([tenantId])
@@ -265,6 +269,7 @@ model Conversation {
 
   messages Message[]
   scheduledMessages ScheduledMessage[]
+  orders            Order[]
 
   // Impede duas conversas pro mesmo contato na mesma sessão — sem isso, duas
   // mensagens chegando quase juntas (poucos ms de diferença) podem disparar
@@ -360,11 +365,106 @@ model Product {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  movements StockMovement[]
+  movements  StockMovement[]
+  orderItems OrderItem[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, sku])
   @@index([tenantId, isActive])
+}
+
+enum OrderStatus {
+  RASCUNHO // a consultora está montando
+  AGUARDANDO_FINANCEIRO // passou adiante, esperando valor e condição
+  FECHADO // financeiro fechou — é aqui que o estoque baixa
+  CANCELADO
+}
+
+enum PaymentMethod {
+  PIX
+  CARTAO // maquininha, presencial ou por link — o Dilon Zap só registra
+  BOLETO
+  FIADO
+}
+
+// Pedido de venda, nascido dentro da conversa.
+//
+// O fluxo da Believe tem duas mãos: a consultora monta o pedido a partir do
+// que foi conversado e passa pro financeiro, que coloca valor e condição e
+// fecha. O status é essa passagem — não é enfeite.
+model Order {
+  id       String @id @default(cuid())
+  // Número curto pra citar por telefone e pra imprimir. Mesmo papel do
+  // ticketNumber da conversa.
+  numero   Int    @unique @default(autoincrement())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  // De qual conversa nasceu. Opcional porque um pedido pode ser criado
+  // direto da ficha do cliente, sem conversa aberta.
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  status OrderStatus @default(RASCUNHO)
+
+  createdById String?
+  createdBy   User?   @relation("OrderCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  closedById  String?
+  closedBy    User?   @relation("OrderClosedBy", fields: [closedById], references: [id], onDelete: SetNull)
+
+  paymentMethod PaymentMethod?
+  // Separado do status: pedido fiado ou por boleto FECHA sem estar pago. Sem
+  // essa distinção não dá pra saber quanto a empresa tem a receber.
+  pago   Boolean   @default(false)
+  pagoEm DateTime?
+
+  // Totais congelados no fechamento, em centavos. Recalcular a partir dos
+  // itens em toda leitura pareceria mais "correto", mas um item editado
+  // depois mudaria o valor de um pedido já fechado — o total tem que ser o
+  // que foi combinado, não o que as contas dariam hoje.
+  subtotalCents Int @default(0)
+  descontoCents Int @default(0)
+  totalCents    Int @default(0)
+
+  observacao String?
+
+  enviadoAoFinanceiroEm DateTime?
+  fechadoEm             DateTime?
+  canceladoEm           DateTime?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  items OrderItem[]
+
+  @@index([tenantId, status, createdAt])
+  @@index([contactId])
+  @@index([conversationId])
+}
+
+model OrderItem {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  // Nome COPIADO do catálogo no momento em que o item entrou. Se o produto
+  // for renomeado ou desativado depois, o pedido antigo continua dizendo o
+  // que de fato foi vendido — apontar só pro catálogo faria o histórico
+  // mudar sozinho quando alguém arruma um cadastro.
+  nomeProduto String
+
+  // Preço de tabela na hora, e o efetivamente praticado. Guardar os dois é o
+  // que permite responder "quanto de desconto foi dado" — com só o praticado
+  // essa informação não existe, e não dá pra reconstituir depois.
+  precoTabelaCents Int
+  precoUnitCents   Int
+  quantidade       Int
+
+  @@index([orderId])
 }
 
 enum StockMovementType {

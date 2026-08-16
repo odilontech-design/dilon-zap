@@ -7,6 +7,7 @@ import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatListTimestamp, formatPhoneDisplay, formatTime, type ContactRef } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
+import { OrderPanel, type Pedido } from "@/components/order-panel";
 import { MOTIVOS_FECHAMENTO, MOTIVO_OUTRO } from "@/lib/close-reasons";
 import {
   CONVERSATION_LIST_INTERVAL,
@@ -161,7 +162,7 @@ function playNotificationSound() {
   }
 }
 
-export function InboxView() {
+export function InboxView({ ehFinanceiro }: { ehFinanceiro: boolean }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<ConversationStatus>("OPEN");
@@ -427,6 +428,7 @@ export function InboxView() {
         {selectedId ? (
           <ConversationThread
             conversationId={selectedId}
+            ehFinanceiro={ehFinanceiro}
             onChanged={() => mutateList()}
             onBack={() => setSelectedId(null)}
           />
@@ -538,10 +540,12 @@ function NewConversationModal({
 
 function ConversationThread({
   conversationId,
+  ehFinanceiro,
   onChanged,
   onBack,
 }: {
   conversationId: string;
+  ehFinanceiro: boolean;
   onChanged: () => void;
   onBack: () => void;
 }) {
@@ -552,6 +556,7 @@ function ConversationThread({
   const [pedindoMotivo, setPedindoMotivo] = useState(false);
   const [pedindoBloqueio, setPedindoBloqueio] = useState(false);
   const [agendando, setAgendando] = useState(false);
+  const [pedidoAberto, setPedidoAberto] = useState<Pedido | null>(null);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -577,6 +582,17 @@ function ConversationThread({
   // Polling mais folgado que o das mensagens: agendamento muda de estado no
   // máximo a cada 30s (o ciclo do worker), então consultar mais rápido só
   // gastaria requisição.
+  // Pedidos abertos desta conversa. Não traz fechados nem cancelados: o que
+  // interessa dentro da conversa é o que ainda está em andamento.
+  const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
+    `/api/orders?conversationId=${conversationId}`,
+    fetcher,
+    { refreshInterval: 30_000 }
+  );
+  const pedidosAbertos = (pedidos ?? []).filter(
+    (p) => p.status === "RASCUNHO" || p.status === "AGUARDANDO_FINANCEIRO"
+  );
+
   const { data: agendamentos, mutate: mutateAgendamentos } = useSWR<AgendamentoItem[]>(
     `/api/scheduled-messages?conversationId=${conversationId}`,
     fetcher,
@@ -646,6 +662,29 @@ function ConversationThread({
       input?.focus();
       input?.setSelectionRange(start + emoji.length, start + emoji.length);
     });
+  }
+
+  // Abre o rascunho da conversa, ou cria um se ainda não existe. A API
+  // devolve o rascunho existente em vez de criar outro — sem isso, cada
+  // clique deixaria um pedido vazio pra trás.
+  async function abrirPedido() {
+    const jaAberto = pedidosAbertos[0];
+    if (jaAberto) {
+      setPedidoAberto(jaAberto);
+      return;
+    }
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ conversationId }),
+    });
+    if (!res.ok) {
+      alert("não deu pra abrir o pedido");
+      return;
+    }
+    const lista = await mutatePedidos();
+    const criado = (lista ?? []).find((p) => p.status === "RASCUNHO");
+    if (criado) setPedidoAberto(criado);
   }
 
   // Coloca o texto no campo em vez de enviar direto: quase todo texto pronto
@@ -907,6 +946,17 @@ function ConversationThread({
                 }`}
               >
                 {selectionMode ? "Cancelar seleção" : "Selecionar"}
+              </button>
+              <button
+                onClick={abrirPedido}
+                className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
+              >
+                Pedido
+                {pedidosAbertos.length > 0 && (
+                  <span className="ml-1.5 rounded-full bg-accent text-white px-1.5 text-[10px]">
+                    {pedidosAbertos.length}
+                  </span>
+                )}
               </button>
               <button
                 onClick={() => setPedindoBloqueio(true)}
@@ -1258,6 +1308,17 @@ function ConversationThread({
           </form>
         </div>
       </div>
+      {pedidoAberto && (
+        <OrderPanel
+          pedido={pedidoAberto}
+          ehFinanceiro={ehFinanceiro}
+          onFechar={() => {
+            setPedidoAberto(null);
+            mutatePedidos();
+          }}
+          onMudou={mutatePedidos}
+        />
+      )}
       {agendando && (
         <AgendarMensagem
           textoInicial={draft}
