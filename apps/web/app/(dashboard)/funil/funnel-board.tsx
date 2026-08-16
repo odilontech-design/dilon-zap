@@ -8,6 +8,7 @@ import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact
 import { centsToBRL } from "@/lib/billing";
 import { corDoMotivo } from "@/lib/close-reasons";
 import { LISTING_INTERVAL } from "@/lib/polling";
+import { ContactCard } from "@/components/contact-card";
 
 type StageDef = { id: string; name: string; color: string; position: number };
 type TenantUser = { id: string; name: string };
@@ -32,6 +33,7 @@ export function FunnelBoard() {
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const [userFilter, setUserFilter] = useState("");
   const [editingValueId, setEditingValueId] = useState<string | null>(null);
+  const [fichaDe, setFichaDe] = useState<string | null>(null);
 
   const visible = useMemo(() => {
     if (!contacts) return undefined;
@@ -141,13 +143,21 @@ export function FunnelBoard() {
                   const assignedUser = users?.find((u) => u.id === contact.latestConversation?.assignedToId);
                   return (
                     <div key={contact.id} className="rounded-lg border border-neutral-200 bg-surface p-3">
-                      <div className="flex items-center gap-2 mb-2">
+                      {/* O cabeçalho do card abre a ficha. O resto do card
+                          (etapa, valor, conversa) continua clicável direto —
+                          quem só quer mover de coluna não precisa abrir nada. */}
+                      <button
+                        onClick={() => setFichaDe(contact.id)}
+                        className="flex items-center gap-2 mb-2 w-full text-left group"
+                      >
                         <Avatar contact={contact} size={28} />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate">{contactLabel(contact)}</p>
+                          <p className="text-sm font-medium truncate group-hover:text-accent">
+                            {contactLabel(contact)}
+                          </p>
                           <p className="text-[10px] text-neutral-400 truncate">{formatPhoneDisplay(contact)}</p>
                         </div>
-                      </div>
+                      </button>
                       {editingValueId === contact.id ? (
                         <input
                           autoFocus
@@ -213,6 +223,19 @@ export function FunnelBoard() {
           );
         })}
       </div>
+
+      {fichaDe && (
+        <ContactCard
+          contactId={fichaDe}
+          onFechar={() => {
+            setFichaDe(null);
+            // A ficha edita etapa e valor — sem isso o funil ficaria
+            // mostrando o card na coluna antiga até o próximo ciclo de
+            // polling, e pareceria que a mudança não pegou.
+            mutate();
+          }}
+        />
+      )}
     </div>
   );
 }

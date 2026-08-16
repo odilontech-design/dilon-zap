@@ -11,6 +11,62 @@ const bodySchema = z.object({
   notes: z.string().max(4000).nullable().optional(),
 });
 
+/**
+ * Ficha completa do cliente: os dados dele + o histórico de atendimentos.
+ *
+ * Rota própria, separada da listagem, de propósito. A listagem alimenta o
+ * funil e a tabela de Contatos e precisa ser leve porque carrega a base
+ * inteira; a ficha carrega uma pessoa só e pode ser generosa. Enfiar o
+ * histórico na listagem inflaria um payload que já foi enxugado uma vez.
+ */
+export async function GET(_req: Request, { params }: { params: { id: string } }) {
+  const user = await requireUser();
+
+  const contact = await prisma.contact.findFirst({
+    where: { id: params.id, tenantId: user.tenantId },
+    select: {
+      id: true,
+      name: true,
+      waJid: true,
+      phoneNumber: true,
+      avatarUrl: true,
+      lastStatusAt: true,
+      stageId: true,
+      dealValueCents: true,
+      notes: true,
+      notesUpdatedAt: true,
+      hasWhatsapp: true,
+      createdAt: true,
+      stage: { select: { id: true, name: true, color: true } },
+      conversations: {
+        orderBy: { lastMessageAt: "desc" },
+        select: {
+          id: true,
+          ticketNumber: true,
+          status: true,
+          tags: true,
+          closeReason: true,
+          closedAt: true,
+          createdAt: true,
+          lastMessageAt: true,
+          assignedTo: { select: { name: true } },
+          // Uma prévia só: a ficha mostra do que foi a conversa, e quem
+          // quiser ler tudo abre o atendimento.
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 1,
+            select: { body: true, direction: true, mediaType: true },
+          },
+          _count: { select: { messages: true } },
+        },
+      },
+    },
+  });
+  if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  return NextResponse.json(contact);
+}
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
   const parsed = bodySchema.safeParse(await req.json());
