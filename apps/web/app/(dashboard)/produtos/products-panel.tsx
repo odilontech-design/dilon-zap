@@ -10,6 +10,25 @@ type Product = {
   categoria: string | null;
   priceCents: number;
   isActive: boolean;
+  stockQty: number;
+};
+
+type Movimento = {
+  id: string;
+  tipo: "COMPRA" | "PRODUCAO" | "DEVOLUCAO" | "AJUSTE" | "VENDA";
+  quantidade: number;
+  motivo: string | null;
+  saldoDepois: number;
+  createdAt: string;
+  createdBy: { name: string } | null;
+};
+
+const TIPO_LABEL: Record<Movimento["tipo"], string> = {
+  COMPRA: "Compra",
+  PRODUCAO: "Produção",
+  DEVOLUCAO: "Devolução",
+  AJUSTE: "Ajuste",
+  VENDA: "Venda",
 };
 
 async function fetcher(url: string) {
@@ -65,11 +84,12 @@ export function parsePreco(texto: string): number | null {
 
 const VAZIO = { name: "", sku: "", categoria: "", preco: "" };
 
-export function ProductsPanel({ podeEditar }: { podeEditar: boolean }) {
+export function ProductsPanel({ podeEditar, podeMexerEstoque }: { podeEditar: boolean; podeMexerEstoque: boolean }) {
   const { data: produtos, mutate } = useSWR<Product[]>("/api/products?incluirInativos=1", fetcher);
   const [editando, setEditando] = useState<Product | typeof VAZIO | null>(null);
   const [busca, setBusca] = useState("");
   const [aviso, setAviso] = useState<string | null>(null);
+  const [estoqueDe, setEstoqueDe] = useState<Product | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const filtrados = useMemo(() => {
@@ -201,6 +221,7 @@ export function ProductsPanel({ podeEditar }: { podeEditar: boolean }) {
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Produto</th>
               <th className="text-left font-medium px-4 py-2.5">Categoria</th>
+              <th className="text-right font-medium px-4 py-2.5">Estoque</th>
               <th className="text-right font-medium px-4 py-2.5">Preço</th>
               {podeEditar && <th className="text-right font-medium px-4 py-2.5">Ações</th>}
             </tr>
@@ -227,6 +248,17 @@ export function ProductsPanel({ podeEditar }: { podeEditar: boolean }) {
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-neutral-500">{p.categoria ?? "—"}</td>
+                <td className="px-4 py-2.5 text-right">
+                  <button
+                    onClick={() => setEstoqueDe(p)}
+                    title="Ver extrato e lançar movimentação"
+                    className={`tabular-nums hover:underline ${
+                      p.stockQty <= 0 ? "text-red-600 font-medium" : "text-neutral-700"
+                    }`}
+                  >
+                    {p.stockQty}
+                  </button>
+                </td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{centsToBRL(p.priceCents)}</td>
                 {podeEditar && (
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
@@ -252,6 +284,15 @@ export function ProductsPanel({ podeEditar }: { podeEditar: boolean }) {
         opcionais. Reimportar a mesma planilha atualiza os preços em vez de duplicar.
       </p>
 
+      {estoqueDe && (
+        <PainelEstoque
+          produto={estoqueDe}
+          podeMexer={podeMexerEstoque}
+          onFechar={() => setEstoqueDe(null)}
+          onMudou={mutate}
+        />
+      )}
+
       {editando && (
         <EditorProduto
           inicial={editando}
@@ -263,6 +304,154 @@ export function ProductsPanel({ podeEditar }: { podeEditar: boolean }) {
           onErro={setAviso}
         />
       )}
+    </div>
+  );
+}
+
+function PainelEstoque({
+  produto,
+  podeMexer,
+  onFechar,
+  onMudou,
+}: {
+  produto: Product;
+  podeMexer: boolean;
+  onFechar: () => void;
+  onMudou: () => void;
+}) {
+  const { data, mutate } = useSWR<{ produto: { stockQty: number }; movimentos: Movimento[] }>(
+    `/api/products/${produto.id}/stock`,
+    fetcher
+  );
+  const [tipo, setTipo] = useState<"COMPRA" | "PRODUCAO" | "DEVOLUCAO" | "AJUSTE">("COMPRA");
+  const [qtd, setQtd] = useState("");
+  const [motivo, setMotivo] = useState("");
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  async function lancar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    const quantidade = parseInt(qtd, 10);
+    if (!Number.isFinite(quantidade) || quantidade === 0) {
+      setErro("Informe uma quantidade diferente de zero.");
+      return;
+    }
+
+    setSalvando(true);
+    const res = await fetch(`/api/products/${produto.id}/stock`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tipo, quantidade, motivo }),
+    });
+    setSalvando(false);
+
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      setErro(typeof b.error === "string" ? b.error : "não deu pra lançar");
+      return;
+    }
+    setQtd("");
+    setMotivo("");
+    mutate();
+    onMudou();
+  }
+
+  const saldo = data?.produto.stockQty ?? produto.stockQty;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 w-full max-w-lg max-h-[90vh] flex flex-col"
+      >
+        <header className="p-5 border-b border-neutral-200 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">{produto.name}</h2>
+            <p className="text-sm text-neutral-500">
+              Saldo atual:{" "}
+              <span className={`font-semibold tabular-nums ${saldo <= 0 ? "text-red-600" : "text-neutral-800"}`}>
+                {saldo}
+              </span>
+            </p>
+          </div>
+          <button onClick={onFechar} className="text-neutral-400 hover:text-neutral-700 text-xl leading-none">
+            ×
+          </button>
+        </header>
+
+        {podeMexer && (
+          <form onSubmit={lancar} className="p-5 border-b border-neutral-200 flex flex-col gap-3">
+            {erro && (
+              <p className="rounded-md border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm">{erro}</p>
+            )}
+            <div className="flex gap-2">
+              <select
+                value={tipo}
+                onChange={(e) => setTipo(e.target.value as typeof tipo)}
+                className="rounded-md border border-neutral-300 bg-surface px-2 py-2 text-sm"
+              >
+                <option value="COMPRA">Compra</option>
+                <option value="PRODUCAO">Produção</option>
+                <option value="DEVOLUCAO">Devolução</option>
+                <option value="AJUSTE">Ajuste</option>
+              </select>
+              <input
+                value={qtd}
+                onChange={(e) => setQtd(e.target.value)}
+                inputMode="numeric"
+                placeholder="Qtd"
+                className="w-24 rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm tabular-nums"
+              />
+              <input
+                value={motivo}
+                onChange={(e) => setMotivo(e.target.value)}
+                placeholder="Motivo (opcional)"
+                className="flex-1 min-w-0 rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm"
+              />
+              <button
+                type="submit"
+                disabled={salvando}
+                className="rounded-md bg-accent text-white px-4 py-2 text-sm font-medium disabled:opacity-50"
+              >
+                Lançar
+              </button>
+            </div>
+            {tipo === "AJUSTE" && (
+              <p className="text-xs text-neutral-500">
+                No ajuste, use número negativo para tirar do estoque (ex: <code className="font-mono">-3</code>).
+              </p>
+            )}
+          </form>
+        )}
+
+        <div className="overflow-y-auto p-5">
+          <h3 className="text-xs font-medium text-neutral-700 mb-2">Extrato</h3>
+          {!data && <p className="text-sm text-neutral-500">Carregando...</p>}
+          {data?.movimentos.length === 0 && (
+            <p className="text-sm text-neutral-500">Nenhuma movimentação ainda.</p>
+          )}
+          <div className="flex flex-col gap-1.5">
+            {data?.movimentos.map((m) => (
+              <div key={m.id} className="flex items-center gap-3 text-sm border-b border-neutral-200 pb-1.5 last:border-0">
+                <span
+                  className={`tabular-nums font-medium w-12 text-right ${
+                    m.quantidade > 0 ? "text-emerald-700" : "text-red-600"
+                  }`}
+                >
+                  {m.quantidade > 0 ? `+${m.quantidade}` : m.quantidade}
+                </span>
+                <span className="text-neutral-700">{TIPO_LABEL[m.tipo]}</span>
+                {m.motivo && <span className="text-neutral-500 truncate">· {m.motivo}</span>}
+                <span className="ml-auto text-xs text-neutral-400 whitespace-nowrap tabular-nums">
+                  saldo {m.saldoDepois} · {new Date(m.createdAt).toLocaleDateString("pt-BR")}
+                  {m.createdBy && ` · ${m.createdBy.name}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -13,7 +13,7 @@ function generatePassword() {
 const createSchema = z.object({
   name: z.string().min(2).max(120),
   email: z.string().email(),
-  role: z.enum(["OWNER", "AGENT"]).default("AGENT"),
+  role: z.enum(["OWNER", "AGENT", "FINANCEIRO"]).default("AGENT"),
 });
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {

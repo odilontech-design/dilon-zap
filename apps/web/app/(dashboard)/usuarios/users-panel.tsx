@@ -7,7 +7,7 @@ type Usuario = {
   id: string;
   name: string;
   email: string;
-  role: "OWNER" | "AGENT";
+  role: "OWNER" | "AGENT" | "FINANCEIRO";
   createdAt: string;
   deactivatedAt: string | null;
 };
@@ -21,6 +21,7 @@ async function fetcher(url: string) {
 const PAPEL_LABEL: Record<Usuario["role"], string> = {
   OWNER: "Responsável",
   AGENT: "Atendente",
+  FINANCEIRO: "Financeiro",
 };
 
 function formatarData(iso: string) {
@@ -131,6 +132,7 @@ export function UsersPanel({ meuId }: { meuId: string }) {
                       className="rounded-md border border-neutral-300 bg-surface px-2 py-1 text-sm disabled:opacity-50"
                     >
                       <option value="AGENT">{PAPEL_LABEL.AGENT}</option>
+                      <option value="FINANCEIRO">{PAPEL_LABEL.FINANCEIRO}</option>
                       <option value="OWNER">{PAPEL_LABEL.OWNER}</option>
                     </select>
                   </td>
@@ -188,7 +190,7 @@ function NovoUsuario({
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<"OWNER" | "AGENT">("AGENT");
+  const [role, setRole] = useState<"OWNER" | "AGENT" | "FINANCEIRO">("AGENT");
   const [salvando, setSalvando] = useState(false);
 
   async function salvar(e: React.FormEvent) {
@@ -255,7 +257,7 @@ function NovoUsuario({
           <span className="text-neutral-700">Papel</span>
           <select
             value={role}
-            onChange={(e) => setRole(e.target.value as "OWNER" | "AGENT")}
+            onChange={(e) => setRole(e.target.value as "OWNER" | "AGENT" | "FINANCEIRO")}
             className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
           >
             <option value="AGENT">Atendente — atende conversas</option>

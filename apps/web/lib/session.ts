@@ -6,7 +6,7 @@ export type CurrentUser = {
   id: string;
   name: string;
   email: string;
-  role: "OWNER" | "AGENT" | "SUPERADMIN";
+  role: "OWNER" | "AGENT" | "FINANCEIRO" | "SUPERADMIN";
   tenantId: string;
 };
 

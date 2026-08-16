@@ -491,7 +491,7 @@ function NewUserForm({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState<"OWNER" | "AGENT">("AGENT");
+  const [role, setRole] = useState<"OWNER" | "AGENT" | "FINANCEIRO">("AGENT");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -540,10 +540,11 @@ function NewUserForm({
         />
         <select
           value={role}
-          onChange={(e) => setRole(e.target.value as "OWNER" | "AGENT")}
+          onChange={(e) => setRole(e.target.value as "OWNER" | "AGENT" | "FINANCEIRO")}
           className="rounded-md border border-neutral-700 bg-neutral-950 px-2 py-2 text-sm"
         >
           <option value="AGENT">Atendente</option>
+          <option value="FINANCEIRO">Financeiro</option>
           <option value="OWNER">Proprietário</option>
         </select>
       </div>

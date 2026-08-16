@@ -9,7 +9,7 @@ import { impedimentoParaAlterarStatus, liberarConversasDe } from "@/lib/user-sta
 const patchSchema = z
   .object({
     name: z.string().trim().min(2).max(80).optional(),
-    role: z.enum(["OWNER", "AGENT"]).optional(),
+    role: z.enum(["OWNER", "AGENT", "FINANCEIRO"]).optional(),
     password: z.string().min(8).max(72).optional(),
     ativo: z.boolean().optional(),
   })

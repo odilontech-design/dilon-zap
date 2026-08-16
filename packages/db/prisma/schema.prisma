@@ -37,6 +37,7 @@ model Tenant {
   savedTexts    SavedText[]
   scheduledMessages ScheduledMessage[]
   products      Product[]
+  stockMovements StockMovement[]
 }
 
 // Horário de atendimento, uma linha por dia da semana. Dia sem linha é
@@ -62,6 +63,11 @@ model BusinessHour {
 enum UserRole {
   OWNER
   AGENT
+  // Atende conversas como a consultora e, além disso, fecha pedido, altera
+  // valor e mexe no estoque. Existe porque o fluxo da Believe tem essa
+  // divisão de verdade — a consultora monta o pedido, o financeiro fecha —
+  // e sem o papel não há como a fila do financeiro saber pra quem apontar.
+  FINANCEIRO
   SUPERADMIN // Dilon Tech — acesso cross-tenant pelo painel /admin, não pertence a um tenant "cliente"
 }
 
@@ -91,6 +97,7 @@ model User {
   sentMessages          Message[]      @relation("MessageSender")
   messageReactions      MessageReaction[]
   scheduledMessages     ScheduledMessage[] @relation("ScheduledBy")
+  stockMovements        StockMovement[]    @relation("StockMovementBy")
 
   @@index([tenantId])
 }
@@ -340,12 +347,69 @@ model Product {
   // produto que saiu de linha ainda aparece nos pedidos antigos, e apagar
   // faria o pedido antigo perder o que foi vendido.
   isActive  Boolean  @default(true)
+
+  // Saldo atual, mantido em cache.
+  //
+  // A verdade é a soma de StockMovement — este campo existe só pra listar
+  // 300 produtos sem fazer 300 somas. Por isso NUNCA é escrito direto: toda
+  // alteração passa por registrarMovimento(), que grava a movimentação e
+  // atualiza o saldo na MESMA transação. Se alguém escrever aqui por fora,
+  // o cache descola do histórico e o número deixa de valer.
+  stockQty  Int      @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  movements StockMovement[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, sku])
   @@index([tenantId, isActive])
+}
+
+enum StockMovementType {
+  COMPRA // entrada: chegou do fornecedor
+  PRODUCAO // entrada: a Believe montou/produziu
+  DEVOLUCAO // entrada: cliente devolveu
+  AJUSTE // acerto de inventário — único que pode ser pra cima ou pra baixo
+  VENDA // saída: saiu num pedido
+}
+
+// Histórico de tudo que mexeu no estoque.
+//
+// Estoque é isto, não um número: o saldo é a soma daqui. Um campo
+// "quantidade" que alguém edita na mão parece resolver e desanda em duas
+// semanas — some do sistema o que saiu pela porta e ninguém sabe quando nem
+// por quê. Com o histórico dá pra responder "por que tinha 40 e agora tem
+// 12", que é a pergunta que aparece quando o número não bate.
+//
+// Nunca é apagado nem editado: acerto de estoque é uma movimentação nova de
+// AJUSTE, não uma correção da anterior. Reescrever o passado é justamente o
+// que faz o histórico perder a serventia.
+model StockMovement {
+  id        String            @id @default(cuid())
+  tenantId  String
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tipo      StockMovementType
+  // Positivo entra, negativo sai. AJUSTE aceita os dois sinais; os demais
+  // têm sinal fixo pelo tipo, e isso é garantido em lib/stock.
+  quantidade Int
+  motivo     String?
+
+  // Saldo depois desta movimentação. Guardado pra dar pra auditar a linha do
+  // tempo sem recalcular tudo, e pra flagrar divergência: se o saldo
+  // registrado aqui não bate com a soma até este ponto, alguém escreveu por
+  // fora.
+  saldoDepois Int
+
+  createdById String?
+  createdBy   User?    @relation("StockMovementBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, productId, createdAt])
+  @@index([productId, createdAt])
 }
 
 enum ScheduledMessageStatus {

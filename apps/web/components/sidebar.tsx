@@ -97,7 +97,7 @@ const NAV_ITEMS = [
 
 const COLLAPSE_KEY = "dilonzap:sidebar-collapsed";
 
-export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" | "SUPERADMIN" }) {
+export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" | "FINANCEIRO" | "SUPERADMIN" }) {
   // `open` é só pro mobile (gaveta). No desktop a barra está sempre visível
   // e quem manda é `collapsed`, que alterna entre rótulo + ícone e só ícone.
   const [open, setOpen] = useState(false);
