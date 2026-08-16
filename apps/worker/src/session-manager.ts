@@ -66,6 +66,21 @@ export function getSocketForTenant(tenantId: string) {
 }
 
 /** Edita o texto de uma mensagem já enviada — WhatsApp só deixa editar mensagem própria (fromMe). */
+/**
+ * Como o texto sai no WhatsApp do cliente. Vários atendentes dividem o mesmo
+ * número — sem o nome, o cliente não sabe com quem está falando.
+ *
+ * Fonte única de propósito: isto era feito só no envio, e a edição mandava o
+ * texto cru. Resultado: a atendente corrigia uma vírgula e a mensagem perdia
+ * o "*Consultora Camila:*" no aparelho do cliente — no meio de uma conversa
+ * onde as outras mensagens tinham. Duas cópias da mesma regra divergem;
+ * uma só, não.
+ */
+export function corpoParaEnvio(nomeAtendente: string | null | undefined, corpo: string) {
+  if (!nomeAtendente) return corpo;
+  return corpo ? `*${nomeAtendente}:* ${corpo}` : `*${nomeAtendente}*`;
+}
+
 export async function editOutboundMessage(
   tenantId: string,
   waJid: string,
@@ -75,7 +90,18 @@ export async function editOutboundMessage(
   const socket = getSocketForTenant(tenantId);
   if (!socket) return { ok: false, reason: "sem conexão ativa" };
 
-  await socket.sendMessage(waJid, { text: newText, edit: { remoteJid: waJid, id: waMessageId, fromMe: true } });
+  // Busca quem enviou pra remontar o prefixo. O texto guardado no banco é
+  // sempre o cru (sem nome) — quem veste o nome é o envio, e a edição
+  // precisa vestir igual.
+  const original = await prisma.message.findFirst({
+    where: { waMessageId, direction: "OUTBOUND" },
+    select: { sender: { select: { name: true } } },
+  });
+
+  await socket.sendMessage(waJid, {
+    text: corpoParaEnvio(original?.sender?.name, newText),
+    edit: { remoteJid: waJid, id: waMessageId, fromMe: true },
+  });
   return { ok: true };
 }
 
@@ -1167,14 +1193,8 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
 
         try {
           const jid = message.conversation.contact.waJid;
-          // Vários atendentes dividem o mesmo número — sem isso o cliente não
-          // sabe quem está falando. *negrito* é sintaxe nativa do WhatsApp.
           // Áudio não tem legenda, então o prefixo nele é ignorado mesmo.
-          const displayBody = message.sender
-            ? message.body
-              ? `*${message.sender.name}:* ${message.body}`
-              : `*${message.sender.name}*`
-            : message.body;
+          const displayBody = corpoParaEnvio(message.sender?.name, message.body);
           const messageForSend = { ...message, body: displayBody };
 
           // Reconstrói um WAMessage mínimo só com o que o Baileys precisa pra
