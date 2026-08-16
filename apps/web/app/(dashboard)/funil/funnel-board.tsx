@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { centsToBRL } from "@/lib/billing";
+import { corDoMotivo } from "@/lib/close-reasons";
 import { LISTING_INTERVAL } from "@/lib/polling";
 
 type StageDef = { id: string; name: string; color: string; position: number };
@@ -16,6 +17,7 @@ type Contact = ContactRef & {
   stage: StageDef | null;
   dealValueCents: number;
   latestConversation: { id: string; assignedToId: string | null } | null;
+  ultimoMotivo: string | null;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -163,11 +165,25 @@ export function FunnelBoard() {
                           {centsToBRL(contact.dealValueCents)}
                         </button>
                       )}
-                      {assignedUser && (
-                        <span className="inline-block text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 mb-2">
-                          {assignedUser.name}
-                        </span>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1.5 mb-2 empty:mb-0">
+                        {assignedUser && (
+                          <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
+                            {assignedUser.name}
+                          </span>
+                        )}
+                        {/* Desfecho do último atendimento. É o que responde
+                            "por que esse cliente parou aqui?" sem precisar
+                            abrir a conversa — a pergunta que o funil existe
+                            pra responder. */}
+                        {contact.ultimoMotivo && (
+                          <span
+                            className={`text-[10px] rounded-full px-2 py-0.5 ${corDoMotivo(contact.ultimoMotivo)}`}
+                            title={`Último atendimento fechado como: ${contact.ultimoMotivo}`}
+                          >
+                            {contact.ultimoMotivo}
+                          </span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1.5">
                         <select
                           value={contact.stageId ?? UNSTAGED}

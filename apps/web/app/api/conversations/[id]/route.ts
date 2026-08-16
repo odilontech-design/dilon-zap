@@ -9,6 +9,7 @@ const bodySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED"]).optional(),
   assignedToId: z.string().nullable().optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
+  closeReason: z.string().trim().min(1).max(60).optional(),
 });
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -51,10 +52,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const transferiu =
     parsed.data.assignedToId !== undefined && parsed.data.assignedToId !== conversation.assignedToId;
 
+  // Fechando agora: carimba quando. Reabrindo: limpa o carimbo mas MANTÉM o
+  // motivo, que é o registro do que aconteceu da vez anterior — apagar seria
+  // perder informação que ninguém pediu pra perder.
+  const fechando = parsed.data.status === "RESOLVED" && conversation.status !== "RESOLVED";
+  const reabrindo =
+    parsed.data.status !== undefined && parsed.data.status !== "RESOLVED" && conversation.status === "RESOLVED";
+
   const updated = await prisma.conversation.update({
     where: { id: conversation.id },
     data: {
       ...parsed.data,
+      ...(fechando ? { closedAt: new Date() } : {}),
+      ...(reabrindo ? { closedAt: null } : {}),
       ...(transferiu
         ? {
             assignedAt: parsed.data.assignedToId ? new Date() : null,

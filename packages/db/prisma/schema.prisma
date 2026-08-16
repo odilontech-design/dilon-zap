@@ -179,6 +179,15 @@ model Contact {
   stageId        String?
   stage          Stage?   @relation(fields: [stageId], references: [id], onDelete: SetNull)
   dealValueCents Int      @default(0) // valor do negócio — soma no total de cada coluna do funil
+
+  // Anotação livre sobre o cliente. Fica no CONTATO e não na conversa: o
+  // que vale saber ("prefere ser chamada de Lili", "só compra no fim do
+  // mês", "salão fecha segunda") vale pro próximo atendimento também, e
+  // preso a um ticket resolvido isso se perderia justamente quando alguém
+  // fosse mais precisar.
+  notes          String?
+  notesUpdatedAt DateTime?
+
   createdAt      DateTime @default(now())
 
   conversations Conversation[]
@@ -222,6 +231,17 @@ model Conversation {
   assignedById     String?
   assignedBy       User?     @relation("AssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
   assignmentSeenAt DateTime?
+
+  // Por que o atendimento acabou. Guarda o rótulo já resolvido em texto (e
+  // não um id de tabela) porque o motivo é o registro histórico daquele
+  // atendimento: se a empresa depois renomear ou apagar um motivo da lista,
+  // as conversas antigas continuam dizendo o que de fato aconteceu.
+  //
+  // closedAt é separado do status: dá pra reabrir uma conversa, e aí o
+  // status volta pra OPEN mas continua existindo a informação de quando e
+  // por que ela tinha sido fechada da vez anterior.
+  closedAt    DateTime?
+  closeReason String?
 
   messages Message[]
 

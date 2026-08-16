@@ -7,6 +7,7 @@ import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatListTimestamp, formatPhoneDisplay, formatTime, type ContactRef } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
+import { MOTIVOS_FECHAMENTO, MOTIVO_OUTRO } from "@/lib/close-reasons";
 import {
   CONVERSATION_LIST_INTERVAL,
   MESSAGES_INTERVAL,
@@ -38,8 +39,9 @@ type ConversationDetail = {
   ticketNumber: number;
   status: ConversationStatus;
   tags: string[];
-  contact: ContactRef & { stageId: string | null };
+  contact: ContactRef & { stageId: string | null; notes: string | null };
   assignedTo: { id: string; name: string } | null;
+  closeReason: string | null;
 };
 
 type MediaType = "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO";
@@ -547,6 +549,7 @@ function ConversationThread({
   const [showContact, setShowContact] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
   const [showTextos, setShowTextos] = useState(false);
+  const [pedindoMotivo, setPedindoMotivo] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -849,7 +852,10 @@ function ConversationThread({
               {TABS.filter((t) => t.key !== conversation.status).map((t) => (
                 <button
                   key={t.key}
-                  onClick={() => patchConversation({ status: t.key })}
+                  // Resolver passa pelo motivo; os outros status vão direto.
+                  onClick={() =>
+                    t.key === "RESOLVED" ? setPedindoMotivo(true) : patchConversation({ status: t.key })
+                  }
                   className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
                 >
                   {STATUS_ACTION_LABEL[t.key]}
@@ -1209,6 +1215,18 @@ function ConversationThread({
           </form>
         </div>
       </div>
+      {pedindoMotivo && (
+        <MotivoFechamento
+          onFechar={() => setPedindoMotivo(false)}
+          onConfirmar={(motivo) => {
+            setPedindoMotivo(false);
+            // Sem motivo, o campo NÃO vai no corpo: a validação exige pelo
+            // menos 1 caractere, então mandar "" faria o "Fechar sem motivo"
+            // devolver 400 e a conversa simplesmente não fechar.
+            patchConversation(motivo ? { status: "RESOLVED", closeReason: motivo } : { status: "RESOLVED" });
+          }}
+        />
+      )}
       {showContact && (
         <>
           <div
@@ -1577,17 +1595,101 @@ function MessageTicks({
   return null;
 }
 
+function MotivoFechamento({
+  onFechar,
+  onConfirmar,
+}: {
+  onFechar: () => void;
+  onConfirmar: (motivo: string) => void;
+}) {
+  const [escolha, setEscolha] = useState<string>("");
+  const [outro, setOutro] = useState("");
+
+  const motivoFinal = escolha === MOTIVO_OUTRO ? outro.trim() : escolha;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+      >
+        <h2 className="text-base font-semibold mb-1">Como terminou este atendimento?</h2>
+        <p className="text-xs text-neutral-500 mb-4">Aparece no funil e ajuda a entender onde as vendas param.</p>
+
+        <div className="flex flex-col gap-1.5 mb-4">
+          {MOTIVOS_FECHAMENTO.map((m) => (
+            <button
+              key={m}
+              onClick={() => setEscolha(m)}
+              className={`text-left text-sm rounded-md border px-3 py-2 ${
+                escolha === m
+                  ? "border-accent bg-accent/10 text-accent font-medium"
+                  : "border-neutral-300 hover:bg-neutral-100"
+              }`}
+            >
+              {m}
+            </button>
+          ))}
+          <button
+            onClick={() => setEscolha(MOTIVO_OUTRO)}
+            className={`text-left text-sm rounded-md border px-3 py-2 ${
+              escolha === MOTIVO_OUTRO
+                ? "border-accent bg-accent/10 text-accent font-medium"
+                : "border-neutral-300 hover:bg-neutral-100"
+            }`}
+          >
+            Outro motivo
+          </button>
+        </div>
+
+        {escolha === MOTIVO_OUTRO && (
+          <input
+            autoFocus
+            value={outro}
+            onChange={(e) => setOutro(e.target.value)}
+            maxLength={60}
+            placeholder="Escreva o motivo"
+            className="w-full mb-4 rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm"
+          />
+        )}
+
+        <div className="flex justify-between items-center gap-3 text-sm">
+          {/* Fechar sem motivo continua possível: obrigar a classificar faria
+              a atendente escolher qualquer coisa só pra se livrar da tela, e
+              aí o dado do funil viraria ruído em vez de informação. */}
+          <button onClick={() => onConfirmar("")} className="text-neutral-500 hover:text-neutral-700">
+            Fechar sem motivo
+          </button>
+          <div className="flex gap-2">
+            <button onClick={onFechar} className="px-3 py-2 text-neutral-600">
+              Cancelar
+            </button>
+            <button
+              onClick={() => onConfirmar(motivoFinal)}
+              disabled={!motivoFinal}
+              className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-40"
+            >
+              Resolver
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ContactPanel({
   contact,
   onClose,
   onSaved,
 }: {
-  contact: ContactRef & { stageId: string | null };
+  contact: ContactRef & { stageId: string | null; notes?: string | null };
   onClose: () => void;
   onSaved: () => void;
 }) {
   const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
   const [name, setName] = useState(contact.name ?? "");
+  const [notes, setNotes] = useState(contact.notes ?? "");
 
   async function save(body: Record<string, unknown>) {
     await fetch(`/api/contacts/${contact.id}`, {
@@ -1637,6 +1739,22 @@ function ContactPanel({
             </option>
           ))}
         </select>
+      </div>
+      <div>
+        <label className="block text-xs font-medium text-neutral-700 mb-1">Anotações</label>
+        <textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          // Salva ao sair do campo, não a cada tecla: anotação é texto
+          // corrido e uma requisição por letra não serve a ninguém.
+          onBlur={() => notes.trim() !== (contact.notes ?? "") && save({ notes: notes.trim() || null })}
+          rows={5}
+          placeholder="O que vale lembrar deste cliente na próxima conversa"
+          className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm resize-y focus:outline-none focus:ring-2 focus:ring-accent"
+        />
+        <p className="mt-1 text-[11px] text-neutral-500">
+          Fica no contato, não na conversa — continua aqui no próximo atendimento.
+        </p>
       </div>
     </div>
   );

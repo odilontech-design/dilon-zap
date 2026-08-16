@@ -25,7 +25,7 @@ export async function GET() {
       dealValueCents: true,
       createdAt: true,
       conversations: {
-        select: { id: true, tags: true, assignedToId: true },
+        select: { id: true, tags: true, assignedToId: true, status: true, closeReason: true },
         orderBy: { lastMessageAt: "desc" },
         take: 1,
       },
@@ -40,6 +40,12 @@ export async function GET() {
     ...contact,
     tags: conversations[0]?.tags ?? [],
     latestConversation: conversations[0] ? { id: conversations[0].id, assignedToId: conversations[0].assignedToId } : null,
+    // Só quando a conversa está de fato fechada: o motivo sobrevive a uma
+    // reabertura de propósito (é o registro do que aconteceu antes), mas
+    // exibir "Sem interesse" num atendimento que voltou a ficar aberto
+    // diria ao funil algo que não é mais verdade.
+    ultimoMotivo:
+      conversations[0]?.status === "RESOLVED" ? conversations[0].closeReason ?? null : null,
   }));
 
   return NextResponse.json(withTags);

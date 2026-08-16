@@ -8,6 +8,7 @@ const bodySchema = z.object({
   stageId: z.string().nullable().optional(),
   dealValueCents: z.number().int().min(0).optional(),
   name: z.string().max(120).nullable().optional(),
+  notes: z.string().max(4000).nullable().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -27,9 +28,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!stage) return NextResponse.json({ error: "etapa inválida" }, { status: 400 });
   }
 
+  const { notes, ...resto } = parsed.data;
+
   const updated = await prisma.contact.update({
     where: { id: contact.id },
-    data: parsed.data,
+    data: {
+      ...resto,
+      // Anotação em branco volta pra null, e não string vazia: "sem
+      // anotação" e "anotação apagada" são a mesma coisa pra quem lê, e a
+      // UI só precisa checar um caso.
+      ...(notes !== undefined
+        ? { notes: notes?.trim() ? notes.trim() : null, notesUpdatedAt: new Date() }
+        : {}),
+    },
   });
 
   return NextResponse.json(updated);
