@@ -138,7 +138,7 @@ export function FunnelBoard() {
                 {colContacts.map((contact) => {
                   const assignedUser = users?.find((u) => u.id === contact.latestConversation?.assignedToId);
                   return (
-                    <div key={contact.id} className="rounded-lg border border-neutral-200 bg-white p-3">
+                    <div key={contact.id} className="rounded-lg border border-neutral-200 bg-surface p-3">
                       <div className="flex items-center gap-2 mb-2">
                         <Avatar contact={contact} size={28} />
                         <div className="min-w-0 flex-1">

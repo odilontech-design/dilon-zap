@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AppVersion } from "@/components/app-version";
 import { DilonMark } from "@/components/dilon-mark";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // Ícones inline (sem lib externa: são poucos e assim não entra mais um
 // pacote no bundle). Todos no mesmo padrão — traço, 24x24, herdando a cor
@@ -103,7 +104,7 @@ export function Sidebar({ name }: { name: string }) {
 
   return (
     <>
-      <div className="md:hidden flex items-center justify-between border-b border-neutral-200 bg-white px-4 h-12 sticky top-0 z-30">
+      <div className="md:hidden flex items-center justify-between border-b border-neutral-200 bg-surface px-4 h-12 sticky top-0 z-30">
         <button
           onClick={() => setOpen(true)}
           aria-label="Abrir menu"
@@ -129,7 +130,7 @@ export function Sidebar({ name }: { name: string }) {
       )}
 
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 shrink-0 border-r border-neutral-200 bg-white flex flex-col transition-[transform,width] duration-200 ease-out ${
+        className={`fixed md:static inset-y-0 left-0 z-50 w-64 shrink-0 border-r border-neutral-200 bg-surface flex flex-col transition-[transform,width] duration-200 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0 ${collapsed ? "md:w-16 md:px-2 px-4" : "md:w-56 px-4"} py-4`}
       >
@@ -234,6 +235,10 @@ export function Sidebar({ name }: { name: string }) {
           <p className={`mb-2 font-medium text-neutral-700 truncate ${collapsed ? "md:hidden" : ""}`}>{name}</p>
           <div className={collapsed ? "md:hidden" : ""}>
             <SignOutButton />
+          </div>
+
+          <div className={`mt-2 ${collapsed ? "md:flex md:justify-center" : ""}`}>
+            <ThemeToggle compact={collapsed} />
           </div>
 
           <div className={`mt-3 ${collapsed ? "md:text-center" : ""}`}>

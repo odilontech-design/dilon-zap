@@ -222,7 +222,7 @@ export function ContactsPanel() {
         )}
       </div>
 
-      <div className="rounded-lg border border-neutral-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-xs text-neutral-500">
             <tr>
@@ -376,7 +376,7 @@ function ContactFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-sm">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-sm">
         <h2 className="text-sm font-semibold mb-4">{contact ? "Editar contato" : "Novo contato"}</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>

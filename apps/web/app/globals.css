@@ -2,7 +2,75 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Tema claro/escuro.
+ *
+ * A escolha central aqui: em vez de espalhar `dark:` por ~250 classes de cor
+ * em 23 arquivos, a própria paleta `neutral` do Tailwind virou variável CSS.
+ * As classes já escritas (`text-neutral-700`, `border-neutral-200`, ...)
+ * continuam idênticas no JSX e passam a responder ao tema sozinhas.
+ *
+ * Isso importa porque o risco de um tema escuro não é a parte que a gente
+ * lembra de trocar — é a que esquece. Um `dark:` faltando num card deixa uma
+ * mancha branca no meio da tela escura. Com a paleta na variável, não existe
+ * "esquecer": ou o tema todo mudou, ou nada mudou.
+ *
+ * Os valores são os CANAIS RGB soltos, sem `rgb()`, porque o Tailwind precisa
+ * injetar o alfa depois: `bg-accent/10` vira `rgb(var(--accent) / 0.1)`. Com
+ * a cor pronta em hex dentro da variável, todas as classes com barra parariam
+ * de funcionar silenciosamente.
+ *
+ * A escala escura NÃO é a clara invertida. Inversão pura dá contraste
+ * agressivo demais e cinzas sujos; os valores abaixo seguem a mesma leitura
+ * semântica da escala clara — números baixos são preenchimentos sutis, altos
+ * são texto — e foram conferidos contra a superfície do card.
+ */
+:root {
+  --canvas: 245 246 244;
+  --surface: 255 255 255;
+  --accent: 27 143 94;
+
+  --n-50: 250 250 250;
+  --n-100: 245 245 245;
+  --n-200: 229 229 229;
+  --n-300: 212 212 212;
+  --n-400: 163 163 163;
+  --n-500: 115 115 115;
+  --n-600: 82 82 82;
+  --n-700: 64 64 64;
+  --n-800: 38 38 38;
+  --n-900: 23 23 23;
+  --n-950: 10 10 10;
+}
+
+[data-theme="dark"] {
+  --canvas: 16 18 21;
+  --surface: 26 29 33;
+  /* Verde um pouco mais claro que o do tema claro: o original (27 143 94)
+     sobre o card escuro dá 4,15:1, logo abaixo do mínimo de leitura. Este
+     dá 5,4:1. Em botão de fundo verde com texto branco o efeito é o
+     inverso e ligeiramente pior, mas botão é texto grande e destacado —
+     o texto corrido é que precisa da folga. */
+  --accent: 35 166 108;
+
+  --n-50: 33 37 42;
+  --n-100: 39 44 50;
+  --n-200: 50 56 64;
+  --n-300: 61 68 77;
+  --n-400: 141 148 156;
+  --n-500: 165 172 180;
+  --n-600: 188 195 202;
+  --n-700: 215 220 225;
+  --n-800: 232 235 238;
+  --n-900: 243 245 247;
+  --n-950: 253 253 254;
+
+  /* Faz o navegador pintar barras de rolagem e controles nativos no tom
+     certo — sem isso, um <select> aberto vem branco no meio do escuro. */
+  color-scheme: dark;
+}
+
 body {
-  background: #f5f6f4;
-  color: #10201c;
+  background: rgb(var(--canvas));
+  color: rgb(var(--n-900));
 }

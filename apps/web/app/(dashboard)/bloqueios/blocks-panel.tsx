@@ -47,7 +47,7 @@ export function BlocksPanel() {
         campanha (a partir da Fase 2). Use quando alguém pedir pra não receber mais contato.
       </p>
 
-      <form onSubmit={handleCreate} className="rounded-lg border border-neutral-200 bg-white p-4 mb-6 flex flex-col sm:flex-row gap-3 sm:items-end">
+      <form onSubmit={handleCreate} className="rounded-lg border border-neutral-200 bg-surface p-4 mb-6 flex flex-col sm:flex-row gap-3 sm:items-end">
         <div className="flex-1">
           <label className="block text-xs font-medium text-neutral-700 mb-1">Número (com DDI/DDD)</label>
           <input
@@ -79,7 +79,7 @@ export function BlocksPanel() {
         {blocks?.map((b) => (
           <div
             key={b.id}
-            className="rounded-lg border border-neutral-200 bg-white p-4 flex items-center justify-between gap-4"
+            className="rounded-lg border border-neutral-200 bg-surface p-4 flex items-center justify-between gap-4"
           >
             <div>
               <p className="text-sm font-medium">{displayJid(b.waJid)}</p>

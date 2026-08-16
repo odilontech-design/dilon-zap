@@ -9,7 +9,7 @@ export default async function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
-      <div className="w-full max-w-sm rounded-lg border border-neutral-200 bg-white p-8 shadow-sm">
+      <div className="w-full max-w-sm rounded-lg border border-neutral-200 bg-surface p-8 shadow-sm">
         <p className="text-xs font-mono uppercase tracking-wide text-accent mb-2">Dilon Zap</p>
         <h1 className="text-xl font-semibold mb-6">Entrar</h1>
         <LoginForm />

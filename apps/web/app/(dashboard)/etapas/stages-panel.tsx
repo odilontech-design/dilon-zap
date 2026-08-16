@@ -48,7 +48,7 @@ export function StagesPanel() {
         </button>
       </div>
 
-      <div className="rounded-lg border border-neutral-200 bg-white overflow-x-auto">
+      <div className="rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-xs text-neutral-500">
             <tr>
@@ -166,7 +166,7 @@ function StageFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg p-6 w-full max-w-sm shadow-lg">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
         <h2 className="text-base font-semibold mb-4">{stage ? "Editar etapa" : "Nova etapa"}</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>

@@ -26,15 +26,15 @@ export function ReportsPanel() {
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-lg border border-neutral-200 bg-white p-4">
+        <div className="rounded-lg border border-neutral-200 bg-surface p-4">
           <p className="text-xs text-neutral-500 mb-1">Mensagens (24h)</p>
           <p className="text-2xl font-semibold">{data.messages24h}</p>
         </div>
-        <div className="rounded-lg border border-neutral-200 bg-white p-4">
+        <div className="rounded-lg border border-neutral-200 bg-surface p-4">
           <p className="text-xs text-neutral-500 mb-1">Mensagens (7 dias)</p>
           <p className="text-2xl font-semibold">{data.messages7d}</p>
         </div>
-        <div className="rounded-lg border border-neutral-200 bg-white p-4">
+        <div className="rounded-lg border border-neutral-200 bg-surface p-4">
           <p className="text-xs text-neutral-500 mb-1">Tempo médio até 1ª resposta</p>
           <p className="text-2xl font-semibold">
             {data.avgFirstResponseMinutes !== null ? formatMinutes(data.avgFirstResponseMinutes) : "—"}

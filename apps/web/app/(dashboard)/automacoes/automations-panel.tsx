@@ -52,7 +52,7 @@ export function AutomationsPanel() {
         como padrão (se existir). Assim que um atendente assume a conversa, a automação para.
       </p>
 
-      <form onSubmit={handleCreate} className="rounded-lg border border-neutral-200 bg-white p-4 mb-6 flex flex-col gap-3">
+      <form onSubmit={handleCreate} className="rounded-lg border border-neutral-200 bg-surface p-4 mb-6 flex flex-col gap-3">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">
             <label className="block text-xs font-medium text-neutral-700 mb-1">Palavra-chave</label>
@@ -95,7 +95,7 @@ export function AutomationsPanel() {
         {rules?.map((rule) => (
           <div
             key={rule.id}
-            className="rounded-lg border border-neutral-200 bg-white p-4 flex items-start justify-between gap-4"
+            className="rounded-lg border border-neutral-200 bg-surface p-4 flex items-start justify-between gap-4"
           >
             <div>
               <p className="text-xs font-mono text-accent mb-1">

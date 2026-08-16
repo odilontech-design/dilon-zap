@@ -62,7 +62,7 @@ export function BusinessHoursPanel({ podeEditar }: { podeEditar: boolean }) {
   const ligada = mensagem.trim().length > 0;
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4 flex flex-col gap-4">
+    <div className="rounded-lg border border-neutral-200 bg-surface p-4 flex flex-col gap-4">
       <div>
         <h2 className="text-sm font-semibold text-neutral-800">Horário de atendimento</h2>
         <p className="text-xs text-neutral-600 mt-1">

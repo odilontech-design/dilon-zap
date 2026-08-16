@@ -23,7 +23,7 @@ const SESSION_LABEL: Record<string, string> = {
 
 function Tile({ label, value, tone }: { label: string; value: string | number; tone?: "ok" | "warn" }) {
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-4">
+    <div className="rounded-lg border border-neutral-200 bg-surface p-4">
       <p className="text-xs text-neutral-500 mb-1">{label}</p>
       <p className={`text-2xl font-semibold ${tone === "warn" ? "text-amber-600" : "text-neutral-900"}`}>
         {value}
@@ -54,7 +54,7 @@ export function LivePanel() {
 
       <div>
         <h2 className="text-sm font-semibold text-neutral-700 mb-3">Carga por atendente</h2>
-        <div className="rounded-lg border border-neutral-200 bg-white overflow-hidden">
+        <div className="rounded-lg border border-neutral-200 bg-surface overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500">
               <tr>
