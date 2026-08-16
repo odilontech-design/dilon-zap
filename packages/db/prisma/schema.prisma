@@ -35,6 +35,7 @@ model Tenant {
   stages        Stage[]
   businessHours BusinessHour[]
   savedTexts    SavedText[]
+  scheduledMessages ScheduledMessage[]
 }
 
 // Horário de atendimento, uma linha por dia da semana. Dia sem linha é
@@ -88,6 +89,7 @@ model User {
   transfersMade         Conversation[] @relation("AssignedBy")
   sentMessages          Message[]      @relation("MessageSender")
   messageReactions      MessageReaction[]
+  scheduledMessages     ScheduledMessage[] @relation("ScheduledBy")
 
   @@index([tenantId])
 }
@@ -254,6 +256,7 @@ model Conversation {
   closeReason String?
 
   messages Message[]
+  scheduledMessages ScheduledMessage[]
 
   // Impede duas conversas pro mesmo contato na mesma sessão — sem isso, duas
   // mensagens chegando quase juntas (poucos ms de diferença) podem disparar
@@ -311,6 +314,54 @@ model AutoReply {
 // "oficial" com cor/status pra alimentar o seletor — uma conversa marcada
 // com um nome que não está mais aqui (etiqueta apagada/renomeada) continua
 // mostrando o texto puro, sem quebrar nada.
+enum ScheduledMessageStatus {
+  PENDING // esperando a hora
+  SENT // já entrou na fila de saída
+  CANCELLED // a atendente desmarcou
+  HELD // a hora chegou mas o cliente escreveu antes — esperando decisão
+}
+
+// Mensagem marcada pra sair depois. Nasceu do pós-venda ("lembrar de
+// perguntar como foi em 7 dias"), mas serve pra qualquer coisa com hora
+// marcada.
+//
+// Quando a hora chega, o worker NÃO envia direto: ele cria uma Message
+// normal na fila de saída. Assim o agendamento herda de graça tudo que o
+// envio já sabe fazer — respeitar bloqueio, vestir o nome do atendente,
+// registrar no histórico, reenviar se o cliente não conseguir decifrar.
+// Um caminho de envio paralelo seria um segundo lugar pra esquecer regra.
+model ScheduledMessage {
+  id             String                @id @default(cuid())
+  tenantId       String
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation   Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  body           String
+  scheduledFor   DateTime
+  status         ScheduledMessageStatus @default(PENDING)
+
+  // Quem marcou. É esse nome que vai no prefixo quando a mensagem sair —
+  // pro cliente, quem falou com ele foi uma pessoa, não "o sistema".
+  createdById String?
+  createdBy   User?   @relation("ScheduledBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  // Preenchido quando vira mensagem de verdade, pra dar pra achar o que saiu.
+  messageId String?
+
+  // Marco pra decidir se o cliente escreveu depois do agendamento. Guardado
+  // no momento em que a atendente marca, e não lido da conversa na hora do
+  // envio, porque o que interessa é "aconteceu algo NOVO desde que eu
+  // programei isso" — e a última mensagem da conversa muda o tempo todo.
+  lastInboundAtOnSchedule DateTime?
+  heldAt                  DateTime?
+  sentAt                  DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, status, scheduledFor])
+  @@index([conversationId])
+}
+
 // Textos guardados pra reusar: resposta rápida ("Bom dia! Como posso
 // ajudar?") e script de abordagem de venda ou cobrança.
 //

@@ -551,6 +551,7 @@ function ConversationThread({
   const [showTextos, setShowTextos] = useState(false);
   const [pedindoMotivo, setPedindoMotivo] = useState(false);
   const [pedindoBloqueio, setPedindoBloqueio] = useState(false);
+  const [agendando, setAgendando] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -572,6 +573,15 @@ function ConversationThread({
     error: conversationError,
     mutate: mutateConversation,
   } = useSWR<ConversationDetail>(`/api/conversations/${conversationId}`, fetcher);
+
+  // Polling mais folgado que o das mensagens: agendamento muda de estado no
+  // máximo a cada 30s (o ciclo do worker), então consultar mais rápido só
+  // gastaria requisição.
+  const { data: agendamentos, mutate: mutateAgendamentos } = useSWR<AgendamentoItem[]>(
+    `/api/scheduled-messages?conversationId=${conversationId}`,
+    fetcher,
+    { refreshInterval: 30_000 }
+  );
   const { data: messages, mutate: mutateMessages } = useSWR<Message[]>(
     `/api/conversations/${conversationId}/messages`,
     fetcher,
@@ -1154,6 +1164,16 @@ function ConversationThread({
               </button>
             </div>
           )}
+          {/* Fica logo acima do campo de mensagem, e não numa aba escondida:
+              agendamento que ninguém vê é agendamento que sai sem ninguém
+              lembrar — e o segurado, pior, não sai e ninguém sabe por quê. */}
+          {agendamentos && agendamentos.length > 0 && (
+            <div className="border-t border-neutral-200 px-3 md:px-4 py-2 flex flex-col gap-1.5">
+              {agendamentos.map((a) => (
+                <AgendamentoLinha key={a.id} item={a} onMudou={mutateAgendamentos} />
+              ))}
+            </div>
+          )}
           <form onSubmit={handleSend} className="relative p-2.5 md:p-4 flex gap-1.5 md:gap-2 items-center">
             {showEmoji && (
               <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
@@ -1204,6 +1224,15 @@ function ConversationThread({
             </button>
             <button
               type="button"
+              onClick={() => setAgendando(true)}
+              disabled={uploading || recording || !!editingMessage}
+              title="Agendar esta mensagem"
+              className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+            >
+              🕐
+            </button>
+            <button
+              type="button"
               onClick={recording ? stopRecording : startRecording}
               disabled={uploading || !!editingMessage}
               title={recording ? "Parar gravação" : "Gravar áudio"}
@@ -1229,6 +1258,18 @@ function ConversationThread({
           </form>
         </div>
       </div>
+      {agendando && (
+        <AgendarMensagem
+          textoInicial={draft}
+          conversationId={conversationId}
+          onFechar={() => setAgendando(false)}
+          onAgendado={() => {
+            setAgendando(false);
+            setDraft("");
+            mutateAgendamentos();
+          }}
+        />
+      )}
       {pedindoBloqueio && (
         <ConfirmarBloqueio
           nome={contactLabel(conversation.contact)}
@@ -1614,6 +1655,198 @@ function MessageTicks({
   if (status === "DELIVERED") return <span aria-label="Entregue">✓✓</span>;
   if (status === "READ") return <span className="text-sky-300" aria-label="Lida">✓✓</span>;
   return null;
+}
+
+type AgendamentoItem = {
+  id: string;
+  body: string;
+  scheduledFor: string;
+  status: "PENDING" | "HELD";
+  createdBy: { name: string } | null;
+};
+
+function formatarQuando(iso: string) {
+  return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+}
+
+function AgendamentoLinha({ item, onMudou }: { item: AgendamentoItem; onMudou: () => void }) {
+  const [ocupado, setOcupado] = useState(false);
+  const segurado = item.status === "HELD";
+
+  async function agir(acao: "liberar" | "cancelar") {
+    setOcupado(true);
+    const res = await fetch(`/api/scheduled-messages/${item.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao }),
+    });
+    setOcupado(false);
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      alert(typeof b.error === "string" ? b.error : "não deu pra concluir");
+      return;
+    }
+    onMudou();
+  }
+
+  return (
+    <div
+      className={`rounded-md border px-3 py-2 text-xs flex items-start justify-between gap-3 ${
+        segurado ? "border-amber-300 bg-amber-100" : "border-neutral-200 bg-neutral-50"
+      }`}
+    >
+      <div className="min-w-0">
+        <p className={`font-medium ${segurado ? "text-amber-900" : "text-neutral-700"}`}>
+          {segurado ? "Segurada — o cliente escreveu antes da hora" : `Agendada para ${formatarQuando(item.scheduledFor)}`}
+          {item.createdBy && <span className="font-normal"> · por {item.createdBy.name}</span>}
+        </p>
+        <p className={`truncate mt-0.5 ${segurado ? "text-amber-900/80" : "text-neutral-500"}`}>{item.body}</p>
+      </div>
+      <div className="flex gap-2 shrink-0">
+        {segurado && (
+          <button
+            onClick={() => agir("liberar")}
+            disabled={ocupado}
+            className="text-accent hover:underline disabled:opacity-40"
+          >
+            Enviar agora
+          </button>
+        )}
+        <button
+          onClick={() => agir("cancelar")}
+          disabled={ocupado}
+          className="text-red-600 hover:underline disabled:opacity-40"
+        >
+          Cancelar
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AgendarMensagem({
+  textoInicial,
+  conversationId,
+  onFechar,
+  onAgendado,
+}: {
+  textoInicial: string;
+  conversationId: string;
+  onFechar: () => void;
+  onAgendado: () => void;
+}) {
+  const [texto, setTexto] = useState(textoInicial);
+  const [quando, setQuando] = useState("");
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  // Atalhos pros casos que a Believe descreveu no treinamento: pós-venda em
+  // dias, retomada em semana. Digitar data completa pra "daqui a 7 dias" é
+  // atrito à toa.
+  function daquiA(dias: number, hora: number) {
+    const d = new Date();
+    d.setDate(d.getDate() + dias);
+    d.setHours(hora, 0, 0, 0);
+    // datetime-local espera hora LOCAL sem fuso; toISOString devolveria UTC
+    // e a data apareceria deslocada no campo.
+    const p = (n: number) => String(n).padStart(2, "0");
+    setQuando(`${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`);
+  }
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    if (!texto.trim() || !quando) return;
+
+    setSalvando(true);
+    const res = await fetch("/api/scheduled-messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId,
+        body: texto.trim(),
+        // new Date(local) interpreta no fuso do navegador e toISOString
+        // converte pra UTC — que é como o servidor guarda.
+        scheduledFor: new Date(quando).toISOString(),
+      }),
+    });
+    setSalvando(false);
+
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      setErro(typeof b.error === "string" ? b.error : "não deu pra agendar");
+      return;
+    }
+    onAgendado();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <form
+        onSubmit={salvar}
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-md"
+      >
+        <h2 className="text-base font-semibold mb-1">Agendar mensagem</h2>
+        <p className="text-xs text-neutral-500 mb-4">
+          Sai automaticamente na hora marcada, com o seu nome. Se o cliente escrever antes, o envio para e você
+          decide.
+        </p>
+
+        {erro && (
+          <p className="mb-3 rounded-md border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm">{erro}</p>
+        )}
+
+        <textarea
+          value={texto}
+          onChange={(e) => setTexto(e.target.value)}
+          required
+          rows={4}
+          placeholder="O que enviar"
+          className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm resize-y mb-3"
+        />
+
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          <button type="button" onClick={() => daquiA(1, 9)} className="text-xs rounded-full border border-neutral-300 px-2.5 py-1 hover:bg-neutral-100">
+            Amanhã 9h
+          </button>
+          <button type="button" onClick={() => daquiA(3, 9)} className="text-xs rounded-full border border-neutral-300 px-2.5 py-1 hover:bg-neutral-100">
+            Em 3 dias
+          </button>
+          <button type="button" onClick={() => daquiA(7, 9)} className="text-xs rounded-full border border-neutral-300 px-2.5 py-1 hover:bg-neutral-100">
+            Em 7 dias
+          </button>
+          <button type="button" onClick={() => daquiA(30, 9)} className="text-xs rounded-full border border-neutral-300 px-2.5 py-1 hover:bg-neutral-100">
+            Em 30 dias
+          </button>
+        </div>
+
+        <label className="block text-sm mb-4">
+          <span className="text-neutral-700">Quando</span>
+          <input
+            type="datetime-local"
+            value={quando}
+            onChange={(e) => setQuando(e.target.value)}
+            required
+            className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+          />
+        </label>
+
+        <div className="flex justify-end gap-2 text-sm">
+          <button type="button" onClick={onFechar} className="px-3 py-2 text-neutral-600">
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            disabled={salvando || !texto.trim() || !quando}
+            className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-40"
+          >
+            {salvando ? "Agendando..." : "Agendar"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }
 
 function ConfirmarBloqueio({

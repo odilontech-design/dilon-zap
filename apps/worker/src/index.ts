@@ -30,11 +30,13 @@ async function main() {
   const { syncSessions, watchForNewSessions } = await import("./session-manager");
   const { startInternalServer } = await import("./http-server");
   const { watchForDuplicateContacts } = await import("./reconcile-contacts");
+  const { startScheduledMessagesLoop } = await import("./scheduled-messages");
 
   console.log("[dilon-zap worker] iniciando...");
   await syncSessions();
   watchForNewSessions();
   watchForDuplicateContacts();
+  startScheduledMessagesLoop();
   startInternalServer();
   console.log("[dilon-zap worker] no ar, observando sessões a cada 5s.");
 }
