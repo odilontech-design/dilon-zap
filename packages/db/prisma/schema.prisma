@@ -36,6 +36,7 @@ model Tenant {
   businessHours BusinessHour[]
   savedTexts    SavedText[]
   scheduledMessages ScheduledMessage[]
+  products      Product[]
 }
 
 // Horário de atendimento, uma linha por dia da semana. Dia sem linha é
@@ -314,6 +315,39 @@ model AutoReply {
 // "oficial" com cor/status pra alimentar o seletor — uma conversa marcada
 // com um nome que não está mais aqui (etiqueta apagada/renomeada) continua
 // mostrando o texto puro, sem quebrar nada.
+// Catálogo de produtos com preço de tabela.
+//
+// Preço em centavos (Int), nunca Float: 19.90 não existe exato em ponto
+// flutuante, e somar dez itens assim rende total com centavo a mais ou a
+// menos. Num pedido isso vira divergência com o que o cliente pagou.
+//
+// NÃO tem estoque de propósito. Estoque não é um número no produto — é o
+// saldo de um histórico de movimentações (entrou, vendeu, devolveu,
+// perdeu). Um campo "quantidade" que alguém edita na mão parece resolver e
+// desanda em duas semanas: some do sistema o que saiu pela porta, e aí
+// ninguém confia mais no número. Se a Believe precisar, é módulo próprio.
+model Product {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  // Código interno da Believe, quando existir. Opcional porque nem todo
+  // produto tem, e exigir um código inventado só pra cadastrar é atrito.
+  sku       String?
+  categoria String?
+  priceCents Int
+  // Desativado some dos seletores de pedido mas continua no histórico: um
+  // produto que saiu de linha ainda aparece nos pedidos antigos, e apagar
+  // faria o pedido antigo perder o que foi vendido.
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, sku])
+  @@index([tenantId, isActive])
+}
+
 enum ScheduledMessageStatus {
   PENDING // esperando a hora
   SENT // já entrou na fila de saída
