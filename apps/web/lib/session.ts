@@ -18,6 +18,19 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
+/**
+ * Usar no que é do responsável pela conta: gestão de usuários, horário de
+ * atendimento. Atendente enxerga, mas não altera.
+ *
+ * SUPERADMIN não passa de propósito — ele administra empresas pelo /admin, e
+ * a gestão de usuários de uma empresa é da própria empresa.
+ */
+export async function requireOwner(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role !== "OWNER") redirect("/painel");
+  return user;
+}
+
 /** Usar nas rotas /admin e /api/admin/*. SUPERADMIN é o único papel com acesso cross-tenant. */
 export async function requireSuperAdmin(): Promise<CurrentUser> {
   const user = await requireUser();

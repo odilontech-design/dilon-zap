@@ -72,6 +72,17 @@ model User {
   role         UserRole @default(AGENT)
   createdAt    DateTime @default(now())
 
+  // Desligamento é desativação, nunca exclusão. O usuário está preso ao
+  // histórico: conversas atribuídas, mensagens que ele enviou e transferências
+  // que ele fez. Apagar o registro não apaga o histórico — apaga a AUTORIA
+  // dele (as relações são SetNull), e a empresa perde para sempre o registro
+  // de quem falou o quê com o cliente.
+  //
+  // Guarda a data, e não um booleano, porque "atendida pela Juliana até
+  // agosto" é uma pergunta real quando se olha uma conversa antiga.
+  // Nulo = ativo.
+  deactivatedAt DateTime?
+
   assignedConversations Conversation[] @relation("AssignedAgent")
   transfersMade         Conversation[] @relation("AssignedBy")
   sentMessages          Message[]      @relation("MessageSender")

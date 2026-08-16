@@ -77,11 +77,17 @@ const NAV_ITEMS = [
     label: "Bloqueios",
     icon: icon(<><circle cx="12" cy="12" r="9" /><path d="m5.6 5.6 12.8 12.8" /></>),
   },
+  {
+    href: "/usuarios",
+    label: "Usuários",
+    icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></>),
+    somenteResponsavel: true,
+  },
 ];
 
 const COLLAPSE_KEY = "dilonzap:sidebar-collapsed";
 
-export function Sidebar({ name }: { name: string }) {
+export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" | "SUPERADMIN" }) {
   // `open` é só pro mobile (gaveta). No desktop a barra está sempre visível
   // e quem manda é `collapsed`, que alterna entre rótulo + ícone e só ícone.
   const [open, setOpen] = useState(false);
@@ -207,7 +213,7 @@ export function Sidebar({ name }: { name: string }) {
         </div>
 
         <nav className="flex flex-col gap-1 text-sm overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
+          {NAV_ITEMS.filter((item) => !item.somenteResponsavel || role === "OWNER").map((item) => {
             const active = pathname === item.href || pathname?.startsWith(item.href + "/");
             return (
               <Link

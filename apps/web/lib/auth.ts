@@ -28,6 +28,11 @@ export const authOptions: NextAuthOptions = {
         });
         if (!user) return null;
 
+        // Desativado não entra. Fica junto da checagem de senha e antes dela
+        // dar certo, pra não existir um caminho em que a senha confere e o
+        // acesso passa mesmo assim.
+        if (user.deactivatedAt) return null;
+
         const valid = await bcrypt.compare(credentials.password, user.passwordHash);
         if (!valid) return null;
 
