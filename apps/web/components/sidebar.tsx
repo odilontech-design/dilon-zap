@@ -140,8 +140,13 @@ export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" 
         />
       )}
 
+      {/* md:sticky + md:h-screen prende a barra à altura da tela. Antes ela
+          era `static` e crescia com o conteúdo: como o menu ganhou itens, a
+          barra passou a ficar mais alta que a janela, esticava o container
+          flex e empurrava a área da direita junto — o Inbox, que conta com a
+          altura da tela pra rolar a conversa, é quem mais sentia. */}
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 shrink-0 border-r border-neutral-200 bg-surface flex flex-col transition-[transform,width] duration-200 ease-out ${
+        className={`fixed md:sticky md:top-0 md:h-screen inset-y-0 left-0 z-50 w-64 shrink-0 border-r border-neutral-200 bg-surface flex flex-col transition-[transform,width] duration-200 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0 ${collapsed ? "md:w-16 md:px-2 px-4" : "md:w-56 px-4"} py-4`}
       >
@@ -217,7 +222,12 @@ export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" 
           )}
         </div>
 
-        <nav className="flex flex-col gap-1 text-sm overflow-y-auto">
+        {/* min-h-0 é o que faz o overflow-y-auto valer. Sem ele, um filho de
+            flex não encolhe abaixo do próprio conteúdo: a barra de rolagem
+            simplesmente nunca aparecia, e o nav empurrava o rodapé pra fora
+            da tela em vez de rolar. flex-1 dá a ele o espaço que sobra entre
+            a marca e o rodapé. */}
+        <nav className="flex-1 min-h-0 flex flex-col gap-1 text-sm overflow-y-auto">
           {NAV_ITEMS.filter((item) => !item.somenteResponsavel || role === "OWNER").map((item) => {
             const active = pathname === item.href || pathname?.startsWith(item.href + "/");
             return (
