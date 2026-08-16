@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { impedimentoParaAlterarStatus, liberarConversasDe } from "@/lib/user-status";
 
 const patchSchema = z
   .object({
@@ -30,33 +31,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const { name, role, password, ativo } = parsed.data;
 
-  // Ninguém se desativa nem se rebaixa: os dois caminhos levam a uma empresa
-  // sem responsável, e o único jeito de voltar seria pedir pro suporte.
-  if (alvo.id === user.id && (ativo === false || role === "AGENT")) {
-    return NextResponse.json(
-      { error: "você não pode desativar nem rebaixar a própria conta" },
-      { status: 400 }
-    );
-  }
-
-  // Mesma proteção pro caso de dois responsáveis virarem zero: se este é o
-  // último OWNER ativo, ele não pode sair de cena.
-  if (alvo.role === "OWNER" && (ativo === false || role === "AGENT")) {
-    const outrosDonos = await prisma.user.count({
-      where: {
-        tenantId: user.tenantId,
-        role: "OWNER",
-        deactivatedAt: null,
-        id: { not: alvo.id },
-      },
-    });
-    if (outrosDonos === 0) {
-      return NextResponse.json(
-        { error: "a empresa ficaria sem nenhum responsável ativo" },
-        { status: 400 }
-      );
-    }
-  }
+  const impedimento = await impedimentoParaAlterarStatus(alvo, ativo ?? true, role === "AGENT", user.id);
+  if (impedimento) return NextResponse.json({ error: impedimento }, { status: 400 });
 
   const atualizado = await prisma.user.update({
     where: { id: alvo.id },
@@ -69,18 +45,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     select: { id: true, name: true, email: true, role: true, createdAt: true, deactivatedAt: true },
   });
 
-  // Desatribui o que estava na mão de quem saiu — senão as conversas dela
-  // ficam num limbo: aparecem como "atribuídas" e ninguém assume porque
-  // parecem já ter dono. O histórico de quem ENVIOU cada mensagem continua
-  // intacto, que é o que não pode se perder.
-  let desatribuidas = 0;
-  if (ativo === false) {
-    const r = await prisma.conversation.updateMany({
-      where: { tenantId: user.tenantId, assignedToId: alvo.id, status: { not: "RESOLVED" } },
-      data: { assignedToId: null },
-    });
-    desatribuidas = r.count;
-  }
+  const desatribuidas = ativo === false ? await liberarConversasDe(alvo.id, user.tenantId) : 0;
 
   await logAudit({
     actor: user,

@@ -15,7 +15,14 @@ const STATUS_LABEL: Record<string, string> = {
   LOGGED_OUT: "Desconectado",
 };
 
-type User = { id: string; name: string; email: string; role: string; createdAt: string };
+type User = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  createdAt: string;
+  deactivatedAt: string | null;
+};
 type Session = {
   id: string;
   label: string;
@@ -68,7 +75,39 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
   const { data, mutate } = useSWR<TenantDetailResponse>(`/api/admin/tenants/${tenantId}`, fetcher);
   const [addingUser, setAddingUser] = useState(false);
   const [newUserPassword, setNewUserPassword] = useState<{ email: string; password: string } | null>(null);
+  const [togglingId, setTogglingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+
+  async function handleToggleAtivo(u: User) {
+    const desativando = !u.deactivatedAt;
+    if (desativando) {
+      const ok = confirm(
+        `Desativar ${u.name} (${u.email})?\n\n` +
+          `Perde o acesso na hora e sai da lista de atribuição. As conversas abertas na mão dela ficam sem ` +
+          `responsável, pra alguém da equipe assumir.\n\n` +
+          `O histórico continua com o nome dela em tudo que já respondeu. Dá pra reativar depois.`
+      );
+      if (!ok) return;
+    }
+
+    setTogglingId(u.id);
+    const res = await fetch(`/api/admin/users/${u.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ativo: !desativando }),
+    });
+    setTogglingId(null);
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      alert(typeof body.error === "string" ? body.error : "não deu pra concluir");
+      return;
+    }
+    if (desativando && body.desatribuidas > 0) {
+      alert(`${body.desatribuidas} conversa(s) que estavam com ${u.name} ficaram sem responsável.`);
+    }
+    mutate();
+  }
 
   async function handleResetPassword(userId: string) {
     setResettingId(userId);
@@ -131,24 +170,41 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         )}
 
         <div className="rounded-lg border border-neutral-800 bg-neutral-900 divide-y divide-neutral-800">
-          {tenant.users.map((u) => (
-            <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-2 flex-wrap text-sm">
-              <div>
-                <span className="text-neutral-200 font-medium">{u.name}</span>{" "}
-                <span className="text-neutral-500">{u.email}</span>
+          {tenant.users.map((u) => {
+            const inativo = Boolean(u.deactivatedAt);
+            return (
+              <div key={u.id} className="px-4 py-3 flex items-center justify-between gap-2 flex-wrap text-sm">
+                <div>
+                  <span className={inativo ? "text-neutral-500" : "text-neutral-200 font-medium"}>{u.name}</span>{" "}
+                  <span className="text-neutral-500">{u.email}</span>
+                  {inativo && (
+                    <span className="ml-2 text-[10px] rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-400">
+                      desativado
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-xs rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300">{u.role}</span>
+                  <button
+                    onClick={() => handleResetPassword(u.id)}
+                    disabled={resettingId === u.id || inativo}
+                    className="text-xs text-emerald-400 hover:underline disabled:opacity-40 disabled:no-underline"
+                  >
+                    {resettingId === u.id ? "Redefinindo..." : "Redefinir senha"}
+                  </button>
+                  <button
+                    onClick={() => handleToggleAtivo(u)}
+                    disabled={togglingId === u.id}
+                    className={`text-xs hover:underline disabled:opacity-40 disabled:no-underline ${
+                      inativo ? "text-emerald-400" : "text-red-400"
+                    }`}
+                  >
+                    {togglingId === u.id ? "..." : inativo ? "Reativar" : "Desativar"}
+                  </button>
+                </div>
               </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <span className="text-xs rounded-full bg-neutral-800 px-2 py-0.5 text-neutral-300">{u.role}</span>
-                <button
-                  onClick={() => handleResetPassword(u.id)}
-                  disabled={resettingId === u.id}
-                  className="text-xs text-emerald-400 hover:underline disabled:opacity-40 disabled:no-underline"
-                >
-                  {resettingId === u.id ? "Redefinindo..." : "Redefinir senha"}
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {addingUser && (

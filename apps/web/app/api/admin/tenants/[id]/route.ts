@@ -8,7 +8,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const tenant = await prisma.tenant.findUnique({
     where: { id: params.id },
     include: {
-      users: { orderBy: { createdAt: "asc" } },
+      // Campos explícitos: sem o select, o include devolvia o registro
+      // inteiro — passwordHash junto — e o hash bcrypt de cada usuário ia
+      // parar no navegador, no cache e na aba de rede. Só SUPERADMIN vê esta
+      // tela, mas isso não é motivo pra mandar hash de senha pro cliente.
+      users: {
+        select: { id: true, name: true, email: true, role: true, createdAt: true, deactivatedAt: true },
+        orderBy: { createdAt: "asc" },
+      },
       sessions: { orderBy: { createdAt: "desc" } },
       subscription: true,
       invoices: { orderBy: { dueDate: "desc" }, take: 24 },
