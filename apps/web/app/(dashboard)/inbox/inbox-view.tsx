@@ -550,6 +550,7 @@ function ConversationThread({
   const [showEmoji, setShowEmoji] = useState(false);
   const [showTextos, setShowTextos] = useState(false);
   const [pedindoMotivo, setPedindoMotivo] = useState(false);
+  const [pedindoBloqueio, setPedindoBloqueio] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -790,17 +791,27 @@ function ConversationThread({
     setRecording(false);
   }
 
-  async function handleBlock() {
+  async function handleBlock(noWhatsApp: boolean) {
     if (!conversation) return;
-    if (
-      !confirm(`Bloquear ${contactLabel(conversation.contact)}? Ele para de receber qualquer mensagem.`)
-    )
-      return;
-    await fetch("/api/blocks", {
+    setPedindoBloqueio(false);
+
+    const res = await fetch("/api/blocks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ waJid: conversation.contact.waJid, reason: "Bloqueado pelo inbox" }),
+      body: JSON.stringify({
+        waJid: conversation.contact.waJid,
+        reason: noWhatsApp ? "Bloqueado pelo inbox (e no WhatsApp)" : "Bloqueado pelo inbox",
+        noWhatsApp,
+      }),
     });
+
+    const body = await res.json().catch(() => ({}));
+    // O bloqueio na plataforma pode ter dado certo e o do WhatsApp não. Conta
+    // o que faltou em vez de deixar a atendente achando que o cliente foi
+    // bloqueado na conta quando não foi.
+    if (body.avisoWhatsApp) {
+      alert(`Bloqueado aqui na plataforma, mas não no WhatsApp: ${body.avisoWhatsApp}`);
+    }
   }
 
   // Acontece quando a conversa foi atribuída a outra pessoa (ou desatribuída
@@ -887,7 +898,10 @@ function ConversationThread({
               >
                 {selectionMode ? "Cancelar seleção" : "Selecionar"}
               </button>
-              <button onClick={handleBlock} className="text-xs text-red-600 hover:underline">
+              <button
+                onClick={() => setPedindoBloqueio(true)}
+                className="text-xs text-red-600 hover:underline"
+              >
                 Bloquear
               </button>
             </div>
@@ -1215,6 +1229,13 @@ function ConversationThread({
           </form>
         </div>
       </div>
+      {pedindoBloqueio && (
+        <ConfirmarBloqueio
+          nome={contactLabel(conversation.contact)}
+          onFechar={() => setPedindoBloqueio(false)}
+          onConfirmar={handleBlock}
+        />
+      )}
       {pedindoMotivo && (
         <MotivoFechamento
           onFechar={() => setPedindoMotivo(false)}
@@ -1593,6 +1614,64 @@ function MessageTicks({
   if (status === "DELIVERED") return <span aria-label="Entregue">✓✓</span>;
   if (status === "READ") return <span className="text-sky-300" aria-label="Lida">✓✓</span>;
   return null;
+}
+
+function ConfirmarBloqueio({
+  nome,
+  onFechar,
+  onConfirmar,
+}: {
+  nome: string;
+  onFechar: () => void;
+  onConfirmar: (noWhatsApp: boolean) => void;
+}) {
+  // Começa desmarcado sempre. Bloquear na conta é irreversível do ponto de
+  // vista do cliente enquanto durar, e não pode acontecer por inércia de
+  // quem só queria tirar a conversa da caixa.
+  const [noWhatsApp, setNoWhatsApp] = useState(false);
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+      >
+        <h2 className="text-base font-semibold mb-1">Bloquear {nome}?</h2>
+        <p className="text-sm text-neutral-600 mb-4">
+          A conversa some da caixa de entrada e as mensagens dela param de aparecer aqui. Dá pra desfazer em
+          Bloqueios, e o cliente não percebe nada.
+        </p>
+
+        <label className="flex gap-2.5 items-start rounded-md border border-neutral-300 p-3 mb-4 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={noWhatsApp}
+            onChange={(e) => setNoWhatsApp(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span className="text-sm">
+            <span className="font-medium">Bloquear também no WhatsApp</span>
+            <span className="block text-xs text-neutral-500 mt-0.5">
+              Aí sim ela para de conseguir falar com o número da empresa por completo, e o bloqueio aparece no
+              celular de quem estiver com o aparelho.
+            </span>
+          </span>
+        </label>
+
+        <div className="flex justify-end gap-2 text-sm">
+          <button onClick={onFechar} className="px-3 py-2 text-neutral-600">
+            Cancelar
+          </button>
+          <button
+            onClick={() => onConfirmar(noWhatsApp)}
+            className="rounded-md bg-red-600 text-white px-4 py-2 font-medium hover:opacity-90"
+          >
+            Bloquear
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function MotivoFechamento({

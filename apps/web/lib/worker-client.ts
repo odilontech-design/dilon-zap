@@ -139,3 +139,56 @@ export async function disconnectWhatsApp(tenantId: string): Promise<{ ok: boolea
     return { ok: false, reason: "worker fora do ar" };
   }
 }
+
+/**
+ * Pergunta ao WhatsApp quais desses números têm conta.
+ *
+ * Timeout generoso porque a consulta vai até o servidor do WhatsApp e volta,
+ * e é feita em lote — mas ainda limitado, pra uma checagem travada não
+ * segurar a requisição do navegador indefinidamente.
+ */
+export async function checkNumbersOnWhatsApp(
+  tenantId: string,
+  jids: string[]
+): Promise<{ ok: boolean; reason?: string; resultado?: Record<string, boolean> }> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret) return { ok: false, reason: "worker não configurado" };
+
+  try {
+    const res = await fetch(`${baseUrl}/internal/contacts/check-whatsapp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId, jids }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };
+    return await res.json();
+  } catch {
+    return { ok: false, reason: "worker fora do ar" };
+  }
+}
+
+/** Bloqueia/desbloqueia o número na conta de WhatsApp da empresa. */
+export async function setWhatsAppBlockStatus(
+  tenantId: string,
+  waJid: string,
+  acao: "block" | "unblock"
+): Promise<{ ok: boolean; reason?: string }> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret) return { ok: false, reason: "worker não configurado" };
+
+  try {
+    const res = await fetch(`${baseUrl}/internal/contacts/block-whatsapp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId, waJid, acao }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };
+    return await res.json();
+  } catch {
+    return { ok: false, reason: "worker fora do ar" };
+  }
+}

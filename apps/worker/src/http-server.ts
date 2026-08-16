@@ -5,6 +5,8 @@ import {
   deleteOutboundMessage,
   reactToMessage,
   wakeOutboxForTenant,
+  checarNumerosNoWhatsApp,
+  setWhatsAppBlock,
 } from "./session-manager";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
@@ -59,6 +61,16 @@ export function startInternalServer() {
 
     if (req.method === "POST" && req.url === "/internal/outbox/wake") {
       handleWakeOutbox(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/contacts/check-whatsapp") {
+      handleCheckWhatsApp(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/contacts/block-whatsapp") {
+      handleBlockWhatsApp(req, res);
       return;
     }
 
@@ -233,6 +245,56 @@ function handleResolveJid(req: http.IncomingMessage, res: http.ServerResponse) {
       res
         .writeHead(200, { "Content-Type": "application/json" })
         .end(JSON.stringify({ jid: match?.jid ?? null, exists: match?.exists ?? false }));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+function handleCheckWhatsApp(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId, jids } = JSON.parse(body) as { tenantId?: string; jids?: string[] };
+      if (!tenantId || !Array.isArray(jids)) {
+        res
+          .writeHead(400, { "Content-Type": "application/json" })
+          .end(JSON.stringify({ error: "tenantId e jids são obrigatórios" }));
+        return;
+      }
+
+      const result = await checarNumerosNoWhatsApp(tenantId, jids);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+function handleBlockWhatsApp(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId, waJid, acao } = JSON.parse(body) as {
+        tenantId?: string;
+        waJid?: string;
+        acao?: "block" | "unblock";
+      };
+      if (!tenantId || !waJid || (acao !== "block" && acao !== "unblock")) {
+        res
+          .writeHead(400, { "Content-Type": "application/json" })
+          .end(JSON.stringify({ error: "tenantId, waJid e acao (block|unblock) são obrigatórios" }));
+        return;
+      }
+
+      const result = await setWhatsAppBlock(tenantId, waJid, acao);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
     } catch (err) {
       res
         .writeHead(500, { "Content-Type": "application/json" })

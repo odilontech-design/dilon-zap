@@ -188,6 +188,16 @@ model Contact {
   notes          String?
   notesUpdatedAt DateTime?
 
+  // Se o número tem conta no WhatsApp. Nulo = ainda não checado — que é
+  // diferente de "não tem", e a tela precisa saber a diferença pra não
+  // sugerir excluir um contato que só ainda não passou pela verificação.
+  //
+  // Guarda a data junto porque a resposta envelhece: número pode ganhar
+  // conta depois, e um "não tem" de seis meses atrás não vale como motivo
+  // pra apagar ninguém.
+  hasWhatsapp        Boolean?
+  whatsappCheckedAt  DateTime?
+
   createdAt      DateTime @default(now())
 
   conversations Conversation[]
@@ -264,6 +274,16 @@ model ContactBlock {
   waJid     String
   reason    String?
   createdAt DateTime @default(now())
+
+  // Se além de esconder da caixa, o número foi bloqueado na conta do
+  // WhatsApp de verdade. São coisas diferentes: bloquear aqui é reversível e
+  // invisível pro cliente; bloquear lá corta o contato com a empresa inteira
+  // e aparece no celular de quem estiver com o aparelho.
+  //
+  // Guardado pra saber o que desfazer no desbloqueio — desbloquear na conta
+  // um número que nunca foi bloqueado lá seria mexer no WhatsApp da empresa
+  // sem ninguém ter pedido.
+  blockedOnWhatsApp Boolean @default(false)
 
   @@unique([tenantId, waJid])
   @@index([tenantId])

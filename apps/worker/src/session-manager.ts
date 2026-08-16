@@ -105,6 +105,73 @@ export async function editOutboundMessage(
   return { ok: true };
 }
 
+/**
+ * Bloqueia ou desbloqueia o número na CONTA do WhatsApp da empresa.
+ *
+ * Diferente do bloqueio da plataforma, que só esconde da caixa de entrada:
+ * aqui o cliente para de conseguir falar com o número da empresa por
+ * completo, e o bloqueio aparece no celular de quem estiver com o aparelho.
+ * Por isso é ação separada e explícita na tela, nunca efeito colateral.
+ */
+export async function setWhatsAppBlock(
+  tenantId: string,
+  waJid: string,
+  acao: "block" | "unblock"
+): Promise<{ ok: boolean; reason?: string }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "sem conexão ativa" };
+
+  try {
+    await socket.updateBlockStatus(waJid, acao);
+    return { ok: true };
+  } catch (err) {
+    logger.error({ err, waJid, acao }, "falha ao bloquear/desbloquear no WhatsApp");
+    return { ok: false, reason: "o WhatsApp recusou a operação" };
+  }
+}
+
+/**
+ * Pergunta ao WhatsApp quais desses números têm conta.
+ *
+ * Devolve um mapa jid -> tem conta. Números ausentes da resposta são
+ * tratados como "não tem" — é assim que o protocolo responde.
+ *
+ * Só aceita telefone: @lid é identificador interno e o onWhatsApp não sabe
+ * responder sobre ele. Contato que só temos como @lid fica sem checagem, o
+ * que é diferente de "não tem WhatsApp" — e a tela precisa dessa distinção
+ * pra não sugerir excluir quem apenas não pôde ser verificado.
+ */
+export async function checarNumerosNoWhatsApp(
+  tenantId: string,
+  jids: string[]
+): Promise<{ ok: boolean; reason?: string; resultado?: Record<string, boolean> }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "sem conexão ativa" };
+
+  const telefones = jids.filter((j) => j.endsWith("@s.whatsapp.net"));
+  if (telefones.length === 0) return { ok: true, resultado: {} };
+
+  try {
+    const resposta = await socket.onWhatsApp(...telefones);
+    const temConta = new Set(
+      (resposta ?? []).filter((r) => r.exists).map((r) => r.jid)
+    );
+
+    const resultado: Record<string, boolean> = {};
+    for (const jid of telefones) {
+      // Compara pelos dígitos: a resposta pode voltar com o jid normalizado
+      // de forma diferente do que mandamos (o WhatsApp corrige o nono dígito
+      // de celular brasileiro, por exemplo).
+      const digitos = jid.split("@")[0];
+      resultado[jid] = [...temConta].some((j) => j.split("@")[0] === digitos);
+    }
+    return { ok: true, resultado };
+  } catch (err) {
+    logger.error({ err }, "falha ao checar números no WhatsApp");
+    return { ok: false, reason: "não foi possível consultar agora" };
+  }
+}
+
 /** Revoga (apaga pra todos) uma mensagem já enviada. */
 export async function deleteOutboundMessage(
   tenantId: string,
@@ -402,6 +469,42 @@ export async function startSession(sessionId: string) {
         })
         .catch((err) => logger.error({ err }, "falha ao gravar reação"));
     }
+  });
+
+  // Nome da agenda do celular. Quando alguém salva ou renomeia o contato no
+  // aparelho, o WhatsApp avisa por aqui.
+  //
+  // Esse listener não existia, e era exatamente por isso que salvar o
+  // contato no celular não refletia no sistema: o nome da agenda só era lido
+  // no messaging-history.set, que roda ao conectar. Então o nome aparecia
+  // quando a sessão reconectava e nunca no meio do dia — comportamento que
+  // de fora parece "às vezes funciona".
+  const aplicarNomeDaAgenda = async (
+    contatos: Array<{ id?: string | null; lid?: string | null; name?: string | null; notify?: string | null }>
+  ) => {
+    for (const c of contatos) {
+      const jid = c.id ?? c.lid;
+      // `name` é o nome salvo na agenda; `notify` é o pushName que a própria
+      // pessoa escolheu. A agenda vem primeiro: é como a empresa chama o
+      // cliente, e é o que a atendente espera ver.
+      const nome = (c.name || c.notify)?.trim();
+      if (!jid || !nome) continue;
+      if (jid.endsWith("@g.us") || jid === "status@broadcast") continue;
+
+      await prisma.contact
+        .updateMany({
+          where: { tenantId: entry.tenantId, waJid: jid },
+          data: { name: nome },
+        })
+        .catch((err) => logger.error({ err, jid }, "falha ao atualizar nome do contato"));
+    }
+  };
+
+  socket.ev.on("contacts.upsert", (contatos) => {
+    void aplicarNomeDaAgenda(contatos);
+  });
+  socket.ev.on("contacts.update", (contatos) => {
+    void aplicarNomeDaAgenda(contatos);
   });
 
   // WhatsApp manda o histórico existente (em blocos) logo depois de parear

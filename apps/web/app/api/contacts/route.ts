@@ -24,6 +24,10 @@ export async function GET() {
       stageId: true,
       dealValueCents: true,
       createdAt: true,
+      // Só o booleano, não a data: a tela precisa saber "tem / não tem /
+      // não checado", e a data só interessa quando alguém for investigar
+      // um caso específico.
+      hasWhatsapp: true,
       conversations: {
         select: { id: true, tags: true, assignedToId: true, status: true, closeReason: true },
         orderBy: { lastMessageAt: "desc" },

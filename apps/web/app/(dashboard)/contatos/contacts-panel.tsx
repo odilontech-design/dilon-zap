@@ -16,6 +16,8 @@ type Contact = ContactRef & {
   dealValueCents: number;
   tags: string[];
   createdAt: string;
+  // null = ainda não checado, que é diferente de "não tem".
+  hasWhatsapp: boolean | null;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -32,6 +34,7 @@ export function ContactsPanel() {
   const [dupeOnly, setDupeOnly] = useState(false);
   const [editing, setEditing] = useState<Contact | "new" | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
+  const [checando, setChecando] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Duas pistas fracas, mas úteis juntas: mesmo número digitado (pega
@@ -110,6 +113,30 @@ export function ContactsPanel() {
     mutate();
   }
 
+  // Roda em lotes, um por clique. Consultar a base inteira de uma vez é o
+  // tipo de tráfego que faz o WhatsApp desconfiar do número — e derrubar a
+  // sessão da Believe custa muito mais que checar em várias rodadas.
+  async function checarWhatsApp() {
+    setChecando(true);
+    const res = await fetch("/api/contacts/check-whatsapp", { method: "POST" });
+    setChecando(false);
+
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setImportSummary(typeof body.error === "string" ? body.error : "não deu pra checar agora");
+      return;
+    }
+    if (body.verificados === 0) {
+      setImportSummary("Todos os números já foram checados.");
+      return;
+    }
+    setImportSummary(
+      `${body.verificados} número(s) checado(s), ${body.semWhatsapp} sem WhatsApp.` +
+        (body.restantes > 0 ? ` Faltam ${body.restantes} — clique de novo pra continuar.` : "")
+    );
+    mutate();
+  }
+
   function handleExport() {
     window.open("/api/contacts/export", "_blank");
   }
@@ -177,6 +204,14 @@ export function ContactsPanel() {
               e.target.value = "";
             }}
           />
+          <button
+            onClick={checarWhatsApp}
+            disabled={checando}
+            title="Consulta o WhatsApp e marca os números que não têm conta"
+            className="text-xs rounded-md border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            {checando ? "Checando..." : "Checar WhatsApp"}
+          </button>
           <button
             onClick={() => setEditing("new")}
             className="text-xs rounded-md bg-accent px-3 py-1.5 font-medium text-white hover:opacity-90"
@@ -257,7 +292,21 @@ export function ContactsPanel() {
                     </div>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-neutral-600">{formatPhoneDisplay(c)}</td>
+                <td className="px-4 py-2.5 text-neutral-600">
+                  {formatPhoneDisplay(c)}
+                  {/* Só quando checamos e deu negativo. "Ainda não checado"
+                      não vira aviso: dizer "sem WhatsApp" sobre quem apenas
+                      não passou pela verificação faria a atendente excluir
+                      contato bom. */}
+                  {c.hasWhatsapp === false && (
+                    <span
+                      className="ml-2 text-[10px] rounded-full bg-red-100 text-red-900 px-2 py-0.5"
+                      title="Este número não tem conta no WhatsApp. Confira antes de excluir — pode ser erro de digitação."
+                    >
+                      sem WhatsApp
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2.5">
                   {c.stage ? (
                     <span
