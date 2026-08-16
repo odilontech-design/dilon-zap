@@ -546,6 +546,7 @@ function ConversationThread({
   const [draft, setDraft] = useState("");
   const [showContact, setShowContact] = useState(false);
   const [showEmoji, setShowEmoji] = useState(false);
+  const [showTextos, setShowTextos] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
   const [replyTo, setReplyTo] = useState<Message | null>(null);
@@ -630,6 +631,19 @@ function ConversationThread({
     requestAnimationFrame(() => {
       input?.focus();
       input?.setSelectionRange(start + emoji.length, start + emoji.length);
+    });
+  }
+
+  // Coloca o texto no campo em vez de enviar direto: quase todo texto pronto
+  // precisa de um ajuste antes de sair, e um clique que já dispara mensagem
+  // pro cliente não tem desfazer.
+  function usarTextoPronto(corpo: string) {
+    setDraft(corpo);
+    setShowTextos(false);
+    requestAnimationFrame(() => {
+      draftInputRef.current?.focus();
+      const fim = corpo.length;
+      draftInputRef.current?.setSelectionRange(fim, fim);
     });
   }
 
@@ -1124,6 +1138,13 @@ function ConversationThread({
             {showEmoji && (
               <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
             )}
+            {showTextos && (
+              <SavedTextPicker
+                contact={conversation.contact}
+                onPick={usarTextoPronto}
+                onClose={() => setShowTextos(false)}
+              />
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -1151,6 +1172,15 @@ function ConversationThread({
               className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
             >
               📎
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowTextos((v) => !v)}
+              disabled={uploading || recording}
+              title="Textos prontos"
+              className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+            >
+              ⚡
             </button>
             <button
               type="button"
@@ -1384,6 +1414,105 @@ function MessageMedia({ message, onLoad }: { message: Message; onLoad?: () => vo
     >
       📄 {message.mediaFileName ?? "arquivo"}
     </a>
+  );
+}
+
+type SavedTextItem = {
+  id: string;
+  categoria: string;
+  titulo: string;
+  corpo: string;
+  atalho: string | null;
+};
+
+/**
+ * Troca {nome} pelo primeiro nome do cliente.
+ *
+ * Só o primeiro nome: "Oi, Maria" soa como gente, "Oi, Maria Aparecida da
+ * Silva" soa como mala direta.
+ *
+ * Sem nome salvo, tirar só o marcador deixa a pontuação órfã — "Oi, {nome}!"
+ * vira "Oi, !". Boa parte da base é contato sem nome, então esse é o caso
+ * comum, não a exceção: depois de remover, junta espaço duplicado, vírgula
+ * solta no começo da linha e espaço antes de pontuação.
+ */
+function aplicarVariaveis(corpo: string, contact: ContactRef) {
+  const primeiro = contact.name?.trim().split(/\s+/)[0];
+  if (primeiro) return corpo.replace(/\{nome\}/gi, primeiro);
+
+  return corpo
+    .replace(/\{nome\}/gi, "")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/(^|\n)[ \t]*,[ \t]*/g, "$1")
+    .replace(/[ \t]+([,!?.:;])/g, "$1")
+    .replace(/,([!?.])/g, "$1")
+    .trim();
+}
+
+function SavedTextPicker({
+  contact,
+  onPick,
+  onClose,
+}: {
+  contact: ContactRef;
+  onPick: (corpo: string) => void;
+  onClose: () => void;
+}) {
+  const { data: textos } = useSWR<SavedTextItem[]>("/api/saved-texts", fetcher);
+  const [busca, setBusca] = useState("");
+
+  const q = busca.trim().toLowerCase();
+  const filtrados = (textos ?? []).filter(
+    (t) =>
+      !q ||
+      t.titulo.toLowerCase().includes(q) ||
+      t.corpo.toLowerCase().includes(q) ||
+      t.categoria.toLowerCase().includes(q) ||
+      (t.atalho ?? "").includes(q)
+  );
+
+  return (
+    <>
+      <div className="fixed inset-0 z-30" onClick={onClose} aria-hidden />
+      <div className="absolute bottom-full left-2 md:left-4 mb-2 z-40 w-[min(24rem,calc(100vw-2rem))] rounded-lg border border-neutral-200 bg-surface shadow-lg">
+        <div className="p-2 border-b border-neutral-200">
+          <input
+            autoFocus
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar texto pronto..."
+            className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+        </div>
+
+        <div className="max-h-72 overflow-y-auto">
+          {!textos && <p className="px-3 py-4 text-sm text-neutral-500">Carregando...</p>}
+          {textos?.length === 0 && (
+            <p className="px-3 py-4 text-sm text-neutral-500">
+              Nenhum texto cadastrado. O responsável cadastra em Textos prontos, no menu.
+            </p>
+          )}
+          {textos && textos.length > 0 && filtrados.length === 0 && (
+            <p className="px-3 py-4 text-sm text-neutral-500">Nada encontrado.</p>
+          )}
+
+          {filtrados.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => onPick(aplicarVariaveis(t.corpo, contact))}
+              className="w-full text-left px-3 py-2 hover:bg-neutral-100 border-b border-neutral-200 last:border-0"
+            >
+              <p className="text-sm font-medium text-neutral-800 flex items-center gap-2">
+                <span className="truncate">{t.titulo}</span>
+                <span className="text-[10px] uppercase tracking-wide text-neutral-400 shrink-0">{t.categoria}</span>
+              </p>
+              <p className="text-xs text-neutral-500 line-clamp-2 mt-0.5">{aplicarVariaveis(t.corpo, contact)}</p>
+            </button>
+          ))}
+        </div>
+      </div>
+    </>
   );
 }
 

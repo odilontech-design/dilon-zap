@@ -34,6 +34,7 @@ model Tenant {
   tags          Tag[]
   stages        Stage[]
   businessHours BusinessHour[]
+  savedTexts    SavedText[]
 }
 
 // Horário de atendimento, uma linha por dia da semana. Dia sem linha é
@@ -270,6 +271,40 @@ model AutoReply {
 // "oficial" com cor/status pra alimentar o seletor — uma conversa marcada
 // com um nome que não está mais aqui (etiqueta apagada/renomeada) continua
 // mostrando o texto puro, sem quebrar nada.
+// Textos guardados pra reusar: resposta rápida ("Bom dia! Como posso
+// ajudar?") e script de abordagem de venda ou cobrança.
+//
+// Um model só pros dois de propósito. Por baixo são a mesma coisa — texto
+// reutilizável, organizado por assunto — e o que muda é só o tamanho e a hora
+// de usar. Dois sistemas separados dariam dois lugares pra procurar texto, e
+// nenhum dos dois ficaria completo: no segundo dia de uso alguém ia querer
+// inserir um trecho do script na conversa, e aí teria que copiar de uma tela
+// pra outra.
+//
+// `categoria` é texto livre em vez de tabela própria: a Believe vai querer
+// "Financeiro", "Objeção de preço", "Pós-venda", e obrigar a cadastrar
+// categoria antes de escrever o primeiro texto é atrito sem retorno. A tela
+// sugere as que já existem.
+model SavedText {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  categoria String
+  titulo    String
+  corpo     String
+  // Atalho opcional pra chamar pelo teclado (ex: "bomdia"). Nulo quando não
+  // tem — em Postgres o unique convive com vários nulos, então quem não usa
+  // atalho não colide com ninguém.
+  atalho    String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, titulo])
+  @@unique([tenantId, atalho])
+  @@index([tenantId, categoria])
+}
+
 model Tag {
   id        String   @id @default(cuid())
   tenantId  String
