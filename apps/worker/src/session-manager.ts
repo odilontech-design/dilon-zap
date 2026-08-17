@@ -78,7 +78,10 @@ export function getSocketForTenant(tenantId: string) {
  */
 export function corpoParaEnvio(nomeAtendente: string | null | undefined, corpo: string) {
   if (!nomeAtendente) return corpo;
-  return corpo ? `*${nomeAtendente}:* ${corpo}` : `*${nomeAtendente}*`;
+  // Nome em negrito, quebra de linha, mensagem embaixo. Antes era
+  // "*Nome:* mensagem" na mesma linha, o que embolava assinatura e conteúdo
+  // num parágrafo só — em mensagem longa a atendente sumia no meio do texto.
+  return corpo ? `*${nomeAtendente}*\n${corpo}` : `*${nomeAtendente}*`;
 }
 
 export async function editOutboundMessage(
