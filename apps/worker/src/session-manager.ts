@@ -57,21 +57,6 @@ export function isSessionActive(sessionId: string) {
   return activeSessions.has(sessionId);
 }
 
-/**
- * Empresas com conexão ativa agora.
- *
- * A varredura de avatares usa isso pra só pescar contatos de quem está
- * conectado. Sem esse filtro, uma empresa desconectada com centenas de
- * contatos ocuparia todo lote e nenhum contato das outras avançaria nunca.
- */
-export function getTenantsConectados(): string[] {
-  const ids = new Set<string>();
-  for (const entry of activeSessions.values()) {
-    if (entry.socket) ids.add(entry.tenantId);
-  }
-  return [...ids];
-}
-
 /** Usado pelo servidor HTTP interno pra achar a conexão ativa de um tenant. */
 export function getSocketForTenant(tenantId: string) {
   for (const entry of activeSessions.values()) {
@@ -1113,7 +1098,19 @@ function extractHistoricalText(msg: proto.IWebMessageInfo): string {
 }
 
 // Quanto tempo uma conferida de foto vale antes de valer a pena refazer.
-export const AVATAR_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+//
+// NÃO transforme isso numa varredura em lote. Já foi tentado, em 17/08/2026:
+// um laço conferia 20 contatos a cada 5 minutos pra consertar a base inteira
+// de uma vez. Depois de ~81 consultas, o WhatsApp passou a responder
+// not-authorized e removeu o dispositivo vinculado da Believe
+// (stream:error 401, conflict type="device_removed"). O número ficou fora do
+// ar por 40 minutos, 16 mensagens de cliente nunca saíram, e foi preciso
+// reler o QR code.
+//
+// Buscar foto no ritmo das mensagens que chegam é seguro — foi o que rodou
+// por meses. Em lote, não é. A diferença não é o total de consultas, é a
+// concentração.
+const AVATAR_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Vale (re)buscar a foto desse contato agora? Uma regra só cobre os dois
 // lados do problema: quem não tem foto para de ser tentado a cada mensagem
@@ -1130,7 +1127,7 @@ function precisaBuscarAvatar(contact: { avatarCheckedAt: Date | null }) {
 // pps.whatsapp.net expiram. Numa amostra de 12 fotos que tínhamos salvas em
 // produção, 6 já respondiam 403 — a foto aparecia no dia em que o contato
 // chegou e sumia semanas depois, sem nada ter mudado do nosso lado.
-export async function fetchAndSaveAvatar(
+async function fetchAndSaveAvatar(
   socket: ReturnType<typeof makeWASocket>,
   contactId: string,
   waJid: string
