@@ -182,7 +182,24 @@ model Contact {
   // e o WhatsApp revelou o par via senderPn/jid em alguma mensagem — @lid é
   // opaco por padrão, isso só existe quando conseguimos capturar o par.
   phoneNumber String?
-  avatarUrl   String? // URL da foto de perfil do WhatsApp, quando disponível/pública
+  // Endereço que a tela usa. Aponta pro NOSSO servidor, não pro WhatsApp:
+  // as URLs de pps.whatsapp.net expiram — metade das que tínhamos guardadas
+  // já respondia 403 — e a foto sumia da tela semanas depois sem nada ter
+  // mudado.
+  avatarUrl   String?
+  // Chave da imagem no R2. É o que a rota de avatar usa pra servir o arquivo.
+  avatarKey   String?
+  // Identificador da foto no WhatsApp (o nome do arquivo na URL original).
+  // Coluna própria porque a reconciliação de contatos duplicados compara
+  // contatos por foto: antes ela extraía isso da avatarUrl, e no dia em que
+  // a avatarUrl deixasse de ser do WhatsApp a comparação pararia de casar em
+  // silêncio — voltando a duplicar contato sem ninguém entender por quê.
+  avatarPhotoId String?
+  // Última TENTATIVA, dê certo ou não. Sem isso o worker rebuscava a foto a
+  // cada mensagem recebida de todo contato sem avatar — 263 contatos batendo
+  // na API do WhatsApp o dia inteiro, à toa, e esse é o tipo de padrão que
+  // chama atenção no número.
+  avatarCheckedAt DateTime?
   // Último Status (Stories) que esse contato postou — "tem Status disponível"
   // é calculado na hora (últimas 24h), não guardado como boolean, porque
   // Status expira sozinho e não teria como saber quando "desligar" a flag.

@@ -57,6 +57,21 @@ export function isSessionActive(sessionId: string) {
   return activeSessions.has(sessionId);
 }
 
+/**
+ * Empresas com conexão ativa agora.
+ *
+ * A varredura de avatares usa isso pra só pescar contatos de quem está
+ * conectado. Sem esse filtro, uma empresa desconectada com centenas de
+ * contatos ocuparia todo lote e nenhum contato das outras avançaria nunca.
+ */
+export function getTenantsConectados(): string[] {
+  const ids = new Set<string>();
+  for (const entry of activeSessions.values()) {
+    if (entry.socket) ids.add(entry.tenantId);
+  }
+  return [...ids];
+}
+
 /** Usado pelo servidor HTTP interno pra achar a conexão ativa de um tenant. */
 export function getSocketForTenant(tenantId: string) {
   for (const entry of activeSessions.values()) {
@@ -705,11 +720,14 @@ async function resolveContact(params: {
     if (!existsByJid) {
       const photoId = await fetchAvatarPhotoId(params.socket, params.waJid);
       if (photoId) {
+        // Compara pela coluna avatarPhotoId, não extraindo da avatarUrl: a
+        // avatarUrl agora aponta pro nosso servidor, e extrair dela daria
+        // sempre "avatar" — casando contatos que não têm nada a ver.
         const candidates = await prisma.contact.findMany({
-          where: { tenantId: params.tenantId, waJid: { not: params.waJid }, avatarUrl: { not: null } },
-          select: { id: true, avatarUrl: true, name: true },
+          where: { tenantId: params.tenantId, waJid: { not: params.waJid }, avatarPhotoId: { not: null } },
+          select: { id: true, avatarPhotoId: true, name: true },
         });
-        const match = candidates.find((c) => avatarPhotoId(c.avatarUrl!) === photoId);
+        const match = candidates.find((c) => c.avatarPhotoId === photoId);
         if (match) {
           // Atualiza o waJid pro valor novo — daqui pra frente essa pessoa
           // resolve direto pelo caminho rápido (upsert por waJid literal),
@@ -787,10 +805,8 @@ async function recordMessage(params: {
     socket: params.socket,
   });
 
-  if (!contact.avatarUrl) {
-    fetchAndSaveAvatar(params.socket, contact.id, params.waJid).catch(() => {
-      // sem foto de perfil ou privacidade bloqueando — segue sem avatar, não é erro
-    });
+  if (precisaBuscarAvatar(contact)) {
+    buscarAvatarEmSegundoPlano(params.socket, contact.id, params.waJid);
   }
 
   // upsert (não find-then-create) é essencial aqui: duas mensagens chegando
@@ -1025,8 +1041,8 @@ async function importHistoricalMessages(
     if (!contact.phoneNumber && resolvedPhone) {
       await prisma.contact.update({ where: { id: contact.id }, data: { phoneNumber: resolvedPhone } });
     }
-    if (!contact.avatarUrl) {
-      fetchAndSaveAvatar(socket, contact.id, waJid).catch(() => {});
+    if (precisaBuscarAvatar(contact)) {
+      buscarAvatarEmSegundoPlano(socket, contact.id, waJid);
     }
 
     // upsert (não find-then-create) — mesmo motivo do recordMessage(): evita
@@ -1096,17 +1112,92 @@ function extractHistoricalText(msg: proto.IWebMessageInfo): string {
   return "";
 }
 
-// Busca a foto de perfil só na primeira mensagem de um contato (evita bater
-// na API do WhatsApp toda hora) — falha normalmente quando a pessoa não tem
-// foto pública ou a privacidade bloqueia, e isso não deve derrubar nada.
-async function fetchAndSaveAvatar(
+// Quanto tempo uma conferida de foto vale antes de valer a pena refazer.
+export const AVATAR_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+// Vale (re)buscar a foto desse contato agora? Uma regra só cobre os dois
+// lados do problema: quem não tem foto para de ser tentado a cada mensagem
+// pra sempre, e quem tem é reconferido de vez em quando — senão a pessoa
+// troca a foto de perfil e a nossa nunca muda.
+function precisaBuscarAvatar(contact: { avatarCheckedAt: Date | null }) {
+  if (!contact.avatarCheckedAt) return true;
+  return Date.now() - contact.avatarCheckedAt.getTime() > AVATAR_TTL_MS;
+}
+
+// Busca a foto de perfil e guarda A IMAGEM no nosso R2, não o endereço dela.
+//
+// Guardar o endereço era o que fazíamos antes, e não funciona: as URLs de
+// pps.whatsapp.net expiram. Numa amostra de 12 fotos que tínhamos salvas em
+// produção, 6 já respondiam 403 — a foto aparecia no dia em que o contato
+// chegou e sumia semanas depois, sem nada ter mudado do nosso lado.
+export async function fetchAndSaveAvatar(
   socket: ReturnType<typeof makeWASocket>,
   contactId: string,
   waJid: string
 ) {
+  // Marca a tentativa ANTES de tentar. Se marcasse depois, toda falha
+  // deixaria o contato elegível de novo na mensagem seguinte — que é
+  // exatamente o loop que essa marcação existe pra cortar.
+  await prisma.contact.update({
+    where: { id: contactId },
+    data: { avatarCheckedAt: new Date() },
+  });
+
   const url = await socket.profilePictureUrl(waJid, "image");
-  if (!url) return;
-  await prisma.contact.update({ where: { id: contactId }, data: { avatarUrl: url } });
+  if (!url) return "sem-foto";
+
+  const photoId = avatarPhotoId(url);
+  const atual = await prisma.contact.findUnique({
+    where: { id: contactId },
+    select: { avatarKey: true, avatarPhotoId: true },
+  });
+  // Mesma foto que já está guardada: não baixa nem sobe de novo.
+  if (atual?.avatarKey && photoId && atual.avatarPhotoId === photoId) return "inalterada";
+
+  // Sem R2 (ambiente local), guarda a URL do WhatsApp como antes. Expira em
+  // algumas semanas, o que é o bastante pra desenvolvimento.
+  if (!isStorageConfigured()) {
+    await prisma.contact.update({
+      where: { id: contactId },
+      data: { avatarUrl: url, avatarPhotoId: photoId },
+    });
+    return "sem-r2";
+  }
+
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`CDN do WhatsApp respondeu ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const key = `avatars/${contactId}.jpg`;
+  await uploadMedia(key, buffer, res.headers.get("content-type") ?? "image/jpeg");
+
+  await prisma.contact.update({
+    where: { id: contactId },
+    data: {
+      avatarKey: key,
+      avatarPhotoId: photoId,
+      // A chave é sempre a mesma pro mesmo contato, então o navegador
+      // guardaria a foto velha pra sempre depois de uma troca. O ?v= muda
+      // junto com a foto e é o que faz a troca aparecer.
+      avatarUrl: `/api/contacts/${contactId}/avatar?v=${encodeURIComponent(photoId ?? "1")}`,
+    },
+  });
+  return "salva";
+}
+
+// Envolve a busca de avatar pra ela nunca derrubar o fluxo da mensagem, mas
+// TAMBÉM nunca sumir em silêncio. Antes cada chamada terminava num
+// `.catch(() => {})` puro: com 263 contatos sem foto em produção, não havia
+// como distinguir "essa pessoa não tem foto" de "a busca está quebrada".
+function buscarAvatarEmSegundoPlano(
+  socket: ReturnType<typeof makeWASocket>,
+  contactId: string,
+  waJid: string
+) {
+  fetchAndSaveAvatar(socket, contactId, waJid).catch((err) => {
+    console.warn(
+      `[dilon-zap worker] [avatar] falha ao buscar foto de ${waJid}: ${err?.message ?? err}`
+    );
+  });
 }
 
 // v1 do construtor de fluxos: casamento simples por palavra-chave. Só dispara
