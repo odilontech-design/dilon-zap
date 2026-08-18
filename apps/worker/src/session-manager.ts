@@ -3,6 +3,7 @@ import makeWASocket, {
   fetchLatestBaileysVersion,
   downloadMediaMessage,
   makeCacheableSignalKeyStore,
+  generateMessageID,
   WAMessageStatus,
   type proto,
   type WAMessage,
@@ -429,12 +430,30 @@ export async function startSession(sessionId: string) {
       const status = mapReceiptStatus(update.status);
       if (!status) continue;
 
-      // Best-effort: se a mensagem não é nossa (ex: veio de outro worker/sessão
-      // antiga) o updateMany simplesmente não acha nada pra atualizar.
-      await prisma.message.updateMany({
-        where: { sessionId, waMessageId: key.id, direction: "OUTBOUND" },
-        data: { status },
-      });
+      await aplicarRecibo(sessionId, key.id, status);
+    }
+  });
+
+  // Segunda fonte de recibo, e ela não é redundante: o messages.update acima
+  // só chega quando o Baileys resolve traduzir o recibo num status de
+  // mensagem. O message-receipt.update é o evento cru, e vem em casos em que
+  // o outro não vem. Ouvir só um deles era parte de por que um terço das
+  // mensagens ficava parado em "enviado" pra sempre.
+  socket.ev.on("message-receipt.update", async (recibos) => {
+    for (const { key, receipt } of recibos) {
+      if (!key.fromMe || !key.id) continue;
+
+      // Ouvido (áudio) e lido são a mesma coisa pra quem olha a tela: a
+      // pessoa consumiu a mensagem.
+      const status: StatusDeRecibo | null =
+        receipt.playedTimestamp || receipt.readTimestamp
+          ? "READ"
+          : receipt.receiptTimestamp
+            ? "DELIVERED"
+            : null;
+      if (!status) continue;
+
+      await aplicarRecibo(sessionId, key.id, status);
     }
   });
 
@@ -557,6 +576,41 @@ export async function startSession(sessionId: string) {
   });
 
   pollOutbox(sessionId, socket, () => stopped);
+}
+
+// Ordem de progresso de uma mensagem enviada. Existe pra que o status só
+// ande PRA FRENTE.
+//
+// O WhatsApp reenvia recibos fora de ordem e repete os antigos em reconexão
+// e sincronização de histórico. Como a gravação era um updateMany direto,
+// um SERVER_ACK atrasado chegando depois do READ rebaixava a mensagem de
+// "lida" pra "enviada" — e ela ficava assim pra sempre, porque o recibo de
+// leitura não vem duas vezes.
+//
+// FAILED fica abaixo de SENT de propósito: recibo do WhatsApp é prova mais
+// forte que erro nosso, então uma mensagem marcada como falha que depois
+// recebe confirmação de entrega deve ser corrigida pra entregue.
+const NIVEL_STATUS = { PENDING: 0, FAILED: 1, SENT: 2, DELIVERED: 3, READ: 4 } as const;
+type StatusDeRecibo = keyof typeof NIVEL_STATUS;
+
+async function aplicarRecibo(sessionId: string, waMessageId: string, novo: StatusDeRecibo) {
+  const inferiores = (Object.keys(NIVEL_STATUS) as StatusDeRecibo[]).filter(
+    (s) => NIVEL_STATUS[s] < NIVEL_STATUS[novo]
+  );
+  if (inferiores.length === 0) return;
+
+  // O filtro por status na cláusula where é o que torna isso atômico: dois
+  // recibos chegando juntos não conseguem se sobrescrever, porque o que vale
+  // menos não encontra linha pra atualizar.
+  await prisma.message.updateMany({
+    where: {
+      sessionId,
+      waMessageId,
+      direction: "OUTBOUND",
+      status: { in: inferiores },
+    },
+    data: { status: novo, statusUpdatedAt: new Date() },
+  });
 }
 
 // WAMessageStatus do Baileys: ERROR/PENDING/SERVER_ACK (enviou pro WhatsApp) /
@@ -1436,13 +1490,36 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
               }
             : undefined;
 
-          const sent = message.mediaType && message.mediaKey
-            ? await sendOutboundMedia(socket, jid, messageForSend, { quoted })
-            : await socket.sendMessage(jid, { text: displayBody }, { quoted });
+          // Id gerado por nós e gravado ANTES do envio. É o que garante que o
+          // recibo de entrega encontre a mensagem: quando quem gerava era o
+          // WhatsApp, o id só chegava aqui depois do sendMessage resolver, e
+          // qualquer recibo que chegasse nesse meio-tempo procurava um id que
+          // ainda não existia no banco e era jogado fora sem deixar rastro.
+          //
+          // Numa retentativa reaproveita o id já gravado: mesmo id significa
+          // que o WhatsApp trata como a mesma mensagem, em vez de o cliente
+          // receber duas.
+          const waMessageId = message.waMessageId ?? generateMessageID();
+          if (!message.waMessageId) {
+            await prisma.message.update({
+              where: { id: message.id },
+              data: { waMessageId },
+            });
+          }
 
-          await prisma.message.update({
-            where: { id: message.id },
-            data: { status: "SENT", waMessageId: sent?.key?.id ?? undefined },
+          if (message.mediaType && message.mediaKey) {
+            await sendOutboundMedia(socket, jid, messageForSend, { quoted, messageId: waMessageId });
+          } else {
+            await socket.sendMessage(jid, { text: displayBody }, { quoted, messageId: waMessageId });
+          }
+
+          // updateMany com filtro de status, não update por id: o recibo de
+          // entrega pode ter chegado enquanto o envio ainda estava em curso,
+          // e um `status: "SENT"` cego rebaixaria a mensagem de entregue pra
+          // enviada — desfazendo justamente o que essa correção conserta.
+          await prisma.message.updateMany({
+            where: { id: message.id, status: "PENDING" },
+            data: { status: "SENT", statusUpdatedAt: new Date() },
           });
         } catch (error) {
           const errorMessage = (error as Error).message;

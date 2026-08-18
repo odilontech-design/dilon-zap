@@ -664,8 +664,17 @@ model Message {
   session        WhatsAppSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   direction      MessageDirection
   status         MessageStatus     @default(SENT)
+  // Quando o status mudou pela última vez. Sem isso não dava pra responder
+  // "essa mensagem está parada em SENT há quanto tempo?" — que é a diferença
+  // entre um recibo que ainda vai chegar e um que nunca vem.
+  statusUpdatedAt DateTime?
   body           String // legenda/texto — pode ser vazio quando é só mídia
-  waMessageId    String? // id da mensagem no WhatsApp, útil para status de entrega
+  // Id da mensagem no WhatsApp. É por ele que os recibos de entrega e leitura
+  // encontram a mensagem — por isso ele é GERADO POR NÓS e gravado ANTES do
+  // envio. Quando era o WhatsApp que gerava, ele só existia aqui depois do
+  // sendMessage resolver, e todo recibo que chegasse nessa janela procurava
+  // um id que ainda não estava no banco e era descartado calado.
+  waMessageId    String?
   errorMessage   String?
   createdAt      DateTime          @default(now())
   readAt         DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
