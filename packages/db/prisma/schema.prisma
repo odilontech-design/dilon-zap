@@ -177,7 +177,19 @@ model Contact {
   tenantId    String
   tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   waJid       String // ex: 5511999999999@s.whatsapp.net — pode ser @lid quando o WhatsApp esconde o número real
+  // Nome que a tela mostra. Pode ter vindo da agenda do celular, do pushName
+  // da própria pessoa, ou de alguém que digitou aqui.
   name        String?
+  // Último nome que o WhatsApp nos informou pra esse contato (agenda ou
+  // pushName). Não é pra exibir: serve pra saber se o nome MUDOU do lado de
+  // lá. Sem isso, toda sincronização do WhatsApp parecia uma alteração nova
+  // e reescrevia o `name` — inclusive por cima do que a atendente tinha
+  // acabado de corrigir à mão.
+  waName      String?
+  // Alguém editou esse nome aqui dentro. Quando é true, sincronização do
+  // WhatsApp nunca sobrescreve: quem digitou sabe melhor como a empresa
+  // chama o cliente do que o nome que o cliente escolheu pra própria conta.
+  nameManual  Boolean @default(false)
   // Número de telefone real (dígitos, sem sufixo de JID) quando waJid é @lid
   // e o WhatsApp revelou o par via senderPn/jid em alguma mensagem — @lid é
   // opaco por padrão, isso só existe quando conseguimos capturar o par.

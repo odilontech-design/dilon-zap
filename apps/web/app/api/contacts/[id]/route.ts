@@ -90,6 +90,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     where: { id: contact.id },
     data: {
       ...resto,
+      // Nome digitado aqui vira definitivo: a partir de agora nenhuma
+      // sincronização do WhatsApp reescreve. Era exatamente esse o problema
+      // relatado — a atendente corrigia o nome e ele voltava sozinho pro
+      // nome que a cliente usa na conta dela.
+      ...(resto.name !== undefined ? { nameManual: true } : {}),
       // Anotação em branco volta pra null, e não string vazia: "sem
       // anotação" e "anotação apagada" são a mesma coisa pra quem lê, e a
       // UI só precisa checar um caso.

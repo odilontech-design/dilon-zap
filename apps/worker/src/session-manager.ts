@@ -490,16 +490,47 @@ export async function startSession(sessionId: string) {
       // `name` é o nome salvo na agenda; `notify` é o pushName que a própria
       // pessoa escolheu. A agenda vem primeiro: é como a empresa chama o
       // cliente, e é o que a atendente espera ver.
-      const nome = (c.name || c.notify)?.trim();
+      // Duas fontes bem diferentes, e tratá-las como equivalentes era o bug:
+      // `name` é o nome da AGENDA do celular — como a empresa cadastrou o
+      // cliente ("Dc2 Sheila vieira"); `notify` é o pushName, o nome que a
+      // própria pessoa escolheu pra conta dela ("Sheila").
+      const nomeAgenda = c.name?.trim();
+      const pushName = c.notify?.trim();
+      const nome = nomeAgenda || pushName;
       if (!jid || !nome) continue;
       if (jid.endsWith("@g.us") || jid === "status@broadcast") continue;
 
-      await prisma.contact
-        .updateMany({
+      try {
+        const contato = await prisma.contact.findFirst({
           where: { tenantId: entry.tenantId, waJid: jid },
-          data: { name: nome },
-        })
-        .catch((err) => logger.error({ err, jid }, "falha ao atualizar nome do contato"));
+          select: { id: true, name: true, waName: true, nameManual: true },
+        });
+        if (!contato) continue;
+
+        // O WhatsApp reenvia a lista inteira de contatos a cada sincronização,
+        // não só o que mudou — sem essa comparação, toda reconexão parecia
+        // alteração nova e disparava escrita à toa.
+        if (contato.waName === nome) continue;
+
+        // Duas regras, cada uma cobrindo um jeito de perder o nome certo:
+        //
+        // nameManual: alguém digitou esse nome aqui dentro. Nada do WhatsApp
+        // reescreve — era o relato da Camila, que corrigia o nome e ele
+        // voltava sozinho.
+        //
+        // pushName só preenche vazio: se o contato JÁ tem nome, o nome que a
+        // cliente escolheu pra própria conta não substitui o que a empresa
+        // usa pra identificá-la. Só a agenda tem essa autoridade.
+        const podeReescrever =
+          !contato.nameManual && (Boolean(nomeAgenda) || !contato.name);
+
+        await prisma.contact.update({
+          where: { id: contato.id },
+          data: podeReescrever ? { waName: nome, name: nome } : { waName: nome },
+        });
+      } catch (err) {
+        logger.error({ err, jid }, "falha ao atualizar nome do contato");
+      }
     }
   };
 

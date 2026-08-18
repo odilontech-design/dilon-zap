@@ -28,15 +28,21 @@ export async function upsertContactByPhone(tenantId: string, phoneDigits: string
     }
   }
 
+  // nameManual nos dois casos: os dois chamadores dessa função são o cadastro
+  // manual de contato e a importação de planilha — nome digitado por gente,
+  // que a sincronização do WhatsApp não pode reescrever depois.
   if (contact) {
     if (name && !contact.name) {
-      contact = await prisma.contact.update({ where: { id: contact.id }, data: { name } });
+      contact = await prisma.contact.update({
+        where: { id: contact.id },
+        data: { name, nameManual: true },
+      });
     }
     return { contact, created: false };
   }
 
   contact = await prisma.contact.create({
-    data: { tenantId, waJid: canonicalJid, name: name || null },
+    data: { tenantId, waJid: canonicalJid, name: name || null, nameManual: Boolean(name) },
   });
   return { contact, created: true };
 }
