@@ -53,3 +53,5 @@ caso("erro tardio nao desfaz uma leitura confirmada", "READ", "FAILED", "READ");
 caso("erro tardio nao desfaz uma entrega confirmada", "DELIVERED", "FAILED", "DELIVERED");
 
 console.log(falhas === 0 ? "\nPASSOU" : `\n${falhas} FALHA(S)`);
+
+export {};

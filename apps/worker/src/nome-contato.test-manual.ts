@@ -98,3 +98,5 @@ caso(
 );
 
 console.log(falhas === 0 ? "\nPASSOU" : `\n${falhas} FALHA(S)`);
+
+export {};
