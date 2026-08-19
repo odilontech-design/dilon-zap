@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
@@ -987,15 +987,21 @@ function ConversationThread({
           className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
           onScroll={handleMessagesScroll}
         >
-          {messages?.map((m) => {
+          {messages?.map((m, i) => {
+            // Separador de data igual ao WhatsApp: so aparece quando a mensagem
+            // cai num dia diferente da anterior. Sem ele, uma conversa antiga
+            // vira uma sequencia de horarios soltos e nao da pra saber se
+            // 17:14 e de ontem ou de tres semanas atras.
+            const mudouDeDia = i === 0 || !mesmoDia(messages[i - 1].createdAt, m.createdAt);
             const editable = m.direction === "OUTBOUND" && !m.isDeleted && !m.mediaType && SENT_STATUSES.includes(m.status);
             const deletable = m.direction === "OUTBOUND" && !m.isDeleted;
             const myReaction = m.reactions.find((r) => r.fromMe);
             const theirReaction = m.reactions.find((r) => !r.fromMe);
             const hasReaction = !m.isDeleted && (myReaction || theirReaction);
             return (
+              <Fragment key={m.id}>
+              {mudouDeDia && <SeparadorDeData iso={m.createdAt} />}
               <div
-                key={m.id}
                 className={`flex items-center gap-2 ${m.direction === "OUTBOUND" ? "self-end" : "self-start"} ${hasReaction ? "mb-2" : ""}`}
               >
                 {selectionMode && !m.isDeleted && (
@@ -1167,6 +1173,7 @@ function ConversationThread({
                 </div>
                 </div>
               </div>
+              </Fragment>
             );
           })}
           <div ref={messagesEndRef} />
@@ -2191,6 +2198,69 @@ function TagEditor({
           ))}
         </select>
       )}
+    </div>
+  );
+}
+
+/**
+ * Duas mensagens caíram no mesmo dia do calendário?
+ *
+ * Compara ano/mês/dia no fuso de quem está olhando, e não a diferença em
+ * horas: 23h50 e 00h10 estão a 20 minutos uma da outra e são dias
+ * diferentes; 00h10 e 23h50 do MESMO dia estão a quase 24h e são o mesmo.
+ */
+function mesmoDia(isoA: string, isoB: string) {
+  const a = new Date(isoA);
+  const b = new Date(isoB);
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Como o WhatsApp escreve a data do separador: "Hoje" e "Ontem" por extenso,
+ * dia da semana na semana corrente, e data cheia a partir daí.
+ *
+ * A referência é sempre a meia-noite de hoje, não "24h atrás" — senão às 9h
+ * da manhã uma mensagem das 22h de anteontem cairia em "ontem".
+ */
+function rotuloDeData(iso: string) {
+  const data = new Date(iso);
+  const hoje = new Date();
+  const meiaNoiteHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const meiaNoiteData = new Date(data.getFullYear(), data.getMonth(), data.getDate());
+  const diasAtras = Math.round((meiaNoiteHoje.getTime() - meiaNoiteData.getTime()) / 86400000);
+
+  if (diasAtras === 0) return "Hoje";
+  if (diasAtras === 1) return "Ontem";
+  // Só até 6 dias: no sétimo, "quarta-feira" seria ambíguo entre a semana
+  // passada e esta.
+  if (diasAtras > 1 && diasAtras < 7) {
+    const dia = data.toLocaleDateString("pt-BR", { weekday: "long" });
+    return dia.charAt(0).toUpperCase() + dia.slice(1);
+  }
+  // Ano só quando não é o corrente — "12/08" basta pra quem está lendo uma
+  // conversa deste ano.
+  return data.getFullYear() === hoje.getFullYear()
+    ? data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })
+    : data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+/** Faixa de data entre os blocos de mensagens, igual à do WhatsApp. */
+function SeparadorDeData({ iso }: { iso: string }) {
+  return (
+    <div className="self-center my-2">
+      <span
+        // title com a data completa: o rótulo curto é bom pra bater o olho,
+        // mas quem precisa da data exata (conferir um pedido, por exemplo)
+        // consegue sem sair da conversa.
+        title={new Date(iso).toLocaleDateString("pt-BR", { dateStyle: "full" })}
+        className="rounded-md bg-neutral-200/80 px-2.5 py-1 text-[11px] font-medium text-neutral-600 dark:bg-neutral-700/80 dark:text-neutral-300"
+      >
+        {rotuloDeData(iso)}
+      </span>
     </div>
   );
 }
