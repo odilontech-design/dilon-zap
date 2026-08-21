@@ -41,11 +41,26 @@ a imagem construída fora dela.
    - **Pooled** (o host tem `-pooler` no meio) → vai em `ESQUADRIAS_DATABASE_URL`
    - **Direct** (sem `-pooler`) → vai em `ESQUADRIAS_DIRECT_URL`
 
-As duas são necessárias e não são intercambiáveis. A aplicação consulta pela
-pooled, porque em serverless cada requisição pode virar uma instância nova e
-sem o pooler as conexões do Postgres esgotam no primeiro pico. As migrações
-usam a direta, porque o PgBouncer em modo transação não suporta os comandos
-que uma migração precisa — pela pooled ela trava ou falha pela metade.
+> ⚠️ **Renomeie as variáveis.** O snippet que o Neon entrega pronto usa
+> `DATABASE_URL` e `DATABASE_URL_UNPOOLED` — e `DATABASE_URL` é a variável do
+> **Dilon Zap** neste monorepo. Colar o snippet como veio faz o Zap apontar
+> pro banco de esquadrias. Os nomes corretos aqui são
+> `ESQUADRIAS_DATABASE_URL` e `ESQUADRIAS_DIRECT_URL`.
+
+O `channel_binding=require` que vem na URL do Neon pode ficar: o Prisma
+5.22 aceita o parâmetro.
+
+A **pooled é obrigatória**: em serverless cada requisição pode virar uma
+instância nova, e sem o pooler as conexões do Postgres esgotam no primeiro
+pico de acessos.
+
+A **direta é opcional no Neon** com Prisma 5.22 — a própria Neon documenta que
+a partir do 5.10 a migração roda pela pooled (é o que aquele comentário
+"uncomment next line if you use Prisma <5.10" quer dizer). O schema pede as
+duas mesmo assim, porque em outros poolers em modo transação (Supabase) a
+direta continua obrigatória, e porque migração em conexão dedicada não divide
+o pool com o tráfego do app enquanto aplica DDL. Se um dia usar um provedor
+com URL única, repita a mesma nas duas variáveis.
 
 Ambas já vêm com `?sslmode=require`; mantenha.
 

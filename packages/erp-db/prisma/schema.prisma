@@ -25,10 +25,15 @@ datasource db {
   // virar uma instância nova; sem o pooler, um pico de acessos esgota as
   // conexões do Postgres e o app passa a responder erro de conexão.
   url       = env("ESQUADRIAS_DATABASE_URL")
-  // Conexão DIRETA, usada só por migração e introspecção. O PgBouncer em modo
-  // transação não suporta os comandos que uma migração precisa (advisory
-  // lock, DDL em sessão), então `migrate deploy` pela URL pooled trava ou
-  // falha pela metade — que é o pior momento possível para falhar.
+  // Conexão DIRETA, usada só por migração e introspecção.
+  //
+  // No Prisma 5.22 + Neon ela é OPCIONAL — a própria Neon documenta que a
+  // partir do 5.10 a migração roda pela pooled. Fica aqui mesmo assim por
+  // dois motivos: em outros poolers em modo transação (Supabase, PgBouncer
+  // próprio) ela continua obrigatória, e migração numa conexão dedicada não
+  // divide o pool com o tráfego do app enquanto aplica DDL.
+  //
+  // Se o seu provedor entrega uma URL só, repita a mesma nas duas variáveis.
   directUrl = env("ESQUADRIAS_DIRECT_URL")
 }
 
