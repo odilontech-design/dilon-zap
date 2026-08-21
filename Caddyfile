@@ -1,3 +1,7 @@
 zap.dilontech.com.br {
 	reverse_proxy web:3000
 }
+
+esquadrias.dilontech.com.br {
+	reverse_proxy esquadrias:3001
+}

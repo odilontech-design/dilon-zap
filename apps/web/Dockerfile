@@ -12,8 +12,11 @@ RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
+COPY apps/esquadrias/package.json apps/esquadrias/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/storage/package.json packages/storage/package.json
+COPY packages/erp-db/package.json packages/erp-db/package.json
+COPY packages/esquadrias-core/package.json packages/esquadrias-core/package.json
 RUN npm install
 
 COPY . .

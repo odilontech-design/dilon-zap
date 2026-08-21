@@ -1,0 +1,664 @@
+// Schema do SaaS de vidros e esquadrias de alumínio.
+//
+// Banco PRÓPRIO, separado do Dilon Zap (que atende WhatsApp). São dois
+// produtos vendidos a públicos diferentes: misturar os schemas obrigaria a
+// serralheria a carregar tabela de conversa de WhatsApp e o cliente do Zap a
+// carregar tabela de perfil de alumínio. O monorepo é compartilhado; o dado,
+// não.
+//
+// O client é gerado com nome próprio (`@prisma-erp/client`) porque o
+// `@dilon-zap/db` já ocupa o `.prisma/client` padrão — dois schemas no mesmo
+// repositório não podem gerar no mesmo lugar.
+generator client {
+  provider = "prisma-client-js"
+  output   = "../../../node_modules/@prisma-erp/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("ESQUADRIAS_DATABASE_URL")
+}
+
+enum PlanoAssinatura {
+  BASICO
+  ESSENCIAL
+  AVANCADO
+}
+
+enum PapelUsuario {
+  OWNER      // dono da serralheria: vê custo, margem e financeiro inteiro
+  GERENTE
+  VENDEDOR   // monta orçamento; enxerga o custo (precisa, pra negociar), não mexe no catálogo
+  PRODUCAO   // corte, materiais e ordem de serviço; não vê preço de venda
+  FINANCEIRO
+  SUPERADMIN // Dilon Tech — cross-tenant, não pertence a uma empresa cliente
+}
+
+/// Uma Empresa = uma serralheria/vidraçaria assinante. É o tenant.
+model Empresa {
+  id        String   @id @default(cuid())
+  nome      String
+  slug      String   @unique
+  cnpj      String?
+  telefone  String?
+  email     String?
+  endereco  String?
+  cidade    String?
+  uf        String?
+  cep       String?
+
+  /// White-label: a proposta que o cliente final recebe sai com a marca da
+  /// serralheria, não com a nossa. É o que faz a assinatura se pagar na
+  /// cabeça de quem vende.
+  logoUrl      String?
+  corPrimaria  String  @default("#1B8F5E")
+
+  timezone       String          @default("America/Sao_Paulo")
+  plano          PlanoAssinatura @default(BASICO)
+  trialTerminaEm DateTime?
+  ativa          Boolean         @default(true)
+
+  // ── Parâmetros de cálculo ────────────────────────────────────────────────
+  // Ficam no tenant, e não constantes no código, porque é exatamente aqui que
+  // duas serralheiras diferem: a mesma janela custa diferente pra quem compra
+  // alumínio em outra condição e trabalha com outra margem.
+  margemLucroPercent         Float @default(100)
+  maoDeObraPorM2Centavos     Int   @default(0)
+  maoDeObraPercentSobreCusto Float @default(0)
+  /// Retalho que sobra da barra e não vira peça. Ignorar isso é a diferença
+  /// silenciosa entre a margem do sistema e a do extrato bancário.
+  perdaAluminioPercent       Float @default(8)
+  impostoPercent             Float @default(0)
+  espessuraSerraMm           Int   @default(3)
+  sobraMinimaAproveitavelMm  Int   @default(300)
+  validadeOrcamentoDias      Int   @default(15)
+  condicoesPadrao            String?
+  /// Numeração dos orçamentos por empresa: cada serralheria começa do 1.
+  proximoNumeroOrcamento     Int   @default(1)
+
+  criadoEm   DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  usuarios     Usuario[]
+  clientes     Cliente[]
+  fornecedores Fornecedor[]
+  cores        Cor[]
+  linhas       LinhaPerfil[]
+  perfis       Perfil[]
+  vidros       Vidro[]
+  ferragens    Ferragem[]
+  tipologias   Tipologia[]
+  orcamentos   Orcamento[]
+  obras        Obra[]
+  lancamentos  Lancamento[]
+  compromissos Compromisso[]
+  metas        MetaVenda[]
+  auditoria    RegistroAuditoria[]
+}
+
+model Usuario {
+  id           String       @id @default(cuid())
+  empresaId    String
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome         String
+  email        String       @unique
+  senhaHash    String
+  papel        PapelUsuario @default(VENDEDOR)
+  telefone     String?
+  /// Percentual de comissão sobre a venda aprovada. Alimenta o ranking.
+  comissaoPercent Float     @default(0)
+  criadoEm     DateTime     @default(now())
+  /// Desligamento é desativação, nunca exclusão: o usuário está preso ao
+  /// histórico (orçamentos que vendeu, lançamentos que baixou). Apagar não
+  /// apaga o histórico, apaga a autoria dele.
+  desativadoEm DateTime?
+
+  orcamentos   Orcamento[]        @relation("VendedorOrcamento")
+  obras        Obra[]             @relation("ResponsavelObra")
+  compromissos Compromisso[]      @relation("ResponsavelCompromisso")
+  metas        MetaVenda[]
+  lancamentos  Lancamento[]       @relation("LancamentoBaixadoPor")
+
+  @@index([empresaId])
+}
+
+enum TipoPessoa {
+  FISICA
+  JURIDICA
+}
+
+model Cliente {
+  id        String     @id @default(cuid())
+  empresaId String
+  empresa   Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome      String
+  tipo      TipoPessoa @default(FISICA)
+  /// CPF ou CNPJ, só dígitos. Único por empresa — cliente duplicado é o que
+  /// faz o histórico de compra de alguém aparecer partido em dois cadastros.
+  documento String?
+  email     String?
+  telefone  String?
+  endereco  String?
+  numero    String?
+  bairro    String?
+  cidade    String?
+  uf        String?
+  cep       String?
+  observacoes String?
+  criadoEm  DateTime   @default(now())
+
+  orcamentos   Orcamento[]
+  obras        Obra[]
+  compromissos Compromisso[]
+  lancamentos  Lancamento[]
+
+  @@unique([empresaId, documento])
+  @@index([empresaId, nome])
+}
+
+model Fornecedor {
+  id        String   @id @default(cuid())
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome      String
+  cnpj      String?
+  telefone  String?
+  email     String?
+  criadoEm  DateTime @default(now())
+
+  perfis      Perfil[]
+  vidros      Vidro[]
+  ferragens   Ferragem[]
+  lancamentos Lancamento[]
+
+  @@index([empresaId])
+}
+
+/// Cor/acabamento do alumínio. O fator multiplica o preço do kg: preto e
+/// amadeirado saem mais caro que o natural, e é a empresa quem sabe quanto.
+model Cor {
+  id             String  @id @default(cuid())
+  empresaId      String
+  empresa        Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome           String
+  hex            String  @default("#CCCCCC")
+  fatorAluminio  Float   @default(1)
+  fatorFerragem  Float   @default(1)
+  ativa          Boolean @default(true)
+  ordem          Int     @default(0)
+
+  itens OrcamentoItem[] @relation("CorAluminio")
+  itensFerragem OrcamentoItem[] @relation("CorFerragem")
+
+  @@unique([empresaId, nome])
+}
+
+/// Linha de perfil (Suprema, Gold, 25, Alumifort...). Agrupa os perfis que
+/// encaixam entre si — tipologia de uma linha não roda com perfil de outra.
+model LinhaPerfil {
+  id        String   @id @default(cuid())
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome      String
+  descricao String?
+  ativa     Boolean  @default(true)
+
+  perfis     Perfil[]
+  tipologias Tipologia[]
+
+  @@unique([empresaId, nome])
+}
+
+model Perfil {
+  id        String       @id @default(cuid())
+  empresaId String
+  empresa   Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  linhaId   String?
+  linha     LinhaPerfil? @relation(fields: [linhaId], references: [id], onDelete: SetNull)
+  fornecedorId String?
+  fornecedor   Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+
+  codigo    String
+  nome      String
+  /// kg por metro linear — é o que a indústria informa e o que define o custo.
+  pesoPorMetro       Float
+  precoPorKgCentavos Int
+  comprimentoBarraMm Int     @default(6000)
+  estoqueBarras      Float   @default(0)
+  ativo              Boolean @default(true)
+  criadoEm           DateTime @default(now())
+
+  pecasTipologia TipologiaPeca[]
+
+  @@unique([empresaId, codigo])
+  @@index([empresaId, nome])
+}
+
+model Vidro {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedorId String?
+  fornecedor   Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+
+  nome            String
+  tipo            String  @default("INCOLOR")
+  espessuraMm     Float   @default(4)
+  precoM2Centavos Int
+  /// Metragem mínima cobrada pela vidraçaria: chapa de 0,2 m² sai como 1 m².
+  m2Minimo        Float   @default(0)
+  temperado       Boolean @default(false)
+  ativo           Boolean @default(true)
+
+  vidrosTipologia TipologiaVidro[]
+
+  @@unique([empresaId, nome])
+}
+
+model Ferragem {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  fornecedorId String?
+  fornecedor   Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+
+  codigo               String?
+  nome                 String
+  unidade              String  @default("pç")
+  precoUnitarioCentavos Int
+  estoque              Float   @default(0)
+  ativo                Boolean @default(true)
+
+  ferragensTipologia TipologiaFerragem[]
+
+  @@unique([empresaId, nome])
+}
+
+enum CategoriaTipologia {
+  JANELA
+  PORTA
+  BOX
+  GUARDA_CORPO
+  FACHADA
+  VITRINE
+  OUTRO
+}
+
+/// Tipologia = o molde paramétrico da esquadria. Dado o vão (L x H), ela
+/// gera a lista de cortes, vidros e ferragens através de fórmulas.
+///
+/// É o coração da customização: o concorrente entrega um catálogo fechado de
+/// tipologias prontas; aqui a serralheria cadastra as dela, com a linha de
+/// perfil que ela compra e a folga que a montagem dela usa.
+model Tipologia {
+  id        String             @id @default(cuid())
+  empresaId String
+  empresa   Empresa            @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  linhaId   String?
+  linha     LinhaPerfil?       @relation(fields: [linhaId], references: [id], onDelete: SetNull)
+
+  nome      String
+  categoria CategoriaTipologia @default(JANELA)
+  descricao String?
+  /// Desenho esquemático em SVG, mostrado na escolha da tipologia e na
+  /// proposta. Guardado inline porque é pequeno e sempre acompanha o registro.
+  desenhoSvg String?
+
+  larguraMinMm Int @default(300)
+  larguraMaxMm Int @default(6000)
+  alturaMinMm  Int @default(300)
+  alturaMaxMm  Int @default(6000)
+
+  /// Fórmula opcional de mão de obra (centavos). Vazia = usa a regra da empresa.
+  formulaMaoDeObra String?
+  ativa            Boolean  @default(true)
+  criadoEm         DateTime @default(now())
+
+  parametros ParametroTipologia[]
+  pecas      TipologiaPeca[]
+  vidros     TipologiaVidro[]
+  ferragens  TipologiaFerragem[]
+  itens      OrcamentoItem[]
+
+  @@unique([empresaId, nome])
+  @@index([empresaId, categoria])
+}
+
+/// Variável nomeada usada nas fórmulas da tipologia (folga, transpasse,
+/// número de folhas). Fica separada pra tela conseguir listar o que dá pra
+/// ajustar item a item sem o vendedor precisar ler as fórmulas.
+model ParametroTipologia {
+  id          String    @id @default(cuid())
+  tipologiaId String
+  tipologia   Tipologia @relation(fields: [tipologiaId], references: [id], onDelete: Cascade)
+  chave       String
+  rotulo      String
+  valorPadrao Float
+  ordem       Int       @default(0)
+
+  @@unique([tipologiaId, chave])
+}
+
+enum TipoCorte {
+  RETO
+  ANGULO_45
+  ANGULO_45_DUPLO
+}
+
+model TipologiaPeca {
+  id          String    @id @default(cuid())
+  tipologiaId String
+  tipologia   Tipologia @relation(fields: [tipologiaId], references: [id], onDelete: Cascade)
+  perfilId    String
+  /// Restrict e não Cascade: apagar um perfil ainda usado por tipologia
+  /// deixaria a tipologia gerando corte de um perfil que não existe mais.
+  perfil      Perfil    @relation(fields: [perfilId], references: [id], onDelete: Restrict)
+
+  descricao          String
+  corte              TipoCorte @default(RETO)
+  formulaQuantidade  String    @default("1")
+  formulaComprimento String
+  ordem              Int       @default(0)
+
+  @@index([tipologiaId])
+}
+
+model TipologiaVidro {
+  id          String    @id @default(cuid())
+  tipologiaId String
+  tipologia   Tipologia @relation(fields: [tipologiaId], references: [id], onDelete: Cascade)
+  vidroId     String
+  vidro       Vidro     @relation(fields: [vidroId], references: [id], onDelete: Restrict)
+
+  descricao         String
+  formulaQuantidade String @default("1")
+  formulaLargura    String
+  formulaAltura     String
+  ordem             Int    @default(0)
+
+  @@index([tipologiaId])
+}
+
+model TipologiaFerragem {
+  id          String    @id @default(cuid())
+  tipologiaId String
+  tipologia   Tipologia @relation(fields: [tipologiaId], references: [id], onDelete: Cascade)
+  ferragemId  String
+  ferragem    Ferragem  @relation(fields: [ferragemId], references: [id], onDelete: Restrict)
+
+  descricao         String
+  formulaQuantidade String @default("1")
+  ordem             Int    @default(0)
+
+  @@index([tipologiaId])
+}
+
+enum StatusOrcamento {
+  RASCUNHO
+  ENVIADO
+  APROVADO
+  REPROVADO
+  EXPIRADO
+}
+
+model Orcamento {
+  id         String          @id @default(cuid())
+  empresaId  String
+  empresa    Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  numero     Int
+  clienteId  String?
+  cliente    Cliente?        @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  vendedorId String?
+  vendedor   Usuario?        @relation("VendedorOrcamento", fields: [vendedorId], references: [id], onDelete: SetNull)
+
+  titulo      String          @default("Orçamento")
+  status      StatusOrcamento @default(RASCUNHO)
+  validoAte   DateTime?
+  condicoes   String?
+  observacoes String?
+
+  descontoPercent  Float @default(0)
+  descontoCentavos Int   @default(0)
+  freteCentavos    Int   @default(0)
+  /// Desconto em reais que REALMENTE saiu da conta (percentual + valor fixo).
+  /// Os dois campos acima são a entrada do vendedor; este é o resultado. Sem
+  /// ele, a tela e a proposta mostrariam "desconto R$ 0,00" ao lado de um
+  /// total já descontado em 10% — e o cliente perguntaria o porquê.
+  descontoAplicadoCentavos Int @default(0)
+
+  /// Totais materializados. O cálculo é sempre refeito a partir dos itens ao
+  /// salvar; guardar o resultado é o que permite listar 500 orçamentos sem
+  /// reexpandir 500 tipologias a cada abertura da tela.
+  subtotalCentavos Int @default(0)
+  totalCentavos    Int @default(0)
+  custoCentavos    Int @default(0)
+  lucroCentavos    Int @default(0)
+
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  aprovadoEm   DateTime?
+
+  itens OrcamentoItem[]
+  obra  Obra?
+
+  @@unique([empresaId, numero])
+  @@index([empresaId, status])
+}
+
+model OrcamentoItem {
+  id          String     @id @default(cuid())
+  orcamentoId String
+  orcamento   Orcamento  @relation(fields: [orcamentoId], references: [id], onDelete: Cascade)
+  tipologiaId String?
+  tipologia   Tipologia? @relation(fields: [tipologiaId], references: [id], onDelete: SetNull)
+
+  descricao  String
+  larguraMm  Int
+  alturaMm   Int
+  quantidade Int    @default(1)
+  ambiente   String?
+  observacoes String?
+
+  corAluminioId String?
+  corAluminio   Cor?    @relation("CorAluminio", fields: [corAluminioId], references: [id], onDelete: SetNull)
+  corFerragemId String?
+  corFerragem   Cor?    @relation("CorFerragem", fields: [corFerragemId], references: [id], onDelete: SetNull)
+
+  /// Valores ajustados pelo vendedor no item (a tela deixa mexer).
+  margemLucroPercent Float?
+  acrescimoCentavos  Int   @default(0)
+  descontoCentavos   Int   @default(0)
+  adicionaisCentavos Int   @default(0)
+
+  /// Parâmetros sobrescritos neste item (folga dessa obra), como {"folga": 15}.
+  parametros Json?
+
+  custoCentavos    Int @default(0)
+  subtotalCentavos Int @default(0)
+  totalCentavos    Int @default(0)
+
+  /// Fotografia do cálculo no momento em que o item foi salvo: peças, vidros,
+  /// ferragens e preços já expandidos.
+  ///
+  /// Redundante de propósito. O preço do alumínio muda toda semana; sem o
+  /// snapshot, reabrir um orçamento de 40 dias atrás recalcularia tudo pela
+  /// tabela de hoje e mostraria um valor diferente do que o cliente recebeu
+  /// assinado. Orçamento aprovado é documento, não consulta.
+  memoriaCalculo Json?
+
+  ordem Int @default(0)
+
+  @@index([orcamentoId])
+}
+
+enum StatusObra {
+  AGUARDANDO
+  MEDICAO
+  PRODUCAO
+  PRONTO
+  INSTALACAO
+  CONCLUIDA
+  CANCELADA
+}
+
+/// Obra = o orçamento aprovado virando serviço. Separada do orçamento porque
+/// a partir da aprovação a vida do registro é outra: prazo, etapa de
+/// produção, instalação e recebimento.
+model Obra {
+  id          String     @id @default(cuid())
+  empresaId   String
+  empresa     Empresa    @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  orcamentoId String?    @unique
+  orcamento   Orcamento? @relation(fields: [orcamentoId], references: [id], onDelete: SetNull)
+  clienteId   String?
+  cliente     Cliente?   @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  responsavelId String?
+  responsavel   Usuario? @relation("ResponsavelObra", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  titulo      String
+  status      StatusObra @default(AGUARDANDO)
+  endereco    String?
+  cidade      String?
+  previsaoInicio DateTime?
+  previsaoFim    DateTime?
+  concluidaEm    DateTime?
+  observacoes    String?
+
+  valorCentavos Int @default(0)
+
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  compromissos Compromisso[]
+  lancamentos  Lancamento[]
+  checklist    ItemChecklist[]
+
+  @@index([empresaId, status])
+}
+
+/// Checklist de produção da obra (plano AVANÇADO no concorrente; aqui é
+/// tabela simples porque o valor está em quem marca, não em quem vende).
+model ItemChecklist {
+  id       String    @id @default(cuid())
+  obraId   String
+  obra     Obra      @relation(fields: [obraId], references: [id], onDelete: Cascade)
+  descricao String
+  concluido Boolean  @default(false)
+  concluidoEm DateTime?
+  ordem     Int      @default(0)
+
+  @@index([obraId])
+}
+
+enum TipoLancamento {
+  RECEITA
+  DESPESA
+}
+
+enum StatusLancamento {
+  PENDENTE
+  PAGO
+  CANCELADO
+}
+
+/// Contas a receber e a pagar na MESMA tabela: o fluxo de caixa é a soma dos
+/// dois com sinal trocado, e separar em duas tabelas obrigaria a unir tudo de
+/// novo em toda consulta que importa.
+model Lancamento {
+  id        String           @id @default(cuid())
+  empresaId String
+  empresa   Empresa          @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipo      TipoLancamento
+  status    StatusLancamento @default(PENDENTE)
+
+  descricao      String
+  categoria      String?
+  valorCentavos  Int
+  vencimento     DateTime
+  pagoEm         DateTime?
+  formaPagamento String?
+
+  clienteId    String?
+  cliente      Cliente?    @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  fornecedorId String?
+  fornecedor   Fornecedor? @relation(fields: [fornecedorId], references: [id], onDelete: SetNull)
+  obraId       String?
+  obra         Obra?       @relation(fields: [obraId], references: [id], onDelete: SetNull)
+  baixadoPorId String?
+  baixadoPor   Usuario?    @relation("LancamentoBaixadoPor", fields: [baixadoPorId], references: [id], onDelete: SetNull)
+
+  /// Identifica a parcela dentro do parcelamento ("2/6"), pro cliente
+  /// reconhecer o boleto que está pagando.
+  parcela      Int?
+  totalParcelas Int?
+
+  criadoEm DateTime @default(now())
+
+  @@index([empresaId, status, vencimento])
+  @@index([empresaId, tipo])
+}
+
+enum TipoCompromisso {
+  MEDICAO
+  VISITA
+  INSTALACAO
+  ENTREGA
+  MANUTENCAO
+  OUTRO
+}
+
+model Compromisso {
+  id        String          @id @default(cuid())
+  empresaId String
+  empresa   Empresa         @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  tipo      TipoCompromisso @default(VISITA)
+  titulo    String
+  descricao String?
+  inicio    DateTime
+  fim       DateTime?
+  concluido Boolean         @default(false)
+
+  clienteId     String?
+  cliente       Cliente? @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  obraId        String?
+  obra          Obra?    @relation(fields: [obraId], references: [id], onDelete: SetNull)
+  responsavelId String?
+  responsavel   Usuario? @relation("ResponsavelCompromisso", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  criadoEm DateTime @default(now())
+
+  @@index([empresaId, inicio])
+}
+
+/// Meta de venda por vendedor e mês. O ranking sai daqui cruzado com os
+/// orçamentos aprovados no período.
+model MetaVenda {
+  id         String  @id @default(cuid())
+  empresaId  String
+  empresa    Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  usuario    Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  /// Primeiro dia do mês de competência, em UTC.
+  competencia DateTime
+  metaCentavos Int
+
+  @@unique([usuarioId, competencia])
+  @@index([empresaId, competencia])
+}
+
+/// Trilha de auditoria. Preço e orçamento são o ativo da empresa: quando um
+/// valor aparece mudado, a pergunta é sempre "quem mudou e quando".
+model RegistroAuditoria {
+  id        String   @id @default(cuid())
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  atorId    String?
+  atorNome  String
+  acao      String
+  entidade  String?
+  entidadeId String?
+  detalhe   Json?
+  criadoEm  DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+}

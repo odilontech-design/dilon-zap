@@ -80,6 +80,22 @@ services:
       postgres:
         condition: service_healthy
 
+  # Segundo produto, container próprio. Compartilha o Postgres da VPS, mas em
+  # banco separado (ESQUADRIAS_DATABASE_URL no .env) — são clientes
+  # diferentes, e um dump do Zap não pode arrastar dado de serralheria junto.
+  esquadrias:
+    build:
+      context: .
+      dockerfile: apps/esquadrias/Dockerfile
+    restart: unless-stopped
+    logging: *log
+    env_file: .env
+    expose:
+      - "3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
@@ -93,6 +109,7 @@ services:
       - caddy_config:/config
     depends_on:
       - web
+      - esquadrias
 
 volumes:
   caddy_data:
