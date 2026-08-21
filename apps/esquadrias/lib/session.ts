@@ -18,11 +18,24 @@ export type UsuarioAtual = {
   plano: PlanoAssinatura;
 };
 
+/**
+ * Confere que a sessão traz os campos que TODA consulta usa pra isolar tenant.
+ *
+ * Sem isso, uma sessão sem `empresaId` (token emitido por outro produto do
+ * monorepo com o mesmo segredo, token de uma versão antiga do app) chegaria
+ * às queries como `where: { empresaId: undefined }` — e o Prisma trata campo
+ * `undefined` como filtro AUSENTE, devolvendo os dados de todas as empresas.
+ * O buraco não daria erro nenhum: a tela abriria normal, com dado de mais.
+ */
+export function sessaoCompleta(usuario: unknown): usuario is UsuarioAtual {
+  const u = usuario as Partial<UsuarioAtual> | undefined;
+  return Boolean(u && typeof u.empresaId === "string" && u.empresaId && typeof u.papel === "string" && u.papel);
+}
+
 export async function requireUsuario(): Promise<UsuarioAtual> {
   const session = await getServerSession(authOptions);
-  const usuario = session?.user as UsuarioAtual | undefined;
-  if (!usuario) redirect("/login");
-  return usuario;
+  if (!sessaoCompleta(session?.user)) redirect("/login");
+  return session!.user as UsuarioAtual;
 }
 
 export async function requireDono(): Promise<UsuarioAtual> {

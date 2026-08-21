@@ -61,7 +61,7 @@ cp .env.example .env          # preencha NEXTAUTH_SECRET e ESQUADRIAS_DATABASE_U
 docker compose up -d          # sobe o Postgres (cria os dois bancos)
 npm install
 npm run erp:generate          # gera o Prisma Client do ERP
-npm run erp:push              # cria as tabelas
+npm run erp:deploy            # cria as tabelas (aplica as migrações)
 npm run erp:seed              # empresa de demonstração + catálogo + 6 tipologias
 npm run dev:esquadrias        # http://localhost:3001
 ```
@@ -69,6 +69,10 @@ npm run dev:esquadrias        # http://localhost:3001
 Login criado pelo seed: `dono@vidracariamodelo.com.br` / `troque-esta-senha`
 (o seed também cria vendedor, produção e financeiro, com a mesma senha, pra
 conferir o que cada papel enxerga).
+
+> Se você já tinha criado as tabelas com `erp:push` antes das migrações
+> existirem, o `erp:deploy` reclama que o banco não está vazio. Rode
+> `npm run erp:baseline` uma vez para marcar a migração inicial como aplicada.
 
 Testes do motor de cálculo:
 
@@ -122,6 +126,16 @@ A trava de plano está no **servidor** (`requireRecurso` nas páginas,
 quem digitar a URL entra. Mesmo assim o item continua visível e leva à tela de
 upgrade: esconder faria a serralheria nunca descobrir o que ela pagaria a mais
 para ter.
+
+## Produção
+
+O runbook de deploy está em [`docs/deploy-esquadrias.md`](../../docs/deploy-esquadrias.md):
+container próprio no `docker-compose.prod.yml`, banco separado no mesmo
+Postgres, domínio próprio no Caddy e backup já incluído no cron que existe.
+
+Em produção use sempre `erp:deploy` (`prisma migrate deploy`), nunca
+`erp:push` — o push sincroniza o banco com o schema **inclusive removendo** o
+que não estiver mais nele.
 
 ## O que ainda não está pronto
 

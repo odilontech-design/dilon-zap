@@ -4,7 +4,7 @@ import { z } from "zod";
 import type { PapelUsuario } from "@dilon-zap/erp-db";
 import { authOptions } from "@/lib/auth";
 import { temRecurso, type Recurso } from "@/lib/planos";
-import type { UsuarioAtual } from "@/lib/session";
+import { sessaoCompleta, type UsuarioAtual } from "@/lib/session";
 
 /**
  * Helpers das rotas de API.
@@ -22,9 +22,11 @@ export class RespostaDeErro extends Error {
 
 export async function usuarioDaApi(): Promise<UsuarioAtual> {
   const session = await getServerSession(authOptions);
-  const usuario = session?.user as UsuarioAtual | undefined;
-  if (!usuario) throw new RespostaDeErro(401, "não autenticado");
-  return usuario;
+  // Mesma checagem das páginas: sessão sem empresaId chegaria às queries como
+  // `where: { empresaId: undefined }`, que o Prisma trata como filtro ausente
+  // — devolvendo dados de todas as empresas sem erro nenhum. Ver lib/session.
+  if (!sessaoCompleta(session?.user)) throw new RespostaDeErro(401, "não autenticado");
+  return session!.user as UsuarioAtual;
 }
 
 export function exigirPapel(usuario: UsuarioAtual, papeis: PapelUsuario[]): void {

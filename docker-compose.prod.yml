@@ -90,6 +90,14 @@ services:
     restart: unless-stopped
     logging: *log
     env_file: .env
+    # O env_file é o MESMO do Zap, e o NEXTAUTH_URL de lá aponta pro domínio
+    # dele. Sem este override o login daqui redirecionaria pro
+    # zap.dilontech.com.br e o callback nunca voltaria — e o segredo
+    # compartilhado faria um cookie de um produto ser aceito pelo outro.
+    # São dois produtos: domínio próprio e segredo próprio.
+    environment:
+      NEXTAUTH_URL: ${ESQUADRIAS_NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${ESQUADRIAS_NEXTAUTH_SECRET}
     expose:
       - "3001"
     depends_on:

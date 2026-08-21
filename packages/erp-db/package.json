@@ -9,7 +9,9 @@
     "db:push": "dotenv -e ../../.env -- prisma db push",
     "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
     "db:studio": "dotenv -e ../../.env -- prisma studio",
-    "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
+    "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
+    "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
+    "db:baseline": "dotenv -e ../../.env -- prisma migrate resolve --applied 20260821000000_init"
   },
   "prisma": {
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"
