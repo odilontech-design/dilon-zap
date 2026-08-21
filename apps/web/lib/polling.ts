@@ -38,3 +38,14 @@ export const ADMIN_INTERVAL = 30_000;
 
 /** Status da conexão WhatsApp — precisa ser vivo só enquanto espera o QR. */
 export const WHATSAPP_STATUS_INTERVAL = 3_000;
+
+/**
+ * Aviso no Inbox de que o número está fora do ar.
+ *
+ * Bem mais lento que o WHATSAPP_STATUS_INTERVAL acima porque o uso é outro:
+ * lá alguém está parado na tela esperando o QR aparecer; aqui é um aviso de
+ * fundo, e a atendente não precisa saber no mesmo segundo. Vinte segundos de
+ * atraso num aviso é irrelevante perto de descobrir só quando o cliente
+ * reclama — que é o que acontecia antes.
+ */
+export const SESSION_HEALTH_INTERVAL = 20_000;

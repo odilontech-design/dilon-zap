@@ -12,6 +12,7 @@ import { MOTIVOS_FECHAMENTO, MOTIVO_OUTRO } from "@/lib/close-reasons";
 import {
   CONVERSATION_LIST_INTERVAL,
   MESSAGES_INTERVAL,
+  SESSION_HEALTH_INTERVAL,
   STATUS_COUNTS_INTERVAL,
   UNREAD_COUNT_INTERVAL,
 } from "@/lib/polling";
@@ -606,6 +607,14 @@ function ConversationThread({
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
 
+  // Estado da conexão do número. Reusa o endpoint que a tela de Conectar
+  // número já usa, com intervalo próprio: aqui é aviso de fundo, não alguém
+  // parado esperando o QR aparecer.
+  const { data: sessao } = useSWR<SessaoWhatsApp>("/api/whatsapp/status", fetcher, {
+    refreshInterval: SESSION_HEALTH_INTERVAL,
+  });
+  const aviso = avisoDaSessao(sessao ?? null);
+
   // Ao trocar de conversa, sempre volta a acompanhar o final (igual WhatsApp).
   useEffect(() => {
     isNearBottomRef.current = true;
@@ -703,6 +712,9 @@ function ConversationThread({
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     if (!draft.trim()) return;
+    // Trava só quando escrever nao adianta (LOGGED_OUT/PENDING_QR). Em queda
+    // passageira o envio segue liberado, porque a fila entrega depois.
+    if (aviso?.bloqueiaEnvio) return;
     const text = draft;
     setDraft("");
 
@@ -982,6 +994,8 @@ function ConversationThread({
             </button>
           </div>
         )}
+        {aviso && <AvisoDeConexao aviso={aviso} />}
+
         <div
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
@@ -1301,8 +1315,16 @@ function ConversationThread({
               ref={draftInputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              placeholder={uploading ? "Enviando anexo..." : recording ? "Gravando áudio..." : "Escreva uma mensagem..."}
-              disabled={uploading || recording}
+              placeholder={
+                aviso?.bloqueiaEnvio
+                  ? "Número desconectado — leia o QR code em Conectar número"
+                  : uploading
+                    ? "Enviando anexo..."
+                    : recording
+                      ? "Gravando áudio..."
+                      : "Escreva uma mensagem..."
+              }
+              disabled={uploading || recording || aviso?.bloqueiaEnvio}
               className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
             />
             <button
@@ -2270,6 +2292,63 @@ function SeparadorDeData({ iso }: { iso: string }) {
       >
         {rotuloDeData(iso)}
       </span>
+    </div>
+  );
+}
+
+type SessaoWhatsApp = { status: "PENDING_QR" | "CONNECTED" | "DISCONNECTED" | "LOGGED_OUT" } | null;
+
+/**
+ * O que a atendente precisa saber quando o número não está conectado.
+ *
+ * Três situações diferentes, e tratá-las como uma só seria errado:
+ *
+ * DISCONNECTED é queda passageira — o worker reconecta sozinho em segundos e
+ * a fila de saída entrega o que ficou parado. Aqui o envio CONTINUA liberado,
+ * porque a mensagem digitada agora sai daqui a pouco; bloquear atrapalharia
+ * sem motivo.
+ *
+ * LOGGED_OUT e PENDING_QR precisam de gente: alguém tem que ler o QR code no
+ * celular. Não se resolve sozinho, e cada mensagem digitada só engrossa uma
+ * fila que vai disparar toda de uma vez quando reconectar — foi assim que 13
+ * mensagens idênticas saíram em rajada em 17/08, logo depois de o WhatsApp ter
+ * removido o dispositivo. Nesses dois casos o envio fica bloqueado.
+ */
+function avisoDaSessao(sessao: SessaoWhatsApp) {
+  if (!sessao || sessao.status === "CONNECTED") return null;
+
+  if (sessao.status === "DISCONNECTED") {
+    return {
+      bloqueiaEnvio: false,
+      titulo: "Conexão instável com o WhatsApp",
+      detalhe:
+        "O sistema está reconectando sozinho. Pode escrever normalmente — a mensagem entra na fila e sai assim que voltar.",
+      tom: "aviso" as const,
+    };
+  }
+
+  return {
+    bloqueiaEnvio: true,
+    titulo: "O número está desconectado do WhatsApp",
+    detalhe:
+      sessao.status === "LOGGED_OUT"
+        ? "Nada entra nem sai até alguém ler o QR code de novo, em Conectar número. As mensagens de agora NÃO chegam ao cliente."
+        : "Falta ler o QR code em Conectar número para o WhatsApp começar a funcionar.",
+    tom: "erro" as const,
+  };
+}
+
+/** Faixa no topo da conversa quando o número não está conectado. */
+function AvisoDeConexao({ aviso }: { aviso: NonNullable<ReturnType<typeof avisoDaSessao>> }) {
+  const cores =
+    aviso.tom === "erro"
+      ? "bg-red-50 border-red-300 text-red-800 dark:bg-red-950/40 dark:border-red-800 dark:text-red-200"
+      : "bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200";
+
+  return (
+    <div className={`border-b px-3 md:px-6 py-2 text-sm ${cores}`} role="status">
+      <p className="font-semibold">{aviso.titulo}</p>
+      <p className="opacity-90">{aviso.detalhe}</p>
     </div>
   );
 }
