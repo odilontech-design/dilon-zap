@@ -12,11 +12,24 @@
 generator client {
   provider = "prisma-client-js"
   output   = "../../../node_modules/@prisma-erp/client"
+  // `native` cobre a máquina de quem desenvolve; o segundo alvo é o runtime
+  // da Vercel (Amazon Linux). O engine é escolhido em tempo de GERAÇÃO, não
+  // de execução: sem o alvo certo compilado junto, o deploy sobe e só quebra
+  // na primeira query, com um erro que não menciona engine nenhum.
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
   provider = "postgresql"
-  url      = env("ESQUADRIAS_DATABASE_URL")
+  // Conexão POOLED (PgBouncer do Neon). Em serverless cada requisição pode
+  // virar uma instância nova; sem o pooler, um pico de acessos esgota as
+  // conexões do Postgres e o app passa a responder erro de conexão.
+  url       = env("ESQUADRIAS_DATABASE_URL")
+  // Conexão DIRETA, usada só por migração e introspecção. O PgBouncer em modo
+  // transação não suporta os comandos que uma migração precisa (advisory
+  // lock, DDL em sessão), então `migrate deploy` pela URL pooled trava ou
+  // falha pela metade — que é o pior momento possível para falhar.
+  directUrl = env("ESQUADRIAS_DIRECT_URL")
 }
 
 enum PlanoAssinatura {

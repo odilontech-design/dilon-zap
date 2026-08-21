@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3001",
+    "prebuild": "prisma generate --schema ../../packages/erp-db/prisma/schema.prisma",
     "build": "next build",
     "start": "next start -p 3001",
     "lint": "next lint",

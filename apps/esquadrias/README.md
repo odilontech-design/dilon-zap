@@ -129,9 +129,15 @@ para ter.
 
 ## Produção
 
-O runbook de deploy está em [`docs/deploy-esquadrias.md`](../../docs/deploy-esquadrias.md):
-container próprio no `docker-compose.prod.yml`, banco separado no mesmo
-Postgres, domínio próprio no Caddy e backup já incluído no cron que existe.
+Dois caminhos, conforme a fase:
+
+- **Demo para cliente** → [`docs/deploy-vercel-neon.md`](../../docs/deploy-vercel-neon.md).
+  Banco no Neon, app na Vercel. Não usa a VPS, que tem 1 vCPU / 2 GB e mantém
+  a sessão de WhatsApp de um cliente pagante — um build do Next ali dentro
+  arrisca derrubar o worker.
+- **Produto com clientes pagantes** → [`docs/deploy-esquadrias.md`](../../docs/deploy-esquadrias.md).
+  Container próprio no `docker-compose.prod.yml`, banco separado no mesmo
+  Postgres, domínio próprio no Caddy e backup já incluído no cron que existe.
 
 Em produção use sempre `erp:deploy` (`prisma migrate deploy`), nunca
 `erp:push` — o push sincroniza o banco com o schema **inclusive removendo** o
