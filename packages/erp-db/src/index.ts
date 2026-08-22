@@ -1,40 +1,54 @@
 import { PrismaClient } from "@prisma-erp/client";
 
-/**
- * Falha cedo e com nome, quando a variável certa não está definida.
- *
- * O snippet que Neon e Supabase entregam pronto usa `DATABASE_URL` — que
- * neste monorepo é a variável do Dilon Zap. Quem copia e cola acaba com o
- * banco de esquadrias sem configuração e, pior, com o Zap apontando pro banco
- * errado. Sem esta checagem o sintoma seria um erro do Prisma sobre string de
- * conexão vazia, que não diz qual variável faltou nem que existem duas.
- */
-if (!process.env.ESQUADRIAS_DATABASE_URL) {
-  throw new Error(
-    "ESQUADRIAS_DATABASE_URL não está definida. Este é o banco do SaaS de esquadrias, " +
-      "separado do DATABASE_URL do Dilon Zap — se você copiou a string do Neon/Supabase, " +
-      "renomeie a variável. Ver docs/deploy-vercel-neon.md.",
-  );
-}
-// Nota: com um `.env` no disco esta checagem quase nunca dispara — o runtime
-// do Prisma carrega o `.env` ao ser importado, antes daqui. Ela existe para o
-// deploy sem arquivo `.env` (Vercel, container), que é onde o esquecimento
-// realmente acontece.
+const MENSAGEM_SEM_URL =
+  "ESQUADRIAS_DATABASE_URL não está definida. Este é o banco do SaaS de esquadrias, " +
+  "separado do DATABASE_URL do Dilon Zap — se você copiou a string do Neon/Supabase, " +
+  "renomeie a variável. Ver docs/deploy-vercel-neon.md.";
 
-/**
- * Client do banco de esquadrias. Singleton preso no globalThis porque o
- * hot-reload do Next recarrega o módulo a cada alteração de arquivo — sem
- * isso, o pool de conexões cresce até o Postgres recusar novas em plena
- * sessão de desenvolvimento.
- */
 const globalParaPrisma = globalThis as unknown as { prismaErp?: PrismaClient };
 
-export const prisma =
-  globalParaPrisma.prismaErp ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"],
-  });
+let instancia: PrismaClient | undefined;
 
-if (process.env.NODE_ENV !== "production") globalParaPrisma.prismaErp = prisma;
+/**
+ * Cria (uma vez) o client do banco de esquadrias.
+ *
+ * A conferência da variável fica AQUI, e não no topo do módulo, por causa do
+ * `next build`: ele importa toda rota para coletar os dados de página, então
+ * um throw na importação derruba a compilação inteira quando o ambiente de
+ * build não tem a connection string — mesmo que o ambiente de execução tenha.
+ * Validando no primeiro uso, o build passa e quem esqueceu a variável recebe
+ * a mensagem na primeira consulta, que é quando o problema realmente existe.
+ *
+ * O singleton fica preso no globalThis fora de produção porque o hot-reload
+ * do Next recarrega o módulo a cada alteração de arquivo — sem isso, o pool
+ * de conexões cresce até o Postgres recusar novas em plena sessão de
+ * desenvolvimento.
+ */
+function obterClient(): PrismaClient {
+  if (instancia) return instancia;
+
+  if (!process.env.ESQUADRIAS_DATABASE_URL) throw new Error(MENSAGEM_SEM_URL);
+
+  instancia =
+    globalParaPrisma.prismaErp ??
+    new PrismaClient({ log: process.env.NODE_ENV === "development" ? ["warn", "error"] : ["error"] });
+
+  if (process.env.NODE_ENV !== "production") globalParaPrisma.prismaErp = instancia;
+
+  return instancia;
+}
+
+/**
+ * Fachada preguiçosa: `prisma.cliente.findMany()` continua igual em quem usa,
+ * mas o client só nasce no primeiro acesso a uma propriedade.
+ */
+export const prisma: PrismaClient = new Proxy({} as PrismaClient, {
+  get(_alvo, propriedade) {
+    const cliente = obterClient();
+    const valor = Reflect.get(cliente, propriedade, cliente);
+    // Métodos como `$transaction` perdem o `this` ao serem devolvidos soltos.
+    return typeof valor === "function" ? valor.bind(cliente) : valor;
+  },
+});
 
 export * from "@prisma-erp/client";

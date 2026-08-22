@@ -2,6 +2,14 @@ import Link from "next/link";
 import { NOME_PLANO, planoMinimo, type Recurso } from "@/lib/planos";
 import { requireUsuario } from "@/lib/session";
 
+// Página atrás de autenticação: o conteúdo depende da sessão de quem pediu, e
+// por isso nunca pode ser gerada estaticamente no build. Sem esta linha o Next
+// tenta pré-renderizar, e a compilação passa a depender das variáveis de
+// autenticação estarem certas no ambiente de BUILD — um NEXTAUTH_URL vazio
+// derruba o deploy inteiro com "Invalid URL", em vez de simplesmente falhar o
+// login em runtime.
+export const dynamic = "force-dynamic";
+
 const DESCRICAO: Partial<Record<Recurso, string>> = {
   FINANCEIRO: "Fluxo de caixa, contas a receber e a pagar ligadas às obras.",
   AGENDA: "Medições, instalações e entregas em uma agenda por responsável.",
