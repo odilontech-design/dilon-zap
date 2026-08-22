@@ -68,8 +68,35 @@ function diagnosticar(err: unknown): { conecta: boolean; tabelasCriadas: boolean
   };
 }
 
+/**
+ * Confere o FORMATO da connection string sem devolver o conteúdo.
+ *
+ * Uma variável pode estar "ok" (preenchida) e ainda assim inutilizável: o
+ * painel do Neon entrega a linha pronta como `DATABASE_URL="postgresql://..."`,
+ * e quem copia o trecho inteiro acaba salvando as aspas junto. O valor não
+ * fica vazio, então nenhuma checagem de presença acusa — e o sintoma é este,
+ * "não conecta", que manda a pessoa procurar no lugar errado.
+ */
+function formatoDaUrl(bruto: string | undefined): { formato: string; pooled?: boolean } {
+  if (!bruto) return { formato: "ausente" };
+
+  if (bruto !== bruto.trim()) return { formato: "tem espaço em branco no começo ou no fim" };
+  if (/^["']|["']$/.test(bruto)) return { formato: "está entre aspas — cole só o endereço, sem as aspas" };
+  if (!/^postgres(ql)?:\/\//.test(bruto)) return { formato: "não começa com postgresql://" };
+
+  try {
+    const url = new URL(bruto);
+    if (!url.hostname) return { formato: "sem servidor no endereço" };
+    if (!url.password) return { formato: "sem senha no endereço" };
+    return { formato: "ok", pooled: url.hostname.includes("-pooler") };
+  } catch {
+    return { formato: "não é um endereço válido" };
+  }
+}
+
 export async function GET() {
   const variaveis = Object.fromEntries([...OBRIGATORIAS, ...OPCIONAIS].map((nome) => [nome, estado(nome)]));
+  const urlBanco = formatoDaUrl(process.env.ESQUADRIAS_DATABASE_URL);
   const faltando = OBRIGATORIAS.filter((nome) => estado(nome) !== "ok");
 
   if (faltando.length > 0) {
@@ -79,6 +106,7 @@ export async function GET() {
       {
         saudavel: false,
         variaveis,
+        urlDoBanco: urlBanco,
         banco: { testado: false },
         proximoPasso: `Preencha na Vercel: ${faltando.join(", ")} (Settings → Environment Variables) e faça Redeploy.`,
       },
@@ -93,13 +121,23 @@ export async function GET() {
     return NextResponse.json({
       saudavel: true,
       variaveis,
+      urlDoBanco: urlBanco,
       banco: { testado: true, conecta: true, tabelasCriadas: true, tipologias },
       proximoPasso: tipologias > 0 ? "Tudo certo — acesse /login." : "Banco criado, mas vazio. Rode a parte de dados do banco-esquadrias.sql.",
     });
   } catch (err) {
     const { conecta, tabelasCriadas, codigo, proximoPasso } = diagnosticar(err);
+
+    // Formato torto explica a falha de conexão melhor que qualquer conselho
+    // genérico — e é a única pista que temos, já que o client do Prisma não
+    // devolve o motivo real da falha de inicialização.
+    const conselho =
+      urlBanco.formato !== "ok"
+        ? `A ESQUADRIAS_DATABASE_URL ${urlBanco.formato}. Corrija na Vercel e faça Redeploy.`
+        : proximoPasso;
+
     return NextResponse.json(
-      { saudavel: false, variaveis, banco: { testado: true, conecta, tabelasCriadas, codigo }, proximoPasso },
+      { saudavel: false, variaveis, urlDoBanco: urlBanco, banco: { testado: true, conecta, tabelasCriadas, codigo }, proximoPasso: conselho },
       { status: 503 },
     );
   }

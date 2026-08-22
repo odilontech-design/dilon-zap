@@ -19,10 +19,21 @@ export const authOptions: NextAuthOptions = {
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
 
-        const usuario = await prisma.usuario.findUnique({
-          where: { email: credentials.email.toLowerCase().trim() },
-          include: { empresa: { select: { ativa: true, nome: true, plano: true } } },
-        });
+        let usuario;
+        try {
+          usuario = await prisma.usuario.findUnique({
+            where: { email: credentials.email.toLowerCase().trim() },
+            include: { empresa: { select: { ativa: true, nome: true, plano: true } } },
+          });
+        } catch (err) {
+          // Banco fora do ar, tabelas ainda não criadas, URL errada: sem este
+          // catch, tudo isso vira `null` e a tela diz "email ou senha
+          // incorretos" — mandando a pessoa trocar a senha quando o problema
+          // é a instalação. Foi exatamente o que aconteceu no primeiro deploy.
+          console.error("[login] falha ao consultar o banco", err);
+          throw new Error("BANCO_INDISPONIVEL");
+        }
+
         if (!usuario) return null;
 
         // Desativado não entra, e empresa suspensa também não. As duas

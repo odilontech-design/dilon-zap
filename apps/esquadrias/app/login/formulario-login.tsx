@@ -19,9 +19,18 @@ export function FormularioLogin() {
     const resultado = await signIn("credentials", { email, password: senha, redirect: false });
 
     if (resultado?.error) {
-      // Mensagem única de propósito: dizer "usuário não existe" entrega quais
-      // emails têm conta no sistema pra quem estiver testando de fora.
-      setErro("Email ou senha incorretos.");
+      // Duas mensagens, e só duas. Credencial errada e usuário inexistente
+      // compartilham o mesmo texto de propósito: distinguir os dois entrega
+      // quais emails têm conta pra quem estiver testando de fora.
+      //
+      // Já falha de BANCO é outra coisa — não é problema de quem está
+      // digitando, e chamá-la de "senha incorreta" manda a pessoa tentar
+      // trocar a senha quando o que falta é terminar a instalação.
+      setErro(
+        resultado.error.includes("BANCO_INDISPONIVEL")
+          ? "Não foi possível falar com o banco de dados. Se a instalação é nova, confira /api/saude."
+          : "Email ou senha incorretos.",
+      );
       setEnviando(false);
       return;
     }
