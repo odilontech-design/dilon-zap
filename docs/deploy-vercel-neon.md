@@ -73,18 +73,34 @@ transforma um erro de schema em deploy quebrado.
 ```bash
 git checkout claude/saas-vidros-esquadrias-0twgtp
 npm install
-
-# aponte para o Neon (use a DIRETA nos dois, só nesta etapa)
-export ESQUADRIAS_DATABASE_URL="<url direta do Neon>"
-export ESQUADRIAS_DIRECT_URL="<url direta do Neon>"
-
-npm run erp:generate
-npm run erp:deploy     # cria as tabelas
-npm run erp:seed       # Vidraçaria Modelo + catálogo + 6 tipologias
+./scripts/preparar-banco.sh
 ```
 
-Esperado: `All migrations have been successfully applied.` e depois
-`✔ Empresa "Vidraçaria Modelo" pronta — 13 perfis, 8 vidros, 12 ferragens, 6 tipologias.`
+O script pede as duas URLs, **recusa se estiverem trocadas** (a pooled tem
+`-pooler` no host, a direta não — é o erro que só aparece depois, como
+migração travada ou "too many connections"), aplica as migrações, carrega a
+empresa de demonstração, oferece trocar a senha padrão e imprime no fim o
+bloco pronto para colar na Vercel, já com o `NEXTAUTH_SECRET` gerado.
+
+<details>
+<summary>Se preferir rodar na mão</summary>
+
+```bash
+export ESQUADRIAS_DATABASE_URL="<url DIRETA do Neon>"
+export ESQUADRIAS_DIRECT_URL="<a mesma url direta>"
+
+npm run erp:generate
+npm run erp:deploy    # cria as tabelas
+npm run erp:seed      # Vidraçaria Modelo + catálogo + 6 tipologias
+npm run erp:senha -- dono@vidracariamodelo.com.br "sua nova senha"
+```
+
+Use a **direta** nas duas variáveis só nesta etapa — é migração e carga
+inicial, que não têm por que passar pelo pooler.
+</details>
+
+Esperado ao fim: `6 tipologias`, `13 perfis`, `12 ferragens` e a confirmação
+da troca de senha.
 
 ## 3. Projeto na Vercel
 
@@ -139,12 +155,13 @@ ao proxy — ela difere do que o Caddy da VPS exige.
 curl -sI https://esquadrias.dilontech.com.br/login | head -1     # HTTP/2 200
 ```
 
-Entre com `dono@vidracariamodelo.com.br` / `troque-esta-senha` e confira o
-roteiro do [README do app](../apps/esquadrias/README.md): a janela de
-1200 × 1000 mm em branco tem que dar **R$ 1.030,53**.
+Entre com `dono@vidracariamodelo.com.br` e a senha que você definiu no passo 2,
+e confira o roteiro do [README do app](../apps/esquadrias/README.md): a janela
+de 1200 × 1000 mm em branco tem que dar **R$ 1.030,53**.
 
-**Troque essa senha em Equipe antes de mandar o link para o cliente.** O login
-do seed é público — está neste repositório.
+Se você pulou a troca de senha, a do seed é `troque-esta-senha` — que está
+publicada neste repositório. Troque antes de mandar o link para o cliente,
+pela tela de Equipe ou com `npm run erp:senha`.
 
 ## 7. Backup da demo
 

@@ -11,7 +11,8 @@
     "db:studio": "dotenv -e ../../.env -- prisma studio",
     "db:seed": "dotenv -e ../../.env -- tsx prisma/seed.ts",
     "db:deploy": "dotenv -e ../../.env -- prisma migrate deploy",
-    "db:baseline": "dotenv -e ../../.env -- prisma migrate resolve --applied 20260821000000_init"
+    "db:baseline": "dotenv -e ../../.env -- prisma migrate resolve --applied 20260821000000_init",
+    "db:senha": "dotenv -e ../../.env -- tsx prisma/trocar-senha.ts"
   },
   "prisma": {
     "seed": "dotenv -e ../../.env -- tsx prisma/seed.ts"

@@ -22,7 +22,8 @@
     "erp:seed": "npm run db:seed -w packages/erp-db",
     "test:core": "npm run test -w packages/esquadrias-core",
     "erp:deploy": "npm run db:deploy -w packages/erp-db",
-    "erp:baseline": "npm run db:baseline -w packages/erp-db"
+    "erp:baseline": "npm run db:baseline -w packages/erp-db",
+    "erp:senha": "npm run db:senha -w packages/erp-db --"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,
