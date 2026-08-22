@@ -29,6 +29,10 @@ export function PainelEquipe({ limite, nomePlano, meuId }: { limite: number | nu
   const { data, mutate, isLoading } = useSWR<Membro[]>("/api/usuarios", buscar);
   const [novo, setNovo] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Quem está com a troca de senha aberta. Um por vez, e o formulário aparece
+  // ACIMA da tabela dizendo o nome: dentro da célula ele estourava a largura,
+  // e um campo de senha sem dono visível é convite a trocar a senha errada.
+  const [trocandoSenha, setTrocandoSenha] = useState<Membro | null>(null);
 
   const ativos = (data ?? []).filter((m) => !m.desativadoEm).length;
 
@@ -53,6 +57,19 @@ export function PainelEquipe({ limite, nomePlano, meuId }: { limite: number | nu
       {erro && <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>}
 
       {novo && <FormularioMembro aoSalvar={(dados) => acao(async () => { await enviar("/api/usuarios", "POST", dados); setNovo(false); })} />}
+
+      {trocandoSenha && (
+        <FormularioSenha
+          pessoa={trocandoSenha}
+          aoSalvar={(senha) =>
+            acao(async () => {
+              await enviar(`/api/usuarios/${trocandoSenha.id}`, "PATCH", { novaSenha: senha });
+              setTrocandoSenha(null);
+            })
+          }
+          aoCancelar={() => setTrocandoSenha(null)}
+        />
+      )}
 
       <Card>
         {isLoading ? (
@@ -81,11 +98,14 @@ export function PainelEquipe({ limite, nomePlano, meuId }: { limite: number | nu
                 <td className="px-4 py-3">
                   <Etiqueta tom={m.desativadoEm ? "neutro" : "verde"}>{m.desativadoEm ? "desativado" : "ativo"}</Etiqueta>
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="px-4 py-3 text-right whitespace-nowrap">
+                  <button onClick={() => setTrocandoSenha(m)} className="text-sm text-neutral-600 hover:underline">
+                    trocar senha
+                  </button>
                   {m.id !== meuId && (
                     <button
                       onClick={() => acao(() => enviar(`/api/usuarios/${m.id}`, "PATCH", { ativo: Boolean(m.desativadoEm) }))}
-                      className="text-sm text-accent hover:underline"
+                      className="ml-3 text-sm text-accent hover:underline"
                     >
                       {m.desativadoEm ? "reativar" : "desativar"}
                     </button>
@@ -109,6 +129,48 @@ export function PainelEquipe({ limite, nomePlano, meuId }: { limite: number | nu
         </dl>
       </Card>
     </>
+  );
+}
+
+/**
+ * Troca a senha de uma pessoa da equipe.
+ *
+ * Não pede a senha atual de propósito: quem chega aqui é o responsável pela
+ * conta, e o caso de uso real é "fulano esqueceu a senha, me desbloqueia".
+ * Exigir a senha antiga faria justamente o cenário para o qual isto existe
+ * ser impossível de resolver.
+ */
+function FormularioSenha({
+  pessoa,
+  aoSalvar,
+  aoCancelar,
+}: {
+  pessoa: Membro;
+  aoSalvar: (senha: string) => void;
+  aoCancelar: () => void;
+}) {
+  const [senha, setSenha] = useState("");
+
+  return (
+    <Card className="mb-4 p-4">
+      <h2 className="mb-3 font-medium text-neutral-900">
+        Nova senha para {pessoa.nome} <span className="font-normal text-neutral-500">({pessoa.email})</span>
+      </h2>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <Campo rotulo="Senha" ajuda="Mínimo de 8 caracteres. A pessoa entra com ela no próximo login.">
+          <Entrada type="password" autoFocus value={senha} onChange={(e) => setSenha(e.target.value)} />
+        </Campo>
+        <div className="flex gap-2 pb-[2px]">
+          <Botao onClick={() => aoSalvar(senha)} disabled={senha.length < 8}>
+            Salvar senha
+          </Botao>
+          <Botao variante="secundario" onClick={aoCancelar}>
+            Cancelar
+          </Botao>
+        </div>
+      </div>
+    </Card>
   );
 }
 
