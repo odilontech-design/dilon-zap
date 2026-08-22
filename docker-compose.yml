@@ -10,6 +10,10 @@ services:
       - "5432:5432"
     volumes:
       - dilonzap_postgres_data:/var/lib/postgresql/data
+      # Cria o banco do SaaS de esquadrias junto com o do Zap. Só roda quando
+      # o volume é criado do zero; num volume que já existe, rode à mão:
+      #   docker compose exec postgres psql -U dilonzap -c "CREATE DATABASE esquadrias"
+      - ./scripts/init-esquadrias-db.sql:/docker-entrypoint-initdb.d/10-esquadrias.sql:ro
 
 volumes:
   dilonzap_postgres_data:

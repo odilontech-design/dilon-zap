@@ -1,0 +1,80 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Tema claro/escuro — mesma estratégia do apps/web: em vez de espalhar
+ * `dark:` por centenas de classes, a própria paleta `neutral` do Tailwind é
+ * variável CSS. As classes já escritas (`text-neutral-700`, `border-neutral-200`)
+ * respondem ao tema sozinhas, e não existe "esquecer um dark:" deixando uma
+ * mancha branca no meio da tela escura.
+ *
+ * Os valores são os CANAIS RGB soltos, sem `rgb()`, porque o Tailwind injeta
+ * o alfa depois: `bg-accent/10` vira `rgb(var(--accent) / 0.1)`.
+ *
+ * O acento é azul, e não o verde do Dilon Zap: são dois produtos, vendidos
+ * separados, e a serralheria que assina este aqui não tem por que herdar a
+ * identidade do produto de WhatsApp. Quando a empresa configura a cor dela
+ * (white-label), é `--accent` que é sobrescrito em runtime.
+ */
+:root {
+  --canvas: 244 246 249;
+  --surface: 255 255 255;
+  --accent: 29 116 202;
+
+  --n-50: 250 250 250;
+  --n-100: 245 245 245;
+  --n-200: 229 229 229;
+  --n-300: 212 212 212;
+  --n-400: 163 163 163;
+  --n-500: 115 115 115;
+  --n-600: 82 82 82;
+  --n-700: 64 64 64;
+  --n-800: 38 38 38;
+  --n-900: 23 23 23;
+  --n-950: 10 10 10;
+}
+
+[data-theme="dark"] {
+  --canvas: 15 18 22;
+  --surface: 25 29 35;
+  /* Azul mais claro que o do tema claro: o original sobre o card escuro fica
+     abaixo do mínimo de leitura para texto corrido. */
+  --accent: 84 160 240;
+
+  --n-50: 33 37 42;
+  --n-100: 39 44 50;
+  --n-200: 50 56 64;
+  --n-300: 61 68 77;
+  --n-400: 141 148 156;
+  --n-500: 165 172 180;
+  --n-600: 188 195 202;
+  --n-700: 215 220 225;
+  --n-800: 232 235 238;
+  --n-900: 243 245 247;
+  --n-950: 253 253 254;
+
+  color-scheme: dark;
+}
+
+body {
+  background: rgb(var(--canvas));
+  color: rgb(var(--n-900));
+}
+
+/* Impressão: proposta, relação de materiais, plano de corte e ordem de
+   serviço saem em papel na obra. Tudo que é navegação some, e o fundo vira
+   branco — economiza tinta e é o que a serralheria imprime dezenas de vezes
+   por semana. */
+@media print {
+  .nao-imprimir {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .quebra-pagina {
+    break-before: page;
+  }
+}

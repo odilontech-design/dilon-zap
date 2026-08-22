@@ -15,10 +15,13 @@ Ver a proposta de arquitetura completa (diagrama, mitigação de risco de banime
 
 ```
 apps/
-  web/      Next.js — dashboard (login, conectar número, inbox)
-  worker/   Processo Node de longa duração — conexão(ões) Baileys
+  web/         Next.js — dashboard do Dilon Zap (login, conectar número, inbox)
+  worker/      Processo Node de longa duração — conexão(ões) Baileys
+  esquadrias/  Next.js — SaaS de vidros e esquadrias de alumínio (produto separado)
 packages/
-  db/       Schema Prisma + client compartilhado entre web e worker
+  db/               Schema Prisma do Zap, compartilhado entre web e worker
+  erp-db/           Schema Prisma do SaaS de esquadrias (banco próprio)
+  esquadrias-core/  Motor de cálculo do SaaS de esquadrias, sem dependência de banco
 ```
 
 `apps/worker` precisa ficar sempre rodando — é ele quem mantém a conexão com o WhatsApp aberta. Diferente do `apps/web`, não dá pra rodar em função serverless (Vercel), por isso web e worker são deploys separados.
@@ -82,3 +85,24 @@ docker compose -f docker-compose.prod.yml up -d --build
 DNS: registro tipo A apontando `zap` pro IP público da VM, configurado no provedor do domínio (Registro.br). Firewall: a VM precisa liberar as portas 80 e 443 (na Oracle Cloud isso é na Security List da VCN, além do firewall do sistema operacional).
 
 A sessão do WhatsApp persiste no Postgres — subir o worker numa VM nova não exige escanear QR Code de novo, desde que aponte pro mesmo banco.
+
+
+## Segundo produto: SaaS de vidros e esquadrias
+
+O monorepo abriga dois produtos vendidos separadamente. O `apps/esquadrias` é
+um sistema de orçamento, produção e financeiro para vidraçarias e serralherias
+de alumínio: tipologias paramétricas (a serralheria escreve as próprias
+fórmulas de corte), relação de materiais, otimização das barras de 6 metros,
+obras e fluxo de caixa.
+
+Banco separado do Zap de propósito — são clientes diferentes, e misturar os
+schemas obrigaria a serralheria a carregar tabela de conversa de WhatsApp.
+
+```bash
+docker compose up -d
+npm run erp:generate && npm run erp:push && npm run erp:seed
+npm run dev:esquadrias   # http://localhost:3001
+npm run test:core        # testes do motor de cálculo
+```
+
+Detalhes, decisões de projeto e o que ainda falta: [`apps/esquadrias/README.md`](apps/esquadrias/README.md).
