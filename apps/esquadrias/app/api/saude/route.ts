@@ -32,6 +32,42 @@ function estado(nome: string): "ok" | "vazia" | "ausente" {
 }
 
 /**
+ * Reduz a exceção a um texto seguro de mostrar.
+ *
+ * O motivo real da falha de conexão (TLS recusado, autenticação, servidor
+ * inalcançável) só existe dentro da mensagem — o client não expõe código. Sem
+ * isso o diagnóstico empaca em "não respondeu", que não distingue senha
+ * errada de parâmetro que o driver não suporta.
+ *
+ * A mensagem do Prisma inclui um trecho do CÓDIGO-FONTE, e nele a connection
+ * string aparece inteira. Por isso a limpeza é feita em duas passadas — a URL
+ * completa e, por garantia, qualquer par usuário:senha solto — e as linhas do
+ * code-frame são descartadas.
+ */
+function mensagemSegura(err: unknown): string | undefined {
+  const bruto = err instanceof Error ? err.message : typeof err === "string" ? err : undefined;
+  if (!bruto) return undefined;
+
+  return bruto
+    .split("\n")
+    .map((l) => l.trim())
+    .filter(Boolean)
+    // Descarta o code-frame: linhas numeradas e a seta do apontador.
+    .filter((l) => !/^\d+\s/.test(l) && !l.startsWith("→") && !l.startsWith("^"))
+    .filter((l) => !l.startsWith("Invalid `") && !l.includes("invocation"))
+    .join(" · ")
+    .replace(/postgres(ql)?:\/\/\S+/gi, "[url removida]")
+    .replace(/\b[\w.-]+:[^@\s/]+@/g, "[credencial removida]@")
+    // O endereço do servidor também sai. Esta rota responde sem autenticação,
+    // e publicar o host do banco entrega um alvo para tentativa de acesso. O
+    // valor do diagnóstico está no MOTIVO ("não alcancei", "autenticação
+    // recusada"), não em qual máquina — quem lê já sabe qual banco configurou.
+    .replace(/\b[\w.-]+\.(neon\.tech|amazonaws\.com|supabase\.co|azure\.com)(:\d+)?/gi, "[servidor omitido]")
+    .replace(/`[\w.-]+:\d+`/g, "`[servidor omitido]`")
+    .slice(0, 300);
+}
+
+/**
  * Traduz o erro do Prisma para o que a pessoa precisa FAZER.
  *
  * Usa o CÓDIGO quando ele existe, e não o texto: procurar "does not exist" na
@@ -127,6 +163,7 @@ export async function GET() {
     });
   } catch (err) {
     const { conecta, tabelasCriadas, codigo, proximoPasso } = diagnosticar(err);
+    const detalhe = mensagemSegura(err);
 
     // Formato torto explica a falha de conexão melhor que qualquer conselho
     // genérico — e é a única pista que temos, já que o client do Prisma não
@@ -137,7 +174,13 @@ export async function GET() {
         : proximoPasso;
 
     return NextResponse.json(
-      { saudavel: false, variaveis, urlDoBanco: urlBanco, banco: { testado: true, conecta, tabelasCriadas, codigo }, proximoPasso: conselho },
+      {
+        saudavel: false,
+        variaveis,
+        urlDoBanco: urlBanco,
+        banco: { testado: true, conecta, tabelasCriadas, codigo, detalhe },
+        proximoPasso: conselho,
+      },
       { status: 503 },
     );
   }
