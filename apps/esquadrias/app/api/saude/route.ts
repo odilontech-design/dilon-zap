@@ -113,7 +113,13 @@ function diagnosticar(err: unknown): { conecta: boolean; tabelasCriadas: boolean
  * fica vazio, então nenhuma checagem de presença acusa — e o sintoma é este,
  * "não conecta", que manda a pessoa procurar no lugar errado.
  */
-function formatoDaUrl(bruto: string | undefined): { formato: string; pooled?: boolean } {
+function formatoDaUrl(bruto: string | undefined): {
+  formato: string;
+  pooled?: boolean;
+  servidor?: string;
+  tamanhoDoServidor?: number;
+  bancoNoFim?: string;
+} {
   if (!bruto) return { formato: "ausente" };
 
   if (bruto !== bruto.trim()) return { formato: "tem espaço em branco no começo ou no fim" };
@@ -124,7 +130,23 @@ function formatoDaUrl(bruto: string | undefined): { formato: string; pooled?: bo
     const url = new URL(bruto);
     if (!url.hostname) return { formato: "sem servidor no endereço" };
     if (!url.password) return { formato: "sem senha no endereço" };
-    return { formato: "ok", pooled: url.hostname.includes("-pooler") };
+
+    // Mostra o servidor MASCARADO. "Can't reach database server" com um
+    // endereço bem formado quase sempre é caractere faltando no nome do
+    // endpoint — invisível a olho nu, mas óbvio ao comparar com o painel.
+    // O miolo é o identificador do projeto e fica oculto, porque esta rota
+    // responde sem autenticação; o começo, o fim e o TAMANHO bastam para
+    // comparar, e não servem para alcançar nada.
+    const h = url.hostname;
+    const mascarado = h.length > 30 ? `${h.slice(0, 6)}…${h.slice(-24)}` : "(muito curto)";
+
+    return {
+      formato: "ok",
+      pooled: h.includes("-pooler"),
+      servidor: mascarado,
+      tamanhoDoServidor: h.length,
+      bancoNoFim: url.pathname.replace("/", "") || "(nenhum)",
+    };
   } catch {
     return { formato: "não é um endereço válido" };
   }
