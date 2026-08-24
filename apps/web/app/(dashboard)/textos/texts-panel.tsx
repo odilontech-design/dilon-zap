@@ -20,7 +20,7 @@ async function fetcher(url: string) {
 
 const VAZIO = { categoria: "", titulo: "", corpo: "", atalho: "" };
 
-export function TextsPanel({ podeEditar }: { podeEditar: boolean }) {
+export function TextsPanel({ podeEditar, podeExcluir }: { podeEditar: boolean; podeExcluir: boolean }) {
   const { data: textos, mutate } = useSWR<SavedText[]>("/api/saved-texts", fetcher);
   const [editando, setEditando] = useState<SavedText | typeof VAZIO | null>(null);
   const [erro, setErro] = useState<string | null>(null);
@@ -129,9 +129,11 @@ export function TextsPanel({ podeEditar }: { podeEditar: boolean }) {
                       >
                         Editar
                       </button>
-                      <button onClick={() => excluir(t)} className="text-red-600 hover:text-red-700">
-                        Excluir
-                      </button>
+                      {podeExcluir && (
+                        <button onClick={() => excluir(t)} className="text-red-600 hover:text-red-700">
+                          Excluir
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

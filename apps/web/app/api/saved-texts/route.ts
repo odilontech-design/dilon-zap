@@ -3,11 +3,16 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 
-// Atendente lê e usa; criar e editar é do Responsável — mesmo critério do
-// horário de atendimento. Texto padrão da empresa é decisão da empresa, e
-// se cada uma editar o seu o padrão deixa de existir.
+// Quem atende também escreve o texto: a consultora e o financeiro conhecem
+// a objeção real do cliente melhor que quem cadastra de fora. Os 15 textos
+// iniciais ficaram com 1 em uso — os de venda, que são trabalho da
+// consultora, nunca saíram do lugar.
+//
+// EXCLUIR continua só do Responsável (ver a rota [id]): criar e editar são
+// reversíveis e visíveis; apagar tira de todo mundo um texto que ninguém vai
+// notar que sumiu até precisar dele.
 function podeEditar(role: string) {
-  return role === "OWNER";
+  return role === "OWNER" || role === "AGENT" || role === "FINANCEIRO";
 }
 
 export async function GET() {
