@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { BotaoSuporte } from "@/components/botao-suporte";
 import { FormularioLogin } from "./formulario-login";
 
 // Página atrás de autenticação: o conteúdo depende da sessão de quem pediu, e
@@ -25,6 +26,7 @@ export default async function LoginPage() {
             <p className="text-sm text-neutral-500 mt-1">Gestão de vidros e esquadrias de alumínio.</p>
           </div>
           <FormularioLogin />
+          <BotaoSuporte />
         </div>
       </div>
 
