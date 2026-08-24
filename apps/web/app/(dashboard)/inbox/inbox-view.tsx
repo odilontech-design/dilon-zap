@@ -1593,6 +1593,7 @@ type SavedTextItem = {
   titulo: string;
   corpo: string;
   atalho: string | null;
+  isActive: boolean;
 };
 
 /**
@@ -1632,13 +1633,18 @@ function SavedTextPicker({
   const [busca, setBusca] = useState("");
 
   const q = busca.trim().toLowerCase();
+  // Texto desativado nao aparece aqui. A listagem devolve todos de proposito
+  // — a tela de Textos prontos precisa mostrar os desativados pra dar pra
+  // reativar — mas quem esta atendendo so pode escolher os que valem.
+  // Mesmo criterio do seletor de etiquetas.
   const filtrados = (textos ?? []).filter(
     (t) =>
-      !q ||
+      t.isActive &&
+      (!q ||
       t.titulo.toLowerCase().includes(q) ||
       t.corpo.toLowerCase().includes(q) ||
       t.categoria.toLowerCase().includes(q) ||
-      (t.atalho ?? "").includes(q)
+      (t.atalho ?? "").includes(q))
   );
 
   return (

@@ -52,6 +52,24 @@ export function TextsPanel({ podeEditar, podeExcluir }: { podeEditar: boolean; p
     return Array.from(mapa.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [filtrados]);
 
+  // Desativar e a alternativa reversivel a excluir — e a unica que a
+  // consultora e o financeiro tem, ja que apagar ficou com o Responsavel.
+  // Texto desativado some do seletor da conversa mas continua aqui, pronto
+  // pra voltar.
+  async function alternarAtivo(t: SavedText) {
+    setErro(null);
+    const res = await fetch(`/api/saved-texts/${t.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isActive: !t.isActive }),
+    });
+    if (!res.ok) {
+      setErro(t.isActive ? "não deu pra desativar" : "não deu pra reativar");
+      return;
+    }
+    mutate();
+  }
+
   async function excluir(t: SavedText) {
     if (!confirm(`Excluir "${t.titulo}"?`)) return;
     const res = await fetch(`/api/saved-texts/${t.id}`, { method: "DELETE" });
@@ -108,8 +126,13 @@ export function TextsPanel({ podeEditar, podeExcluir }: { podeEditar: boolean; p
               <div key={t.id} className="px-4 py-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="font-medium text-neutral-800">
+                    <p className={`font-medium ${t.isActive ? "text-neutral-800" : "text-neutral-400 line-through"}`}>
                       {t.titulo}
+                      {!t.isActive && (
+                        <span className="ml-2 text-[10px] rounded bg-neutral-200 text-neutral-600 px-1.5 py-0.5 no-underline">
+                          desativado
+                        </span>
+                      )}
                       {t.atalho && (
                         <span className="ml-2 text-[10px] font-mono rounded bg-neutral-100 text-neutral-500 px-1.5 py-0.5">
                           /{t.atalho}
@@ -128,6 +151,12 @@ export function TextsPanel({ podeEditar, podeExcluir }: { podeEditar: boolean; p
                         className="text-neutral-600 hover:text-accent"
                       >
                         Editar
+                      </button>
+                      <button
+                        onClick={() => alternarAtivo(t)}
+                        className="text-neutral-600 hover:text-accent"
+                      >
+                        {t.isActive ? "Desativar" : "Reativar"}
                       </button>
                       {podeExcluir && (
                         <button onClick={() => excluir(t)} className="text-red-600 hover:text-red-700">
