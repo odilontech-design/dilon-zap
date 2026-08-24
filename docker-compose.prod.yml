@@ -107,9 +107,15 @@ services:
     # zap.dilontech.com.br e o callback nunca voltaria — e o segredo
     # compartilhado faria um cookie de um produto ser aceito pelo outro.
     # São dois produtos: domínio próprio e segredo próprio.
+    # O ":-" evita o aviso de "variável não definida" em TODO comando de
+    # rotina do Zap. Silenciar aqui não remove a proteção: o NextAuth se
+    # recusa a subir em produção sem NEXTAUTH_SECRET, então quem ativar o
+    # perfil sem configurar descobre na hora, pelo container que não sobe —
+    # que é onde o erro precisa aparecer. Aviso que toca todo dia sem ter o
+    # que fazer só ensina a ignorar aviso.
     environment:
-      NEXTAUTH_URL: ${ESQUADRIAS_NEXTAUTH_URL}
-      NEXTAUTH_SECRET: ${ESQUADRIAS_NEXTAUTH_SECRET}
+      NEXTAUTH_URL: ${ESQUADRIAS_NEXTAUTH_URL:-}
+      NEXTAUTH_SECRET: ${ESQUADRIAS_NEXTAUTH_SECRET:-}
     expose:
       - "3001"
     depends_on:
