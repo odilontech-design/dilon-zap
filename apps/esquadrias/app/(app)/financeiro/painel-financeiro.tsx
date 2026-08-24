@@ -168,7 +168,7 @@ function FormularioLancamento({ aoSalvar }: { aoSalvar: (dados: Record<string, u
           <Entrada value={descricao} onChange={(e) => setDescricao(e.target.value)} />
         </Campo>
         <Campo rotulo="Categoria">
-          <Entrada value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Alumínio, folha, aluguel…" />
+          <Entrada value={categoria} onChange={(e) => setCategoria(e.target.value)} placeholder="Alumínio, ferro, folha, aluguel…" />
         </Campo>
         <Campo rotulo="Valor">
           <Entrada inputMode="decimal" value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" />

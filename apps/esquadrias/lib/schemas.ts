@@ -38,6 +38,8 @@ export const schemaFerragem = z.object({
   unidade: z.string().trim().max(10).default("pç"),
   precoUnitarioCentavos: z.number().int().min(0),
   estoque: z.number().min(0).default(0),
+  /** Granel (kg/m/m²): a quantidade fracionária é cobrada como está. */
+  fracionavel: z.boolean().default(false),
   ativo: z.boolean().default(true),
 });
 

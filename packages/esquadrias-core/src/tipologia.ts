@@ -54,6 +54,13 @@ export type FerragemTemplate = {
   ferragemNome: string;
   unidade: string;
   precoUnitarioCentavos: number;
+  /**
+   * Insumo vendido a granel — kg de eletrodo, metro de trilho, m² de tinta.
+   * Nesses a quantidade fracionária é o resultado real: arredondar 3,3 m de
+   * trilho pra 4 m encarece o orçamento sem que ninguém veja de onde veio.
+   * Peça continua sendo arredondada pra cima: meia dobradiça não existe.
+   */
+  fracionavel?: boolean;
   formulaQuantidade: string;
 };
 
@@ -119,6 +126,7 @@ export type FerragemExpandida = {
   ferragemNome: string;
   unidade: string;
   quantidade: number;
+  fracionavel: boolean;
   custoCentavos: number;
 };
 
@@ -175,6 +183,10 @@ function escopoDe(tipologia: Tipologia, medidas: Medidas): Record<string, number
  */
 function arredondar4(n: number): number {
   return Math.round(n * 10000) / 10000;
+}
+
+function arredondar3(n: number): number {
+  return Math.round(n * 1000) / 1000;
 }
 
 function exigirNaoNegativo(valor: number, campo: string, expr: string): number {
@@ -258,10 +270,13 @@ export function expandirTipologia(tipologia: Tipologia, medidas: Medidas, fatorC
 
   const ferragens: FerragemExpandida[] = [];
   for (const t of tipologia.ferragens) {
-    const qtdUnit = Math.ceil(exigirNaoNegativo(avaliarFormula(t.formulaQuantidade, escopo), `quantidade de "${t.descricao}"`, t.formulaQuantidade));
+    const bruto = exigirNaoNegativo(avaliarFormula(t.formulaQuantidade, escopo), `quantidade de "${t.descricao}"`, t.formulaQuantidade);
+    // Granel mantém a fração (3 casas basta: grama de eletrodo, milímetro de
+    // trilho); peça arredonda pra cima porque não se compra meia roldana.
+    const qtdUnit = t.fracionavel ? arredondar3(bruto) : Math.ceil(bruto);
     if (qtdUnit === 0) continue;
 
-    const quantidade = qtdUnit * qtdItem;
+    const quantidade = t.fracionavel ? arredondar3(qtdUnit * qtdItem) : qtdUnit * qtdItem;
     ferragens.push({
       templateId: t.id,
       descricao: t.descricao,
@@ -269,6 +284,7 @@ export function expandirTipologia(tipologia: Tipologia, medidas: Medidas, fatorC
       ferragemNome: t.ferragemNome,
       unidade: t.unidade,
       quantidade,
+      fracionavel: t.fracionavel ?? false,
       custoCentavos: Math.round(quantidade * t.precoUnitarioCentavos * fatorCor.ferragem),
     });
   }

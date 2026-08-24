@@ -145,8 +145,9 @@ async function main() {
   const ferragens = [
     { nome: "Roldana dupla", unidade: "pç", precoUnitarioCentavos: REAIS(8.5) },
     { nome: "Fecho concha", unidade: "pç", precoUnitarioCentavos: REAIS(12) },
-    { nome: "Escova de vedação", unidade: "m", precoUnitarioCentavos: REAIS(3.2) },
-    { nome: "Borracha de vedação", unidade: "m", precoUnitarioCentavos: REAIS(2.8) },
+    // Vedação é vendida em rolo e cortada no metro: 3,4 m é 3,4 m.
+    { nome: "Escova de vedação", unidade: "m", precoUnitarioCentavos: REAIS(3.2), fracionavel: true },
+    { nome: "Borracha de vedação", unidade: "m", precoUnitarioCentavos: REAIS(2.8), fracionavel: true },
     { nome: "Silicone neutro", unidade: "tubo", precoUnitarioCentavos: REAIS(38) },
     { nome: "Parafuso 4,2x25", unidade: "pç", precoUnitarioCentavos: REAIS(0.25) },
     { nome: "Puxador tubular 30cm", unidade: "pç", precoUnitarioCentavos: REAIS(65) },

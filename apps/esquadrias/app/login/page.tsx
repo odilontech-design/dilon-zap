@@ -23,7 +23,7 @@ export default async function LoginPage() {
           <div className="mb-8">
             <div className="h-11 w-11 rounded-xl bg-accent grid place-items-center text-white font-bold text-lg mb-4">E</div>
             <h1 className="text-2xl font-semibold text-neutral-900">Entrar</h1>
-            <p className="text-sm text-neutral-500 mt-1">Gestão de vidros e esquadrias de alumínio.</p>
+            <p className="text-sm text-neutral-500 mt-1">Gestão de vidros, esquadrias de alumínio e serralheria de ferro.</p>
           </div>
           <FormularioLogin />
           <BotaoSuporte />

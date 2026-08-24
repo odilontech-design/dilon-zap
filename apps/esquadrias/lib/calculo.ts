@@ -74,6 +74,7 @@ export function paraMotor(tipologia: NonNullable<TipologiaComInsumos>): Tipologi
       ferragemNome: f.ferragem.nome,
       unidade: f.ferragem.unidade,
       precoUnitarioCentavos: f.ferragem.precoUnitarioCentavos,
+      fracionavel: f.ferragem.fracionavel,
       formulaQuantidade: f.formulaQuantidade,
     })),
   };

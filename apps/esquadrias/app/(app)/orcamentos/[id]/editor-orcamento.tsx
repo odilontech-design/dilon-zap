@@ -205,7 +205,7 @@ export function EditorOrcamento({
                       )}
                       {item.memoriaCalculo?.expansao && (
                         <p className="mt-1 text-xs text-neutral-500">
-                          {formatarM2(item.memoriaCalculo.expansao.areaTotalM2)} · {item.memoriaCalculo.expansao.pesoTotalKg.toFixed(2)} kg de alumínio
+                          {formatarM2(item.memoriaCalculo.expansao.areaTotalM2)} · {item.memoriaCalculo.expansao.pesoTotalKg.toFixed(2)} kg de perfil
                         </p>
                       )}
                     </div>

@@ -53,3 +53,55 @@ export const JANELA_2_FOLHAS: Tipologia = {
     },
   ],
 };
+
+/**
+ * Grade de proteção em metalon — a tipologia de FERRO da serralheria.
+ *
+ * Está aqui porque ferro não é um caso especial do motor: o perfil continua
+ * sendo kg/m × R$/kg × barra, o que muda é o insumo. O que ela exerce e a
+ * janela não é: quantidade de peça que sai do VÃO (`teto(L / espaçamento)`,
+ * a variedade que o serralheiro calcula na mão hoje) e consumível a granel
+ * (eletrodo em kg, tinta em m²) medido em fração de unidade.
+ */
+export const GRADE_FERRO: Tipologia = {
+  id: "tip_grade",
+  nome: "Grade de proteção - metalon",
+  categoria: "JANELA",
+  parametros: [
+    { chave: "espacamento", rotulo: "Espaçamento máx. entre barras (mm)", valorPadrao: 110 },
+    { chave: "folga", rotulo: "Folga total no vão (mm)", valorPadrao: 10 },
+  ],
+  pecas: [
+    {
+      id: "g1", descricao: "Moldura horizontal", perfilId: "perf_met30", perfilCodigo: "MET-30x30", perfilNome: "Metalon 30x30",
+      pesoPorMetro: 1.08, precoPorKgCentavos: 1050, comprimentoBarraMm: 6000, corte: "RETO",
+      formulaQuantidade: "2", formulaComprimento: "L - folga",
+    },
+    {
+      id: "g2", descricao: "Moldura vertical", perfilId: "perf_met30", perfilCodigo: "MET-30x30", perfilNome: "Metalon 30x30",
+      pesoPorMetro: 1.08, precoPorKgCentavos: 1050, comprimentoBarraMm: 6000, corte: "RETO",
+      formulaQuantidade: "2", formulaComprimento: "H - folga - 60",
+    },
+    {
+      id: "g3", descricao: "Barra vertical", perfilId: "perf_met20", perfilCodigo: "MET-20x20", perfilNome: "Metalon 20x20",
+      pesoPorMetro: 0.71, precoPorKgCentavos: 1050, comprimentoBarraMm: 6000, corte: "RETO",
+      formulaQuantidade: "teto((L - folga) / espacamento) - 1", formulaComprimento: "H - folga - 60",
+    },
+  ],
+  vidros: [],
+  ferragens: [
+    {
+      id: "gf1", descricao: "Fixação no vão", ferragemId: "fer_chumbador", ferragemNome: "Chumbador parabolt 3/8\"",
+      unidade: "pç", precoUnitarioCentavos: 480, formulaQuantidade: "8",
+    },
+    {
+      id: "gf2", descricao: "Solda", ferragemId: "fer_eletrodo", ferragemNome: "Eletrodo 6013 2,50mm",
+      unidade: "kg", precoUnitarioCentavos: 3200, fracionavel: true,
+      formulaQuantidade: "0,04 * (teto((L - folga) / espacamento) + 3)",
+    },
+    {
+      id: "gf3", descricao: "Fundo + esmalte (2 faces)", ferragemId: "fer_tinta", ferragemNome: "Tinta esmalte sintético",
+      unidade: "m²", precoUnitarioCentavos: 1100, fracionavel: true, formulaQuantidade: "AREA * 2",
+    },
+  ],
+};

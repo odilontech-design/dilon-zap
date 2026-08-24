@@ -25,11 +25,19 @@ export type LinhaMaterial = {
 
 export type EntradaMaterial = {
   expansao: Expansao;
-  /** Barras necessárias por perfil, vindo do plano de corte (quando houver). */
-  barrasPorPerfil?: Record<string, number>;
 };
 
-export function agregarMateriais(entradas: EntradaMaterial[]): LinhaMaterial[] {
+/**
+ * Barras por perfil vindas do plano de corte.
+ *
+ * É argumento do orçamento INTEIRO, não de cada item, porque o plano de corte
+ * também é: as peças de todos os itens saem das mesmas barras. Já foi campo
+ * de cada entrada — e aí o mesmo mapa era somado uma vez por item, mandando a
+ * serralheria comprar o dobro de metal num orçamento de dois itens.
+ */
+export type BarrasPorPerfil = Record<string, number>;
+
+export function agregarMateriais(entradas: EntradaMaterial[], barrasPorPerfil: BarrasPorPerfil = {}): LinhaMaterial[] {
   const linhas = new Map<string, LinhaMaterial>();
 
   const acumular = (chave: string, base: Omit<LinhaMaterial, "quantidade" | "custoCentavos">, quantidade: number, custo: number) => {
@@ -82,15 +90,10 @@ export function agregarMateriais(entradas: EntradaMaterial[]): LinhaMaterial[] {
     }
   }
 
-  const barras = entradas.reduce<Record<string, number>>((acc, e) => {
-    for (const [perfilId, qtd] of Object.entries(e.barrasPorPerfil ?? {})) acc[perfilId] = (acc[perfilId] ?? 0) + qtd;
-    return acc;
-  }, {});
-
   for (const [perfilId, dados] of metrosPorPerfil) {
     const linha = linhas.get(`ALUMINIO:${perfilId}`);
     if (!linha) continue;
-    const barrasDoPlano = barras[perfilId];
+    const barrasDoPlano = barrasPorPerfil[perfilId];
     linha.quantidade = barrasDoPlano ?? Math.ceil((dados.metros * 1000) / dados.barraMm);
     linha.detalhe = `${dados.metros.toFixed(2)} m lineares · ${dados.peso.toFixed(2)} kg${barrasDoPlano ? " · plano de corte" : " · estimado"}`;
   }

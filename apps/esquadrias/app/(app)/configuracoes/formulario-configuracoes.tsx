@@ -68,7 +68,7 @@ export function FormularioConfiguracoes({ empresa }: { empresa: Empresa }) {
     <>
       <TituloPagina
         titulo="Configurações"
-        descricao="Os números daqui são o que torna o sistema SEU: margem, mão de obra, perda de alumínio e imposto entram em todo orçamento."
+        descricao="Os números daqui são o que torna o sistema SEU: margem, mão de obra, perda no corte e imposto entram em todo orçamento."
         acao={
           <Link href="/configuracoes/plano" className="rounded-lg border border-neutral-300 px-4 py-2 text-sm text-neutral-700 hover:bg-neutral-100">
             Plano e cobrança
@@ -112,7 +112,7 @@ export function FormularioConfiguracoes({ empresa }: { empresa: Empresa }) {
         <Card className="p-4">
           <h2 className="mb-3 font-medium text-neutral-900">Precificação</h2>
           <p className="mb-3 text-xs text-neutral-500">
-            Margem de 100% significa dobrar o custo — é a prática do setor. A perda de alumínio é o retalho que sobra da barra e
+            Margem de 100% significa dobrar o custo — é a prática do setor. A perda no corte é o retalho que sobra da barra e
             que você paga mesmo sem usar.
           </p>
 
@@ -122,7 +122,7 @@ export function FormularioConfiguracoes({ empresa }: { empresa: Empresa }) {
               <Entrada inputMode="decimal" value={maoDeObra} onChange={(e) => setMaoDeObra(e.target.value)} />
             </Campo>
             {numero("maoDeObraPercentSobreCusto", "Mão de obra sobre o custo (%)", "Soma com a de m². Deixe 0 se não usar.")}
-            {numero("perdaAluminioPercent", "Perda de alumínio (%)")}
+            {numero("perdaAluminioPercent", "Perda no corte (%)")}
             {numero("impostoPercent", "Imposto sobre a venda (%)", "Simples Nacional, na prática. Cobrado por fora.")}
             {numero("validadeOrcamentoDias", "Validade do orçamento (dias)", undefined, "1")}
           </div>

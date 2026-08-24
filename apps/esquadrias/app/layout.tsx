@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Esquadrias — gestão para vidraçarias e serralherias",
-  description: "Orçamento paramétrico, plano de corte, relação de materiais e financeiro para vidros e esquadrias de alumínio.",
+  description: "Orçamento paramétrico, plano de corte, relação de materiais e financeiro para vidros, esquadrias de alumínio e serralheria de ferro.",
 };
 
 /**

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Expansao, PrecoItem } from "@dilon-zap/esquadrias-core";
-import { formatarM2, formatarReais } from "@dilon-zap/esquadrias-core";
+import { formatarM2, formatarQuantidade, formatarReais } from "@dilon-zap/esquadrias-core";
 import { AreaTexto, Botao, Campo, Entrada, EntradaMoeda, Selecao } from "@/components/campos";
 import { enviar } from "@/lib/fetcher";
 
@@ -215,7 +215,7 @@ export function ModalItem({
                 </Campo>
               </div>
 
-              <Campo rotulo="Cor do alumínio">
+              <Campo rotulo="Cor do perfil">
                 <div className="flex flex-wrap gap-2">
                   {cores.map((c) => (
                     <button
@@ -308,7 +308,7 @@ export function ModalItem({
               ) : (
                 <>
                   <section>
-                    <h3 className="mb-2 font-medium text-neutral-900">Cortes de alumínio</h3>
+                    <h3 className="mb-2 font-medium text-neutral-900">Cortes de perfil</h3>
                     <ul className="divide-y divide-neutral-200 rounded-lg border border-neutral-200">
                       {simulacao.expansao.pecas.map((p, i) => (
                         <li key={i} className="flex items-center justify-between gap-3 px-3 py-2">
@@ -347,7 +347,7 @@ export function ModalItem({
                         <li key={i} className="flex items-center justify-between gap-3 px-3 py-2">
                           <span className="min-w-0 truncate text-neutral-900">{f.ferragemNome}</span>
                           <span className="shrink-0 text-neutral-700">
-                            {f.quantidade} {f.unidade}
+                            {formatarQuantidade(f.quantidade)} {f.unidade}
                           </span>
                         </li>
                       ))}
@@ -355,7 +355,7 @@ export function ModalItem({
                   </section>
 
                   <p className="text-xs text-neutral-500">
-                    Peso total de alumínio: {simulacao.expansao.pesoTotalKg.toFixed(2)} kg · Área: {formatarM2(simulacao.expansao.areaTotalM2)}
+                    Peso total de perfil: {simulacao.expansao.pesoTotalKg.toFixed(2)} kg · Área: {formatarM2(simulacao.expansao.areaTotalM2)}
                   </p>
                 </>
               )}

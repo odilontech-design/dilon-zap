@@ -47,7 +47,7 @@ export default async function CortePage({ params }: { params: { id: string } }) 
       </div>
 
       {plano.perfis.length === 0 ? (
-        <Card className="p-8 text-center text-sm text-neutral-500">Nenhuma peça de alumínio para cortar neste orçamento.</Card>
+        <Card className="p-8 text-center text-sm text-neutral-500">Nenhuma peça de perfil para cortar neste orçamento.</Card>
       ) : (
         <>
           <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">

@@ -193,7 +193,7 @@ export function EditorTipologia({ tipologiaId, inicial, opcoes }: { tipologiaId?
         <Card className="p-4">
           <div className="mb-3 flex items-center justify-between">
             <div>
-              <h2 className="font-medium text-neutral-900">Cortes de alumínio</h2>
+              <h2 className="font-medium text-neutral-900">Cortes de perfil</h2>
               <p className="text-xs text-neutral-500">Variáveis: {variaveis.join(", ")}</p>
             </div>
             <Botao
@@ -404,7 +404,7 @@ export function EditorTipologia({ tipologiaId, inicial, opcoes }: { tipologiaId?
                 ))}
               </ul>
               <p className="text-xs text-neutral-500">
-                {expansao.pesoTotalKg.toFixed(2)} kg de alumínio · área {expansao.areaM2.toFixed(2)} m²
+                {expansao.pesoTotalKg.toFixed(2)} kg de perfil · área {expansao.areaM2.toFixed(2)} m²
               </p>
             </div>
           )}

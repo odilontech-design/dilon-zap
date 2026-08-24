@@ -17,12 +17,14 @@ type Perfil = {
   linha: { id: string; nome: string } | null;
 };
 type Vidro = { id: string; nome: string; tipo: string; espessuraMm: number; precoM2Centavos: number; m2Minimo: number; temperado: boolean };
-type Ferragem = { id: string; nome: string; unidade: string; precoUnitarioCentavos: number };
+type Ferragem = { id: string; nome: string; unidade: string; precoUnitarioCentavos: number; fracionavel: boolean };
 type Cor = { id: string; nome: string; hex: string; fatorAluminio: number; fatorFerragem: number };
 type Linha = { id: string; nome: string; _count: { perfis: number; tipologias: number } };
 
 const ABAS = [
-  ["perfis", "Perfis de alumínio"],
+  // "Perfis", não "Perfis de alumínio": a mesma aba guarda a linha de ferro
+  // da serralheria — o que o motor precisa é kg/m, R$/kg e o tamanho da barra.
+  ["perfis", "Perfis e barras"],
   ["vidros", "Vidros"],
   ["ferragens", "Ferragens"],
   ["cores", "Cores"],
@@ -54,7 +56,7 @@ export function PainelCatalogo({ editavel }: { editavel: boolean }) {
     <>
       <TituloPagina
         titulo="Catálogo de insumos"
-        descricao="O preço do orçamento nasce daqui. Alumínio é cobrado por peso (kg/m × R$/kg), vidro por m² e ferragem por peça."
+        descricao="O preço do orçamento nasce daqui. Perfil é cobrado por peso (kg/m × R$/kg) — vale igual pra alumínio e pra ferro —, vidro por m², e ferragem por peça ou a granel (kg de eletrodo, metro de trilho, m² de tinta)."
       />
 
       {erro && <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600">{erro}</p>}
@@ -198,6 +200,7 @@ export function PainelCatalogo({ editavel }: { editavel: boolean }) {
                 { chave: "nome", rotulo: "Nome", tipo: "texto" },
                 { chave: "unidade", rotulo: "Unidade", tipo: "texto", padrao: "pç" },
                 { chave: "precoUnitarioCentavos", rotulo: "Preço unitário", tipo: "moeda" },
+                { chave: "fracionavel", rotulo: "Vendido a granel (kg, m, m²)", tipo: "booleano", padrao: "nao" },
               ]}
               aoSalvar={(dados) => acao(() => enviar("/api/catalogo/ferragens", "POST", dados), ferragens.mutate)}
             />
@@ -207,11 +210,29 @@ export function PainelCatalogo({ editavel }: { editavel: boolean }) {
             {!ferragens.data || ferragens.data.length === 0 ? (
               <Vazio titulo="Nenhuma ferragem cadastrada" />
             ) : (
-              <Tabela cabecalho={["Nome", "Unidade", "Preço", ...(editavel ? [""] : [])]}>
+              <Tabela cabecalho={["Nome", "Unidade", "Cobrança", "Preço", ...(editavel ? [""] : [])]}>
                 {ferragens.data.map((f) => (
                   <tr key={f.id}>
                     <td className="px-4 py-3 font-medium text-neutral-900">{f.nome}</td>
                     <td className="px-4 py-3 text-neutral-700">{f.unidade}</td>
+                    <td className="px-4 py-3 text-neutral-700">
+                      {editavel ? (
+                        <button
+                          onClick={() =>
+                            acao(
+                              () => enviar(`/api/catalogo/ferragens/${f.id}`, "PATCH", { fracionavel: !f.fracionavel }),
+                              ferragens.mutate,
+                            )
+                          }
+                          className="text-sm text-accent hover:underline"
+                          title="Granel cobra a fração (0,48 kg de eletrodo). Por peça arredonda pra cima."
+                        >
+                          {f.fracionavel ? "granel" : "por peça"}
+                        </button>
+                      ) : (
+                        <>{f.fracionavel ? "granel" : "por peça"}</>
+                      )}
+                    </td>
                     <td className="px-4 py-3">
                       {editavel ? (
                         <CampoPrecoInline
@@ -250,7 +271,7 @@ export function PainelCatalogo({ editavel }: { editavel: boolean }) {
               campos={[
                 { chave: "nome", rotulo: "Nome", tipo: "texto" },
                 { chave: "hex", rotulo: "Cor (#RRGGBB)", tipo: "texto", padrao: "#CCCCCC" },
-                { chave: "fatorAluminio", rotulo: "Fator no alumínio", tipo: "decimal", padrao: "1" },
+                { chave: "fatorAluminio", rotulo: "Fator no perfil", tipo: "decimal", padrao: "1" },
                 { chave: "fatorFerragem", rotulo: "Fator na ferragem", tipo: "decimal", padrao: "1" },
               ]}
               aoSalvar={(dados) => acao(() => enviar("/api/catalogo/cores", "POST", dados), cores.mutate)}
@@ -261,7 +282,7 @@ export function PainelCatalogo({ editavel }: { editavel: boolean }) {
             {!cores.data || cores.data.length === 0 ? (
               <Vazio titulo="Nenhuma cor cadastrada" />
             ) : (
-              <Tabela cabecalho={["Cor", "Fator alumínio", "Fator ferragem", ...(editavel ? [""] : [])]}>
+              <Tabela cabecalho={["Cor", "Fator perfil", "Fator ferragem", ...(editavel ? [""] : [])]}>
                 {cores.data.map((c) => (
                   <tr key={c.id}>
                     <td className="px-4 py-3">
@@ -295,10 +316,15 @@ export function PainelCatalogo({ editavel }: { editavel: boolean }) {
   );
 }
 
+const OPCOES_SIM_NAO = [
+  { valor: "nao", texto: "Não" },
+  { valor: "sim", texto: "Sim" },
+];
+
 type CampoForm = {
   chave: string;
   rotulo: string;
-  tipo: "texto" | "inteiro" | "decimal" | "moeda" | "selecao";
+  tipo: "texto" | "inteiro" | "decimal" | "moeda" | "selecao" | "booleano";
   padrao?: string;
   opcoes?: Array<{ valor: string; texto: string }>;
 };
@@ -330,9 +356,9 @@ function FormularioNovo({ titulo, campos, aoSalvar }: { titulo: string; campos: 
       <div className="grid gap-3 sm:grid-cols-3">
         {campos.map((campo) => (
           <Campo key={campo.chave} rotulo={campo.rotulo}>
-            {campo.tipo === "selecao" ? (
+            {campo.tipo === "selecao" || campo.tipo === "booleano" ? (
               <Selecao value={valores[campo.chave]} onChange={(e) => setValores((v) => ({ ...v, [campo.chave]: e.target.value }))}>
-                {(campo.opcoes ?? []).map((o) => (
+                {(campo.opcoes ?? (campo.tipo === "booleano" ? OPCOES_SIM_NAO : [])).map((o) => (
                   <option key={o.valor} value={o.valor}>
                     {o.texto}
                   </option>
@@ -365,7 +391,9 @@ function FormularioNovo({ titulo, campos, aoSalvar }: { titulo: string; campos: 
                     ? Math.round(Number(bruto.replace(",", ".")) || 0)
                     : campo.tipo === "decimal"
                       ? Number(bruto.replace(",", ".")) || 0
-                      : bruto;
+                      : campo.tipo === "booleano"
+                        ? bruto === "sim"
+                        : bruto;
             }
             aoSalvar(dados);
             setAberto(false);

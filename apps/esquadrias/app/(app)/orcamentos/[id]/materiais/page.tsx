@@ -10,7 +10,9 @@ import { BotaoImprimir } from "@/components/botao-imprimir";
 
 export const dynamic = "force-dynamic";
 
-const ROTULO = { ALUMINIO: "Alumínio", VIDRO: "Vidros", FERRAGEM: "Ferragens e acessórios" } as const;
+// A chave é ALUMINIO por história; o rótulo diz "Perfis e barras" porque a
+// mesma lista serve a linha de alumínio e a de ferro da serralheria.
+const ROTULO = { ALUMINIO: "Perfis e barras", VIDRO: "Vidros", FERRAGEM: "Ferragens e insumos" } as const;
 
 export default async function MateriaisPage({ params }: { params: { id: string } }) {
   const usuario = await requireUsuario();
@@ -33,7 +35,7 @@ export default async function MateriaisPage({ params }: { params: { id: string }
     for (const perfil of plano.perfis) barrasPorPerfil[perfil.perfilId] = perfil.totalBarras;
   }
 
-  const linhas = agregarMateriais(expansoes.map((expansao) => ({ expansao, barrasPorPerfil })));
+  const linhas = agregarMateriais(expansoes.map((expansao) => ({ expansao })), barrasPorPerfil);
   const mostrarCusto = vePreco(usuario.papel);
   const grupos = (["ALUMINIO", "VIDRO", "FERRAGEM"] as const).map((tipo) => ({ tipo, itens: linhas.filter((l) => l.tipo === tipo) }));
 

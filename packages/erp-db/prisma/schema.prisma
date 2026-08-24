@@ -286,6 +286,10 @@ model Ferragem {
   precoUnitarioCentavos Int
   estoque              Float   @default(0)
   ativo                Boolean @default(true)
+  /// Insumo vendido a granel (kg de eletrodo, m de trilho, m² de tinta) em vez
+  /// de por peça. Quantidade fracionária é cobrada como está; sem isso o motor
+  /// arredonda pra cima e 0,48 kg de eletrodo vira 1 kg no orçamento.
+  fracionavel          Boolean @default(false)
 
   ferragensTipologia TipologiaFerragem[]
 

@@ -31,3 +31,12 @@ export function formatarMm(mm: number): string {
 export function formatarM2(m2: number): string {
   return `${m2.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} m²`;
 }
+
+/**
+ * Quantidade de insumo. Peça sai inteira ("4"), granel sai com a fração que a
+ * fórmula deu ("0,48 kg", "3,3 m") — sem casas decimais penduradas quando a
+ * conta fecha redonda.
+ */
+export function formatarQuantidade(quantidade: number): string {
+  return quantidade.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+}

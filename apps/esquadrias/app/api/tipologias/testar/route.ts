@@ -82,6 +82,7 @@ export const POST = rota(async (req) => {
         ferragemNome: ferragem.nome,
         unidade: ferragem.unidade,
         precoUnitarioCentavos: ferragem.precoUnitarioCentavos,
+        fracionavel: ferragem.fracionavel,
         formulaQuantidade: f.formulaQuantidade,
       };
     }),
