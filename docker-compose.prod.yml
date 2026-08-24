@@ -84,6 +84,18 @@ services:
   # banco separado (ESQUADRIAS_DATABASE_URL no .env) — são clientes
   # diferentes, e um dump do Zap não pode arrastar dado de serralheria junto.
   esquadrias:
+    # Não sobe num `docker compose up -d` comum: hoje este produto roda na
+    # Vercel (esquadrias.dilontech.com.br resolve pra lá, não pra esta VPS),
+    # e o banco dele está no Neon. Sem o perfil, um `up -d` de rotina subia
+    # um segundo servidor do mesmo produto, apontado pra um banco local
+    # vazio e sem receber tráfego nenhum — duas bases divergentes que só
+    # aparecem quando alguém reclama que sumiu um orçamento.
+    #
+    # Pra rodar aqui de propósito (migração ou teste), o serviço continua
+    # inteiro e é só pedir:
+    #   docker compose -f docker-compose.prod.yml --profile esquadrias up -d
+    # Antes disso, as variáveis ESQUADRIAS_* precisam existir no .env.
+    profiles: ["esquadrias"]
     build:
       context: .
       dockerfile: apps/esquadrias/Dockerfile
@@ -117,7 +129,6 @@ services:
       - caddy_config:/config
     depends_on:
       - web
-      - esquadrias
 
 volumes:
   caddy_data:

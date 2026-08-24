@@ -2,6 +2,10 @@ zap.dilontech.com.br {
 	reverse_proxy web:3000
 }
 
-esquadrias.dilontech.com.br {
-	reverse_proxy esquadrias:3001
-}
+# esquadrias.dilontech.com.br NÃO entra aqui: o DNS desse domínio aponta pra
+# Vercel, onde o produto está hospedado. Declarar a rota nesta VPS faria o
+# Caddy tentar emitir certificado pra um domínio cujo tráfego nunca chega —
+# falhando em ciclo, sem nunca servir ninguém.
+#
+# Se um dia o produto migrar pra cá, o bloco volta JUNTO com a mudança de
+# DNS, não antes.
