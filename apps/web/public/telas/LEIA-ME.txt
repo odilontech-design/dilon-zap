@@ -1,0 +1,12 @@
+Capturas de tela exibidas na pagina de login.
+
+Arquivos esperados (PNG):
+  inbox.png    - atendimento aberto, com a lista de conversas ao lado
+  funil.png    - funil de vendas por etapa
+  pedidos.png  - pedido e catalogo
+
+Nao precisa mexer em codigo: o componente TelaDoSistema esconde a moldura
+sozinho quando o arquivo nao existe, e mostra assim que ele aparece aqui.
+
+Use o tenant de demonstracao (Aurora Cosmeticos) para capturar. Nunca use
+conversa de cliente real: esta pagina e publica.
