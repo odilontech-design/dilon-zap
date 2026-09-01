@@ -88,7 +88,12 @@ export default async function LoginPage() {
             que a pessoa VE, e continua a vista enquanto ela desce lendo o
             material comercial ao lado. */}
         <section className="order-1 px-5 py-10 lg:order-2 lg:w-[27rem] lg:shrink-0 lg:border-l lg:border-neutral-200 lg:bg-surface lg:px-8 lg:py-0">
-          <div className="flex items-center justify-center lg:sticky lg:top-0 lg:h-screen">
+          <div className="lg:sticky lg:top-0 lg:h-screen lg:overflow-y-auto">
+            {/* min-h-full com itens centralizados: curto, fica no meio da
+                tela; alto, rola de cima pra baixo sem cortar. Centralizar
+                sem isso funcionava com o formulário fechado e escondia o fim
+                dele quando abria, porque o excedente vazava dos dois lados. */}
+            <div className="flex min-h-full items-center justify-center lg:py-10">
           <div className="flex w-full max-w-sm flex-col gap-4">
             <div className="rounded-xl border border-neutral-200 bg-surface p-8 shadow-sm">
               <p className="mb-2 font-mono text-xs uppercase tracking-[0.18em] text-accent">Dilon Zap</p>
@@ -121,12 +126,13 @@ export default async function LoginPage() {
               </>
             )}
           </div>
+            </div>
           </div>
         </section>
 
         {/* Comercial: abaixo no celular, à esquerda no desktop. */}
-        <section className="order-2 flex flex-col justify-center gap-10 border-t border-neutral-200 px-5 py-14 lg:order-1 lg:flex-1 lg:border-t-0 lg:px-12 lg:py-20">
-          <div className="flex flex-col gap-6">
+        <section className="order-2 flex flex-col justify-center gap-16 border-t border-neutral-200 px-5 py-16 lg:order-1 lg:flex-1 lg:border-t-0 lg:px-14 lg:py-28">
+          <div className="flex flex-col gap-7">
             <a
               href={SITE_DILON}
               target="_blank"
@@ -153,9 +159,9 @@ export default async function LoginPage() {
 
           <CarrosselTelas telas={TELAS} />
 
-          <dl className="flex flex-col gap-7">
+          <dl className="flex flex-col gap-10">
             {DIFERENCIAIS.map((d) => (
-              <div key={d.titulo} className="flex flex-col gap-1.5">
+              <div key={d.titulo} className="flex flex-col gap-2">
                 <dt className="text-xl font-semibold tracking-tight text-neutral-900">{d.titulo}</dt>
                 <dd className="max-w-xl leading-relaxed text-neutral-600">{d.texto}</dd>
               </div>
