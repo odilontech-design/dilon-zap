@@ -79,7 +79,16 @@ export default async function LoginPage() {
         {/* Formulário: primeiro no celular, à direita no desktop. */}
         {/* bg-surface só no desktop: no celular as duas seções empilham, e
             dois tons empilhados viram faixa, não divisão. */}
-        <section className="order-1 flex items-center justify-center px-5 py-10 lg:order-2 lg:w-[27rem] lg:shrink-0 lg:border-l lg:border-neutral-200 lg:bg-surface lg:px-8">
+        {/* A coluna estica com a coluna comercial, que e alta: e o que da o
+            fundo continuo do lado direito. Mas o CONTEUDO nao pode ser
+            centralizado nela, e esse era o defeito — num laptop de 768px de
+            altura o cartao comecava a 60% da tela e o botao Entrar ficava
+            abaixo da dobra. Quem so quer trabalhar tinha que rolar.
+            O miolo e sticky e ocupa uma tela: o login fica centralizado no
+            que a pessoa VE, e continua a vista enquanto ela desce lendo o
+            material comercial ao lado. */}
+        <section className="order-1 px-5 py-10 lg:order-2 lg:w-[27rem] lg:shrink-0 lg:border-l lg:border-neutral-200 lg:bg-surface lg:px-8 lg:py-0">
+          <div className="flex items-center justify-center lg:sticky lg:top-0 lg:h-screen">
           <div className="flex w-full max-w-sm flex-col gap-4">
             <div className="rounded-xl border border-neutral-200 bg-surface p-8 shadow-sm">
               <p className="mb-2 font-mono text-xs uppercase tracking-[0.18em] text-accent">Dilon Zap</p>
@@ -111,6 +120,7 @@ export default async function LoginPage() {
                 </a>
               </>
             )}
+          </div>
           </div>
         </section>
 
