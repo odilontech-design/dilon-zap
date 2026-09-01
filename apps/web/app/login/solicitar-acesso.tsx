@@ -13,32 +13,48 @@ import { linkComMensagem } from "@/lib/suporte";
  *
  * Fica recolhido por padrão. Quem trabalha aqui todo dia não pode ter um
  * formulário de vendas empurrando o campo de senha pra baixo.
+ *
+ * Todos os campos são obrigatórios porque a mensagem existe pra virar cadastro
+ * do outro lado: faltando um dado, alguém tem que voltar e perguntar, e cada
+ * ida e volta é uma chance de o interessado esfriar. O e-mail em especial é o
+ * que vira o login — sem ele não há conta pra criar.
  */
 export function SolicitarAcesso({ numero }: { numero: string }) {
   const [aberto, setAberto] = useState(false);
   const [nome, setNome] = useState("");
   const [empresa, setEmpresa] = useState("");
+  const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
   const [equipe, setEquipe] = useState("");
 
-  const podeEnviar = nome.trim().length > 1 && empresa.trim().length > 1;
+  // Validação frouxa de propósito: o navegador já barra o formato pelo
+  // type="email", e o que importa aqui é não deixar passar um campo vazio.
+  // Regra de e-mail rigorosa demais rejeita endereço válido e trava a venda.
+  const emailParecePreenchido = /.+@.+\..+/.test(email.trim());
+  const podeEnviar =
+    nome.trim().length > 1 &&
+    empresa.trim().length > 1 &&
+    emailParecePreenchido &&
+    telefone.trim().length >= 8 &&
+    equipe.trim().length > 0;
 
   function abrirWhatsApp(e: React.FormEvent) {
     e.preventDefault();
     if (!podeEnviar) return;
 
     // Texto em primeira pessoa: quem envia é a pessoa, e a mensagem tem que
-    // soar como ela escreveu.
-    const linhas = [
+    // soar como ela escreveu. A ordem segue o que o cadastro precisa.
+    const texto = [
       "Olá! Quero conhecer o Dilon Zap.",
       "",
       `Nome: ${nome.trim()}`,
       `Empresa: ${empresa.trim()}`,
-    ];
-    if (telefone.trim()) linhas.push(`Telefone: ${telefone.trim()}`);
-    if (equipe.trim()) linhas.push(`Pessoas no atendimento: ${equipe.trim()}`);
+      `E-mail para acesso: ${email.trim()}`,
+      `Telefone: ${telefone.trim()}`,
+      `Pessoas no atendimento: ${equipe.trim()}`,
+    ].join("\n");
 
-    window.open(linkComMensagem(numero, linhas.join("\n")), "_blank", "noopener,noreferrer");
+    window.open(linkComMensagem(numero, texto), "_blank", "noopener,noreferrer");
   }
 
   if (!aberto) {
@@ -83,10 +99,24 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-neutral-700">
-          Telefone <span className="font-normal text-neutral-400">(opcional)</span>
-        </span>
+        <span className="font-medium text-neutral-700">E-mail</span>
         <input
+          required
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="voce@suaempresa.com.br"
+          className={campo}
+        />
+        {/* Diz pra que serve antes de a pessoa digitar: e-mail que vira login
+            merece ser escolhido com cuidado, e trocar depois dá trabalho. */}
+        <span className="text-xs text-neutral-500">Será o seu login no sistema.</span>
+      </label>
+
+      <label className="flex flex-col gap-1 text-sm">
+        <span className="font-medium text-neutral-700">Telefone</span>
+        <input
+          required
           value={telefone}
           onChange={(e) => setTelefone(e.target.value)}
           inputMode="tel"
@@ -96,10 +126,9 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-neutral-700">
-          Quantas pessoas atendem <span className="font-normal text-neutral-400">(opcional)</span>
-        </span>
+        <span className="font-medium text-neutral-700">Quantas pessoas atendem</span>
         <input
+          required
           value={equipe}
           onChange={(e) => setEquipe(e.target.value)}
           inputMode="numeric"
