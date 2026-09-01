@@ -49,11 +49,15 @@ export function CarrosselTelas({ telas }: { telas: Tela[] }) {
     <figure className="flex flex-col gap-3">
       <div className="overflow-hidden rounded-lg border border-neutral-200 bg-surface shadow-sm">
         {/* Barra de janela: diz "isto é um sistema" sem a captura precisar
-            incluir o navegador inteiro. */}
-        <div className="flex items-center gap-1.5 border-b border-neutral-200 bg-neutral-100 px-3 py-2">
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
-          <span className="h-2.5 w-2.5 rounded-full bg-neutral-300" />
+            incluir o navegador inteiro. As cores são as do macOS porque é o
+            que o olho reconhece na hora como "janela de verdade"; cinza
+            genérico parece placeholder. Ficam em hex fixo de propósito: são
+            citação de outra interface, não cor deste tema, então não seguem o
+            claro/escuro. */}
+        <div className="flex items-center gap-2 border-b border-neutral-200 bg-neutral-100 px-4 py-2.5">
+          <span className="h-3 w-3 rounded-full" style={{ background: "#FF5F57" }} />
+          <span className="h-3 w-3 rounded-full" style={{ background: "#FEBC2E" }} />
+          <span className="h-3 w-3 rounded-full" style={{ background: "#28C840" }} />
         </div>
 
         {/* Todas montadas, só a atual visível: trocar de slide não dispara um

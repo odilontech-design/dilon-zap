@@ -8,12 +8,12 @@ import { SolicitarAcesso } from "./solicitar-acesso";
 import { LogoDilon } from "./logo-dilon";
 
 /**
- * Página de entrada — e vitrine do produto.
+ * Página de entrada e vitrine do produto.
  *
  * Duas audiências opostas dividem esta tela: a atendente abre todo dia de
  * manhã e quer digitar e sumir daqui; quem recebe o link pela primeira vez
  * quer entender o que o sistema faz. Por isso o formulário fica numa coluna
- * própria, sempre visível, e o conteúdo comercial ao lado — nunca por cima.
+ * própria, sempre visível, e o conteúdo comercial ao lado, nunca por cima.
  *
  * No celular a ordem inverte: o formulário vem primeiro e o comercial desce
  * pra baixo, porque quem usa todo dia não pode ter que rolar a tela pra
@@ -22,8 +22,8 @@ import { LogoDilon } from "./logo-dilon";
 
 const SITE_DILON = "https://dilontech.com.br/";
 // Os planos vivem no site, com comparacao e selo de mais vendido. Repetir
-// preco aqui criaria um segundo lugar pra manter — e no dia em que os dois
-// divergissem, quem estaria errado seria a tela que exige deploy pra mudar.
+// preco aqui criaria um segundo lugar pra manter, e no dia em que os dois
+// divergissem quem estaria errado seria a tela que exige deploy pra mudar.
 const PLANOS_DILON = "https://dilontech.com.br/zap";
 
 const TELAS: Tela[] = [
@@ -53,7 +53,7 @@ const DIFERENCIAIS = [
   {
     titulo: "Cada conversa tem dono",
     texto:
-      "Vários atendentes no mesmo número, sem um pisar no outro. A conversa é atribuída, o nome de quem responde vai junto na mensagem e o cliente sempre sabe com quem está falando.",
+      "Vários atendentes no mesmo número, sem um pisar no outro. A conversa é atribuída, o nome de quem responde vai junto na mensagem, e o cliente sempre sabe com quem está falando.",
   },
   {
     titulo: "Do primeiro oi ao pedido fechado",
@@ -63,7 +63,7 @@ const DIFERENCIAIS = [
   {
     titulo: "Nenhum cliente esquecido",
     texto:
-      "Todo atendimento vira um ticket com situação e responsável: o que ficou pendente continua à vista até alguém resolver, em vez de sumir na rolagem do WhatsApp. E o histórico fica na empresa — quando alguém sai da equipe, a relação com o cliente não vai junto no celular.",
+      "Todo atendimento vira um ticket com situação e responsável. O que ficou pendente continua à vista até alguém resolver, em vez de sumir na rolagem do WhatsApp. E o histórico fica na empresa: quando alguém sai da equipe, a relação com o cliente não vai junto no celular.",
   },
 ];
 
@@ -79,23 +79,23 @@ export default async function LoginPage() {
         {/* Formulário: primeiro no celular, à direita no desktop. */}
         {/* bg-surface só no desktop: no celular as duas seções empilham, e
             dois tons empilhados viram faixa, não divisão. */}
-        <section className="order-1 flex items-center justify-center px-5 py-10 lg:order-2 lg:w-[26rem] lg:shrink-0 lg:border-l lg:border-neutral-200 lg:bg-surface lg:px-8">
+        <section className="order-1 flex items-center justify-center px-5 py-10 lg:order-2 lg:w-[27rem] lg:shrink-0 lg:border-l lg:border-neutral-200 lg:bg-surface lg:px-8">
           <div className="flex w-full max-w-sm flex-col gap-4">
-            <div className="rounded-lg border border-neutral-200 bg-surface p-7 shadow-sm">
-              <p className="mb-1 font-mono text-xs uppercase tracking-wide text-accent">Dilon Zap</p>
-              <h1 className="mb-6 text-xl font-semibold">Entrar</h1>
+            <div className="rounded-xl border border-neutral-200 bg-surface p-8 shadow-sm">
+              <p className="mb-2 font-mono text-xs uppercase tracking-[0.18em] text-accent">Dilon Zap</p>
+              <h1 className="mb-7 text-3xl font-semibold tracking-tight">Entrar</h1>
               <LoginForm />
             </div>
 
-            <p className="text-center text-xs text-neutral-500">
+            <p className="text-center text-xs leading-relaxed text-neutral-500">
               Já é cliente e perdeu o acesso? Fale com o responsável pela sua empresa.
             </p>
 
-            {/* Sem número configurado, a instalação não expõe contato nenhum —
-                é o que uma instalação white-label deve fazer. */}
+            {/* Sem número configurado, a instalação não expõe contato nenhum.
+                É o que uma instalação white-label deve fazer. */}
             {numero && (
               <>
-                <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-neutral-400">
+                <div className="flex items-center gap-3 pt-1 text-[11px] uppercase tracking-[0.14em] text-neutral-400">
                   <span className="h-px flex-1 bg-neutral-200" />
                   ainda não é cliente?
                   <span className="h-px flex-1 bg-neutral-200" />
@@ -105,7 +105,7 @@ export default async function LoginPage() {
                   href={PLANOS_DILON}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-center text-xs text-neutral-500 underline underline-offset-2 transition hover:text-accent"
+                  className="text-center text-xs text-neutral-500 underline underline-offset-4 transition hover:text-accent"
                 >
                   Ver planos e preços
                 </a>
@@ -115,8 +115,8 @@ export default async function LoginPage() {
         </section>
 
         {/* Comercial: abaixo no celular, à esquerda no desktop. */}
-        <section className="order-2 flex flex-col justify-center gap-8 border-t border-neutral-200 px-5 py-12 lg:order-1 lg:flex-1 lg:border-t-0 lg:px-10 lg:py-16">
-          <div className="flex flex-col gap-5">
+        <section className="order-2 flex flex-col justify-center gap-10 border-t border-neutral-200 px-5 py-14 lg:order-1 lg:flex-1 lg:border-t-0 lg:px-12 lg:py-20">
+          <div className="flex flex-col gap-6">
             <a
               href={SITE_DILON}
               target="_blank"
@@ -127,33 +127,38 @@ export default async function LoginPage() {
               <LogoDilon />
             </a>
 
-            <h2 className="max-w-xl text-3xl font-semibold leading-tight tracking-tight text-neutral-900 sm:text-4xl">
-              Um número de WhatsApp. A equipe inteira atendendo.
+            {/* O destaque em cor cai na segunda frase, que é onde está a
+                promessa: um número só já existe, a equipe inteira nele é o que
+                o produto entrega. */}
+            <h2 className="max-w-2xl text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.03em] text-neutral-900 sm:text-5xl lg:text-6xl">
+              Um número de WhatsApp.{" "}
+              <span className="text-accent">A equipe inteira atendendo.</span>
             </h2>
-            <p className="max-w-lg text-neutral-600">
+
+            <p className="max-w-xl text-lg leading-relaxed text-neutral-600">
               O Dilon Zap organiza o atendimento que já acontece no WhatsApp da sua
-              empresa — sem trocar de número e sem pedir para o cliente instalar nada.
+              empresa, sem trocar de número e sem pedir para o cliente instalar nada.
             </p>
           </div>
 
           <CarrosselTelas telas={TELAS} />
 
-          <dl className="flex flex-col gap-5">
+          <dl className="flex flex-col gap-7">
             {DIFERENCIAIS.map((d) => (
-              <div key={d.titulo} className="flex flex-col gap-1">
-                <dt className="font-semibold text-neutral-900">{d.titulo}</dt>
-                <dd className="max-w-lg text-sm leading-relaxed text-neutral-600">{d.texto}</dd>
+              <div key={d.titulo} className="flex flex-col gap-1.5">
+                <dt className="text-xl font-semibold tracking-tight text-neutral-900">{d.titulo}</dt>
+                <dd className="max-w-xl leading-relaxed text-neutral-600">{d.texto}</dd>
               </div>
             ))}
           </dl>
 
-          <p className="text-xs text-neutral-500">
+          <p className="text-sm text-neutral-500">
             Dilon Zap é um produto da{" "}
             <a
               href={SITE_DILON}
               target="_blank"
               rel="noopener noreferrer"
-              className="font-medium text-accent underline underline-offset-2 hover:opacity-80"
+              className="font-medium text-accent underline underline-offset-4 hover:opacity-80"
             >
               Dilon Tech
             </a>
