@@ -21,6 +21,10 @@ import { LogoDilon } from "./logo-dilon";
  */
 
 const SITE_DILON = "https://dilontech.com.br/";
+// Os planos vivem no site, com comparacao e selo de mais vendido. Repetir
+// preco aqui criaria um segundo lugar pra manter — e no dia em que os dois
+// divergissem, quem estaria errado seria a tela que exige deploy pra mudar.
+const PLANOS_DILON = "https://dilontech.com.br/zap";
 
 const TELAS: Tela[] = [
   {
@@ -97,6 +101,14 @@ export default async function LoginPage() {
                   <span className="h-px flex-1 bg-neutral-200" />
                 </div>
                 <SolicitarAcesso numero={numero} />
+                <a
+                  href={PLANOS_DILON}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-center text-xs text-neutral-500 underline underline-offset-2 transition hover:text-accent"
+                >
+                  Ver planos e preços
+                </a>
               </>
             )}
           </div>
