@@ -1,8 +1,11 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { numeroDoComercial } from "@/lib/suporte";
 import { LoginForm } from "./login-form";
-import { TelaDoSistema } from "./tela-do-sistema";
+import { CarrosselTelas, type Tela } from "./carrossel-telas";
+import { SolicitarAcesso } from "./solicitar-acesso";
+import { LogoDilon } from "./logo-dilon";
 
 /**
  * Página de entrada — e vitrine do produto.
@@ -17,11 +20,36 @@ import { TelaDoSistema } from "./tela-do-sistema";
  * trabalhar.
  */
 
+const SITE_DILON = "https://dilontech.com.br/";
+
+const TELAS: Tela[] = [
+  {
+    src: "/telas/inbox.png",
+    alt: "Tela de atendimento: lista de conversas à esquerda e o atendimento aberto à direita",
+    legenda: "Atendimento em andamento, com etiquetas e responsável definido.",
+  },
+  {
+    src: "/telas/funil.png",
+    alt: "Funil de vendas com os clientes distribuídos por etapa",
+    legenda: "Funil de vendas por etapa.",
+  },
+  {
+    src: "/telas/pedidos.png",
+    alt: "Tela de pedidos, com catálogo de produtos e valores",
+    legenda: "Pedido montado dentro da conversa.",
+  },
+  {
+    src: "/telas/produtos.png",
+    alt: "Catálogo de produtos com preço e saldo de estoque",
+    legenda: "Catálogo e estoque.",
+  },
+];
+
 const DIFERENCIAIS = [
   {
     titulo: "Cada conversa tem dono",
     texto:
-      "Vários atendentes no mesmo número, sem um pisar no outro. A conversa é atribuída, o nome de quem responde vai junto na mensagem e o histórico fica no cliente, não no celular de alguém.",
+      "Vários atendentes no mesmo número, sem um pisar no outro. A conversa é atribuída, o nome de quem responde vai junto na mensagem e o cliente sempre sabe com quem está falando.",
   },
   {
     titulo: "Do primeiro oi ao pedido fechado",
@@ -29,15 +57,17 @@ const DIFERENCIAIS = [
       "Etapas de funil, catálogo de produtos, pedido montado dentro da conversa e baixa de estoque no fechamento. A venda não muda de sistema no meio do caminho.",
   },
   {
-    titulo: "Você enxerga o que travou",
+    titulo: "Nenhum cliente esquecido",
     texto:
-      "O sistema mostra quando a mensagem não foi entregue e avisa na tela se o número sai do ar — em vez de deixar alguém atendendo no vazio sem saber.",
+      "Todo atendimento vira um ticket com situação e responsável: o que ficou pendente continua à vista até alguém resolver, em vez de sumir na rolagem do WhatsApp. E o histórico fica na empresa — quando alguém sai da equipe, a relação com o cliente não vai junto no celular.",
   },
 ];
 
 export default async function LoginPage() {
   const session = await getServerSession(authOptions);
   if (session) redirect("/painel");
+
+  const numero = numeroDoComercial();
 
   return (
     <div className="min-h-screen bg-canvas">
@@ -46,21 +76,45 @@ export default async function LoginPage() {
         {/* bg-surface só no desktop: no celular as duas seções empilham, e
             dois tons empilhados viram faixa, não divisão. */}
         <section className="order-1 flex items-center justify-center px-5 py-10 lg:order-2 lg:w-[26rem] lg:shrink-0 lg:border-l lg:border-neutral-200 lg:bg-surface lg:px-8">
-          <div className="w-full max-w-sm">
+          <div className="flex w-full max-w-sm flex-col gap-4">
             <div className="rounded-lg border border-neutral-200 bg-surface p-7 shadow-sm">
               <p className="mb-1 font-mono text-xs uppercase tracking-wide text-accent">Dilon Zap</p>
               <h1 className="mb-6 text-xl font-semibold">Entrar</h1>
               <LoginForm />
             </div>
-            <p className="mt-4 text-center text-xs text-neutral-500">
-              Não tem acesso? Fale com o responsável pela sua empresa.
+
+            <p className="text-center text-xs text-neutral-500">
+              Já é cliente e perdeu o acesso? Fale com o responsável pela sua empresa.
             </p>
+
+            {/* Sem número configurado, a instalação não expõe contato nenhum —
+                é o que uma instalação white-label deve fazer. */}
+            {numero && (
+              <>
+                <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-neutral-400">
+                  <span className="h-px flex-1 bg-neutral-200" />
+                  ainda não é cliente?
+                  <span className="h-px flex-1 bg-neutral-200" />
+                </div>
+                <SolicitarAcesso numero={numero} />
+              </>
+            )}
           </div>
         </section>
 
         {/* Comercial: abaixo no celular, à esquerda no desktop. */}
         <section className="order-2 flex flex-col justify-center gap-8 border-t border-neutral-200 px-5 py-12 lg:order-1 lg:flex-1 lg:border-t-0 lg:px-10 lg:py-16">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-5">
+            <a
+              href={SITE_DILON}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-fit rounded transition hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-accent focus:ring-offset-2"
+              aria-label="Ir para o site da Dilon Tech"
+            >
+              <LogoDilon />
+            </a>
+
             <h2 className="max-w-xl text-3xl font-semibold leading-tight tracking-tight text-neutral-900 sm:text-4xl">
               Um número de WhatsApp. A equipe inteira atendendo.
             </h2>
@@ -70,11 +124,7 @@ export default async function LoginPage() {
             </p>
           </div>
 
-          <TelaDoSistema
-            src="/telas/inbox.png"
-            alt="Tela de atendimento do Dilon Zap: lista de conversas à esquerda e o atendimento aberto à direita"
-            legenda="Atendimento em andamento, com etiquetas e responsável definido."
-          />
+          <CarrosselTelas telas={TELAS} />
 
           <dl className="flex flex-col gap-5">
             {DIFERENCIAIS.map((d) => (
@@ -85,21 +135,17 @@ export default async function LoginPage() {
             ))}
           </dl>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <TelaDoSistema
-              src="/telas/funil.png"
-              alt="Funil de vendas do Dilon Zap, com os clientes distribuídos por etapa"
-              legenda="Funil por etapa."
-            />
-            <TelaDoSistema
-              src="/telas/pedidos.png"
-              alt="Tela de pedidos do Dilon Zap, com catálogo e valores"
-              legenda="Pedido e catálogo."
-            />
-          </div>
-
           <p className="text-xs text-neutral-500">
-            Dilon Zap é um produto da Dilon Tech.
+            Dilon Zap é um produto da{" "}
+            <a
+              href={SITE_DILON}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-accent underline underline-offset-2 hover:opacity-80"
+            >
+              Dilon Tech
+            </a>
+            .
           </p>
         </section>
       </div>
