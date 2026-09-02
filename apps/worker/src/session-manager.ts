@@ -17,6 +17,7 @@ import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/stor
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
+import { decidirAutoResposta } from "./auto-reply-decisao";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
@@ -984,6 +985,8 @@ async function recordMessage(params: {
       foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone),
       mensagemAusencia: atendimento.outOfHoursMessage,
       ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
+      contactId: contact.id,
+      saudacaoEnviadaEm: contact.saudacaoEnviadaEm,
     });
   }
 }
@@ -1285,15 +1288,9 @@ function buscarAvatarEmSegundoPlano(
 // v1 do construtor de fluxos: casamento simples por palavra-chave. Só dispara
 // pra conversa sem atendente atribuído — assim que um humano assume, a
 // automação para de responder no lugar dele.
-// Uma mensagem recebida gera NO MÁXIMO uma resposta automática. Por isso
-// ausência e resposta padrão são decididas aqui juntas, e não em automações
-// separadas: separadas, um cliente escrevendo às 22h levaria a resposta da
-// palavra-chave E o aviso de que estamos fechados, duas mensagens seguidas do
-// nada.
-//
-// Ordem: palavra-chave ganha sempre (é específica e útil a qualquer hora);
-// fora do horário, o aviso de ausência ocupa o lugar da resposta padrão; e se
-// a empresa não configurou ausência, tudo se comporta como antes.
+// Qual resposta sai fica em decidirAutoResposta (auto-reply-decisao.ts), que
+// é pura e tem teste. Aqui ficam só as idas ao banco: ler as regras, gravar a
+// mensagem e registrar o que já foi avisado.
 async function maybeAutoReply(params: {
   tenantId: string;
   sessionId: string;
@@ -1302,35 +1299,24 @@ async function maybeAutoReply(params: {
   foraDoHorario: boolean;
   mensagemAusencia: string | null;
   ausenciaAvisadaEm: Date | null;
+  contactId: string;
+  saudacaoEnviadaEm: Date | null;
 }) {
   const rules = await prisma.autoReply.findMany({ where: { tenantId: params.tenantId } });
 
-  const lowerText = params.inboundText.toLowerCase();
-  const porPalavraChave = rules.find(
-    (r) => !r.isDefault && r.keyword && lowerText.includes(r.keyword.toLowerCase())
-  );
+  const decisao = decidirAutoResposta({
+    regras: rules,
+    textoRecebido: params.inboundText,
+    foraDoHorario: params.foraDoHorario,
+    mensagemAusencia: params.mensagemAusencia,
+    ausenciaAvisadaEm: params.ausenciaAvisadaEm,
+    saudacaoEnviadaEm: params.saudacaoEnviadaEm,
+    agora: new Date(),
+    ausenciaIntervaloMs: AUSENCIA_INTERVALO_MS,
+  });
+  if (!decisao) return;
 
-  const ausenciaLigada = params.foraDoHorario && Boolean(params.mensagemAusencia);
-  // Trava anti-spam: cliente que manda cinco mensagens de madrugada recebe UM
-  // aviso, não cinco. Sem isso a automação vira motivo de reclamação.
-  const jaAvisou =
-    params.ausenciaAvisadaEm != null &&
-    Date.now() - params.ausenciaAvisadaEm.getTime() < AUSENCIA_INTERVALO_MS;
-
-  let texto: string | null = null;
-  let marcarAusencia = false;
-
-  if (porPalavraChave) {
-    texto = porPalavraChave.response;
-  } else if (ausenciaLigada) {
-    if (jaAvisou) return; // já avisamos há pouco — fica quieto de propósito
-    texto = params.mensagemAusencia;
-    marcarAusencia = true;
-  } else {
-    texto = rules.find((r) => r.isDefault)?.response ?? null;
-  }
-
-  if (!texto) return;
+  const { texto, marcarAusencia, marcarSaudacao } = decisao;
 
   await prisma.message.create({
     data: {
@@ -1346,6 +1332,14 @@ async function maybeAutoReply(params: {
     await prisma.conversation.update({
       where: { id: params.conversationId },
       data: { outOfHoursNotifiedAt: new Date() },
+    });
+  }
+
+  // Marca depois de enfileirar: só conta como saudado quem de fato recebeu.
+  if (marcarSaudacao) {
+    await prisma.contact.update({
+      where: { id: params.contactId },
+      data: { saudacaoEnviadaEm: new Date() },
     });
   }
 

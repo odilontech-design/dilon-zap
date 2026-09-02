@@ -15,7 +15,7 @@ export default async function AutomacoesPage() {
         <BusinessHoursPanel podeEditar={user.role !== "AGENT"} />
       </div>
 
-      <h2 className="text-sm font-semibold text-neutral-800 mb-3">Respostas por palavra-chave</h2>
+      <h2 className="text-sm font-semibold text-neutral-800 mb-3">Respostas automáticas</h2>
       <AutomationsPanel />
     </div>
   );

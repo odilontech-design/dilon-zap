@@ -207,6 +207,17 @@ model Contact {
   // a avatarUrl deixasse de ser do WhatsApp a comparação pararia de casar em
   // silêncio — voltando a duplicar contato sem ninguém entender por quê.
   avatarPhotoId String?
+  // Quando a saudação de primeiro contato foi enviada pra este cliente.
+  // Fica no contato e não na conversa: quem volta meses depois numa conversa
+  // nova não é um contato novo, e receber "seja bem-vinda" de novo soaria
+  // como se a empresa tivesse esquecido dele.
+  //
+  // A marca só é gravada quando a saudação SAI de fato. Se o cliente escreve
+  // fora do horário, o aviso de ausência tem prioridade e a saudação fica
+  // devendo — ele recebe na primeira mensagem dentro do expediente, em vez
+  // de perder a boas-vindas por ter escrito de madrugada.
+  saudacaoEnviadaEm DateTime?
+
   // Última TENTATIVA, dê certo ou não. Sem isso o worker rebuscava a foto a
   // cada mensagem recebida de todo contato sem avatar — 263 contatos batendo
   // na API do WhatsApp o dia inteiro, à toa, e esse é o tipo de padrão que
@@ -344,6 +355,13 @@ model AutoReply {
   keyword   String
   response  String
   isDefault Boolean  @default(false)
+  // Saudação de primeiro contato: dispara sem palavra-chave, uma vez por
+  // cliente, quando ele fala com a empresa pela primeira vez.
+  //
+  // É diferente da resposta padrão, e a diferença é o ponto: a padrão
+  // responde a TODA mensagem que não casa palavra-chave, então usá-la como
+  // boas-vindas mandaria a mesma saudação pro mesmo cliente pra sempre.
+  isGreeting Boolean @default(false)
   createdAt DateTime @default(now())
 
   @@index([tenantId])
