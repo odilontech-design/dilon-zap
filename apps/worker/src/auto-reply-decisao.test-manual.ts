@@ -1,6 +1,11 @@
 // Tabela de decisão da resposta automática. Puro, sem banco.
 // Rodar com: npx tsx apps/worker/src/auto-reply-decisao.test-manual.ts
-import { decidirAutoResposta, type EntradaDecisao, type RegraAuto } from "./auto-reply-decisao";
+import {
+  decidirAutoResposta,
+  type EntradaDecisao,
+  type OpcaoUra,
+  type RegraAuto,
+} from "./auto-reply-decisao";
 
 const SEIS_HORAS = 6 * 60 * 60 * 1000;
 const AGORA = new Date("2026-09-01T15:00:00Z");
@@ -36,8 +41,35 @@ function cenario(over: Partial<EntradaDecisao>): EntradaDecisao {
     saudacaoEnviadaEm: null,
     agora: AGORA,
     ausenciaIntervaloMs: SEIS_HORAS,
+    uraAtiva: false,
+    uraMensagem: null,
+    uraOpcoes: [],
+    uraEnviadaEm: null,
+    uraReenvios: 0,
     ...over,
   };
+}
+
+// Menu da Guttierres: três setores, cada um com o seu responsável.
+const OPCOES: OpcaoUra[] = [
+  { ordem: 1, rotulo: "Fiscal", atendenteId: "user-fiscal" },
+  { ordem: 2, rotulo: "Contábil", atendenteId: "user-contabil" },
+  { ordem: 3, rotulo: "Departamento Pessoal", atendenteId: "user-dp" },
+];
+const CABECALHO = "Olá! Sou o atendimento da Guttierres. Com qual setor você precisa falar?";
+const MENU = `${CABECALHO}\n\n1 - Fiscal\n2 - Contábil\n3 - Departamento Pessoal`;
+const MENU_DE_NOVO =
+  "Não entendi. Responda com o número de uma das opções:\n\n1 - Fiscal\n2 - Contábil\n3 - Departamento Pessoal";
+
+/** Conversa em que o menu já foi apresentado e esperamos a escolha. */
+function comMenu(over: Partial<EntradaDecisao> = {}) {
+  return cenario({
+    uraAtiva: true,
+    uraMensagem: CABECALHO,
+    uraOpcoes: OPCOES,
+    uraEnviadaEm: new Date("2026-09-01T14:59:00Z"),
+    ...over,
+  });
 }
 
 let falhas = 0;
@@ -223,6 +255,145 @@ checa(
     })
   ),
   resposta(PALAVRA.response)
+);
+
+// ---------------------------------------------------------------------------
+// Menu de triagem (URA): o cliente escolhe o setor e a conversa já nasce com
+// dono. É o caso da Guttierres, que não tem ninguém lendo tudo que chega.
+// ---------------------------------------------------------------------------
+
+checa(
+  "primeiro contato com menu ligado — recebe o menu (e conta como saudado)",
+  decidirAutoResposta(
+    cenario({ uraAtiva: true, uraMensagem: CABECALHO, uraOpcoes: OPCOES })
+  ),
+  { texto: MENU, marcarAusencia: false, marcarSaudacao: true, marcarUraEnviada: true }
+);
+
+checa(
+  "menu ligado sem opção cadastrada — comporta-se como se não existisse",
+  decidirAutoResposta(cenario({ uraAtiva: true, uraMensagem: CABECALHO, regras: [SAUDACAO] })),
+  resposta(SAUDACAO.response, false, true)
+);
+
+checa(
+  "menu desligado com opções cadastradas — segue a saudação de sempre",
+  decidirAutoResposta(cenario({ uraOpcoes: OPCOES, regras: [SAUDACAO] })),
+  resposta(SAUDACAO.response, false, true)
+);
+
+checa(
+  "menu substitui a saudação, nunca manda os dois",
+  decidirAutoResposta(
+    cenario({ uraAtiva: true, uraMensagem: CABECALHO, uraOpcoes: OPCOES, regras: [SAUDACAO] })
+  ),
+  { texto: MENU, marcarAusencia: false, marcarSaudacao: true, marcarUraEnviada: true }
+);
+
+checa(
+  "fora do horário, o aviso de ausência ainda vem antes do menu",
+  decidirAutoResposta(
+    cenario({
+      uraAtiva: true,
+      uraMensagem: CABECALHO,
+      uraOpcoes: OPCOES,
+      foraDoHorario: true,
+      mensagemAusencia: AUSENCIA,
+    })
+  ),
+  resposta(AUSENCIA, true, false)
+);
+
+checa(
+  'cliente responde "2" — vai para o Contábil',
+  decidirAutoResposta(comMenu({ textoRecebido: "2" })),
+  {
+    texto: "Certo! Encaminhando para Contábil. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    atribuirPara: "user-contabil",
+  }
+);
+
+checa(
+  'pontuação e espaço no meio ("  3) ") não atrapalham',
+  decidirAutoResposta(comMenu({ textoRecebido: "  3) " })),
+  {
+    texto: "Certo! Encaminhando para Departamento Pessoal. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    atribuirPara: "user-dp",
+  }
+);
+
+checa(
+  "o nome do setor também vale como escolha, com ou sem acento",
+  decidirAutoResposta(comMenu({ textoRecebido: "contabil" })),
+  {
+    texto: "Certo! Encaminhando para Contábil. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    atribuirPara: "user-contabil",
+  }
+);
+
+checa(
+  'número solto no meio da frase NÃO encaminha ("preciso de 1 boleto")',
+  decidirAutoResposta(comMenu({ textoRecebido: "preciso de 1 boleto" })),
+  { texto: MENU_DE_NOVO, marcarAusencia: false, marcarSaudacao: false, contarReenvioUra: true }
+);
+
+checa(
+  "opção fora da lista cai no reenvio, não em encaminhamento errado",
+  decidirAutoResposta(comMenu({ textoRecebido: "9" })),
+  { texto: MENU_DE_NOVO, marcarAusencia: false, marcarSaudacao: false, contarReenvioUra: true }
+);
+
+checa(
+  "insistiu em texto livre depois do reenvio — o robô se cala e a conversa fica na fila",
+  decidirAutoResposta(comMenu({ textoRecebido: "quero falar com alguém", uraReenvios: 1 })),
+  calado
+);
+
+checa(
+  "mesmo depois de desistir de insistir, a escolha certa ainda encaminha",
+  decidirAutoResposta(comMenu({ textoRecebido: "1", uraReenvios: 1 })),
+  {
+    texto: "Certo! Encaminhando para Fiscal. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    atribuirPara: "user-fiscal",
+  }
+);
+
+checa(
+  "escolha do menu ganha da palavra-chave de mesmo nome (senão ninguém seria acionado)",
+  decidirAutoResposta(
+    comMenu({ textoRecebido: "fiscal", regras: [{ ...PALAVRA, keyword: "fiscal" }] })
+  ),
+  {
+    texto: "Certo! Encaminhando para Fiscal. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    atribuirPara: "user-fiscal",
+  }
+);
+
+checa(
+  "palavra-chave continua valendo pra quem escreve outra coisa durante o menu",
+  decidirAutoResposta(comMenu({ textoRecebido: "qual o horário de vocês?", regras: [PALAVRA] })),
+  resposta(PALAVRA.response)
+);
+
+checa(
+  "cabeçalho vazio — manda só a lista de opções",
+  decidirAutoResposta(cenario({ uraAtiva: true, uraMensagem: null, uraOpcoes: OPCOES })),
+  {
+    texto: "1 - Fiscal\n2 - Contábil\n3 - Departamento Pessoal",
+    marcarAusencia: false,
+    marcarSaudacao: true,
+    marcarUraEnviada: true,
+  }
 );
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
