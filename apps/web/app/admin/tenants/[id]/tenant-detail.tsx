@@ -77,6 +77,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
   const [newUserPassword, setNewUserPassword] = useState<{ email: string; password: string } | null>(null);
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [resettingId, setResettingId] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
 
   async function handleToggleAtivo(u: User) {
     const desativando = !u.deactivatedAt;
@@ -126,11 +127,28 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
       <Link href="/admin" className="text-xs text-emerald-400 hover:underline">
         ← Empresas
       </Link>
-      <h1 className="text-lg font-semibold text-neutral-100 mt-2">{tenant.name}</h1>
+      <div className="mt-2 flex items-center gap-3 flex-wrap">
+        <h1 className="text-lg font-semibold text-neutral-100">{tenant.name}</h1>
+        <button onClick={() => setRenaming(true)} className="text-xs text-emerald-400 hover:underline">
+          Renomear
+        </button>
+      </div>
       <p className="text-sm text-neutral-400 mb-6">
         {tenant.slug} · criada em {formatDate(tenant.createdAt)} · {tenant._count.contacts} contatos ·{" "}
         {tenant._count.conversations} conversas
       </p>
+
+      {renaming && (
+        <RenameTenantForm
+          tenantId={tenant.id}
+          nomeAtual={tenant.name}
+          onClose={() => setRenaming(false)}
+          onSaved={() => {
+            setRenaming(false);
+            mutate();
+          }}
+        />
+      )}
 
       <section className="mb-8">
         <h2 className="text-sm font-medium text-neutral-200 mb-2">Sessões WhatsApp</h2>
@@ -469,6 +487,79 @@ function SubscriptionForm({
             <button
               type="submit"
               disabled={saving}
+              className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 hover:opacity-90 disabled:opacity-50"
+            >
+              {saving ? "Salvando..." : "Salvar"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function RenameTenantForm({
+  tenantId,
+  nomeAtual,
+  onClose,
+  onSaved,
+}: {
+  tenantId: string;
+  nomeAtual: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(nomeAtual);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError(null);
+
+    const res = await fetch(`/api/admin/tenants/${tenantId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    setSaving(false);
+
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "não deu pra renomear a empresa");
+      return;
+    }
+    onSaved();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-sm text-neutral-100">
+        <h2 className="text-base font-semibold mb-4">Renomear empresa</h2>
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <div>
+            <label className="block text-xs font-medium text-neutral-400 mb-1">Nome da empresa</label>
+            <input
+              required
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+          <p className="text-xs text-neutral-500">
+            O identificador (slug) é recalculado a partir do nome. Ninguém precisa entrar de novo — login e conversas
+            não dependem dele.
+          </p>
+          {error && <p className="text-sm text-red-400">{error}</p>}
+          <div className="flex justify-end gap-2 mt-2">
+            <button type="button" onClick={onClose} className="px-3 py-2 text-sm text-neutral-400 hover:text-neutral-200">
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || !name.trim() || name.trim() === nomeAtual}
               className="rounded-md bg-emerald-500 px-4 py-2 text-sm font-medium text-neutral-950 hover:opacity-90 disabled:opacity-50"
             >
               {saving ? "Salvando..." : "Salvar"}

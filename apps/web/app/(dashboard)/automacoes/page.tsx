@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { AutomationsPanel } from "./automations-panel";
 import { BusinessHoursPanel } from "./business-hours-panel";
+import { UraPanel } from "./ura-panel";
 
 export default async function AutomacoesPage() {
   const user = await requireUser();
@@ -13,6 +14,12 @@ export default async function AutomacoesPage() {
           esquece, enquanto as regras por palavra-chave são mexidas sempre. */}
       <div className="max-w-2xl mb-8">
         <BusinessHoursPanel podeEditar={user.role !== "AGENT"} />
+      </div>
+
+      {/* O menu vem antes das respostas por palavra-chave porque é ele que
+          decide de quem é a conversa — as palavras-chave só respondem. */}
+      <div className="max-w-2xl mb-8">
+        <UraPanel podeEditar={user.role !== "AGENT"} />
       </div>
 
       <h2 className="text-sm font-semibold text-neutral-800 mb-3">Respostas automáticas</h2>

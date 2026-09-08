@@ -23,6 +23,19 @@ model Tenant {
   // de a empresa que atende 24h simplesmente não configurar nada.
   outOfHoursMessage String?
 
+  // Menu de triagem (URA) do primeiro contato. Existe pra empresa que não tem
+  // ninguém lendo tudo que chega pra decidir de quem é: o próprio cliente
+  // escolhe o assunto e a conversa já nasce com dono.
+  //
+  // Ligado/desligado explícito em vez de "tem opção cadastrada?": a empresa
+  // precisa poder desligar o menu por uma semana sem apagar a configuração
+  // inteira e ter que remontar depois.
+  uraAtiva    Boolean @default(false)
+  // Cabeçalho do menu — as opções são montadas a partir de UraOpcao e coladas
+  // embaixo. Guardar o menu pronto em texto obrigaria a reescrever a mensagem
+  // toda vez que uma opção mudasse de nome.
+  uraMensagem String?
+
   users         User[]
   sessions      WhatsAppSession[]
   contacts      Contact[]
@@ -34,11 +47,44 @@ model Tenant {
   invoices      Invoice[]
   tags          Tag[]
   stages        Stage[]
+  uraOpcoes     UraOpcao[]
   businessHours BusinessHour[]
   savedTexts    SavedText[]
   scheduledMessages ScheduledMessage[]
   products      Product[]
   stockMovements StockMovement[]
+}
+
+// Uma opção do menu de triagem: o que o cliente digita, o que ele lê e quem
+// recebe a conversa.
+//
+// `atendente` é obrigatório de propósito. Uma opção sem destino deixaria a
+// conversa sem dono depois de o cliente escolher — que é exatamente o
+// problema que o menu existe pra resolver, só que agora com o cliente
+// achando que já foi encaminhado.
+//
+// onDelete: Cascade no atendente porque desligar alguém é desativação
+// (User.deactivatedAt), não exclusão — o Cascade só valeria num delete de
+// verdade, e aí a opção órfã não poderia mesmo continuar de pé.
+model UraOpcao {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // O que o cliente digita. Int e não String porque a ordem do menu e a tecla
+  // são a mesma coisa: "1" é a primeira opção da lista, sempre.
+  ordem  Int
+  rotulo String
+
+  atendenteId String
+  atendente   User   @relation("UraDestino", fields: [atendenteId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  // Duas opções com a mesma tecla tornariam o menu ambíguo — e a escolha do
+  // cliente, uma disputa entre dois registros.
+  @@unique([tenantId, ordem])
+  @@index([tenantId])
 }
 
 // Horário de atendimento, uma linha por dia da semana. Dia sem linha é
@@ -95,6 +141,7 @@ model User {
 
   assignedConversations Conversation[] @relation("AssignedAgent")
   transfersMade         Conversation[] @relation("AssignedBy")
+  uraOpcoes             UraOpcao[]     @relation("UraDestino")
   sentMessages          Message[]      @relation("MessageSender")
   messageReactions      MessageReaction[]
   scheduledMessages     ScheduledMessage[] @relation("ScheduledBy")
@@ -287,6 +334,23 @@ model Conversation {
   // trava que impede o cliente levar cinco respostas iguais por mandar cinco
   // mensagens de madrugada — sem ela a automação vira motivo de reclamação.
   outOfHoursNotifiedAt DateTime?
+
+  // Estado do menu de triagem. Fica na conversa, e não no contato como a
+  // saudação, porque o que o menu resolve é de quem é ESTE atendimento.
+  //
+  // Na prática o cliente vê o menu uma vez: assim que ele escolhe, a conversa
+  // ganha dono e a automação inteira para de rodar (ver o guard de
+  // assignedToId no worker) — inclusive depois de resolvida, porque resolver
+  // não tira o responsável. Quem continua sem dono é justamente quem nunca
+  // escolheu, e é pra esse caso que o carimbo existe: na próxima mensagem
+  // dele, o menu não é reapresentado do zero.
+  uraEnviadaEm DateTime?
+  // Quantas vezes o menu foi reapresentado depois de uma resposta que não é
+  // opção. Vai até 1: reapresenta uma vez e, se ainda assim não vier uma
+  // escolha, o robô se cala e a conversa fica na fila pra um humano assumir —
+  // insistir com quem está escrevendo em texto livre é o jeito mais rápido de
+  // irritar o cliente.
+  uraReenvios  Int       @default(0)
 
   // Transferência entre atendentes. assignedAt/assignedById dizem quando e
   // por quem; assignmentSeenAt marca quando o novo responsável abriu — o

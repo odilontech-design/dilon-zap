@@ -12,12 +12,12 @@ import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 import pino from "pino";
 import { randomUUID } from "node:crypto";
-import { prisma } from "@dilon-zap/db";
+import { prisma, type Prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
-import { decidirAutoResposta } from "./auto-reply-decisao";
+import { decidirAutoResposta, type OpcaoUra } from "./auto-reply-decisao";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
@@ -987,6 +987,11 @@ async function recordMessage(params: {
       ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
       contactId: contact.id,
       saudacaoEnviadaEm: contact.saudacaoEnviadaEm,
+      uraAtiva: atendimento.uraAtiva,
+      uraMensagem: atendimento.uraMensagem,
+      uraOpcoes: atendimento.uraOpcoes,
+      uraEnviadaEm: conversation.uraEnviadaEm,
+      uraReenvios: conversation.uraReenvios,
     });
   }
 }
@@ -998,25 +1003,50 @@ async function recordMessage(params: {
 const CACHE_ATENDIMENTO_MS = 60_000;
 const cacheAtendimento = new Map<
   string,
-  { em: number; dados: { timezone: string; outOfHoursMessage: string | null; dias: DiaDeAtendimento[] } }
+  {
+    em: number;
+    dados: {
+      timezone: string;
+      outOfHoursMessage: string | null;
+      dias: DiaDeAtendimento[];
+      uraAtiva: boolean;
+      uraMensagem: string | null;
+      uraOpcoes: OpcaoUra[];
+    };
+  }
 >();
 
 async function carregarAtendimento(tenantId: string) {
   const guardado = cacheAtendimento.get(tenantId);
   if (guardado && Date.now() - guardado.em < CACHE_ATENDIMENTO_MS) return guardado.dados;
 
-  const [tenant, dias] = await Promise.all([
+  const [tenant, dias, uraOpcoes] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
-      select: { timezone: true, outOfHoursMessage: true },
+      select: { timezone: true, outOfHoursMessage: true, uraAtiva: true, uraMensagem: true },
     }),
     prisma.businessHour.findMany({
       where: { tenantId },
       select: { weekday: true, isOpen: true, opensAt: true, closesAt: true },
     }),
+    // Só opções cujo destino ainda está ativo: encaminhar pra quem saiu da
+    // empresa deixaria a conversa "atendida" na mesa de ninguém — pior que
+    // não encaminhar, porque some da fila sem dono e ninguém procura.
+    prisma.uraOpcao.findMany({
+      where: { tenantId, atendente: { deactivatedAt: null } },
+      select: { ordem: true, rotulo: true, atendenteId: true },
+      orderBy: { ordem: "asc" },
+    }),
   ]);
 
-  const dados = { timezone: tenant.timezone, outOfHoursMessage: tenant.outOfHoursMessage, dias };
+  const dados = {
+    timezone: tenant.timezone,
+    outOfHoursMessage: tenant.outOfHoursMessage,
+    dias,
+    uraAtiva: tenant.uraAtiva,
+    uraMensagem: tenant.uraMensagem,
+    uraOpcoes,
+  };
   cacheAtendimento.set(tenantId, { em: Date.now(), dados });
   return dados;
 }
@@ -1301,6 +1331,11 @@ async function maybeAutoReply(params: {
   ausenciaAvisadaEm: Date | null;
   contactId: string;
   saudacaoEnviadaEm: Date | null;
+  uraAtiva: boolean;
+  uraMensagem: string | null;
+  uraOpcoes: OpcaoUra[];
+  uraEnviadaEm: Date | null;
+  uraReenvios: number;
 }) {
   const rules = await prisma.autoReply.findMany({ where: { tenantId: params.tenantId } });
 
@@ -1313,10 +1348,16 @@ async function maybeAutoReply(params: {
     saudacaoEnviadaEm: params.saudacaoEnviadaEm,
     agora: new Date(),
     ausenciaIntervaloMs: AUSENCIA_INTERVALO_MS,
+    uraAtiva: params.uraAtiva,
+    uraMensagem: params.uraMensagem,
+    uraOpcoes: params.uraOpcoes,
+    uraEnviadaEm: params.uraEnviadaEm,
+    uraReenvios: params.uraReenvios,
   });
   if (!decisao) return;
 
-  const { texto, marcarAusencia, marcarSaudacao } = decisao;
+  const { texto, marcarAusencia, marcarSaudacao, marcarUraEnviada, contarReenvioUra, atribuirPara } =
+    decisao;
 
   await prisma.message.create({
     data: {
@@ -1332,6 +1373,25 @@ async function maybeAutoReply(params: {
     await prisma.conversation.update({
       where: { id: params.conversationId },
       data: { outOfHoursNotifiedAt: new Date() },
+    });
+  }
+
+  // Estado do menu na conversa. As três coisas mexem na mesma linha, então
+  // vão num update só — e o encaminhamento entra junto com assignedAt para o
+  // Inbox mostrar o aviso de "chegou pra você", igual a uma transferência
+  // feita por um colega. assignedById fica nulo de propósito: não foi ninguém
+  // da equipe que transferiu, foi o próprio cliente escolhendo no menu.
+  const mudancasNaConversa: Prisma.ConversationUpdateInput = {};
+  if (marcarUraEnviada) mudancasNaConversa.uraEnviadaEm = new Date();
+  if (contarReenvioUra) mudancasNaConversa.uraReenvios = { increment: 1 };
+  if (atribuirPara) {
+    mudancasNaConversa.assignedTo = { connect: { id: atribuirPara } };
+    mudancasNaConversa.assignedAt = new Date();
+  }
+  if (Object.keys(mudancasNaConversa).length > 0) {
+    await prisma.conversation.update({
+      where: { id: params.conversationId },
+      data: mudancasNaConversa,
     });
   }
 
