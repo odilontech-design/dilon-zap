@@ -5,15 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@dilon-zap/db";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-
-function slugify(name: string) {
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
+import { slugUnico } from "@/lib/tenant-slug";
 
 function generatePassword() {
   return randomBytes(9).toString("base64url"); // 12 chars, sem confundir com telefone/ID
@@ -52,12 +44,7 @@ export async function POST(req: Request) {
   const existingUser = await prisma.user.findUnique({ where: { email } });
   if (existingUser) return NextResponse.json({ error: "já existe um usuário com esse e-mail" }, { status: 409 });
 
-  let slug = slugify(tenantName) || "tenant";
-  let attempt = 0;
-  while (await prisma.tenant.findUnique({ where: { slug } })) {
-    attempt++;
-    slug = `${slugify(tenantName)}-${attempt}`;
-  }
+  const slug = await slugUnico(tenantName);
 
   const password = generatePassword();
   const passwordHash = await bcrypt.hash(password, 10);
