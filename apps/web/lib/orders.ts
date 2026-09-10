@@ -30,6 +30,8 @@ export type FecharInput = {
   descontoCents: number;
   /** PIX e cartão saem pagos na hora; boleto e fiado ficam a receber. */
   pago: boolean;
+  /** Quando o cliente combinou de pagar. Só usado quando `pago` é falso. */
+  vencimento?: Date | null;
   observacao?: string;
 };
 
@@ -91,6 +93,27 @@ export async function fecharPedido(input: FecharInput) {
       });
     }
 
+    // Pedido que fecha pago já nasce com o recebimento no extrato. Marcar só
+    // a flag deixaria o histórico mentindo por omissão: o pedido apareceria
+    // quitado e o extrato, vazio — e aí "quanto entrou em setembro" daria
+    // menos do que entrou de verdade.
+    //
+    // Criado aqui dentro, e não chamando registrarPagamento(), porque aquela
+    // função abre a própria transação: chamada de dentro desta aninharia
+    // transação, e o rollback do fechamento não desfaria o pagamento. Mesmo
+    // motivo da baixa de estoque logo acima.
+    if (input.pago && totais.totalCents > 0) {
+      await tx.pagamento.create({
+        data: {
+          orderId: pedido.id,
+          valorCents: totais.totalCents,
+          meio: input.paymentMethod,
+          recebidoEm: agora,
+          createdById: input.userId,
+        },
+      });
+    }
+
     const atualizado = await tx.order.update({
       where: { id: pedido.id },
       data: {
@@ -98,6 +121,10 @@ export async function fecharPedido(input: FecharInput) {
         paymentMethod: input.paymentMethod,
         pago: input.pago,
         pagoEm: input.pago ? agora : null,
+        // Prazo só faz sentido em pedido que fecha devendo. Em PIX ou cartão
+        // o dinheiro já entrou, e uma data de vencimento ali confundiria a
+        // lista de recebíveis com algo que não é dívida.
+        vencimento: input.pago ? null : (input.vencimento ?? null),
         subtotalCents: totais.subtotalCents,
         descontoCents: totais.descontoCents,
         totalCents: totais.totalCents,
@@ -121,10 +148,18 @@ export async function fecharPedido(input: FecharInput) {
  * esquecer, o número fica errado sem avisar.
  */
 export async function saldoDevedor(tenantId: string, contactId: string) {
-  const r = await prisma.order.aggregate({
+  // Traz os pagamentos junto em vez de somar totalCents: com pagamento
+  // parcial, somar o total do pedido diria que o cliente deve 200 quando ele
+  // já pagou 140. Enquanto `pago` era sim/não os dois davam no mesmo — agora
+  // não dão mais, e esta função é a que a ficha do contato mostra.
+  const pedidos = await prisma.order.findMany({
     where: { tenantId, contactId, status: "FECHADO", pago: false },
-    _sum: { totalCents: true },
-    _count: true,
+    select: { totalCents: true, pagamentos: { select: { valorCents: true } } },
   });
-  return { totalCents: r._sum.totalCents ?? 0, pedidos: r._count };
+
+  const totalCents = pedidos.reduce(
+    (soma, p) => soma + p.totalCents - p.pagamentos.reduce((s, x) => s + x.valorCents, 0),
+    0
+  );
+  return { totalCents, pedidos: pedidos.length };
 }

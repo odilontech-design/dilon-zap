@@ -232,6 +232,7 @@ model User {
   ordersCreated         Order[]            @relation("OrderCreatedBy")
   ordersClosed          Order[]            @relation("OrderClosedBy")
   stockMovements        StockMovement[]    @relation("StockMovementBy")
+  pagamentos            Pagamento[]        @relation("PagamentoPor")
 
   @@index([tenantId])
 }
@@ -648,8 +649,24 @@ model Order {
   paymentMethod PaymentMethod?
   // Separado do status: pedido fiado ou por boleto FECHA sem estar pago. Sem
   // essa distinção não dá pra saber quanto a empresa tem a receber.
+  //
+  // É CACHE, igual ao saldo do estoque: a verdade é a soma de Pagamento, e
+  // este campo existe pra listar cem pedidos sem fazer cem somas. Por isso
+  // nunca é escrito direto — só por registrarPagamento(), que grava o
+  // pagamento e atualiza isto na MESMA transação. Escrever por fora descola
+  // o cache do histórico e o número deixa de valer.
   pago   Boolean   @default(false)
   pagoEm DateTime?
+
+  // Quando o cliente combinou de pagar.
+  //
+  // Sem isto não existe "vencido": `pago` sozinho responde se recebeu, nunca
+  // se está atrasado — e "quem me deve há mais tempo" é a única pergunta que
+  // importa numa lista de recebíveis. Nulo em pedido pago na hora (PIX,
+  // cartão), onde combinar prazo não faz sentido.
+  vencimento DateTime?
+
+  pagamentos Pagamento[]
 
   // Totais congelados no fechamento, em centavos. Recalcular a partir dos
   // itens em toda leitura pareceria mais "correto", mas um item editado
@@ -672,6 +689,41 @@ model Order {
   @@index([tenantId, status, createdAt])
   @@index([contactId])
   @@index([conversationId])
+}
+
+// Um recebimento de um pedido.
+//
+// Historico, e nao um booleano — mesma escolha do StockMovement e pelo mesmo
+// motivo. Fiado de cosmetico se paga em parcela: "pagou 60 de 200" nao cabe
+// em sim/nao, e um campo "valorPago" que alguem edita na mao desanda em duas
+// semanas (some do sistema o que entrou pelo caixa e ninguem sabe quando nem
+// de quem). Com o historico da pra responder "por que o saldo era 200 e agora
+// e 140", que e a pergunta que aparece quando o numero nao bate.
+//
+// Nunca e apagado nem editado: estorno e um pagamento NEGATIVO, nao a
+// correcao do anterior. Reescrever o passado e o que faz o extrato perder a
+// serventia.
+model Pagamento {
+  id      String @id @default(cuid())
+  orderId String
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  // Em centavos. Negativo e estorno — o unico caso em que a soma diminui.
+  valorCents Int
+  meio       PaymentMethod?
+
+  // Quando o dinheiro entrou, que nem sempre e quando foi lancado: a
+  // consultora recebe no sabado e registra na segunda, e o relatorio tem que
+  // dizer sabado.
+  recebidoEm DateTime @default(now())
+  observacao String?
+
+  createdById String?
+  createdBy   User?   @relation("PagamentoPor", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
 }
 
 model OrderItem {

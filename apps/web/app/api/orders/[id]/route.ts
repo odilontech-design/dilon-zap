@@ -23,6 +23,8 @@ const patchSchema = z.object({
   observacao: z.string().trim().max(500).optional(),
   descontoCents: z.number().int().min(0).optional(),
   paymentMethod: z.enum(["PIX", "CARTAO", "BOLETO", "FIADO"]).optional(),
+  // Prazo combinado com o cliente. So vale em pedido que fecha devendo.
+  vencimento: z.string().datetime().nullable().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -115,6 +117,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       userId: user.id,
       paymentMethod: parsed.data.paymentMethod,
       descontoCents: parsed.data.descontoCents ?? 0,
+      vencimento: parsed.data.vencimento ? new Date(parsed.data.vencimento) : null,
       pago: pagoNaHora,
       observacao: parsed.data.observacao,
     });
