@@ -2,6 +2,8 @@
 
 import useSWR from "swr";
 import { LISTING_INTERVAL } from "@/lib/polling";
+import { Rosca, BarrasAgrupadas } from "./graficos";
+import { useCoresGrafico } from "./cores-grafico";
 
 /**
  * Painel de relatórios.
@@ -10,9 +12,12 @@ import { LISTING_INTERVAL } from "@/lib/polling";
  * conexão — e a tela mostrava só três números, ignorando o resto. Não houve
  * consulta nova aqui: é o mesmo payload, inteiro.
  *
- * Sem gráfico de propósito. São contagens pequenas que se leem melhor como
- * número e tabela; uma barra por atendente entra só como pista de proporção
- * ao lado do valor, nunca no lugar dele.
+ * Rosca para a situação das conversas, barras para a carga por atendente.
+ *
+ * A tabela continua embaixo das barras de propósito: no tema claro uma das
+ * três cores fica abaixo de 3:1 de contraste contra a superfície, e a regra é
+ * compensar com rótulo escrito e tabela — a leitura nunca pode depender só da
+ * cor. A tabela também é o lugar de ler o número exato sem passar o mouse.
  */
 
 type Agente = { id: string; name: string; active: number; resolved: number };
@@ -56,6 +61,7 @@ function Cartao({ rotulo, valor, nota }: { rotulo: string; valor: string; nota?:
 
 export function ReportsPanel() {
   const { data } = useSWR<Summary>("/api/reports/summary", fetcher, { refreshInterval: LISTING_INTERVAL });
+  const cores = useCoresGrafico();
 
   if (!data) return <p className="text-sm text-neutral-400">Carregando...</p>;
 
@@ -67,7 +73,6 @@ export function ReportsPanel() {
     .filter((a) => a.active > 0 || a.resolved > 0)
     .sort((a, b) => b.active - a.active || b.resolved - a.resolved);
 
-  const maiorCarga = Math.max(1, ...comCarga.map((a) => a.active));
   const emAndamento = data.statusCounts.OPEN + data.statusCounts.PENDING;
 
   return (
@@ -104,11 +109,14 @@ export function ReportsPanel() {
 
       <section>
         <h2 className="mb-3 text-sm font-semibold text-neutral-800">Situação das conversas</h2>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Cartao rotulo="Em atendimento" valor={String(data.statusCounts.OPEN)} />
-          <Cartao rotulo="Pendentes" valor={String(data.statusCounts.PENDING)} />
-          <Cartao rotulo="Resolvidas" valor={String(data.statusCounts.RESOLVED)} />
-        </div>
+        <Rosca
+          titulo="Conversas por situação"
+          fatias={[
+            { rotulo: "Em atendimento", valor: data.statusCounts.OPEN, cor: cores[0] },
+            { rotulo: "Pendentes", valor: data.statusCounts.PENDING, cor: cores[1] },
+            { rotulo: "Resolvidas", valor: data.statusCounts.RESOLVED, cor: cores[2] },
+          ]}
+        />
         {emAndamento > 0 && (
           <p className="mt-2 text-xs text-neutral-400">
             {emAndamento} conversa(s) ainda esperando desfecho.
@@ -118,6 +126,19 @@ export function ReportsPanel() {
 
       <section>
         <h2 className="mb-3 text-sm font-semibold text-neutral-800">Carga por atendente</h2>
+
+        {comCarga.length > 0 && (
+          <div className="mb-4">
+            <BarrasAgrupadas
+              titulo="Conversas por atendente"
+              itens={comCarga.map((a) => ({ rotulo: a.name, valores: [a.active, a.resolved] }))}
+              series={[
+                { rotulo: "Em aberto", cor: cores[0] },
+                { rotulo: "Resolvidas", cor: cores[2] },
+              ]}
+            />
+          </div>
+        )}
 
         {comCarga.length === 0 ? (
           <p className="rounded-lg border border-neutral-200 bg-surface px-4 py-6 text-center text-sm text-neutral-400">
@@ -137,19 +158,11 @@ export function ReportsPanel() {
                 {comCarga.map((a) => (
                   <tr key={a.id} className="border-t border-neutral-100">
                     <td className="px-4 py-2.5">{a.name}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center justify-end gap-2">
-                        {/* Pista de proporção, não a informação. O número
-                            continua sendo o que se lê; a barra só deixa a
-                            diferença entre 2 e 14 visível de relance. */}
-                        <span
-                          aria-hidden
-                          className="h-1.5 rounded-full bg-accent/30"
-                          style={{ width: `${Math.round((a.active / maiorCarga) * 64)}px` }}
-                        />
-                        <span className="tabular-nums font-medium">{a.active}</span>
-                      </div>
-                    </td>
+                    {/* Só o número: a proporção já está nas barras acima, e
+                        repetir a mesma informação duas vezes na mesma tela
+                        rouba atenção do que a tabela faz de melhor, que é
+                        dar o valor exato. */}
+                    <td className="px-4 py-2.5 text-right tabular-nums font-medium">{a.active}</td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-neutral-500">
                       {a.resolved}
                     </td>
