@@ -15,7 +15,7 @@ export async function GET() {
     where: {
       direction: "INBOUND",
       readAt: null,
-      conversation: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+      conversation: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
     },
   });
 

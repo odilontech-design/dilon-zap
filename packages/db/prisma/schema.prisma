@@ -48,6 +48,7 @@ model Tenant {
   tags          Tag[]
   stages        Stage[]
   uraOpcoes     UraOpcao[]
+  setores       Setor[]
   businessHours BusinessHour[]
   savedTexts    SavedText[]
   scheduledMessages ScheduledMessage[]
@@ -55,17 +56,52 @@ model Tenant {
   stockMovements StockMovement[]
 }
 
-// Uma opção do menu de triagem: o que o cliente digita, o que ele lê e quem
-// recebe a conversa.
+// Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
 //
-// `atendente` é obrigatório de propósito. Uma opção sem destino deixaria a
-// conversa sem dono depois de o cliente escolher — que é exatamente o
-// problema que o menu existe pra resolver, só que agora com o cliente
-// achando que já foi encaminhado.
+// Existe pra que a conversa tenha dono ANTES de ter responsável. Encaminhar
+// pro setor põe o atendimento numa fila que a equipe inteira do setor enxerga
+// e da qual qualquer um puxa — que é o que uma pessoa só como destino não
+// resolve: se ela está de férias, o cliente fica esperando e ninguém sabe.
+model Setor {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nome String
+  // Etiqueta visual no Inbox. É o que faz a fila ser legível de relance,
+  // sem precisar abrir a conversa pra saber de quem é o assunto.
+  cor  String @default("#0F766E")
+  // Desativar em vez de apagar: setor que saiu de uso ainda é o setor das
+  // conversas antigas, e apagar faria o histórico perder essa informação.
+  ativo Boolean @default(true)
+
+  createdAt DateTime @default(now())
+
+  membros   SetorMembro[]
+  opcoes    UraOpcao[]
+  conversas Conversation[]
+
+  @@unique([tenantId, nome])
+  @@index([tenantId, ativo])
+}
+
+// Quem pertence a qual setor.
 //
-// onDelete: Cascade no atendente porque desligar alguém é desativação
-// (User.deactivatedAt), não exclusão — o Cascade só valeria num delete de
-// verdade, e aí a opção órfã não poderia mesmo continuar de pé.
+// Muitos-pra-muitos de propósito: numa contabilidade pequena a mesma pessoa
+// cobre Fiscal e Contábil, e obrigar a escolher um faria ela deixar de ver
+// metade da fila que é dela.
+model SetorMembro {
+  setorId String
+  setor   Setor  @relation(fields: [setorId], references: [id], onDelete: Cascade)
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@id([setorId, userId])
+  @@index([userId])
+}
+
 model UraOpcao {
   id       String @id @default(cuid())
   tenantId String
@@ -76,8 +112,22 @@ model UraOpcao {
   ordem  Int
   rotulo String
 
-  atendenteId String
-  atendente   User   @relation("UraDestino", fields: [atendenteId], references: [id], onDelete: Cascade)
+  // Destino: EXATAMENTE um dos dois preenchido.
+  //
+  // Os dois existem porque as duas coisas são pedidas de verdade. A Guttierres
+  // quer "1 - Fiscal", que é um setor com três pessoas. A Believe quer "3 -
+  // falar com a Camila", que é uma pessoa. Um produto que só faz setor obriga
+  // a revenda a criar um setor de uma pessoa só pra dizer o óbvio.
+  //
+  // O Postgres garantiria isso com um CHECK, mas o projeto sincroniza schema
+  // com `db push`, que não conhece a restrição e a descartaria na próxima
+  // sincronização em silêncio. Então quem garante é a rota /api/ura, num lugar
+  // só — e este comentário existe pra que ninguém escreva um segundo caminho
+  // de gravação achando que o banco protege.
+  setorId     String?
+  setor       Setor?  @relation(fields: [setorId], references: [id], onDelete: Cascade)
+  atendenteId String?
+  atendente   User?   @relation("UraDestino", fields: [atendenteId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
@@ -142,6 +192,7 @@ model User {
   assignedConversations Conversation[] @relation("AssignedAgent")
   transfersMade         Conversation[] @relation("AssignedBy")
   uraOpcoes             UraOpcao[]     @relation("UraDestino")
+  setores               SetorMembro[]
   sentMessages          Message[]      @relation("MessageSender")
   messageReactions      MessageReaction[]
   scheduledMessages     ScheduledMessage[] @relation("ScheduledBy")
@@ -327,6 +378,19 @@ model Conversation {
   tags      String[]            @default([])
   assignedToId String?
   assignedTo   User?            @relation("AssignedAgent", fields: [assignedToId], references: [id])
+
+  // De qual setor é este atendimento. É ORTOGONAL a assignedToId, e essa é a
+  // ideia toda: setor responde "de quem é o assunto", responsável responde
+  // "quem está cuidando agora".
+  //
+  // Setor preenchido com responsável vazio É a fila do setor — o estado que a
+  // equipe inteira enxerga e do qual qualquer membro puxa. Sem os dois campos
+  // esse estado não existe, e encaminhar viraria de novo escolher uma pessoa.
+  //
+  // onDelete: SetNull porque apagar um setor não pode levar junto o histórico
+  // de atendimento — a conversa aconteceu, mesmo que o setor não exista mais.
+  setorId String?
+  setor   Setor?  @relation(fields: [setorId], references: [id], onDelete: SetNull)
   lastMessageAt DateTime        @default(now())
   createdAt DateTime            @default(now())
 
@@ -381,6 +445,8 @@ model Conversation {
   // um sem ver o create do outro ainda (find-then-create não é atômico).
   @@unique([contactId, sessionId])
   @@index([tenantId, status])
+  // Fila do setor: quem sao as conversas do meu setor sem responsavel.
+  @@index([tenantId, setorId, assignedToId])
   @@index([sessionId])
 }
 

@@ -12,7 +12,7 @@ export async function GET() {
 
   const counts = await prisma.conversation.groupBy({
     by: ["status"],
-    where: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+    where: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
     _count: true,
   });
 

@@ -79,7 +79,7 @@ export async function POST(req: Request) {
     where: {
       id: parsed.data.conversationId,
       tenantId: user.tenantId,
-      ...conversationVisibilityWhere(user),
+      ...(await conversationVisibilityWhere(user)),
     },
     select: { id: true, contactId: true },
   });

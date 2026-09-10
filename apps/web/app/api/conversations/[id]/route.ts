@@ -16,7 +16,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const user = await requireUser();
 
   const conversation = await prisma.conversation.findFirst({
-    where: { id: params.id, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+    where: { id: params.id, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
     include: {
       contact: true,
       assignedTo: { select: { id: true, name: true } },
@@ -33,7 +33,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const conversation = await prisma.conversation.findFirst({
-    where: { id: params.id, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+    where: { id: params.id, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 

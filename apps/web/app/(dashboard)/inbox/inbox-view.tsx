@@ -28,6 +28,10 @@ type ConversationSummary = {
   tags: string[];
   contact: ContactRef;
   assignedTo: { id: string; name: string } | null;
+  // Setor da conversa. Convive com assignedTo em vez de substituir: setor
+  // responde de quem e o assunto, assignedTo responde quem esta cuidando.
+  // Setor sem responsavel e a fila — o estado que a equipe do setor puxa.
+  setor: { id: string; nome: string; cor: string } | null;
   unreadCount: number;
   // Calculado no servidor em relação a quem pediu: o mesmo registro é aviso
   // pra quem recebeu a conversa e nada pros outros.
@@ -404,6 +408,20 @@ export function InboxView({ ehFinanceiro }: { ehFinanceiro: boolean }) {
                     {c.assignedTo && (
                       <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
                         {c.assignedTo.name}
+                      </span>
+                    )}
+                    {c.setor && (
+                      <span
+                        className="text-[10px] rounded-full px-2 py-0.5"
+                        style={{ backgroundColor: c.setor.cor, color: readableTextColor(c.setor.cor) }}
+                        title={
+                          c.assignedTo
+                            ? `Setor ${c.setor.nome}`
+                            : `Na fila do setor ${c.setor.nome} — ninguém assumiu ainda`
+                        }
+                      >
+                        {c.setor.nome}
+                        {!c.assignedTo && " · na fila"}
                       </span>
                     )}
                     {c.tags.map((tag) => {

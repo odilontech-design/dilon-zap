@@ -11,7 +11,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const user = await requireUser();
 
   const message = await prisma.message.findFirst({
-    where: { id: params.id, conversation: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) } },
+    where: { id: params.id, conversation: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) } },
     select: { mediaKey: true },
   });
   if (!message?.mediaKey) return NextResponse.json({ error: "not found" }, { status: 404 });

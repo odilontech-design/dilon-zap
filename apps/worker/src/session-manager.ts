@@ -17,7 +17,7 @@ import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/stor
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
-import { decidirAutoResposta, type OpcaoUra } from "./auto-reply-decisao";
+import { decidirAutoResposta, automacaoPodeFalar, type OpcaoUra } from "./auto-reply-decisao";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
@@ -975,7 +975,8 @@ async function recordMessage(params: {
     await prisma.message.create({ data: messageData });
   }
 
-  if (isInbound && !conversation.assignedToId) {
+  // A regra de quem cala o robô tem nome e teste — ver automacaoPodeFalar.
+  if (isInbound && automacaoPodeFalar(conversation)) {
     const atendimento = await carregarAtendimento(session.tenantId);
     await maybeAutoReply({
       tenantId: session.tenantId,
@@ -1032,9 +1033,24 @@ async function carregarAtendimento(tenantId: string) {
     // Só opções cujo destino ainda está ativo: encaminhar pra quem saiu da
     // empresa deixaria a conversa "atendida" na mesa de ninguém — pior que
     // não encaminhar, porque some da fila sem dono e ninguém procura.
+    //
+    // Setor pede DUAS condições. Ativo não basta: setor sem nenhum membro
+    // ativo é uma fila que ninguém filtra, e o efeito pro cliente é o mesmo
+    // de ser encaminhado pra quem saiu da empresa. Melhor a opção nem
+    // aparecer no menu do que aparecer e não levar a lugar nenhum.
+    //
+    // O OR é obrigatório aqui: com atendenteId nulável, filtrar só por
+    // `atendente: { deactivatedAt: null }` descartaria TODA opção de setor
+    // em silêncio, e o menu apareceria sem elas sem ninguém entender por quê.
     prisma.uraOpcao.findMany({
-      where: { tenantId, atendente: { deactivatedAt: null } },
-      select: { ordem: true, rotulo: true, atendenteId: true },
+      where: {
+        tenantId,
+        OR: [
+          { atendente: { deactivatedAt: null } },
+          { setor: { ativo: true, membros: { some: { user: { deactivatedAt: null } } } } },
+        ],
+      },
+      select: { ordem: true, rotulo: true, atendenteId: true, setorId: true },
       orderBy: { ordem: "asc" },
     }),
   ]);
@@ -1356,7 +1372,15 @@ async function maybeAutoReply(params: {
   });
   if (!decisao) return;
 
-  const { texto, marcarAusencia, marcarSaudacao, marcarUraEnviada, contarReenvioUra, atribuirPara } =
+  const {
+    texto,
+    marcarAusencia,
+    marcarSaudacao,
+    marcarUraEnviada,
+    contarReenvioUra,
+    atribuirPara,
+    direcionarParaSetor,
+  } =
     decisao;
 
   await prisma.message.create({
@@ -1387,6 +1411,13 @@ async function maybeAutoReply(params: {
   if (atribuirPara) {
     mudancasNaConversa.assignedTo = { connect: { id: atribuirPara } };
     mudancasNaConversa.assignedAt = new Date();
+  }
+  // Setor NÃO preenche assignedTo de propósito: a conversa vai pra fila do
+  // setor, sem responsável, que é o estado em que a equipe inteira enxerga e
+  // qualquer membro pode assumir. Preencher um responsável aqui escolheria
+  // uma pessoa por conta própria e desfaria justamente o que o setor resolve.
+  if (direcionarParaSetor) {
+    mudancasNaConversa.setor = { connect: { id: direcionarParaSetor } };
   }
   if (Object.keys(mudancasNaConversa).length > 0) {
     await prisma.conversation.update({

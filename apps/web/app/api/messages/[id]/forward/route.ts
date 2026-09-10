@@ -19,7 +19,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const source = await prisma.message.findFirst({
-    where: { id: params.id, conversation: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) } },
+    where: { id: params.id, conversation: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) } },
   });
   if (!source) return NextResponse.json({ error: "not found" }, { status: 404 });
   if (source.isDeleted) return NextResponse.json({ error: "essa mensagem foi apagada" }, { status: 400 });
@@ -28,7 +28,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     where: {
       id: { in: parsed.data.conversationIds },
       tenantId: user.tenantId,
-      ...conversationVisibilityWhere(user),
+      ...(await conversationVisibilityWhere(user)),
     },
   });
   if (targets.length === 0) return NextResponse.json({ error: "nenhuma conversa válida selecionada" }, { status: 400 });

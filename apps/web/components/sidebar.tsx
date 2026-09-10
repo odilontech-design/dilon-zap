@@ -83,6 +83,12 @@ const NAV_ITEMS = [
     icon: icon(<><path d="M20.6 13.4 12 4.8A2 2 0 0 0 10.6 4.2H5a1 1 0 0 0-1 1v5.6a2 2 0 0 0 .6 1.4l8.6 8.6a2 2 0 0 0 2.8 0l4.6-4.6a2 2 0 0 0 0-2.8Z" /><circle cx="7.8" cy="8" r="1.2" fill="currentColor" stroke="none" /></>),
   },
   {
+    href: "/setores",
+    label: "Setores",
+    icon: icon(<><circle cx="9" cy="7" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20" /><path d="M17 14a3.5 3.5 0 0 1 3.5 3.5V19" /></>),
+    somenteResponsavel: true,
+  },
+  {
     href: "/etapas",
     label: "Etapas do funil",
     icon: icon(<><path d="M8 6h13M8 12h13M8 18h13" /><circle cx="3.5" cy="6" r="1.5" /><circle cx="3.5" cy="12" r="1.5" /><circle cx="3.5" cy="18" r="1.5" /></>),

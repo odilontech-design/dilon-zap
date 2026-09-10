@@ -12,12 +12,23 @@ import useSWR from "swr";
  * linha ofereceria ao cliente um menu meio-montado.
  */
 
+// Destino vem do servidor já resolvido (nome, cor, se está em pé) pra tela
+// não ter que cruzar três rotas só pra desenhar um <option>. null existe
+// porque a opção pode ter ficado sem destino válido depois de gravada.
+type Destino = {
+  tipo: "SETOR" | "ATENDENTE";
+  id: string;
+  nome: string;
+  cor: string | null;
+  ativo: boolean;
+};
+
 type Opcao = {
   rotulo: string;
-  atendenteId: string;
-  atendenteNome?: string;
-  atendenteAtivo?: boolean;
+  destino: Destino | null;
 };
+
+type SetorLista = { id: string; nome: string; ativo: boolean; membros: { id: string }[] };
 
 type Config = {
   ativa: boolean;
@@ -27,11 +38,20 @@ type Config = {
 
 type Atendente = { id: string; name: string };
 
+// O seletor guarda "SETOR:id" ou "ATENDENTE:id" num campo só. Setores e
+// pessoas numa lista única de propósito: pra quem configura, "encaminhar pra
+// fila do Fiscal" e "encaminhar pra Camila" são a mesma pergunta, e dois
+// seletores lado a lado obrigariam a entender a diferença antes de escolher.
+function paraValor(d: Destino | null) {
+  return d ? d.tipo + ":" + d.id : "";
+}
+
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
 export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
   const { data, mutate } = useSWR<Config>("/api/ura", fetcher);
   const { data: atendentes } = useSWR<Atendente[]>("/api/users", fetcher);
+  const { data: setores } = useSWR<SetorLista[]>("/api/setores", fetcher);
 
   const [ativa, setAtiva] = useState(false);
   const [mensagem, setMensagem] = useState("");
@@ -59,7 +79,7 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
   }
 
   function adiciona() {
-    setOpcoes((atual) => [...(atual ?? []), { rotulo: "", atendenteId: "" }]);
+    setOpcoes((atual) => [...(atual ?? []), { rotulo: "", destino: null }]);
     mexeu();
   }
 
@@ -89,7 +109,12 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
       body: JSON.stringify({
         ativa,
         mensagem: mensagem.trim() || null,
-        opcoes: (opcoes ?? []).map((o) => ({ rotulo: o.rotulo, atendenteId: o.atendenteId })),
+        opcoes: (opcoes ?? []).map((o) => ({
+          rotulo: o.rotulo,
+          // O botão de salvar fica travado enquanto houver opção sem destino
+          // (ver `incompleta`), então aqui destino nunca é null.
+          destino: { tipo: o.destino!.tipo, id: o.destino!.id },
+        })),
       }),
     });
     setSalvando(false);
@@ -105,7 +130,7 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
 
   if (!data || opcoes === null) return <p className="text-sm text-neutral-500">Carregando menu...</p>;
 
-  const incompleta = opcoes.some((o) => !o.rotulo.trim() || !o.atendenteId);
+  const incompleta = opcoes.some((o) => !o.rotulo.trim() || !o.destino);
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-surface p-4 flex flex-col gap-4">
@@ -176,23 +201,51 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
               className="flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-accent"
             />
             <select
-              value={o.atendenteId}
+              value={paraValor(o.destino)}
               disabled={!podeEditar}
-              onChange={(e) => alteraOpcao(i, { atendenteId: e.target.value })}
-              className="w-44 shrink-0 rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-100"
+              onChange={(e) => {
+                const [tipo, id] = e.target.value.split(":");
+                if (!id) return alteraOpcao(i, { destino: null });
+                const nome =
+                  tipo === "SETOR"
+                    ? ((setores ?? []).find((x) => x.id === id)?.nome ?? "")
+                    : ((atendentes ?? []).find((x) => x.id === id)?.name ?? "");
+                alteraOpcao(i, {
+                  destino: { tipo: tipo as Destino["tipo"], id, nome, cor: null, ativo: true },
+                });
+              }}
+              className="w-52 shrink-0 rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-100"
             >
               <option value="">quem recebe...</option>
-              {/* A pessoa já escolhida entra na lista mesmo se tiver sido
-                  desativada depois: sem isso o seletor apareceria vazio e a
-                  configuração pareceria corrompida em vez de desatualizada. */}
-              {o.atendenteId && o.atendenteAtivo === false && (
-                <option value={o.atendenteId}>{o.atendenteNome} (desativado)</option>
+
+              {/* O destino já escolhido entra na lista mesmo se tiver caído
+                  (pessoa desativada, setor desativado ou esvaziado): sem isso
+                  o seletor apareceria vazio e a configuração pareceria
+                  corrompida em vez de desatualizada. */}
+              {o.destino && !o.destino.ativo && (
+                <option value={paraValor(o.destino)}>{o.destino.nome} (indisponível)</option>
               )}
-              {(atendentes ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
+
+              {/* Setor sem ninguém dentro fica fora da lista: escolher ele
+                  seria mandar a conversa pra uma fila que ninguém enxerga, e
+                  a rota recusaria o salvamento de qualquer jeito. */}
+              <optgroup label="Setores">
+                {(setores ?? [])
+                  .filter((x) => x.ativo && x.membros.length > 0)
+                  .map((x) => (
+                    <option key={x.id} value={"SETOR:" + x.id}>
+                      {x.nome}
+                    </option>
+                  ))}
+              </optgroup>
+
+              <optgroup label="Pessoas">
+                {(atendentes ?? []).map((a) => (
+                  <option key={a.id} value={"ATENDENTE:" + a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
             {podeEditar && (
               <div className="flex items-center gap-1 shrink-0">
@@ -237,10 +290,11 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
         )}
       </div>
 
-      {opcoes.some((o) => o.atendenteAtivo === false) && (
+      {opcoes.some((o) => o.destino && !o.destino.ativo) && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-          Uma das opções aponta para alguém desativado. Enquanto estiver assim, essa opção não é
-          oferecida ao cliente — escolha outra pessoa para o setor.
+          Uma das opções aponta para um destino que não está em pé: alguém desativado, ou um setor
+          desativado ou sem ninguém dentro. Enquanto estiver assim, essa opção não é oferecida ao
+          cliente.
         </p>
       )}
 

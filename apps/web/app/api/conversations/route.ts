@@ -18,6 +18,7 @@ export async function GET(req: Request) {
   const search = params.get("search")?.trim();
   const tag = params.get("tag")?.trim();
   const assignedToId = params.get("assignedToId")?.trim();
+  const setorId = params.get("setorId")?.trim();
   const unreadOnly = params.get("unreadOnly") === "1";
 
   const searchDigits = search?.replace(/\D/g, "");
@@ -27,9 +28,10 @@ export async function GET(req: Request) {
     ...(status ? { status } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
     ...(assignedToId ? { assignedToId } : {}),
+    ...(setorId ? (setorId === "sem" ? { setorId: null } : { setorId }) : {}),
     ...(unreadOnly ? { messages: { some: { direction: "INBOUND", readAt: null } } } : {}),
     AND: [
-      conversationVisibilityWhere(user),
+      (await conversationVisibilityWhere(user)),
       ...(search
         ? [
             {
@@ -62,6 +64,9 @@ export async function GET(req: Request) {
         select: { id: true, name: true, waJid: true, phoneNumber: true, avatarUrl: true, lastStatusAt: true },
       },
       assignedTo: { select: { id: true, name: true } },
+      // Etiqueta do setor na lista. So nome e cor: e o que a linha desenha,
+      // e esta rota e consultada em laco por atendente.
+      setor: { select: { id: true, nome: true, cor: true } },
       // Campos da transferência entram só pra virar o booleano abaixo — não
       // vão crus pro cliente, porque essa rota é consultada em loop e cada
       // campo extra vira tráfego multiplicado por atendente por minuto.

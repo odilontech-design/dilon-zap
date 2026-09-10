@@ -9,7 +9,7 @@ export async function GET() {
   const user = await requireUser();
 
   const conversations = await prisma.conversation.findMany({
-    where: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+    where: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
     orderBy: { lastMessageAt: "desc" },
     select: {
       id: true,

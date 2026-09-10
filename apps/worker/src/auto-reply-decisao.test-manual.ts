@@ -1,6 +1,7 @@
 // Tabela de decisão da resposta automática. Puro, sem banco.
 // Rodar com: npx tsx apps/worker/src/auto-reply-decisao.test-manual.ts
 import {
+  automacaoPodeFalar,
   decidirAutoResposta,
   type EntradaDecisao,
   type OpcaoUra,
@@ -394,6 +395,120 @@ checa(
     marcarSaudacao: true,
     marcarUraEnviada: true,
   }
+);
+
+
+// ---------------------------------------------------------------------------
+// Setores: o pedido do Carlos, da Guttierres. A opcao aponta pra um setor e a
+// conversa vai pra FILA dele, sem responsavel, pra equipe inteira enxergar.
+// ---------------------------------------------------------------------------
+
+const SETORES: OpcaoUra[] = [
+  { ordem: 1, rotulo: "Fiscal", setorId: "setor-fiscal" },
+  { ordem: 2, rotulo: "Contábil", setorId: "setor-contabil" },
+  { ordem: 3, rotulo: "Falar com o Carlos", atendenteId: "user-carlos" },
+];
+
+/** Menu ja apresentado, com destinos por setor. */
+function comSetores(over: Partial<EntradaDecisao> = {}) {
+  return cenario({
+    uraAtiva: true,
+    uraMensagem: CABECALHO,
+    uraOpcoes: SETORES,
+    uraEnviadaEm: new Date("2026-09-01T14:59:00Z"),
+    ...over,
+  });
+}
+
+checa(
+  'cliente responde "1" — vai para a FILA do Fiscal, sem responsavel',
+  decidirAutoResposta(comSetores({ textoRecebido: "1" })),
+  {
+    texto: "Certo! Encaminhando para Fiscal. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    direcionarParaSetor: "setor-fiscal",
+  }
+);
+
+checa(
+  "o nome do setor tambem vale como escolha",
+  decidirAutoResposta(comSetores({ textoRecebido: "contabil" })),
+  {
+    texto: "Certo! Encaminhando para Contábil. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    direcionarParaSetor: "setor-contabil",
+  }
+);
+
+checa(
+  "setor e pessoa convivem no mesmo menu — a opcao 3 continua indo pra uma pessoa",
+  decidirAutoResposta(comSetores({ textoRecebido: "3" })),
+  {
+    texto: "Certo! Encaminhando para Falar com o Carlos. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    atribuirPara: "user-carlos",
+  }
+);
+
+checa(
+  "setor tem precedencia se os dois vierem preenchidos (nao deveria acontecer)",
+  decidirAutoResposta(
+    comSetores({
+      textoRecebido: "1",
+      uraOpcoes: [{ ordem: 1, rotulo: "Fiscal", setorId: "setor-fiscal", atendenteId: "user-x" }],
+    })
+  ),
+  {
+    texto: "Certo! Encaminhando para Fiscal. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    direcionarParaSetor: "setor-fiscal",
+  }
+);
+
+checa(
+  "opcao sem destino nenhum nao confirma encaminhamento — reapresenta o menu",
+  decidirAutoResposta(
+    comSetores({ textoRecebido: "1", uraOpcoes: [{ ordem: 1, rotulo: "Fiscal" }] })
+  ),
+  {
+    texto: "Não entendi. Responda com o número de uma das opções:\n\n1 - Fiscal",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    contarReenvioUra: true,
+  }
+);
+
+// ---------------------------------------------------------------------------
+// O guard. E a linha que, esquecida, faz o cliente encaminhado receber o menu
+// de novo — porque encaminhar pro setor NAO preenche assignedToId.
+// ---------------------------------------------------------------------------
+
+checa(
+  "conversa sem dono nenhum — o robo fala",
+  automacaoPodeFalar({ assignedToId: null, setorId: null }),
+  true
+);
+
+checa(
+  "conversa com responsavel — o robo cala (comportamento de sempre)",
+  automacaoPodeFalar({ assignedToId: "user-fiscal", setorId: null }),
+  false
+);
+
+checa(
+  "conversa NA FILA de um setor, sem responsavel — o robo tem que calar",
+  automacaoPodeFalar({ assignedToId: null, setorId: "setor-fiscal" }),
+  false
+);
+
+checa(
+  "setor com responsavel ja definido — cala tambem",
+  automacaoPodeFalar({ assignedToId: "user-fiscal", setorId: "setor-fiscal" }),
+  false
 );
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);

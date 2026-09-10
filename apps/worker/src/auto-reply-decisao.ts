@@ -15,10 +15,17 @@ export type RegraAuto = {
 };
 
 // Uma opção do menu de triagem, do jeito que a decisão precisa dela.
+//
+// O destino é um setor OU uma pessoa, nunca os dois. Quem garante isso é a
+// rota /api/ura na gravação; aqui a decisão só repassa o que veio, e prefere
+// o setor se por algum motivo os dois vierem preenchidos — encaminhar pra
+// fila que a equipe inteira vê erra menos do que pra uma pessoa que pode
+// estar de férias.
 export type OpcaoUra = {
   ordem: number;
   rotulo: string;
-  atendenteId: string;
+  setorId?: string | null;
+  atendenteId?: string | null;
 };
 
 export type EntradaDecisao = {
@@ -49,7 +56,33 @@ export type Decisao = {
   contarReenvioUra?: boolean;
   /** Atendente que passa a ser dono da conversa. */
   atribuirPara?: string;
+  /**
+   * Setor que passa a ser dono da conversa.
+   *
+   * Diferente de atribuirPara: a conversa fica na FILA do setor, sem
+   * responsável, visível pra todos os membros. Quem assume é gente, clicando.
+   */
+  direcionarParaSetor?: string;
 };
+
+/**
+ * A automação só fala quando NINGUÉM ainda é dono da conversa.
+ *
+ * Dono é pessoa ou setor, e o setor conta tanto quanto a pessoa — essa é a
+ * parte fácil de esquecer. Encaminhar pro setor não preenche assignedToId de
+ * propósito: a conversa fica na fila, sem responsável, pra equipe inteira do
+ * setor ver. Uma checagem só por responsável continuaria enxergando essa
+ * conversa como órfã, e o cliente que escolheu "1 - Fiscal" receberia o menu
+ * de novo logo depois de ser encaminhado.
+ *
+ * Vive aqui, e não solto no meio do session-manager, pra ter nome e teste.
+ */
+export function automacaoPodeFalar(conversa: {
+  assignedToId: string | null;
+  setorId: string | null;
+}) {
+  return !conversa.assignedToId && !conversa.setorId;
+}
 
 /** Quantas vezes o menu é reapresentado antes de o robô se calar. */
 export const URA_MAX_REENVIOS = 1;
@@ -139,12 +172,23 @@ export function decidirAutoResposta(e: EntradaDecisao): Decisao | null {
   if (menuLigado && e.uraEnviadaEm) {
     const escolhida = casarOpcaoUra(e.textoRecebido, e.uraOpcoes);
     if (escolhida) {
-      return {
+      // Setor tem precedência sobre pessoa. Os dois preenchidos não deveria
+      // acontecer (a rota de gravação impede), mas se acontecer é melhor cair
+      // na fila que a equipe inteira vê do que numa pessoa que pode estar
+      // fora — o erro pra esse lado alguém percebe, pro outro não.
+      const base = {
         texto: `Certo! Encaminhando para ${escolhida.rotulo}. Já já alguém te responde por aqui.`,
         marcarAusencia: false,
         marcarSaudacao: false,
-        atribuirPara: escolhida.atendenteId,
       };
+      if (escolhida.setorId) return { ...base, direcionarParaSetor: escolhida.setorId };
+      if (escolhida.atendenteId) return { ...base, atribuirPara: escolhida.atendenteId };
+
+      // Opção sem destino nenhum. Não deveria existir, mas se existir o pior
+      // caminho é confirmar um encaminhamento que não aconteceu: a conversa
+      // ficaria sem dono e sem robô, e o cliente esperando por alguém que
+      // nunca foi acionado. Melhor tratar como se ele não tivesse escolhido —
+      // o menu se reapresenta e a conversa continua na fila geral.
     }
   }
 

@@ -11,7 +11,7 @@ export async function GET(req: Request) {
   if (!conversationId) return NextResponse.json({ error: "conversationId é obrigatório" }, { status: 400 });
 
   const conversa = await prisma.conversation.findFirst({
-    where: { id: conversationId, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+    where: { id: conversationId, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
     select: { id: true },
   });
   if (!conversa) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   }
 
   const conversa = await prisma.conversation.findFirst({
-    where: { id: conversationId, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+    where: { id: conversationId, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
     select: { id: true },
   });
   if (!conversa) return NextResponse.json({ error: "not found" }, { status: 404 });

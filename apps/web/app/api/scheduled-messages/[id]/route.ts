@@ -20,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     where: {
       id: params.id,
       tenantId: user.tenantId,
-      conversation: { ...conversationVisibilityWhere(user) },
+      conversation: { ...(await conversationVisibilityWhere(user)) },
     },
   });
   if (!agendada) return NextResponse.json({ error: "not found" }, { status: 404 });

@@ -34,7 +34,7 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const conversation = await prisma.conversation.findFirst({
-    where: { id: parsed.data.conversationId, tenantId: user.tenantId, ...conversationVisibilityWhere(user) },
+    where: { id: parsed.data.conversationId, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 

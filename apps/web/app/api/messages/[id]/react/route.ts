@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
   const message = await prisma.message.findFirst({
-    where: { id: params.id, conversation: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) } },
+    where: { id: params.id, conversation: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) } },
     include: { conversation: { include: { contact: true } } },
   });
   if (!message) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -49,7 +49,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const user = await requireUser();
 
   const message = await prisma.message.findFirst({
-    where: { id: params.id, conversation: { tenantId: user.tenantId, ...conversationVisibilityWhere(user) } },
+    where: { id: params.id, conversation: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) } },
     include: { conversation: { include: { contact: true } } },
   });
   if (!message) return NextResponse.json({ error: "not found" }, { status: 404 });

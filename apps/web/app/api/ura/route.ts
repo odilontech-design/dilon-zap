@@ -14,6 +14,19 @@ import { logAudit } from "@/lib/audit";
  * lista que a empresa ainda estava escrevendo.
  */
 
+// Destino como tipo + id, e não como dois campos opcionais.
+//
+// No banco são duas colunas nuláveis das quais exatamente uma pode estar
+// preenchida — restrição que o Postgres garantiria com um CHECK, mas o
+// projeto sincroniza schema com `db push`, que descartaria o CHECK na
+// próxima sincronização em silêncio. Modelando assim no payload, "os dois
+// preenchidos" e "nenhum preenchido" deixam de ser representáveis: o zod
+// recusa antes de chegar aqui, e não existe caminho de gravação que escape.
+const destinoSchema = z.discriminatedUnion("tipo", [
+  z.object({ tipo: z.literal("SETOR"), id: z.string().min(1) }),
+  z.object({ tipo: z.literal("ATENDENTE"), id: z.string().min(1) }),
+]);
+
 const bodySchema = z.object({
   ativa: z.boolean(),
   mensagem: z.string().max(4096).nullable(),
@@ -21,7 +34,7 @@ const bodySchema = z.object({
     .array(
       z.object({
         rotulo: z.string().min(1, "dê um nome à opção").max(60),
-        atendenteId: z.string().min(1, "escolha quem recebe"),
+        destino: destinoSchema,
       })
     )
     // 9 porque o cliente responde com UM dígito. Passando disso, "10" começa
@@ -43,10 +56,19 @@ export async function GET() {
         ordem: true,
         rotulo: true,
         atendenteId: true,
-        // O nome vem junto pra tela não precisar cruzar com /api/users só
-        // pra mostrar quem recebe, e pra ficar visível quando o destino foi
-        // desativado (aí o seletor mostra a pessoa, mas o worker já ignora).
+        setorId: true,
+        // Nome e situação vêm juntos pra tela não precisar cruzar com outras
+        // rotas só pra mostrar o destino, e pra continuar legível quando o
+        // destino foi desativado (o seletor mostra, o worker já ignora).
         atendente: { select: { name: true, deactivatedAt: true } },
+        setor: {
+          select: {
+            nome: true,
+            cor: true,
+            ativo: true,
+            _count: { select: { membros: true } },
+          },
+        },
       },
       orderBy: { ordem: "asc" },
     }),
@@ -58,9 +80,23 @@ export async function GET() {
     opcoes: opcoes.map((o) => ({
       ordem: o.ordem,
       rotulo: o.rotulo,
-      atendenteId: o.atendenteId,
-      atendenteNome: o.atendente.name,
-      atendenteAtivo: o.atendente.deactivatedAt === null,
+      destino: o.setorId
+        ? {
+            tipo: "SETOR" as const,
+            id: o.setorId,
+            nome: o.setor?.nome ?? "(setor removido)",
+            cor: o.setor?.cor ?? null,
+            ativo: Boolean(o.setor?.ativo) && (o.setor?._count.membros ?? 0) > 0,
+          }
+        : o.atendenteId
+          ? {
+              tipo: "ATENDENTE" as const,
+              id: o.atendenteId,
+              nome: o.atendente?.name ?? "(usuário removido)",
+              cor: null,
+              ativo: o.atendente?.deactivatedAt === null,
+            }
+          : null,
     })),
   });
 }
@@ -89,17 +125,47 @@ export async function PUT(req: Request) {
     );
   }
 
-  // Destino tem que ser gente desta empresa e ativa. Sem esta checagem, um id
+  // Destino tem que ser desta empresa e estar em pé. Sem esta checagem, um id
   // de outro tenant vindo na requisição encaminharia conversas pra fora da
-  // empresa — e o banco aceitaria, porque UraOpcao referencia User direto.
-  const destinos = [...new Set(opcoes.map((o) => o.atendenteId))];
-  if (destinos.length > 0) {
+  // empresa — e o banco aceitaria, porque UraOpcao referencia User e Setor
+  // direto, sem saber de qual tenant a opção é.
+  const idsAtendente = [...new Set(opcoes.filter((o) => o.destino.tipo === "ATENDENTE").map((o) => o.destino.id))];
+  const idsSetor = [...new Set(opcoes.filter((o) => o.destino.tipo === "SETOR").map((o) => o.destino.id))];
+
+  if (idsAtendente.length > 0) {
     const validos = await prisma.user.count({
-      where: { id: { in: destinos }, tenantId: user.tenantId, deactivatedAt: null },
+      where: { id: { in: idsAtendente }, tenantId: user.tenantId, deactivatedAt: null },
     });
-    if (validos !== destinos.length) {
+    if (validos !== idsAtendente.length) {
       return NextResponse.json(
         { error: "uma das opções aponta para alguém que não está ativo na sua equipe" },
+        { status: 400 }
+      );
+    }
+  }
+
+  if (idsSetor.length > 0) {
+    // Setor sem nenhum membro ativo é recusado AQUI, na hora de salvar, e não
+    // ignorado depois. O worker já descarta a opção nesse caso, mas em
+    // silêncio: a empresa veria o menu no ar sem a opção e não teria como
+    // saber por quê. Falhar na configuração é o único momento em que a
+    // pessoa está olhando.
+    const setores = await prisma.setor.findMany({
+      where: { id: { in: idsSetor }, tenantId: user.tenantId, ativo: true },
+      select: { id: true, nome: true, _count: { select: { membros: true } } },
+    });
+    if (setores.length !== idsSetor.length) {
+      return NextResponse.json(
+        { error: "uma das opções aponta para um setor que não existe ou está desativado" },
+        { status: 400 }
+      );
+    }
+    const vazio = setores.find((s) => s._count.membros === 0);
+    if (vazio) {
+      return NextResponse.json(
+        {
+          error: `o setor "${vazio.nome}" não tem ninguém dentro. Adicione ao menos uma pessoa antes de encaminhar para ele.`,
+        },
         { status: 400 }
       );
     }
@@ -115,7 +181,8 @@ export async function PUT(req: Request) {
         tenantId: user.tenantId,
         ordem: i + 1,
         rotulo: o.rotulo.trim(),
-        atendenteId: o.atendenteId,
+        setorId: o.destino.tipo === "SETOR" ? o.destino.id : null,
+        atendenteId: o.destino.tipo === "ATENDENTE" ? o.destino.id : null,
       })),
     }),
     prisma.tenant.update({
@@ -127,7 +194,13 @@ export async function PUT(req: Request) {
   await logAudit({
     actor: user,
     action: "ura.update",
-    metadata: { ativa, opcoes: opcoes.length, temMensagem: Boolean(mensagem) },
+    metadata: {
+      ativa,
+      opcoes: opcoes.length,
+      setores: idsSetor.length,
+      atendentes: idsAtendente.length,
+      temMensagem: Boolean(mensagem),
+    },
   });
 
   return NextResponse.json({ ok: true });
