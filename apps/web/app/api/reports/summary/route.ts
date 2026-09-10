@@ -22,11 +22,19 @@ type LinhaDoDia = { dia: Date; direction: "INBOUND" | "OUTBOUND"; total: bigint 
  * está três horas atrás: sem converter antes de cortar o dia, tudo que
  * chegasse depois das 21h entraria no dia seguinte — e o gráfico mostraria
  * movimento de madrugada que nunca existiu.
+ *
+ * E a conversão tem que ser DUPLA. `createdAt` é timestamp SEM fuso guardando
+ * UTC. Aplicar `AT TIME ZONE 'America/Sao_Paulo'` direto nele faz o Postgres
+ * entender que o valor JÁ É de São Paulo e convertê-lo pra UTC — anda +3h, o
+ * contrário do pretendido. A primeira versão desta consulta fazia isso e
+ * mandava uma mensagem das 19h30 pro dia seguinte; foi pega conferindo com
+ * uma data conhecida. O primeiro `AT TIME ZONE 'UTC'` declara que o valor é
+ * UTC; o segundo converte pra hora local de verdade.
  */
 async function mensagensPorDia(tenantId: string, timezone: string) {
   const linhas = await prisma.$queryRaw<LinhaDoDia[]>`
     SELECT
-      date_trunc('day', m."createdAt" AT TIME ZONE ${timezone})::date AS dia,
+      date_trunc('day', (m."createdAt" AT TIME ZONE 'UTC') AT TIME ZONE ${timezone})::date AS dia,
       m.direction,
       count(*) AS total
     FROM "Message" m
