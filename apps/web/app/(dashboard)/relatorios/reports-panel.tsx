@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { LISTING_INTERVAL } from "@/lib/polling";
-import { Rosca, BarrasAgrupadas } from "./graficos";
+import { Rosca, BarrasAgrupadas, LinhaDoTempo, type PontoDia } from "./graficos";
 import { useCoresGrafico } from "./cores-grafico";
 
 /**
@@ -30,6 +30,7 @@ type Summary = {
   statusCounts: { OPEN: number; PENDING: number; RESOLVED: number };
   agentWorkload: Agente[];
   session: { status: string; phoneNumber: string | null } | null;
+  serieDiaria: PontoDia[];
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -105,6 +106,18 @@ export function ReportsPanel() {
             }
           />
         </div>
+      </section>
+
+      <section>
+        <h2 className="mb-3 text-sm font-semibold text-neutral-800">Mensagens por dia</h2>
+        <LinhaDoTempo
+          titulo="Mensagens recebidas e enviadas por dia, últimos 14 dias"
+          pontos={data.serieDiaria ?? []}
+          series={[
+            { rotulo: "Recebidas", cor: cores[0] },
+            { rotulo: "Enviadas", cor: cores[1] },
+          ]}
+        />
       </section>
 
       <section>

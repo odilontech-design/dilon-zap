@@ -147,6 +147,142 @@ export function Rosca({ fatias, titulo }: { fatias: Fatia[]; titulo: string }) {
   );
 }
 
+export type PontoDia = { dia: string; recebidas: number; enviadas: number };
+
+/**
+ * Mensagens por dia, duas linhas: recebidas e enviadas.
+ *
+ * Linha porque o eixo é tempo contínuo e o que interessa é a forma — se o
+ * movimento está subindo, se segunda é sempre cheia, se teve um buraco. Barra
+ * por dia daria a mesma informação pedindo mais tinta.
+ *
+ * Um eixo só. Recebidas e enviadas são a mesma unidade e a mesma ordem de
+ * grandeza, então dividem a escala — dois eixos fariam a distância entre as
+ * curvas parecer o que a escala escolheu, não o que os dados dizem.
+ */
+export function LinhaDoTempo({
+  pontos,
+  series,
+  titulo,
+}: {
+  pontos: PontoDia[];
+  series: { rotulo: string; cor: string }[];
+  titulo: string;
+}) {
+  const L = 34;
+  const R = 8;
+  const T = 10;
+  const B = 22;
+  const LARG = 560;
+  const ALT = 170;
+  const plotW = LARG - L - R;
+  const plotH = ALT - T - B;
+
+  const maiorReal = Math.max(...pontos.flatMap((p) => [p.recebidas, p.enviadas]), 0);
+  // Teto arredondado pra cima: um eixo terminando em 37 dá três marcas com
+  // número quebrado e nenhuma delas ajuda a ler.
+  const passo = maiorReal <= 10 ? 2 : maiorReal <= 50 ? 10 : maiorReal <= 200 ? 50 : 100;
+  const teto = Math.max(passo, Math.ceil(maiorReal / passo) * passo);
+
+  const x = (i: number) => L + (pontos.length === 1 ? plotW / 2 : (i / (pontos.length - 1)) * plotW);
+  const y = (v: number) => T + plotH - (v / teto) * plotH;
+
+  const caminho = (chave: "recebidas" | "enviadas") =>
+    pontos.map((p, i) => `${i === 0 ? "M" : "L"} ${x(i).toFixed(1)} ${y(p[chave]).toFixed(1)}`).join(" ");
+
+  const marcas = Array.from({ length: teto / passo + 1 }, (_, i) => i * passo);
+
+  // Rótulo em todo dia vira borrão. Marca as pontas e o meio, que é o
+  // suficiente pra situar; a data exata sai no tooltip de cada ponto.
+  const diasRotulados = new Set([0, Math.floor((pontos.length - 1) / 2), pontos.length - 1]);
+  const curto = (dia: string) => {
+    const [, m, d] = dia.split("-");
+    return `${d}/${m}`;
+  };
+
+  const vazio = maiorReal === 0;
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-surface p-5">
+      <div className="mb-3 flex flex-wrap items-center gap-4 text-xs">
+        {series.map((s) => (
+          <span key={s.rotulo} className="flex items-center gap-1.5 text-neutral-600">
+            <span aria-hidden className="h-2.5 w-2.5 rounded-[3px]" style={{ background: s.cor }} />
+            {s.rotulo}
+          </span>
+        ))}
+      </div>
+
+      {vazio ? (
+        <p className="py-8 text-center text-sm text-neutral-400">
+          Nenhuma mensagem nos últimos {pontos.length} dias.
+        </p>
+      ) : (
+        <svg viewBox={`0 0 ${LARG} ${ALT}`} className="w-full" role="img" aria-label={titulo}>
+          {marcas.map((m) => (
+            <g key={m}>
+              {/* Grade recessiva: serve pra medir, não pra ser vista. */}
+              <line x1={L} x2={LARG - R} y1={y(m)} y2={y(m)} stroke="currentColor" className="text-neutral-200" strokeWidth="1" />
+              <text x={L - 6} y={y(m) + 3.5} textAnchor="end" className="fill-neutral-400 text-[10px]" style={{ fontVariantNumeric: "tabular-nums" }}>
+                {m}
+              </text>
+            </g>
+          ))}
+
+          {pontos.map((p, i) =>
+            diasRotulados.has(i) ? (
+              <text
+                key={p.dia}
+                x={x(i)}
+                y={ALT - 6}
+                // Centralizar TODOS cortaria as pontas: o rótulo do último dia
+                // fica sobre a borda direita e metade dele cai fora da área
+                // desenhada — sai "10/0" no lugar de "10/09". Primeiro e
+                // último se ancoram pra dentro.
+                textAnchor={i === 0 ? "start" : i === pontos.length - 1 ? "end" : "middle"}
+                className="fill-neutral-400 text-[10px]"
+              >
+                {curto(p.dia)}
+              </text>
+            ) : null
+          )}
+
+          {(["recebidas", "enviadas"] as const).map((chave, s) => (
+            <path
+              key={chave}
+              d={caminho(chave)}
+              fill="none"
+              stroke={series[s].cor}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          ))}
+
+          {/* Alvo de toque bem maior que o ponto: a bolinha tem 3px, e
+              ninguém acerta 3px com o dedo nem com o mouse apressado. */}
+          {pontos.map((p, i) => (
+            <g key={p.dia}>
+              {(["recebidas", "enviadas"] as const).map((chave, s) => (
+                <circle key={chave} cx={x(i)} cy={y(p[chave])} r="3" fill={series[s].cor} />
+              ))}
+              <rect
+                x={x(i) - plotW / pontos.length / 2}
+                y={T}
+                width={plotW / pontos.length}
+                height={plotH}
+                fill="transparent"
+              >
+                <title>{`${curto(p.dia)} · ${p.recebidas} recebidas, ${p.enviadas} enviadas`}</title>
+              </rect>
+            </g>
+          ))}
+        </svg>
+      )}
+    </div>
+  );
+}
+
 export type BarraItem = { rotulo: string; valores: number[] };
 
 /**
