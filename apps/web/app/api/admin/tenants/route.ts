@@ -6,6 +6,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { slugUnico } from "@/lib/tenant-slug";
+import { DIAS_DE_TESTE } from "@/lib/saas";
 
 function generatePassword() {
   return randomBytes(9).toString("base64url"); // 12 chars, sem confundir com telefone/ID
@@ -32,13 +33,16 @@ const createSchema = z.object({
   ownerName: z.string().min(2).max(120),
   ownerEmail: z.string().email(),
   whatsappLabel: z.string().max(60).optional(),
+  plano: z.enum(["ESSENCIAL", "PROFISSIONAL", "ESCALA"]).default("ESSENCIAL"),
+  // Valor combinado. Opcional porque no teste ainda nao se sabe quanto vai ser.
+  mensalCents: z.number().int().min(0).optional(),
 });
 
 export async function POST(req: Request) {
   const admin = await requireSuperAdmin();
   const parsed = createSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  const { tenantName, ownerName, ownerEmail, whatsappLabel } = parsed.data;
+  const { tenantName, ownerName, ownerEmail, whatsappLabel, plano, mensalCents } = parsed.data;
 
   const email = ownerEmail.toLowerCase().trim();
   const existingUser = await prisma.user.findUnique({ where: { email } });
@@ -55,6 +59,22 @@ export async function POST(req: Request) {
       slug,
       users: { create: { name: ownerName, email, passwordHash, role: "OWNER" } },
       sessions: { create: { label: whatsappLabel?.trim() || "Principal" } },
+      // Toda empresa nova nasce com assinatura, em TESTE. Antes nascia sem
+      // nenhuma, e foi assim que tres clientes ficaram sem cadastro de
+      // cobranca: nao havia o momento em que alguem precisasse lembrar.
+      //
+      // plataformaCompleta fica falso: quem entra agora segue a escada de
+      // planos. A promessa antiga vale pra quem ja estava dentro.
+      subscription: {
+        create: {
+          status: "TRIAL",
+          plano,
+          plataformaCompleta: false,
+          amountCents: mensalCents ?? 0,
+          cycleDay: Math.min(new Date().getDate(), 28),
+          testeAte: new Date(Date.now() + DIAS_DE_TESTE * 86_400_000),
+        },
+      },
     },
     include: { users: true, sessions: true },
   });

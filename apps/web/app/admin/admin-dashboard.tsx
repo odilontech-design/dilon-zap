@@ -31,7 +31,7 @@ type TenantSession = {
   lastConnectedAt: string | null;
 };
 
-type Subscription = { amountCents: number; status: "ACTIVE" | "PAUSED" | "CANCELED" };
+type Subscription = { amountCents: number; status: "TRIAL" | "ACTIVE" | "PAUSED" | "CANCELED" };
 type OpenInvoice = { id: string; dueDate: string };
 
 type Tenant = {
@@ -47,6 +47,12 @@ type Tenant = {
 
 function billingBadge(tenant: Tenant): { label: string; color: string } {
   if (!tenant.subscription) return { label: "Sem plano", color: "bg-neutral-800 text-neutral-400" };
+  // TRIAL tratado antes do resto: o ramo abaixo trata tudo que não é ACTIVE
+  // nem PAUSED como cancelado, e toda empresa nova nasce em teste — ela
+  // apareceria como cancelada na lista no dia em que foi criada.
+  if (tenant.subscription.status === "TRIAL") {
+    return { label: "Em teste", color: "bg-sky-900/60 text-sky-300" };
+  }
   if (tenant.subscription.status !== "ACTIVE") {
     return { label: tenant.subscription.status === "PAUSED" ? "Pausado" : "Cancelado", color: "bg-neutral-800 text-neutral-400" };
   }

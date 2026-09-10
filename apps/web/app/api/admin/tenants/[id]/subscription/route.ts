@@ -7,7 +7,10 @@ import { logAudit } from "@/lib/audit";
 const bodySchema = z.object({
   amountCents: z.number().int().min(0),
   cycleDay: z.number().int().min(1).max(28),
-  status: z.enum(["ACTIVE", "PAUSED", "CANCELED"]).default("ACTIVE"),
+  // TRIAL precisa estar aqui: sem ele, editar a cobrança de uma empresa em teste
+  // devolveria 400, e o formulário do admin falharia justamente com quem está
+  // no momento de virar cliente pagante.
+  status: z.enum(["TRIAL", "ACTIVE", "PAUSED", "CANCELED"]).default("ACTIVE"),
   notes: z.string().max(500).optional(),
 });
 

@@ -21,6 +21,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       },
       sessions: { orderBy: { createdAt: "desc" } },
       subscription: true,
+      // Exceções de recurso: o painel de plano precisa delas pra mostrar o
+      // que o cliente de fato tem, e não só o que o plano define.
+      recursos: { select: { recurso: true, ativo: true, motivo: true } },
       invoices: { orderBy: { dueDate: "desc" }, take: 24 },
       _count: { select: { contacts: true, conversations: true } },
     },

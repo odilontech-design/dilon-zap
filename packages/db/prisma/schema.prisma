@@ -1116,7 +1116,19 @@ model Subscription {
   // Um campo explícito, e não uma pilha de exceções por recurso: exceções
   // soltas pareceriam arbitrárias a quem abrisse o cadastro daqui a um ano.
   // Este diz o motivo.
-  plataformaCompleta Boolean @default(false)
+  //
+  // DEFAULT TRUE, e isso é o que protege os clientes atuais. Quando o
+  // `db push` acrescenta esta coluna, toda assinatura que JÁ existe recebe o
+  // default. Com false, a Believe e a Guttierres cairiam pra Essencial sem
+  // módulo nenhum no instante do deploy — a Believe perderia Pedidos no meio
+  // do expediente. Com true, as linhas antigas herdam a regra antiga sozinhas,
+  // sem script de migração e sem janela entre o schema e o código.
+  //
+  // Quem entra a partir de agora recebe false EXPLICITAMENTE no código
+  // (criação de empresa no admin). O default só vale pro que já existia —
+  // e se algum caminho futuro esquecer de passar o valor, erra pro lado de
+  // dar mais, que numa promessa comercial é o lado seguro.
+  plataformaCompleta Boolean @default(true)
 
   // Fim do teste gratuito. Só tem sentido com status TRIAL.
   testeAte DateTime?

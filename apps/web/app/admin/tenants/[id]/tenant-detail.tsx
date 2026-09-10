@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
+import { PlanoPanel } from "./plano-panel";
+import type { Recurso } from "@/lib/plano-regras";
 import { formatDate, formatTime } from "@/lib/contact";
 import { centsToBRL, effectiveInvoiceStatus } from "@/lib/billing";
 
@@ -44,8 +46,17 @@ type Subscription = {
   id: string;
   amountCents: number;
   cycleDay: number;
-  status: "ACTIVE" | "PAUSED" | "CANCELED";
+  // TRIAL entrou com o teste de 14 dias. Faltando aqui, a ficha de uma
+  // empresa em teste mostraria o status como desconhecido.
+  status: "TRIAL" | "ACTIVE" | "PAUSED" | "CANCELED";
   notes: string | null;
+  plano: "ESSENCIAL" | "PROFISSIONAL" | "ESCALA";
+  plataformaCompleta: boolean;
+  testeAte: string | null;
+  setupCents: number | null;
+  setupPagoEm: string | null;
+  canceladoEm: string | null;
+  motivoCancelamento: string | null;
 };
 
 type Invoice = {
@@ -65,6 +76,7 @@ type TenantDetailResponse = {
     users: User[];
     sessions: Session[];
     subscription: Subscription | null;
+    recursos: { recurso: Recurso; ativo: boolean; motivo: string | null }[];
     invoices: Invoice[];
     _count: { contacts: number; conversations: number };
   };
@@ -166,6 +178,14 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         </div>
       </section>
 
+      {/* Plano acima da cobrança: o plano decide o que o cliente tem, a
+          cobrança só registra o que ele paga. */}
+      <PlanoPanel
+        tenantId={tenant.id}
+        assinatura={tenant.subscription}
+        excecoes={tenant.recursos ?? []}
+        onSalvo={mutate}
+      />
       <BillingSection tenantId={tenant.id} subscription={tenant.subscription} invoices={tenant.invoices} onChanged={mutate} />
 
       <section className="mb-8">
@@ -259,6 +279,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
 }
 
 const SUB_STATUS_COLOR: Record<string, string> = {
+  TRIAL: "bg-sky-900/60 text-sky-300",
   ACTIVE: "bg-emerald-900/60 text-emerald-300",
   PAUSED: "bg-amber-900/60 text-amber-300",
   CANCELED: "bg-neutral-800 text-neutral-400",
@@ -399,7 +420,7 @@ function SubscriptionForm({
 }) {
   const [amount, setAmount] = useState(subscription ? (subscription.amountCents / 100).toFixed(2) : "");
   const [cycleDay, setCycleDay] = useState(subscription?.cycleDay ?? 5);
-  const [status, setStatus] = useState<"ACTIVE" | "PAUSED" | "CANCELED">(subscription?.status ?? "ACTIVE");
+  const [status, setStatus] = useState<"TRIAL" | "ACTIVE" | "PAUSED" | "CANCELED">(subscription?.status ?? "ACTIVE");
   const [notes, setNotes] = useState(subscription?.notes ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -463,9 +484,10 @@ function SubscriptionForm({
             <label className="block text-xs font-medium text-neutral-400 mb-1">Status</label>
             <select
               value={status}
-              onChange={(e) => setStatus(e.target.value as "ACTIVE" | "PAUSED" | "CANCELED")}
+              onChange={(e) => setStatus(e.target.value as "TRIAL" | "ACTIVE" | "PAUSED" | "CANCELED")}
               className="w-full rounded-md border border-neutral-700 bg-neutral-950 px-3 py-2 text-sm"
             >
+              <option value="TRIAL">Em teste</option>
               <option value="ACTIVE">Ativo</option>
               <option value="PAUSED">Pausado</option>
               <option value="CANCELED">Cancelado</option>
