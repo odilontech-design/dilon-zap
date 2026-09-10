@@ -233,6 +233,7 @@ model User {
   ordersClosed          Order[]            @relation("OrderClosedBy")
   stockMovements        StockMovement[]    @relation("StockMovementBy")
   pagamentos            Pagamento[]        @relation("PagamentoPor")
+  atendimentosEncerrados Atendimento[]     @relation("AtendimentoEncerradoPor")
 
   @@index([tenantId])
 }
@@ -472,6 +473,7 @@ model Conversation {
   messages Message[]
   scheduledMessages ScheduledMessage[]
   orders            Order[]
+  atendimentos      Atendimento[]
 
   // Impede duas conversas pro mesmo contato na mesma sessão — sem isso, duas
   // mensagens chegando quase juntas (poucos ms de diferença) podem disparar
@@ -487,6 +489,37 @@ model Conversation {
 // Lista de opt-out por tenant — contato que pediu pra não receber mais
 // mensagem. Consultada tanto pelo worker (nunca manda outbound pra quem tá
 // aqui) quanto pelas Campanhas na Fase 2.
+// Um ciclo de atendimento dentro de uma conversa: abriu, foi atendido, fechou.
+//
+// A conversa e uma so por contato e dura pra sempre; o ATENDIMENTO tem comeco
+// e fim, e a mesma pessoa volta meses depois com outro assunto. Sem isto, o
+// historico e uma parede unica de mensagens sem saber onde um assunto acabou
+// e outro comecou — e Conversation.closedAt guarda so o ULTIMO, porque reabrir
+// limpa o carimbo.
+//
+// Gravado no FECHAMENTO, nao na abertura: o inicio e o fim do ciclo anterior
+// (ou a criacao da conversa, no primeiro). Assim nao existe ciclo aberto pra
+// manter em dia, e nao ha caminho onde alguem esqueca de abrir um.
+model Atendimento {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  iniciadoEm  DateTime
+  encerradoEm DateTime
+  // Rotulo em texto, nao id de tabela: e o registro historico daquele
+  // atendimento. Se a empresa renomear ou apagar um motivo da lista, os
+  // atendimentos antigos continuam dizendo o que de fato aconteceu.
+  motivo      String?
+
+  encerradoById String?
+  encerradoPor  User?   @relation("AtendimentoEncerradoPor", fields: [encerradoById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([conversationId, encerradoEm])
+}
+
 model ContactBlock {
   id        String   @id @default(cuid())
   tenantId  String

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { encerrarCiclo } from "@/lib/atendimentos";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 const bodySchema = z.object({
@@ -59,11 +60,28 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const reabrindo =
     parsed.data.status !== undefined && parsed.data.status !== "RESOLVED" && conversation.status === "RESOLVED";
 
-  const updated = await prisma.conversation.update({
+  const agora = new Date();
+
+  // Fechar a conversa e gravar o ciclo de atendimento acontecem juntos ou não
+  // acontecem. Separados, um erro entre os dois deixaria a conversa resolvida
+  // sem o atendimento correspondente no histórico — um buraco silencioso que
+  // só apareceria meses depois, quando alguém fosse contar atendimentos.
+  const updated = await prisma.$transaction(async (tx) => {
+    if (fechando) {
+      await encerrarCiclo(tx, {
+        conversationId: conversation.id,
+        criadaEm: conversation.createdAt,
+        motivo: parsed.data.closeReason ?? conversation.closeReason,
+        encerradoById: user.id,
+        encerradoEm: agora,
+      });
+    }
+
+    return tx.conversation.update({
     where: { id: conversation.id },
     data: {
       ...parsed.data,
-      ...(fechando ? { closedAt: new Date() } : {}),
+      ...(fechando ? { closedAt: agora } : {}),
       ...(reabrindo ? { closedAt: null } : {}),
       ...(transferiu
         ? {
@@ -74,7 +92,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
             assignmentSeenAt: parsed.data.assignedToId === user.id ? new Date() : null,
           }
         : {}),
-    },
+      },
+    });
   });
 
   if (Object.keys(parsed.data).length > 0) {

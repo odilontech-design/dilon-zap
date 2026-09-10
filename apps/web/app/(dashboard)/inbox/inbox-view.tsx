@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
@@ -20,6 +20,27 @@ import {
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
 type StageDef = { id: string; name: string; color: string };
+
+type MarcadorAtendimento = {
+  numero: number;
+  iniciadoEm: string;
+  encerradoEm: string | null;
+  motivo: string | null;
+  encerradoPor: string | null;
+  emAndamento: boolean;
+};
+
+/** Um marcador achatado: cada ciclo vira um evento de início e um de fim. */
+type EventoAtendimento = {
+  chave: string;
+  tipo: "inicio" | "fim";
+  numero: number;
+  quando: number;
+  iso: string;
+  motivo: string | null;
+  por: string | null;
+  emAndamento: boolean;
+};
 
 type ConversationSummary = {
   id: string;
@@ -625,6 +646,46 @@ function ConversationThread({
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
 
+  // Ciclos de atendimento desta conversa. Rota própria e sem polling rápido:
+  // isto só muda quando alguém fecha ou reabre, e não precisa viajar junto das
+  // mensagens a cada poucos segundos.
+  const { data: atendimentos } = useSWR<{ marcadores: MarcadorAtendimento[] }>(
+    `/api/conversations/${conversationId}/atendimentos`,
+    fetcher,
+    { refreshInterval: 60_000 }
+  );
+
+  // Achatado em eventos com data, uma vez só, pra o loop de mensagens não
+  // refazer conta a cada linha.
+  const eventosAtendimento = useMemo(() => {
+    const lista: EventoAtendimento[] = [];
+    for (const m of atendimentos?.marcadores ?? []) {
+      lista.push({
+        chave: `ini-${m.numero}`,
+        tipo: "inicio",
+        numero: m.numero,
+        quando: new Date(m.iniciadoEm).getTime(),
+        iso: m.iniciadoEm,
+        motivo: null,
+        por: null,
+        emAndamento: m.emAndamento,
+      });
+      if (m.encerradoEm) {
+        lista.push({
+          chave: `fim-${m.numero}`,
+          tipo: "fim",
+          numero: m.numero,
+          quando: new Date(m.encerradoEm).getTime(),
+          iso: m.encerradoEm,
+          motivo: m.motivo,
+          por: m.encerradoPor,
+          emAndamento: false,
+        });
+      }
+    }
+    return lista.sort((a, b) => a.quando - b.quando);
+  }, [atendimentos]);
+
   // Estado da conexão do número. Reusa o endpoint que a tela de Conectar
   // número já usa, com intervalo próprio: aqui é aviso de fundo, não alguém
   // parado esperando o QR aparecer.
@@ -1025,6 +1086,13 @@ function ConversationThread({
             // vira uma sequencia de horarios soltos e nao da pra saber se
             // 17:14 e de ontem ou de tres semanas atras.
             const mudouDeDia = i === 0 || !mesmoDia(messages[i - 1].createdAt, m.createdAt);
+            // Eventos de atendimento que caem entre a mensagem anterior e esta.
+            // Por DATA, e nao por contagem de mensagens: um atendimento pode ser
+            // encerrado sem nenhuma mensagem depois, e o marcador precisa
+            // aparecer mesmo assim.
+            const desde = i === 0 ? 0 : new Date(messages[i - 1].createdAt).getTime();
+            const ate = new Date(m.createdAt).getTime();
+            const eventosAqui = eventosAtendimento.filter((e) => e.quando > desde && e.quando <= ate);
             const editable = m.direction === "OUTBOUND" && !m.isDeleted && !m.mediaType && SENT_STATUSES.includes(m.status);
             const deletable = m.direction === "OUTBOUND" && !m.isDeleted;
             const myReaction = m.reactions.find((r) => r.fromMe);
@@ -1032,6 +1100,9 @@ function ConversationThread({
             const hasReaction = !m.isDeleted && (myReaction || theirReaction);
             return (
               <Fragment key={m.id}>
+              {eventosAqui.map((e) => (
+                <MarcaAtendimento key={e.chave} evento={e} />
+              ))}
               {mudouDeDia && <SeparadorDeData iso={m.createdAt} />}
               <div
                 className={`flex items-center gap-2 ${m.direction === "OUTBOUND" ? "self-end" : "self-start"} ${hasReaction ? "mb-2" : ""}`}
@@ -1208,6 +1279,24 @@ function ConversationThread({
               </Fragment>
             );
           })}
+
+          {/* O que sobrou depois da última mensagem. Encerrar sem responder é
+              comum ("cliente desistiu", "resolvido por telefone"), e nesses
+              casos o marcador de fim vem DEPOIS de tudo — sem isto ele
+              simplesmente não apareceria. Também cobre a conversa sem nenhuma
+              mensagem ainda. */}
+          {eventosAtendimento
+            .filter(
+              (e) =>
+                e.quando >
+                (messages && messages.length > 0
+                  ? new Date(messages[messages.length - 1].createdAt).getTime()
+                  : 0)
+            )
+            .map((e) => (
+              <MarcaAtendimento key={e.chave} evento={e} />
+            ))}
+
           <div ref={messagesEndRef} />
         </div>
         <div className="border-t border-neutral-200">
@@ -2262,6 +2351,56 @@ function mesmoDia(isoA: string, isoB: string) {
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
     a.getDate() === b.getDate()
+  );
+}
+
+/**
+ * Marcador de início ou fim de um atendimento na linha do tempo.
+ *
+ * Visualmente irmão do separador de data, e não um balão: é informação sobre a
+ * conversa, não algo que alguém disse. Um estilo de mensagem faria parecer que
+ * o sistema falou com o cliente.
+ *
+ * O fim carrega o motivo quando existe. É a diferença entre "acabou" e "acabou
+ * porque o cliente desistiu" — e é o motivo que responde, meses depois, por
+ * que aquele atendimento parou onde parou.
+ */
+function MarcaAtendimento({ evento }: { evento: EventoAtendimento }) {
+  const hora = new Date(evento.iso).toLocaleTimeString("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+
+  const inicio = evento.tipo === "inicio";
+  const rotulo = inicio
+    ? `Início do atendimento ${hora}`
+    : `Fim do atendimento ${hora}`;
+
+  return (
+    <div className="self-center my-3 flex w-full max-w-md items-center gap-2">
+      {/* min-w pra o risco não sumir quando o motivo é longo: sem isso o
+          flex-1 encolhe até zero e o marcador perde a forma de faixa, virando
+          uma pílula solta no meio da conversa. */}
+      <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
+      <span
+        title={new Date(evento.iso).toLocaleString("pt-BR", { dateStyle: "full", timeStyle: "short" })}
+        className={`rounded-md px-2.5 py-1 text-[11px] font-medium ${
+          inicio
+            ? "bg-accent/10 text-accent"
+            : "bg-neutral-200/80 text-neutral-600 dark:bg-neutral-700/80 dark:text-neutral-300"
+        }`}
+      >
+        {rotulo}
+        {!inicio && evento.motivo && (
+          <span className="font-normal"> · {evento.motivo}</span>
+        )}
+        {!inicio && evento.por && <span className="font-normal"> · {evento.por}</span>}
+      </span>
+      {/* min-w pra o risco não sumir quando o motivo é longo: sem isso o
+          flex-1 encolhe até zero e o marcador perde a forma de faixa, virando
+          uma pílula solta no meio da conversa. */}
+      <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
+    </div>
   );
 }
 
