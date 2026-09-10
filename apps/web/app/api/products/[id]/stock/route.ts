@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { registrarMovimento } from "@/lib/stock";
 import { logAudit } from "@/lib/audit";
 
@@ -14,6 +15,8 @@ function podeMexer(role: string) {
 /** Extrato do produto: as últimas movimentações, da mais recente pra trás. */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
 
   const produto = await prisma.product.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
@@ -50,6 +53,8 @@ const bodySchema = z.object({
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
   if (!podeMexer(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
   const parsed = bodySchema.safeParse(await req.json());

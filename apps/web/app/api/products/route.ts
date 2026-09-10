@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 
 /**
  * Atendente lê o catálogo (vai precisar pra montar pedido). Cadastrar e
@@ -17,6 +18,8 @@ function podeEditarCatalogo(role: string) {
 }
 export async function GET(req: Request) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
   const incluirInativos = new URL(req.url).searchParams.get("incluirInativos") === "1";
 
   const produtos = await prisma.product.findMany({
@@ -42,6 +45,8 @@ const criarSchema = z.object({
 
 export async function POST(req: Request) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
   if (!podeEditarCatalogo(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
   const parsed = criarSchema.safeParse(await req.json());

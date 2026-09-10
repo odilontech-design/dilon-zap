@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { autenticarPorChave } from "@/lib/api-key";
+import { recursosDoTenant } from "@/lib/plano";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { wakeOutbox } from "@/lib/worker-client";
 
@@ -46,6 +47,16 @@ export async function POST(req: Request) {
   const auth = await autenticarPorChave(req);
   if (!auth) {
     return NextResponse.json({ error: "chave inválida" }, { status: 401 });
+  }
+
+  // Chave válida não basta: a integração precisa estar no plano. Sem isto, uma
+  // chave gerada enquanto a empresa estava no Escala continuaria funcionando
+  // depois de um downgrade — a chave vive até ser revogada, o plano não.
+  if (!(await recursosDoTenant(auth.tenantId)).has("INTEGRACAO_API")) {
+    return NextResponse.json(
+      { error: "integração não faz parte do plano desta empresa", foraDoPlano: true },
+      { status: 403 }
+    );
   }
 
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));

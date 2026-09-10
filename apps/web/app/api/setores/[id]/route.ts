@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
 
 const editarSchema = z.object({
@@ -21,6 +22,8 @@ async function doTenant(id: string, tenantId: string) {
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "SETORES");
+  if (bloqueio) return bloqueio;
   if (user.role === "AGENT") {
     return NextResponse.json(
       { error: "só o responsável pela conta pode mudar setores" },
@@ -118,6 +121,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "SETORES");
+  if (bloqueio) return bloqueio;
   if (user.role === "AGENT") {
     return NextResponse.json(
       { error: "só o responsável pela conta pode remover setores" },

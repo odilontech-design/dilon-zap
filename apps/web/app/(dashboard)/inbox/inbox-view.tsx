@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useRecurso } from "@/components/recursos-context";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
@@ -624,12 +625,20 @@ function ConversationThread({
   // gastaria requisição.
   // Pedidos abertos desta conversa. Não traz fechados nem cancelados: o que
   // interessa dentro da conversa é o que ainda está em andamento.
+  // Chave nula quando Pedidos está fora do plano: o SWR simplesmente não
+  // busca. Sem isso a rota responderia 403 a cada 30 segundos, pra sempre,
+  // numa tela que fica aberta o dia inteiro.
+  const temPedidos = useRecurso("PEDIDOS");
   const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
-    `/api/orders?conversationId=${conversationId}`,
+    temPedidos ? `/api/orders?conversationId=${conversationId}` : null,
     fetcher,
     { refreshInterval: 30_000 }
   );
-  const pedidosAbertos = (pedidos ?? []).filter(
+  // Array.isArray e não `?? []`: se a rota devolver um objeto de erro (plano
+  // mudou com a tela aberta, sessão expirou), `?? []` deixaria o objeto
+  // passar e o .filter logo abaixo derrubaria o Inbox inteiro. Desligar um
+  // módulo secundário não pode quebrar a tela principal do produto.
+  const pedidosAbertos = (Array.isArray(pedidos) ? pedidos : []).filter(
     (p) => p.status === "RASCUNHO" || p.status === "AGUARDANDO_FINANCEIRO"
   );
 
@@ -1040,6 +1049,7 @@ function ConversationThread({
               </button>
               <button
                 onClick={abrirPedido}
+                hidden={!temPedidos}
                 className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
               >
                 Pedido

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { registrarPagamento } from "@/lib/receivables";
 import { logAudit } from "@/lib/audit";
 
@@ -22,6 +23,8 @@ function ehFinanceiro(role: string) {
 /** Extrato de recebimentos do pedido. */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "CONTAS_RECEBER");
+  if (bloqueio) return bloqueio;
 
   const pedido = await prisma.order.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
@@ -58,6 +61,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "CONTAS_RECEBER");
+  if (bloqueio) return bloqueio;
   if (!ehFinanceiro(user.role)) {
     return NextResponse.json({ error: "só o financeiro pode registrar recebimento" }, { status: 403 });
   }

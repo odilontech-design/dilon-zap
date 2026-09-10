@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
 
 /**
@@ -25,6 +26,8 @@ const criarSchema = z.object({
 
 export async function GET() {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "SETORES");
+  if (bloqueio) return bloqueio;
 
   const setores = await prisma.setor.findMany({
     where: { tenantId: user.tenantId },
@@ -61,6 +64,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "SETORES");
+  if (bloqueio) return bloqueio;
   if (user.role === "AGENT") {
     return NextResponse.json(
       { error: "só o responsável pela conta pode criar setores" },

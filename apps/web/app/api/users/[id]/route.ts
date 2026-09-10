@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { vagaDeAtendente } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
 import { impedimentoParaAlterarStatus, liberarConversasDe } from "@/lib/user-status";
 
@@ -33,6 +34,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const impedimento = await impedimentoParaAlterarStatus(alvo, ativo ?? true, role === "AGENT", user.id);
   if (impedimento) return NextResponse.json({ error: impedimento }, { status: 400 });
+
+  // Reativar ocupa vaga igual a cadastrar. Sem conferir aqui, desativar e
+  // reativar viraria o atalho pra furar o limite do plano — o cadastro novo
+  // estaria barrado, e a reativação passaria por baixo.
+  const reativando = ativo === true && alvo.deactivatedAt !== null;
+  if (reativando) {
+    const vaga = await vagaDeAtendente(user.tenantId);
+    if (!vaga.cabe) {
+      return NextResponse.json(
+        {
+          error: `O plano ${vaga.plano} permite até ${vaga.limite} atendentes ativos, e a equipe já tem ${vaga.ativos}. Desative alguém antes de reativar, ou fale com a Dilon Tech para mudar de plano.`,
+          limiteAtingido: true,
+        },
+        { status: 409 }
+      );
+    }
+  }
 
   const atualizado = await prisma.user.update({
     where: { id: alvo.id },

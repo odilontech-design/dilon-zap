@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { listarRecebiveis } from "@/lib/receivables";
 
 /**
@@ -12,6 +13,8 @@ import { listarRecebiveis } from "@/lib/receivables";
  */
 export async function GET() {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "CONTAS_RECEBER");
+  if (bloqueio) return bloqueio;
   if (user.role !== "OWNER" && user.role !== "FINANCEIRO") {
     return NextResponse.json(
       { error: "só o responsável e o financeiro veem as contas a receber" },
@@ -35,6 +38,8 @@ export async function GET() {
 /** Quanto um contato específico deve — usado na ficha dentro do Inbox. */
 export async function POST(req: Request) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "CONTAS_RECEBER");
+  if (bloqueio) return bloqueio;
   const { contactId } = (await req.json().catch(() => ({}))) as { contactId?: string };
   if (!contactId) return NextResponse.json({ error: "contactId obrigatório" }, { status: 400 });
 

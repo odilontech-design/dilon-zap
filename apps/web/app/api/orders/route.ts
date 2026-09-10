@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 /**
@@ -11,6 +12,8 @@ import { conversationVisibilityWhere } from "@/lib/conversation-access";
  */
 export async function GET(req: Request) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
   const url = new URL(req.url);
   const conversationId = url.searchParams.get("conversationId");
   const status = url.searchParams.get("status");
@@ -72,6 +75,8 @@ const criarSchema = z.object({
 /** Abre um rascunho vazio pra conversa. Os itens entram em seguida. */
 export async function POST(req: Request) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
   const parsed = criarSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 

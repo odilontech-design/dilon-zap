@@ -50,6 +50,7 @@ model Tenant {
   uraOpcoes     UraOpcao[]
   setores       Setor[]
   apiKeys       ApiKey[]
+  recursos      TenantRecurso[]
   businessHours BusinessHour[]
   savedTexts    SavedText[]
   scheduledMessages ScheduledMessage[]
@@ -1061,9 +1062,35 @@ model AuditLog {
 }
 
 enum BillingStatus {
+  // Teste gratuito. O site promete 14 dias; sem este estado, a empresa em
+  // teste era indistinguível de uma que paga — e ninguém sabia quando cobrar.
+  TRIAL
   ACTIVE
   PAUSED
   CANCELED
+}
+
+// Os planos que a Dilon Tech vende. Preço NÃO mora aqui: é "a partir de" e
+// negociado por cliente (fica em Subscription.amountCents). O plano define o
+// que o sistema faz valer — limite de atendentes e quais recursos vêm ligados.
+enum Plano {
+  ESSENCIAL
+  PROFISSIONAL
+  ESCALA
+}
+
+// Recursos que um plano pode incluir ou não.
+//
+// Só entra aqui o que o sistema consegue de fato ligar e desligar. Inbox,
+// contatos, funil e relatórios ficam fora de propósito: são o produto em si,
+// e esconder relatório atrapalha justamente a renovação — é onde o cliente vê
+// o valor que está recebendo.
+enum Recurso {
+  URA
+  SETORES
+  PEDIDOS
+  CONTAS_RECEBER
+  INTEGRACAO_API
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -1078,11 +1105,57 @@ model Subscription {
   cycleDay        Int // dia do mês em que vence a próxima fatura (1-28)
   status          BillingStatus @default(ACTIVE)
   notes           String?
+
+  plano Plano @default(ESSENCIAL)
+
+  // Cliente da regra antiga: contratou quando todo plano tinha a plataforma
+  // completa, e é assim que continua. É uma promessa comercial por escrito —
+  // está no site e na proposta enviada à Hemoderi — e não pode ser desfeita
+  // por uma mudança de tabela.
+  //
+  // Um campo explícito, e não uma pilha de exceções por recurso: exceções
+  // soltas pareceriam arbitrárias a quem abrisse o cadastro daqui a um ano.
+  // Este diz o motivo.
+  plataformaCompleta Boolean @default(false)
+
+  // Fim do teste gratuito. Só tem sentido com status TRIAL.
+  testeAte DateTime?
+
+  // Taxa de implantação: cobrança única, diferente da mensalidade. O site
+  // anuncia R$ 597 e às vezes isenta — por isso o valor fica registrado, e não
+  // fixo no código.
+  setupCents  Int?
+  setupPagoEm DateTime?
+
+  // Quando e por que saiu. Sem isto, "cancelado" é um estado sem história: não
+  // dá pra saber se o cliente saiu por preço, por falta de uso ou porque
+  // fechou a empresa — e são três conversas completamente diferentes.
+  canceladoEm        DateTime?
+  motivoCancelamento String?
   mpPreapprovalId String?
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   invoices Invoice[]
+}
+
+// Exceção de recurso para uma empresa específica.
+//
+// O efetivo é: padrão do plano, com isto por cima. Serve pra ligar um recurso
+// que o plano não inclui (um cliente em teste de um módulo, a integração só
+// pra quem tem o Dilon Saúde) ou desligar um que ele inclui (uma empresa que
+// não quer Pedidos poluindo o menu da equipe).
+model TenantRecurso {
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recurso  Recurso
+  ativo    Boolean
+  // Pra que ninguém tenha que adivinhar daqui a seis meses por que esta
+  // empresa tem um recurso fora do plano.
+  motivo    String?
+  updatedAt DateTime @updatedAt
+
+  @@id([tenantId, recurso])
 }
 
 enum InvoiceStatus {

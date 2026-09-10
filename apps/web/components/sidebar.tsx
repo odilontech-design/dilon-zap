@@ -1,5 +1,7 @@
 "use client";
 
+import type { Recurso } from "@/lib/plano-regras";
+
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -64,17 +66,20 @@ const NAV_ITEMS = [
   },
   {
     href: "/pedidos",
+    recurso: "PEDIDOS" as Recurso,
     label: "Pedidos",
     icon: icon(<><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" /><path d="M3 6h18M16 10a4 4 0 0 1-8 0" /></>),
   },
   {
     href: "/receber",
+    recurso: "CONTAS_RECEBER" as Recurso,
     label: "A receber",
     icon: icon(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>),
     somenteResponsavel: true,
   },
   {
     href: "/produtos",
+    recurso: "PEDIDOS" as Recurso,
     label: "Produtos",
     icon: icon(<><path d="M20.5 7.5 12 3 3.5 7.5v9L12 21l8.5-4.5v-9Z" /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" /></>),
   },
@@ -90,6 +95,7 @@ const NAV_ITEMS = [
   },
   {
     href: "/setores",
+    recurso: "SETORES" as Recurso,
     label: "Setores",
     icon: icon(<><circle cx="9" cy="7" r="3" /><circle cx="17" cy="9" r="2.5" /><path d="M3 20v-1.5A4.5 4.5 0 0 1 7.5 14h3A4.5 4.5 0 0 1 15 18.5V20" /><path d="M17 14a3.5 3.5 0 0 1 3.5 3.5V19" /></>),
     somenteResponsavel: true,
@@ -114,7 +120,19 @@ const NAV_ITEMS = [
 
 const COLLAPSE_KEY = "dilonzap:sidebar-collapsed";
 
-export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" | "FINANCEIRO" | "SUPERADMIN" }) {
+export function Sidebar({
+  name,
+  role,
+  recursos,
+}: {
+  name: string;
+  role: "OWNER" | "AGENT" | "FINANCEIRO" | "SUPERADMIN";
+  // Recursos do plano da empresa. Opcional pra não quebrar quem renderiza o
+  // menu fora do layout do painel; ausente = mostra tudo, e o servidor
+  // continua barrando o que está fora do plano.
+  recursos?: Recurso[];
+}) {
+  const ativos = recursos ? new Set(recursos) : null;
   // `open` é só pro mobile (gaveta). No desktop a barra está sempre visível
   // e quem manda é `collapsed`, que alterna entre rótulo + ícone e só ícone.
   const [open, setOpen] = useState(false);
@@ -250,7 +268,14 @@ export function Sidebar({ name, role }: { name: string; role: "OWNER" | "AGENT" 
             da tela em vez de rolar. flex-1 dá a ele o espaço que sobra entre
             a marca e o rodapé. */}
         <nav className="flex-1 min-h-0 flex flex-col gap-1 text-sm overflow-y-auto">
-          {NAV_ITEMS.filter((item) => !item.somenteResponsavel || role === "OWNER").map((item) => {
+          {NAV_ITEMS.filter(
+            (item) =>
+              (!item.somenteResponsavel || role === "OWNER") &&
+              // Item de recurso fora do plano some do menu. Não é a barreira —
+              // essa é a rota — mas evita a pessoa clicar e dar de cara com
+              // uma recusa.
+              (!("recurso" in item) || !item.recurso || !ativos || ativos.has(item.recurso))
+          ).map((item) => {
             const active = pathname === item.href || pathname?.startsWith(item.href + "/");
             return (
               <Link

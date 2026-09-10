@@ -3,6 +3,7 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { vagaDeAtendente } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
 
 /**
@@ -50,6 +51,24 @@ export async function POST(req: Request) {
 
   const parsed = criarSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
+
+  // Teto do plano. É o único item que diferencia os planos no site e que o
+  // sistema consegue fazer valer — e antes não era conferido em lugar nenhum:
+  // nada impedia o Essencial de cadastrar o nono atendente.
+  //
+  // A mensagem diz o número e o plano. "Limite atingido" sozinho faria o
+  // responsável achar que é defeito e abrir chamado, em vez de entender que é
+  // hora de mudar de plano.
+  const vaga = await vagaDeAtendente(user.tenantId);
+  if (!vaga.cabe) {
+    return NextResponse.json(
+      {
+        error: `O plano ${vaga.plano} permite até ${vaga.limite} atendentes, e a equipe já tem ${vaga.ativos}. Desative alguém que saiu ou fale com a Dilon Tech para mudar de plano.`,
+        limiteAtingido: true,
+      },
+      { status: 409 }
+    );
+  }
 
   // E-mail é único no sistema inteiro, não por empresa — então o conflito
   // pode ser com uma conta de outro tenant, que este OWNER não pode ver.

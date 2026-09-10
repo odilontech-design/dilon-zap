@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 
 const patchSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
@@ -21,6 +22,8 @@ function podeEditarCatalogo(role: string) {
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
   if (!podeEditarCatalogo(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
   const parsed = patchSchema.safeParse(await req.json());
