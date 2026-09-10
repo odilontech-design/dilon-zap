@@ -33,6 +33,11 @@ const criarSchema = z.object({
   // Recebe em centavos: a conversão de "19,90" pra 1990 é feita na tela, num
   // lugar só, e a API nunca vê número quebrado.
   priceCents: z.number().int().min(0),
+  tipo: z.enum(["PRODUTO", "SERVICO"]).default("PRODUTO"),
+  // Só faz sentido em serviço. Recusar duração em produto seria rigor sem
+  // ganho — mas gravar a duração de um produto criaria um dado que nada lê e
+  // que confundiria quem abrisse o cadastro depois.
+  duracaoMinutos: z.number().int().min(1).max(24 * 60).nullable().optional(),
 });
 
 export async function POST(req: Request) {

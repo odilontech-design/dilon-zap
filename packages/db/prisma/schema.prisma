@@ -49,6 +49,7 @@ model Tenant {
   stages        Stage[]
   uraOpcoes     UraOpcao[]
   setores       Setor[]
+  apiKeys       ApiKey[]
   businessHours BusinessHour[]
   savedTexts    SavedText[]
   scheduledMessages ScheduledMessage[]
@@ -134,6 +135,38 @@ model UraOpcao {
   // Duas opções com a mesma tecla tornariam o menu ambíguo — e a escolha do
   // cliente, uma disputa entre dois registros.
   @@unique([tenantId, ordem])
+  @@index([tenantId])
+}
+
+// Chave de API de um sistema externo que fala com este tenant.
+//
+// Nasceu da integracao com o Dilon Saude: quando um agendamento e confirmado
+// la, a confirmacao e o lembrete precisam sair pelo WhatsApp daqui. Nao e o
+// segredo interno do worker (WORKER_INTERNAL_SECRET), que e do web pro worker
+// e nao tem tenant: uma chave externa precisa ser revogavel sozinha e valer
+// pra UMA empresa so.
+//
+// Guarda o HASH, nunca a chave. Quem gera ve o valor uma vez; a partir dai o
+// sistema so consegue conferir, nao reexibir — que e o que impede a chave de
+// vazar por um print da tela de configuracao meses depois.
+model ApiKey {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Pra que serve, em texto: "Dilon Saude - producao". Sem isso, revogar vira
+  // adivinhacao no dia em que houver tres chaves.
+  nome      String
+  hash      String @unique
+  // Ultimos caracteres, so pra identificar na lista qual e qual.
+  final     String
+
+  // Revogacao e data, nao exclusao: saber que uma chave existiu e quando
+  // parou de valer importa quando algo estranho aparece no log.
+  revokedAt  DateTime?
+  lastUsedAt DateTime?
+  createdAt  DateTime  @default(now())
+
   @@index([tenantId])
 }
 
@@ -515,11 +548,32 @@ model AutoReply {
 // perdeu). Um campo "quantidade" que alguém edita na mão parece resolver e
 // desanda em duas semanas: some do sistema o que saiu pela porta, e aí
 // ninguém confia mais no número. Se a Believe precisar, é módulo próprio.
+enum TipoItem {
+  PRODUTO
+  SERVICO
+}
+
 model Product {
   id        String   @id @default(cuid())
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name      String
+
+  // Produto ou serviço. A diferença que importa é UMA: serviço não tem
+  // estoque. Não é "estoque infinito" nem "estoque zero" — é que a pergunta
+  // não se aplica, e tratar como número faria uma consultoria aparecer como
+  // "sem estoque" na tela de venda.
+  //
+  // Enum e não booleano porque a lista pode crescer (assinatura, por exemplo,
+  // que é serviço mas recorrente) e `isService = false` não teria pra onde ir.
+  //
+  // O default PRODUTO mantém os 52 itens da Believe exatamente como estão.
+  tipo TipoItem @default(PRODUTO)
+
+  // Quanto tempo o serviço ocupa, em minutos. Só faz sentido pra SERVICO, e é
+  // o campo que uma agenda consome pra saber onde cabe. Nulo em produto, e
+  // nulo também em serviço que a empresa não quis medir.
+  duracaoMinutos Int?
   // Código interno da Believe, quando existir. Opcional porque nem todo
   // produto tem, e exigir um código inventado só pra cadastrar é atrito.
   sku       String?

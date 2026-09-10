@@ -47,9 +47,17 @@ export async function registrarMovimento(entrada: MovimentoInput) {
     // mesmo com o total certo.
     const produto = await tx.product.findFirst({
       where: { id: productId, tenantId },
-      select: { id: true, stockQty: true },
+      select: { id: true, stockQty: true, tipo: true, name: true },
     });
     if (!produto) throw new Error("produto não encontrado");
+
+    // Serviço não tem estoque, e recusar aqui é o que impede a ideia de
+    // "estoque de serviço" de nascer por acidente. Esta é a única porta de
+    // escrita do saldo — barrando aqui, não existe caminho que produza um
+    // extrato de movimentações para algo que não é contável.
+    if (produto.tipo === "SERVICO") {
+      throw new Error(`"${produto.name}" é um serviço e não tem estoque`);
+    }
 
     // O incremento é atômico no banco (stockQty = stockQty + delta), então o
     // total nunca se perde numa corrida. É daqui que sai o saldo real.

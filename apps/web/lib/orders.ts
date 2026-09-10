@@ -61,6 +61,17 @@ export async function fecharPedido(input: FecharInput) {
     for (const item of pedido.items) {
       if (!item.productId) continue; // item avulso, digitado à mão
 
+      // Serviço passa direto: não tem saldo pra baixar nem extrato pra
+      // registrar. Sem esta linha, vender uma consultoria criaria uma
+      // movimentação de VENDA e levaria o "estoque" dela a -1, -2, -3 — um
+      // número que não quer dizer nada e que apareceria vermelho na tela de
+      // produtos, como se algo estivesse errado no cadastro.
+      const cadastro = await tx.product.findUnique({
+        where: { id: item.productId },
+        select: { tipo: true },
+      });
+      if (cadastro?.tipo === "SERVICO") continue;
+
       const produto = await tx.product.update({
         where: { id: item.productId },
         data: { stockQty: { decrement: item.quantidade } },

@@ -10,7 +10,12 @@ type Product = {
   categoria: string | null;
   priceCents: number;
   isActive: boolean;
+  // Serviço não tem estoque de verdade. O campo vem preenchido do banco
+  // (default 0) e é ignorado quando tipo é SERVICO — mostrar "0" ali faria
+  // uma consultoria parecer esgotada.
   stockQty: number;
+  tipo: "PRODUTO" | "SERVICO";
+  duracaoMinutos: number | null;
 };
 
 type Movimento = {
@@ -249,15 +254,24 @@ export function ProductsPanel({ podeEditar, podeMexerEstoque }: { podeEditar: bo
                 </td>
                 <td className="px-4 py-2.5 text-neutral-500">{p.categoria ?? "—"}</td>
                 <td className="px-4 py-2.5 text-right">
-                  <button
-                    onClick={() => setEstoqueDe(p)}
-                    title="Ver extrato e lançar movimentação"
-                    className={`tabular-nums hover:underline ${
-                      p.stockQty <= 0 ? "text-red-600 font-medium" : "text-neutral-700"
-                    }`}
-                  >
-                    {p.stockQty}
-                  </button>
+                  {/* Serviço não abre extrato: não há movimentação pra ver, e o
+                      botão sugeriria que dá pra lançar entrada. O traço diz
+                      "não se aplica"; um zero diria "acabou". */}
+                  {p.tipo === "SERVICO" ? (
+                    <span className="text-neutral-400" title="Serviço não controla estoque">
+                      —
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => setEstoqueDe(p)}
+                      title="Ver extrato e lançar movimentação"
+                      className={`tabular-nums hover:underline ${
+                        p.stockQty <= 0 ? "text-red-600 font-medium" : "text-neutral-700"
+                      }`}
+                    >
+                      {p.stockQty}
+                    </button>
+                  )}
                 </td>
                 <td className="px-4 py-2.5 text-right tabular-nums">{centsToBRL(p.priceCents)}</td>
                 {podeEditar && (
@@ -474,6 +488,14 @@ function EditorProduto({
   const [preco, setPreco] = useState(
     existente ? ((inicial as Product).priceCents / 100).toFixed(2).replace(".", ",") : ""
   );
+  const [tipo, setTipo] = useState<"PRODUTO" | "SERVICO">(
+    existente ? ((inicial as Product).tipo ?? "PRODUTO") : "PRODUTO"
+  );
+  const [duracao, setDuracao] = useState(
+    existente && (inicial as Product).duracaoMinutos
+      ? String((inicial as Product).duracaoMinutos)
+      : ""
+  );
   const [salvando, setSalvando] = useState(false);
 
   async function salvar(e: React.FormEvent) {
@@ -488,7 +510,17 @@ function EditorProduto({
     const res = await fetch(existente ? `/api/products/${(inicial as Product).id}` : "/api/products", {
       method: existente ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, sku, categoria, priceCents }),
+      body: JSON.stringify({
+        name,
+        sku,
+        categoria,
+        priceCents,
+        tipo,
+        // Duração só acompanha serviço. Em produto vai null de propósito:
+        // se alguém trocar o tipo depois de digitar, o número não fica
+        // pendurado num cadastro onde não quer dizer nada.
+        duracaoMinutos: tipo === "SERVICO" && duracao ? Number(duracao) : null,
+      }),
     });
     setSalvando(false);
 
@@ -507,7 +539,31 @@ function EditorProduto({
         onClick={(e) => e.stopPropagation()}
         className="bg-surface rounded-lg border border-neutral-200 p-6 w-full max-w-md"
       >
-        <h2 className="text-lg font-semibold mb-4">{existente ? "Editar produto" : "Novo produto"}</h2>
+        <h2 className="text-lg font-semibold mb-4">
+          {existente ? "Editar item" : tipo === "SERVICO" ? "Novo serviço" : "Novo produto"}
+        </h2>
+
+        <div className="mb-4 flex gap-2 text-sm">
+          {(["PRODUTO", "SERVICO"] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              onClick={() => setTipo(t)}
+              className={`flex-1 rounded-md border px-3 py-2 ${
+                tipo === t
+                  ? "border-accent bg-accent/10 font-medium text-accent"
+                  : "border-neutral-300 text-neutral-600"
+              }`}
+            >
+              {t === "PRODUTO" ? "Produto" : "Serviço"}
+            </button>
+          ))}
+        </div>
+        {tipo === "SERVICO" && (
+          <p className="-mt-2 mb-4 text-xs text-neutral-500">
+            Serviço não controla estoque. A duração é usada para saber quanto tempo ele ocupa.
+          </p>
+        )}
 
         <label className="block text-sm mb-3">
           <span className="text-neutral-700">Nome</span>

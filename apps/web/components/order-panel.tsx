@@ -42,7 +42,15 @@ export type Pedido = {
   items: PedidoItem[];
 };
 
-type Produto = { id: string; name: string; priceCents: number; stockQty: number; isActive: boolean };
+type Produto = {
+  id: string;
+  name: string;
+  priceCents: number;
+  stockQty: number;
+  isActive: boolean;
+  tipo: "PRODUTO" | "SERVICO";
+  duracaoMinutos: number | null;
+};
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -243,7 +251,13 @@ export function OrderPanel({
                       <span className="shrink-0 text-neutral-500 tabular-nums">
                         {centsToBRL(p.priceCents)}
                         {/* Avisa mas deixa vender, conforme decidido. */}
-                        {p.stockQty <= 0 && <span className="ml-2 text-red-600">sem estoque</span>}
+                        {/* "sem estoque" so vale pra produto. Num servico o
+                            aviso seria falso e travaria a venda sem motivo. */}
+                        {p.tipo === "SERVICO"
+                          ? p.duracaoMinutos && (
+                              <span className="ml-2 text-neutral-400">{p.duracaoMinutos} min</span>
+                            )
+                          : p.stockQty <= 0 && <span className="ml-2 text-red-600">sem estoque</span>}
                       </span>
                     </button>
                   ))}

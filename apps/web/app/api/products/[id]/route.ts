@@ -9,6 +9,8 @@ const patchSchema = z.object({
   categoria: z.string().trim().max(40).optional(),
   priceCents: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
+  tipo: z.enum(["PRODUTO", "SERVICO"]).optional(),
+  duracaoMinutos: z.number().int().min(1).max(24 * 60).nullable().optional(),
 });
 
 // Responsável e Financeiro editam o catálogo, inclusive preço. Ver o
