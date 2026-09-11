@@ -52,6 +52,12 @@ export function formatPhoneDisplay(contact: { waJid: string; phoneNumber?: strin
   return digits ? formatBRDigits(digits) : "número não identificado";
 }
 
+/** Telefone formatado, ou null quando não se sabe — pra quem prefere omitir a linha a imprimir um aviso. */
+export function telefoneConhecido(contact: { waJid: string; phoneNumber?: string | null }) {
+  const digits = realPhoneDigits(contact);
+  return digits ? formatBRDigits(digits) : null;
+}
+
 export function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 }

@@ -36,6 +36,26 @@ model Tenant {
   // toda vez que uma opção mudasse de nome.
   uraMensagem String?
 
+  // Cabeçalho do recibo impresso. Separado de `name` de propósito: o nome
+  // que a equipe vê no sistema ("Believe Cosméticos") não é o que vai no
+  // comprovante — ali vai a razão social ou o nome do MEI, que é o que
+  // identifica a empresa pro cliente e pro fisco.
+  //
+  // Tudo opcional e em texto livre. Endereço estruturado (rua, número, CEP em
+  // campos) só serviria se alguém fosse consultar por CEP, e ninguém vai; em
+  // texto livre a empresa escreve do jeito que quer ver impresso.
+  reciboNome      String?
+  reciboDocumento String?
+  reciboEndereco  String?
+  reciboTelefone  String?
+  // Mensagem no pé do recibo: política de troca, agradecimento, Instagram.
+  reciboRodape    String?
+  // Largura do papel da impressora térmica, em mm. 80 é o padrão de balcão;
+  // 58 é o das impressoras portáteis. Fica na empresa, e não escolhido a cada
+  // impressão, porque a impressora não muda — e errar a largura corta o texto
+  // ou deixa uma faixa em branco.
+  reciboLarguraMm Int @default(80)
+
   users         User[]
   sessions      WhatsAppSession[]
   contacts      Contact[]
@@ -374,6 +394,13 @@ model Contact {
   // fosse mais precisar.
   notes          String?
   notesUpdatedAt DateTime?
+
+  // Dados pro recibo impresso. O WhatsApp entrega nome e telefone e só; CPF
+  // e endereço de entrega a equipe preenche quando precisa — revenda que
+  // entrega e cliente que pede nota. Texto livre pelo mesmo motivo do
+  // endereço da empresa: é pra imprimir, não pra consultar.
+  documento String?
+  endereco  String?
 
   // Se o número tem conta no WhatsApp. Nulo = ainda não checado — que é
   // diferente de "não tem", e a tela precisa saber a diferença pra não

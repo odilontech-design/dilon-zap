@@ -9,6 +9,8 @@ const bodySchema = z.object({
   dealValueCents: z.number().int().min(0).optional(),
   name: z.string().max(120).nullable().optional(),
   notes: z.string().max(4000).nullable().optional(),
+  documento: z.string().max(40).nullable().optional(),
+  endereco: z.string().max(300).nullable().optional(),
 });
 
 /**
@@ -35,6 +37,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       dealValueCents: true,
       notes: true,
       notesUpdatedAt: true,
+      documento: true,
+      endereco: true,
       hasWhatsapp: true,
       createdAt: true,
       stage: { select: { id: true, name: true, color: true } },
@@ -84,7 +88,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!stage) return NextResponse.json({ error: "etapa inválida" }, { status: 400 });
   }
 
-  const { notes, ...resto } = parsed.data;
+  const { notes, documento, endereco, ...resto } = parsed.data;
+  // Mesma regra da anotação: campo apagado vira null, não string vazia, pra
+  // o recibo só ter um caso a checar na hora de omitir a linha.
+  const limpo = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
 
   const updated = await prisma.contact.update({
     where: { id: contact.id },
@@ -101,6 +108,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       ...(notes !== undefined
         ? { notes: notes?.trim() ? notes.trim() : null, notesUpdatedAt: new Date() }
         : {}),
+      documento: limpo(documento),
+      endereco: limpo(endereco),
     },
   });
 

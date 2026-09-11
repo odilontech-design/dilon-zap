@@ -114,6 +114,10 @@ export function OrderPanel({
   const [busca, setBusca] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // Total do pedido que acabou de ser fechado nesta tela. Enquanto existe, o
+  // painel vira a confirmação com o botão de imprimir — é o momento em que o
+  // financeiro precisa do recibo, com a cliente ainda no balcão.
+  const [fechadoAgora, setFechadoAgora] = useState<number | null>(null);
 
   const editavel = pedido.status === "RASCUNHO" || pedido.status === "AGUARDANDO_FINANCEIRO";
   const podeFechar = ehFinanceiro && pedido.status === "AGUARDANDO_FINANCEIRO";
@@ -193,7 +197,37 @@ export function OrderPanel({
     });
     if (r === null) return;
     if (r.jaEstavaFechado) setErro("Esse pedido já tinha sido fechado — nada foi baixado de novo.");
-    else onFechar();
+    else setFechadoAgora(typeof r.total === "number" ? r.total : total);
+  }
+
+  if (fechadoAgora !== null) {
+    return (
+      <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+        <div
+          onClick={(e) => e.stopPropagation()}
+          className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm p-6 text-center"
+        >
+          <p className="text-sm text-neutral-500">Pedido #{pedido.numero} fechado</p>
+          <p className="text-2xl font-semibold tabular-nums mt-1">{centsToBRL(fechadoAgora)}</p>
+          <p className="text-sm text-neutral-600 mt-1">
+            {PAGAMENTO_LABEL[pagamento]} · {pagamento === "PIX" || pagamento === "CARTAO" ? "pago" : "a receber"}
+          </p>
+          <div className="mt-5 flex flex-col gap-2 text-sm">
+            <a
+              href={`/recibo/${pedido.id}`}
+              target="_blank"
+              rel="noopener"
+              className="rounded-md bg-accent text-white px-4 py-2 font-medium"
+            >
+              Imprimir recibo
+            </a>
+            <button onClick={onFechar} className="rounded-md border border-neutral-300 px-4 py-2">
+              Concluir
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -384,6 +418,17 @@ export function OrderPanel({
         </div>
 
         <footer className="p-4 border-t border-neutral-200 flex justify-end gap-2 text-sm flex-wrap">
+          {pedido.status === "FECHADO" && (
+            <a
+              href={`/recibo/${pedido.id}`}
+              target="_blank"
+              rel="noopener"
+              className="rounded-md border border-neutral-300 px-4 py-2"
+            >
+              Imprimir recibo
+            </a>
+          )}
+
           {pedido.status === "FECHADO" && !pedido.pago && ehFinanceiro && (
             <button
               onClick={() => acao({ acao: "marcarPago" }).then((r) => r && onFechar())}

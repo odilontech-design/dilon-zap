@@ -36,6 +36,8 @@ type Ficha = ContactRef & {
   dealValueCents: number;
   notes: string | null;
   notesUpdatedAt: string | null;
+  documento: string | null;
+  endereco: string | null;
   hasWhatsapp: boolean | null;
   createdAt: string;
   stage: { id: string; name: string; color: string } | null;
@@ -104,6 +106,8 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
   const [nome, setNome] = useState<string | null>(null);
   const [valor, setValor] = useState<string | null>(null);
   const [anotacoes, setAnotacoes] = useState<string | null>(null);
+  const [documento, setDocumento] = useState<string | null>(null);
+  const [endereco, setEndereco] = useState<string | null>(null);
 
   async function salvar(campos: Record<string, unknown>) {
     await fetch(`/api/contacts/${contactId}`, {
@@ -205,6 +209,36 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
                 }}
                 inputMode="decimal"
                 className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5 tabular-nums"
+              />
+            </label>
+          </div>
+
+          {/* Só servem pro recibo impresso. Ficam aqui, e não num cadastro à
+              parte, porque é na ficha que a equipe já procura o cliente. */}
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
+            <label className="text-sm">
+              <span className="text-xs font-medium text-neutral-700">CPF / CNPJ</span>
+              <input
+                value={documento ?? ficha.documento ?? ""}
+                onChange={(e) => setDocumento(e.target.value)}
+                onBlur={() => {
+                  if (documento !== null && documento !== (ficha.documento ?? "")) salvar({ documento });
+                }}
+                inputMode="numeric"
+                placeholder="Sai no recibo"
+                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5 tabular-nums"
+              />
+            </label>
+            <label className="text-sm">
+              <span className="text-xs font-medium text-neutral-700">Endereço</span>
+              <input
+                value={endereco ?? ficha.endereco ?? ""}
+                onChange={(e) => setEndereco(e.target.value)}
+                onBlur={() => {
+                  if (endereco !== null && endereco !== (ficha.endereco ?? "")) salvar({ endereco });
+                }}
+                placeholder="Rua, número, bairro, cidade"
+                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
               />
             </label>
           </div>
