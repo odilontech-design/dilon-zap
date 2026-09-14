@@ -12,7 +12,8 @@ export async function GET() {
   // campo a mais aqui vira tráfego repetido o dia todo. Só entra o que as
   // duas telas leem de fato (ver o type Contact de cada uma).
   const contacts = await prisma.contact.findMany({
-    where: { tenantId: user.tenantId },
+    // Grupo não é contato de funil nem de agenda — tem tela própria.
+    where: { tenantId: user.tenantId, grupo: false },
     orderBy: { createdAt: "desc" },
     select: {
       id: true,

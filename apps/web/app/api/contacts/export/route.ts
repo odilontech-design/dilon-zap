@@ -11,7 +11,7 @@ export async function GET() {
   const user = await requireUser();
 
   const contacts = await prisma.contact.findMany({
-    where: { tenantId: user.tenantId },
+    where: { tenantId: user.tenantId, grupo: false },
     orderBy: { createdAt: "desc" },
     include: { stage: { select: { name: true } } },
   });

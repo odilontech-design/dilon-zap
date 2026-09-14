@@ -39,7 +39,10 @@ async function mensagensPorDia(tenantId: string, timezone: string) {
       count(*) AS total
     FROM "Message" m
     JOIN "WhatsAppSession" s ON s.id = m."sessionId"
+    JOIN "Conversation" c ON c.id = m."conversationId"
+    JOIN "Contact" k ON k.id = c."contactId"
     WHERE s."tenantId" = ${tenantId}
+      AND k.grupo = false
       AND m."createdAt" >= now() - (${DIAS_NA_SERIE} || ' days')::interval
     GROUP BY 1, 2
     ORDER BY 1
@@ -93,21 +96,24 @@ export async function GET() {
     select: { timezone: true },
   });
 
+  // Grupo fica fora de todos os números desta tela: conversa de grupo não é
+  // atendimento, e um grupo movimentado inflaria o volume do dia e bagunçaria
+  // o tempo de primeira resposta, que mede quanto o cliente esperou.
   const [statusCounts, messages24h, messages7d, sample, agents, session, serieDiaria] =
     await Promise.all([
     prisma.conversation.groupBy({
       by: ["status"],
-      where: { tenantId: user.tenantId },
+      where: { tenantId: user.tenantId, contact: { grupo: false } },
       _count: true,
     }),
     prisma.message.count({
-      where: { session: { tenantId: user.tenantId }, createdAt: { gte: since24h } },
+      where: { session: { tenantId: user.tenantId }, conversation: { contact: { grupo: false } }, createdAt: { gte: since24h } },
     }),
     prisma.message.count({
-      where: { session: { tenantId: user.tenantId }, createdAt: { gte: since7d } },
+      where: { session: { tenantId: user.tenantId }, conversation: { contact: { grupo: false } }, createdAt: { gte: since7d } },
     }),
     prisma.conversation.findMany({
-      where: { tenantId: user.tenantId },
+      where: { tenantId: user.tenantId, contact: { grupo: false } },
       orderBy: { lastMessageAt: "desc" },
       take: FIRST_RESPONSE_SAMPLE_SIZE,
       include: { messages: { orderBy: { createdAt: "asc" }, select: { direction: true, createdAt: true } } },

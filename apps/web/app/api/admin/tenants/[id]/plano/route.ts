@@ -14,7 +14,7 @@ import { recursosEfetivos, TODOS_RECURSOS, type Assinatura } from "@/lib/plano-r
  * plano pode estar rodando agora mesmo — o menu de triagem, por exemplo.
  */
 
-const recursoEnum = z.enum(["URA", "SETORES", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API"]);
+const recursoEnum = z.enum(["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API"]);
 
 const corpoSchema = z.object({
   plano: z.enum(["ESSENCIAL", "PROFISSIONAL", "ESCALA"]).optional(),

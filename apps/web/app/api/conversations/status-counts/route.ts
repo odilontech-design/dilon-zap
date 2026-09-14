@@ -12,7 +12,8 @@ export async function GET() {
 
   const counts = await prisma.conversation.groupBy({
     by: ["status"],
-    where: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
+    // Os badges são das abas do Inbox, e grupo não aparece no Inbox.
+    where: { tenantId: user.tenantId, contact: { grupo: false }, ...(await conversationVisibilityWhere(user)) },
     _count: true,
   });
 

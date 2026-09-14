@@ -9,7 +9,13 @@ export async function GET() {
   const user = await requireUser();
 
   const conversations = await prisma.conversation.findMany({
-    where: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
+    where: {
+      tenantId: user.tenantId,
+      // Grupo ativo recebe encaminhamento; o desativado nem está sendo
+      // acompanhado, e mandar pra ele seria falar num grupo que ninguém lê aqui.
+      contact: { OR: [{ grupo: false }, { grupoAtivadoEm: { not: null } }] },
+      ...(await conversationVisibilityWhere(user)),
+    },
     orderBy: { lastMessageAt: "desc" },
     select: {
       id: true,

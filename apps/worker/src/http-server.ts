@@ -7,6 +7,7 @@ import {
   wakeOutboxForTenant,
   checarNumerosNoWhatsApp,
   setWhatsAppBlock,
+  sincronizarGrupos,
 } from "./session-manager";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
@@ -71,6 +72,11 @@ export function startInternalServer() {
 
     if (req.method === "POST" && req.url === "/internal/contacts/block-whatsapp") {
       handleBlockWhatsApp(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/groups/sync") {
+      handleSyncGroups(req, res);
       return;
     }
 
@@ -172,12 +178,13 @@ function handleReactMessage(req: http.IncomingMessage, res: http.ServerResponse)
   req.on("data", (chunk) => (body += chunk));
   req.on("end", async () => {
     try {
-      const { tenantId, waJid, waMessageId, targetFromMe, emoji } = JSON.parse(body) as {
+      const { tenantId, waJid, waMessageId, targetFromMe, emoji, participant } = JSON.parse(body) as {
         tenantId?: string;
         waJid?: string;
         waMessageId?: string;
         targetFromMe?: boolean;
         emoji?: string;
+        participant?: string | null;
       };
       if (!tenantId || !waJid || !waMessageId || typeof targetFromMe !== "boolean" || emoji === undefined) {
         res
@@ -186,7 +193,7 @@ function handleReactMessage(req: http.IncomingMessage, res: http.ServerResponse)
         return;
       }
 
-      const result = await reactToMessage(tenantId, waJid, waMessageId, targetFromMe, emoji);
+      const result = await reactToMessage(tenantId, waJid, waMessageId, targetFromMe, emoji, participant);
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
     } catch (err) {
       res
@@ -213,6 +220,29 @@ function handleWakeOutbox(req: http.IncomingMessage, res: http.ServerResponse) {
 
       wakeOutboxForTenant(tenantId);
       res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+// Lista de grupos do número, pedida pela tela de grupos. A trava contra
+// repetição mora em sincronizarGrupos, junto de quem fala com o WhatsApp.
+function handleSyncGroups(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId } = JSON.parse(body) as { tenantId?: string };
+      if (!tenantId) {
+        res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "tenantId é obrigatório" }));
+        return;
+      }
+
+      const result = await sincronizarGrupos(tenantId);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
     } catch (err) {
       res
         .writeHead(500, { "Content-Type": "application/json" })

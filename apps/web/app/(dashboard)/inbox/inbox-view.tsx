@@ -67,7 +67,7 @@ type ConversationDetail = {
   ticketNumber: number;
   status: ConversationStatus;
   tags: string[];
-  contact: ContactRef & { stageId: string | null; notes: string | null };
+  contact: ContactRef & { stageId: string | null; notes: string | null; grupoParticipantes?: number | null };
   assignedTo: { id: string; name: string } | null;
   closeReason: string | null;
 };
@@ -81,6 +81,8 @@ type QuotedMessage = {
   mediaType: MediaType | null;
   isDeleted: boolean;
   sender: { name: string } | null;
+  // Autor, quando a mensagem citada é de alguém num grupo.
+  autorNome?: string | null;
 };
 
 type MessageReaction = { id: string; emoji: string; fromMe: boolean };
@@ -96,6 +98,8 @@ type Message = {
   mediaFileName: string | null;
   mediaDurationSeconds: number | null;
   sender: { name: string } | null;
+  // Quem mandou, em mensagem de grupo. Nulo em chat 1:1.
+  autorNome: string | null;
   isEdited: boolean;
   isDeleted: boolean;
   isForwarded: boolean;
@@ -124,7 +128,8 @@ const SENT_STATUSES: MessageStatus[] = ["SENT", "DELIVERED", "READ"];
 const DELIVERY_WARN_AFTER_MS = 10 * 60 * 1000;
 
 function quotedLabel(quoted: QuotedMessage, contact: ContactRef) {
-  return quoted.direction === "OUTBOUND" ? quoted.sender?.name ?? "Você" : contactLabel(contact);
+  // Num grupo o contato da conversa é o grupo: quem falou é o autor da mensagem.
+  return quoted.direction === "OUTBOUND" ? quoted.sender?.name ?? "Você" : quoted.autorNome ?? contactLabel(contact);
 }
 
 function quotedSnippet(quoted: QuotedMessage) {
@@ -579,16 +584,24 @@ function NewConversationModal({
   );
 }
 
-function ConversationThread({
+/**
+ * A conversa aberta. Exportada pra tela de Grupos usar a mesma, em modoGrupo:
+ * mídia, resposta, reação e envio são idênticos, e duas cópias divergiriam.
+ * O que muda no grupo é o que ele não tem — status, responsável, ficha,
+ * pedido, bloqueio e etiqueta — e o autor em cima de cada mensagem.
+ */
+export function ConversationThread({
   conversationId,
   ehFinanceiro,
   onChanged,
   onBack,
+  modoGrupo = false,
 }: {
   conversationId: string;
   ehFinanceiro: boolean;
   onChanged: () => void;
   onBack: () => void;
+  modoGrupo?: boolean;
 }) {
   const [draft, setDraft] = useState("");
   const [showContact, setShowContact] = useState(false);
@@ -630,7 +643,7 @@ function ConversationThread({
   // numa tela que fica aberta o dia inteiro.
   const temPedidos = useRecurso("PEDIDOS");
   const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
-    temPedidos ? `/api/orders?conversationId=${conversationId}` : null,
+    temPedidos && !modoGrupo ? `/api/orders?conversationId=${conversationId}` : null,
     fetcher,
     { refreshInterval: 30_000 }
   );
@@ -659,7 +672,8 @@ function ConversationThread({
   // isto só muda quando alguém fecha ou reabre, e não precisa viajar junto das
   // mensagens a cada poucos segundos.
   const { data: atendimentos } = useSWR<{ marcadores: MarcadorAtendimento[] }>(
-    `/api/conversations/${conversationId}/atendimentos`,
+    // Grupo não tem ciclo de atendimento, então não tem marcador a buscar.
+    modoGrupo ? null : `/api/conversations/${conversationId}/atendimentos`,
     fetcher,
     { refreshInterval: 60_000 }
   );
@@ -998,17 +1012,30 @@ function ConversationThread({
                 </svg>
               </button>
               <button
-                onClick={() => setShowContact((v) => !v)}
-                className="flex items-center gap-2.5 text-left hover:opacity-70"
+                // Grupo não tem ficha: CPF, funil e anotação são de pessoa.
+                onClick={() => !modoGrupo && setShowContact((v) => !v)}
+                className={`flex items-center gap-2.5 text-left ${modoGrupo ? "cursor-default" : "hover:opacity-70"}`}
               >
                 <Avatar contact={conversation.contact} />
                 <div>
                   <p className="text-sm font-semibold">{contactLabel(conversation.contact)}</p>
-                  <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
+                  {modoGrupo ? (
+                    <p className="text-xs text-neutral-400">
+                      Grupo
+                      {conversation.contact.grupoParticipantes
+                        ? ` · ${conversation.contact.grupoParticipantes} participantes`
+                        : ""}
+                    </p>
+                  ) : (
+                    <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
+                  )}
                 </div>
               </button>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
+              {/* Status, responsável e ficha são do fluxo de atendimento; grupo não tem nenhum dos três. */}
+              {!modoGrupo && (
+              <>
               {TABS.filter((t) => t.key !== conversation.status).map((t) => (
                 <button
                   key={t.key}
@@ -1039,6 +1066,8 @@ function ConversationThread({
               >
                 Ver contato
               </button>
+              </>
+              )}
               <button
                 onClick={toggleSelectionMode}
                 className={`text-xs rounded-md border px-2.5 py-1.5 ${
@@ -1049,7 +1078,7 @@ function ConversationThread({
               </button>
               <button
                 onClick={abrirPedido}
-                hidden={!temPedidos}
+                hidden={!temPedidos || modoGrupo}
                 className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
               >
                 Pedido
@@ -1059,15 +1088,21 @@ function ConversationThread({
                   </span>
                 )}
               </button>
-              <button
-                onClick={() => setPedindoBloqueio(true)}
-                className="text-xs text-red-600 hover:underline"
-              >
-                Bloquear
-              </button>
+              {/* Bloquear é de pessoa: num grupo travaria a fila de envio pra
+                  todo mundo dele. Pra parar de acompanhar, Gerenciar grupos. */}
+              {!modoGrupo && (
+                <button
+                  onClick={() => setPedindoBloqueio(true)}
+                  className="text-xs text-red-600 hover:underline"
+                >
+                  Bloquear
+                </button>
+              )}
             </div>
           </div>
-          <TagEditor tags={conversation.tags} tagDefs={tagDefs} onChange={(tags) => patchConversation({ tags })} />
+          {!modoGrupo && (
+            <TagEditor tags={conversation.tags} tagDefs={tagDefs} onChange={(tags) => patchConversation({ tags })} />
+          )}
         </div>
         {selectionMode && (
           <div className="flex items-center justify-between gap-2 border-b border-neutral-200 bg-accent/5 px-3 md:px-6 py-2 text-sm">
@@ -1133,6 +1168,9 @@ function ConversationThread({
                 >
                 {m.direction === "OUTBOUND" && m.sender && (
                   <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
+                )}
+                {m.direction === "INBOUND" && m.autorNome && (
+                  <p className="text-[11px] font-semibold text-accent mb-0.5">{m.autorNome}</p>
                 )}
                 {m.isDeleted ? (
                   <p className={`italic ${m.direction === "OUTBOUND" ? "text-white/60" : "text-neutral-400"}`}>
@@ -1322,6 +1360,7 @@ function ConversationThread({
                       mediaType: replyTo!.mediaType,
                       isDeleted: replyTo!.isDeleted,
                       sender: replyTo!.sender,
+                      autorNome: replyTo!.autorNome,
                     },
                     conversation.contact
                   )}`}

@@ -29,7 +29,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     message.conversation.contact.waJid,
     message.waMessageId,
     message.direction === "OUTBOUND",
-    parsed.data.emoji
+    parsed.data.emoji,
+    // Em grupo, reagir à mensagem de outra pessoa exige dizer de quem ela é.
+    message.direction === "INBOUND" ? message.autorJid : null
   );
   if (!result.ok) {
     return NextResponse.json({ error: result.reason ?? "não foi possível reagir agora" }, { status: 502 });
@@ -60,7 +62,8 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
       message.conversation.contact.waJid,
       message.waMessageId,
       message.direction === "OUTBOUND",
-      ""
+      "",
+      message.direction === "INBOUND" ? message.autorJid : null
     );
   }
 

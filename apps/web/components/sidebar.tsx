@@ -40,6 +40,12 @@ const NAV_ITEMS = [
     icon: icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />),
   },
   {
+    href: "/grupos",
+    recurso: "GRUPOS" as Recurso,
+    label: "Grupos",
+    icon: icon(<><path d="M3 5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H7l-4 4V5Z" /><path d="M18 8h1a2 2 0 0 1 2 2v10l-3-3h-6a2 2 0 0 1-2-2v-1" /></>),
+  },
+  {
     href: "/contatos",
     label: "Contatos",
     icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /></>),

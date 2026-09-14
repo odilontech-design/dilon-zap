@@ -35,6 +35,9 @@ function formatBRDigits(digits: string): string {
 
 export function contactLabel(contact: { name: string | null; waJid: string; phoneNumber?: string | null }) {
   if (contact.name) return contact.name;
+  // Grupo cujo nome o WhatsApp ainda não informou: o JID cru de grupo não diz
+  // nada pra ninguém, e parecer telefone seria pior.
+  if (contact.waJid.endsWith("@g.us")) return "Grupo sem nome";
   const digits = realPhoneDigits(contact);
   // Sem nome e sem telefone real conhecido (ex: @lid nunca resolvido) — o ID
   // opaco é o único identificador que sobra, mostrado cru mesmo.

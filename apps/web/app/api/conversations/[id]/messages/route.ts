@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     include: {
       sender: { select: { name: true } },
       quotedMessage: {
-        select: { id: true, body: true, direction: true, mediaType: true, isDeleted: true, sender: { select: { name: true } } },
+        select: { id: true, body: true, direction: true, mediaType: true, isDeleted: true, autorNome: true, sender: { select: { name: true } } },
       },
       reactions: { select: { id: true, emoji: true, fromMe: true } },
     },

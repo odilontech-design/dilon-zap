@@ -10,7 +10,7 @@ function checa(nome: string, obtido: unknown, esperado: unknown) {
 }
 
 const lista = (s: Set<Recurso>) => [...s].sort();
-const TODOS = ["CONTAS_RECEBER", "INTEGRACAO_API", "PEDIDOS", "SETORES", "URA"];
+const TODOS = ["CONTAS_RECEBER", "GRUPOS", "INTEGRACAO_API", "PEDIDOS", "SETORES", "URA"];
 
 // ---------------------------------------------------------------------------
 // A promessa por escrito. É o teste que não pode quebrar.
@@ -38,9 +38,14 @@ checa(
   []
 );
 checa(
-  "Profissional novo: triagem, setores, pedidos e a receber",
+  "Profissional novo: triagem, setores, grupos, pedidos e a receber",
   lista(recursosEfetivos({ plano: "PROFISSIONAL", plataformaCompleta: false }, [])),
-  ["CONTAS_RECEBER", "PEDIDOS", "SETORES", "URA"]
+  ["CONTAS_RECEBER", "GRUPOS", "PEDIDOS", "SETORES", "URA"]
+);
+checa(
+  "Essencial novo NÃO tem grupos",
+  recursosEfetivos({ plano: "ESSENCIAL", plataformaCompleta: false }, []).has("GRUPOS"),
+  false
 );
 checa(
   "Profissional novo NÃO tem integração",
@@ -85,7 +90,7 @@ checa(
       { recurso: "PEDIDOS", ativo: false },
     ])
   ),
-  ["CONTAS_RECEBER", "SETORES", "URA"]
+  ["CONTAS_RECEBER", "GRUPOS", "SETORES", "URA"]
 );
 
 // ---------------------------------------------------------------------------

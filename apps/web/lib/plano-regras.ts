@@ -5,7 +5,7 @@
  * A escada dos planos NOVOS:
  *
  *   Essencial     — atender:            inbox, contatos, funil, automações, relatórios
- *   Profissional  — organizar e vender: + menu de triagem, setores, pedidos, a receber
+ *   Profissional  — organizar e vender: + menu de triagem, setores, grupos, pedidos, a receber
  *   Escala        — integrar:           + porta de integração com outros sistemas
  *
  * Quem contratou antes desta tabela tem `plataformaCompleta` e recebe tudo,
@@ -14,9 +14,9 @@
  */
 
 export type Plano = "ESSENCIAL" | "PROFISSIONAL" | "ESCALA";
-export type Recurso = "URA" | "SETORES" | "PEDIDOS" | "CONTAS_RECEBER" | "INTEGRACAO_API";
+export type Recurso = "URA" | "SETORES" | "GRUPOS" | "PEDIDOS" | "CONTAS_RECEBER" | "INTEGRACAO_API";
 
-export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API"];
+export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API"];
 
 export const PLANOS: Record<
   Plano,
@@ -33,8 +33,10 @@ export const PLANOS: Record<
     maxAtendentes: 8,
     // Menu de triagem e setores andam juntos: triagem existe pra encaminhar a
     // um setor, e setor faz sentido a partir do tamanho de equipe deste plano.
-    recursos: ["URA", "SETORES", "PEDIDOS", "CONTAS_RECEBER"],
-    resumo: "Organizar e vender: triagem, setores, pedidos, estoque e contas a receber.",
+    // Grupos entra pelo mesmo motivo: é a equipe inteira acompanhando conversa
+    // com várias pessoas de uma vez, e esse é o tamanho de operação daqui.
+    recursos: ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER"],
+    resumo: "Organizar e vender: triagem, setores, grupos, pedidos, estoque e contas a receber.",
   },
   ESCALA: {
     nome: "Escala",
@@ -47,6 +49,7 @@ export const PLANOS: Record<
 export const ROTULO_RECURSO: Record<Recurso, string> = {
   URA: "Menu de triagem",
   SETORES: "Setores",
+  GRUPOS: "Grupos do WhatsApp",
   PEDIDOS: "Pedidos, produtos e estoque",
   CONTAS_RECEBER: "Contas a receber",
   INTEGRACAO_API: "Integração com outros sistemas",

@@ -39,6 +39,10 @@ export async function conversationVisibilityWhere(
       { assignedToId: null, setorId: null },
       // Fila dos meus setores.
       ...(setorIds.length > 0 ? [{ assignedToId: null, setorId: { in: setorIds } }] : []),
+      // Grupo é da equipe inteira, sempre: não tem responsável nem setor, e
+      // ninguém "assume" um grupo. Sem este ramo a atendente abriria a tela
+      // de Grupos e receberia 404 ao responder.
+      { contact: { grupo: true } },
     ],
   };
 }

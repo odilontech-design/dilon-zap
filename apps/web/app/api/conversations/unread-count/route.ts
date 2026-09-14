@@ -15,7 +15,9 @@ export async function GET() {
     where: {
       direction: "INBOUND",
       readAt: null,
-      conversation: { tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
+      // Grupo fora: um grupo movimentado faria o Inbox apitar o dia inteiro
+      // por conversa que nem aparece nele.
+      conversation: { tenantId: user.tenantId, contact: { grupo: false }, ...(await conversationVisibilityWhere(user)) },
     },
   });
 

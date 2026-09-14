@@ -412,6 +412,23 @@ model Contact {
   hasWhatsapp        Boolean?
   whatsappCheckedAt  DateTime?
 
+  // Grupo do WhatsApp (@g.us) em vez de pessoa. Mora em Contact, e não num
+  // model próprio, pra reaproveitar tudo que uma conversa já tem: mídia,
+  // resposta, reação, encaminhamento e a fila de envio. O custo é tirar
+  // grupo das telas que são de pessoa (Inbox, contatos, funil, relatórios),
+  // e é pra isso que o campo existe: filtrar pelo sufixo do JID em cada
+  // consulta seria fácil de esquecer na próxima tela que alguém criar.
+  grupo              Boolean   @default(false)
+  // Quando a equipe ativou. Nulo = grupo só "disponível": o worker sabe que
+  // ele existe mas não grava mensagem nem baixa mídia. O número costuma
+  // estar em grupo de família e de fornecedor, e gravar tudo encheria a tela
+  // e o armazenamento de conversa que ninguém da empresa acompanha.
+  // Data, e não booleano, porque diz desde quando o grupo tem histórico aqui.
+  grupoAtivadoEm     DateTime?
+  // Só pra lista de grupos mostrar o tamanho. Vem junto dos dados que o
+  // WhatsApp manda sobre o grupo; nunca é consultado de propósito.
+  grupoParticipantes Int?
+
   createdAt      DateTime @default(now())
 
   conversations Conversation[]
@@ -420,6 +437,7 @@ model Contact {
   @@unique([tenantId, waJid])
   @@index([tenantId])
   @@index([tenantId, stageId])
+  @@index([tenantId, grupo])
 }
 
 enum ConversationStatus {
@@ -1000,6 +1018,19 @@ model Message {
   senderUserId String?
   sender       User?   @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
 
+  // Quem mandou, numa mensagem de GRUPO. Num chat 1:1 o autor é o próprio
+  // contato e isto fica nulo; no grupo o contato é o grupo, e sem o autor
+  // em cada mensagem a tela não teria como dizer quem falou. Foi o defeito
+  // dos grupos gravados antes de 03/08: o grupo inteiro aparecia com o nome
+  // de quem mandou a primeira mensagem.
+  //
+  // O nome é retrato do momento (pushName), igual a nomeProduto no pedido:
+  // quem troca o nome da conta depois não reescreve o que já disse.
+  // autorJid é o participante exatamente como o WhatsApp mandou, e é o que
+  // responder e reagir a essa mensagem precisam pra achá-la dentro do grupo.
+  autorJid  String?
+  autorNome String?
+
   mediaType         MediaType?
   mediaKey          String?  // chave do objeto no bucket R2
   mediaMimeType     String?
@@ -1118,6 +1149,7 @@ enum Recurso {
   PEDIDOS
   CONTAS_RECEBER
   INTEGRACAO_API
+  GRUPOS
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem

@@ -25,6 +25,8 @@ export async function GET(req: Request) {
 
   const where: Prisma.ConversationWhereInput = {
     tenantId: user.tenantId,
+    // Grupo tem tela própria e fica fora do Inbox — ver Contact.grupo.
+    contact: { grupo: false },
     ...(status ? { status } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
     ...(assignedToId ? { assignedToId } : {}),

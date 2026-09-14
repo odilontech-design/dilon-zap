@@ -78,7 +78,9 @@ export async function reactWhatsAppMessage(
   waJid: string,
   waMessageId: string,
   targetFromMe: boolean,
-  emoji: string
+  emoji: string,
+  // Autor da mensagem alvo, quando ela é de outra pessoa num grupo.
+  participant?: string | null
 ): Promise<{ ok: boolean; reason?: string }> {
   const baseUrl = process.env.WORKER_INTERNAL_URL;
   const secret = process.env.WORKER_INTERNAL_SECRET;
@@ -88,7 +90,7 @@ export async function reactWhatsAppMessage(
     const res = await fetch(`${baseUrl}/internal/messages/react`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ tenantId, waJid, waMessageId, targetFromMe, emoji }),
+      body: JSON.stringify({ tenantId, waJid, waMessageId, targetFromMe, emoji, participant }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };
@@ -160,6 +162,31 @@ export async function checkNumbersOnWhatsApp(
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
       body: JSON.stringify({ tenantId, jids }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };
+    return await res.json();
+  } catch {
+    return { ok: false, reason: "worker fora do ar" };
+  }
+}
+
+/**
+ * Pede ao worker a lista de grupos do número. Uma consulta só ao WhatsApp,
+ * travada lá no worker por intervalo — ver sincronizarGrupos.
+ */
+export async function syncWhatsAppGroups(
+  tenantId: string
+): Promise<{ ok: boolean; reason?: string; total?: number }> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret) return { ok: false, reason: "worker não configurado" };
+
+  try {
+    const res = await fetch(`${baseUrl}/internal/groups/sync`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId }),
       signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };

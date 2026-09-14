@@ -7,6 +7,7 @@ import makeWASocket, {
   WAMessageStatus,
   type proto,
   type WAMessage,
+  type GroupMetadata,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
@@ -18,6 +19,13 @@ import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
 import { decidirAutoResposta, automacaoPodeFalar, type OpcaoUra } from "./auto-reply-decisao";
+import {
+  ehGrupo,
+  nomeDoAutor,
+  tempoRestante,
+  INTERVALO_CONSULTA_GRUPO_MS,
+  INTERVALO_SINCRONIZACAO_MS,
+} from "./grupos";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
@@ -201,13 +209,18 @@ export async function reactToMessage(
   waJid: string,
   targetWaMessageId: string,
   targetFromMe: boolean,
-  emoji: string
+  emoji: string,
+  // Num grupo, a mensagem de outra pessoa só é achada com o autor junto.
+  participant?: string | null
 ): Promise<{ ok: boolean; reason?: string }> {
   const socket = getSocketForTenant(tenantId);
   if (!socket) return { ok: false, reason: "sem conexão ativa" };
 
   await socket.sendMessage(waJid, {
-    react: { text: emoji, key: { remoteJid: waJid, id: targetWaMessageId, fromMe: targetFromMe } },
+    react: {
+      text: emoji,
+      key: { remoteJid: waJid, id: targetWaMessageId, fromMe: targetFromMe, ...(participant ? { participant } : {}) },
+    },
   });
   return { ok: true };
 }
@@ -386,9 +399,14 @@ export async function startSession(sessionId: string) {
         }
         continue;
       }
-      // Grupo (@g.us) também não é 1:1, fica de fora até a Fase de
-      // campanhas/grupos decidir como tratar.
-      if (waJid.endsWith("@g.us")) continue;
+      // Grupo tem caminho próprio: só grava se a equipe ativou, e grava quem
+      // mandou cada mensagem. Ver registrarMensagemDeGrupo.
+      if (ehGrupo(waJid)) {
+        await registrarMensagemDeGrupo({ sessionId, tenantId: entry.tenantId, msg, socket }).catch((err) =>
+          logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem de grupo")
+        );
+        continue;
+      }
 
       const content = await extractInboundContent(msg, socket).catch((err) => {
         logger.error({ err }, "falha ao processar mensagem");
@@ -561,12 +579,35 @@ export async function startSession(sessionId: string) {
     void aplicarNomeDaAgenda(contatos);
   });
 
+  // Nome e tamanho dos grupos. O WhatsApp manda isto sozinho — ao entrar num
+  // grupo, quando alguém renomeia, e numa leva ao conectar —, então ouvir aqui
+  // mantém a lista de grupos em dia sem nenhuma consulta nossa.
+  socket.ev.on("groups.upsert", (grupos) => {
+    void atualizarCatalogoDeGrupos(entry.tenantId, grupos);
+  });
+  socket.ev.on("groups.update", (grupos) => {
+    void atualizarCatalogoDeGrupos(entry.tenantId, grupos);
+  });
+
   // WhatsApp manda o histórico existente (em blocos) logo depois de parear
   // um número novo, e às vezes um resumo de "o que rolou enquanto eu tava
   // offline" em reconexões. Sem esse listener, o Inbox só teria conversa
   // a partir do momento em que o worker ligou.
-  socket.ev.on("messaging-history.set", async ({ messages, contacts, isLatest }) => {
+  socket.ev.on("messaging-history.set", async ({ messages, contacts, chats, isLatest }) => {
     try {
+      // Os grupos vêm na lista de chats do histórico, já com nome: é a fonte
+      // mais barata da lista de disponíveis, porque já chegou. Mensagem antiga
+      // de grupo NÃO é importada — o grupo só tem histórico aqui a partir de
+      // quando a equipe ativa.
+      // flatMap e não filter+map: é o que deixa o TypeScript saber que o id
+      // que passou por ehGrupo não é mais nulo.
+      const gruposDoHistorico = (chats ?? []).flatMap((c) =>
+        ehGrupo(c.id) ? [{ id: c.id, subject: c.name ?? undefined }] : []
+      );
+      if (gruposDoHistorico.length > 0) {
+        await atualizarCatalogoDeGrupos(entry.tenantId, gruposDoHistorico);
+      }
+
       await importHistoricalMessages(sessionId, messages, contacts, socket);
     } catch (err) {
       logger.error({ err }, "falha ao importar histórico do WhatsApp");
@@ -853,6 +894,9 @@ async function recordMessage(params: {
   remoteJidAlt?: string;
   quotedWaMessageId?: string;
   socket: ReturnType<typeof makeWASocket>;
+  // Mensagem de grupo: o contato da conversa é o grupo, e o autor vai na
+  // própria mensagem. autorJid/autorNome nulos = mandada pela empresa.
+  grupo?: { autorJid: string | null; autorNome: string | null };
 }) {
   const isInbound = params.direction === "INBOUND";
 
@@ -868,13 +912,21 @@ async function recordMessage(params: {
   // negócio, não do contato, então não pode virar o nome do contato.
   const contactName = isInbound ? params.pushName : undefined;
 
-  const contact = await resolveContact({
-    tenantId: session.tenantId,
-    waJid: params.waJid,
-    contactName,
-    resolvedPhone,
-    socket: params.socket,
-  });
+  // Grupo já foi garantido por registrarMensagemDeGrupo, e nenhuma das
+  // reconciliações de pessoa (telefone, foto de perfil) faz sentido pra ele —
+  // o pushName, principalmente, é de quem mandou, e virar nome do grupo foi
+  // exatamente o defeito dos grupos gravados antes.
+  const contact = params.grupo
+    ? await prisma.contact.findUniqueOrThrow({
+        where: { tenantId_waJid: { tenantId: session.tenantId, waJid: params.waJid } },
+      })
+    : await resolveContact({
+        tenantId: session.tenantId,
+        waJid: params.waJid,
+        contactName,
+        resolvedPhone,
+        socket: params.socket,
+      });
 
   if (precisaBuscarAvatar(contact)) {
     buscarAvatarEmSegundoPlano(params.socket, contact.id, params.waJid);
@@ -898,7 +950,8 @@ async function recordMessage(params: {
       sessionId: params.sessionId,
       contactId: contact.id,
       lastMessageAt: new Date(),
-      status: isInbound ? "OPEN" : "RESOLVED",
+      // Grupo não tem ciclo de atendimento: fica sempre aberto.
+      status: isInbound || params.grupo ? "OPEN" : "RESOLVED",
     },
   });
 
@@ -957,6 +1010,8 @@ async function recordMessage(params: {
     body: params.text,
     waMessageId: params.waMessageId,
     quotedMessageId: quotedMessage?.id,
+    autorJid: params.grupo?.autorJid ?? undefined,
+    autorNome: params.grupo?.autorNome ?? undefined,
     ...mediaFields,
   };
 
@@ -976,7 +1031,10 @@ async function recordMessage(params: {
   }
 
   // A regra de quem cala o robô tem nome e teste — ver automacaoPodeFalar.
-  if (isInbound && automacaoPodeFalar(conversation)) {
+  // Em grupo o robô nunca fala: saudação, aviso de ausência e menu de triagem
+  // mandados pra dezenas de pessoas são spam, e é o tipo de coisa que faz o
+  // WhatsApp derrubar o número.
+  if (isInbound && !params.grupo && automacaoPodeFalar(conversation)) {
     const atendimento = await carregarAtendimento(session.tenantId);
     await maybeAutoReply({
       tenantId: session.tenantId,
@@ -994,6 +1052,156 @@ async function recordMessage(params: {
       uraEnviadaEm: conversation.uraEnviadaEm,
       uraReenvios: conversation.uraReenvios,
     });
+  }
+}
+
+// Última consulta de dados de grupo e última "Atualizar lista", por tenant.
+// Em memória de propósito: a trava só precisa sobreviver ao minuto seguinte,
+// e o worker reiniciando já espaça as consultas por conta própria.
+const ultimaConsultaDeGrupo = new Map<string, number>();
+const ultimaSincronizacaoDeGrupos = new Map<string, number>();
+
+/**
+ * Acha o grupo, ou registra como disponível na primeira mensagem dele.
+ *
+ * Grupo nunca visto custa UMA consulta de dados (nome, tamanho) e nunca mais:
+ * a partir daí ele existe no banco e as mensagens seguintes voltam logo na
+ * primeira linha. A trava por tempo cobre o caso perigoso — o número
+ * reconectando e vários grupos desconhecidos mandando mensagem no mesmo
+ * minuto. Consulta em rajada é o que o WhatsApp pune (ver AVATAR_TTL_MS).
+ */
+async function garantirGrupo(tenantId: string, jid: string, socket: ReturnType<typeof makeWASocket>) {
+  const existente = await prisma.contact.findUnique({
+    where: { tenantId_waJid: { tenantId, waJid: jid } },
+    select: { id: true, grupo: true, grupoAtivadoEm: true },
+  });
+  // Contato de grupo gravado antes de 03/08 chega aqui com grupo=false e é
+  // corrigido pelo upsert abaixo.
+  if (existente?.grupo) return existente;
+
+  let subject: string | undefined;
+  let participantes: number | undefined;
+  const agora = Date.now();
+  if (tempoRestante(ultimaConsultaDeGrupo.get(tenantId), agora, INTERVALO_CONSULTA_GRUPO_MS) === 0) {
+    ultimaConsultaDeGrupo.set(tenantId, agora);
+    try {
+      const meta = await socket.groupMetadata(jid);
+      subject = meta.subject?.trim() || undefined;
+      participantes = meta.participants?.length || undefined;
+    } catch (err) {
+      // Sem nome agora não é problema: o evento de grupo ou o "Atualizar
+      // lista" preenchem depois. Travar a mensagem por isso seria pior.
+      logger.warn({ err, jid }, "não deu pra ler os dados do grupo — segue sem nome");
+    }
+  }
+
+  return prisma.contact.upsert({
+    where: { tenantId_waJid: { tenantId, waJid: jid } },
+    create: { tenantId, waJid: jid, grupo: true, name: subject, waName: subject, grupoParticipantes: participantes },
+    update: {
+      grupo: true,
+      ...(subject ? { name: subject, waName: subject } : {}),
+      ...(participantes ? { grupoParticipantes: participantes } : {}),
+    },
+    select: { id: true, grupo: true, grupoAtivadoEm: true },
+  });
+}
+
+/**
+ * Mensagem que chegou num grupo.
+ *
+ * Grupo não ativado para ANTES de baixar mídia ou gravar texto. É o que
+ * permite o número estar em grupo de família e de fornecedor sem que isso vire
+ * CPU gasta, arquivo guardado e conversa na tela — só fica registrado que o
+ * grupo existe, pra aparecer em "Gerenciar grupos".
+ */
+async function registrarMensagemDeGrupo(p: {
+  sessionId: string;
+  tenantId: string;
+  msg: WAMessage;
+  socket: ReturnType<typeof makeWASocket>;
+}) {
+  const jid = p.msg.key.remoteJid!;
+  const grupo = await garantirGrupo(p.tenantId, jid, p.socket);
+  if (!grupo.grupoAtivadoEm) return;
+
+  const content = await extractInboundContent(p.msg, p.socket);
+  if (!content) return;
+
+  const fromMe = !!p.msg.key.fromMe;
+  await recordMessage({
+    sessionId: p.sessionId,
+    waJid: jid,
+    direction: fromMe ? "OUTBOUND" : "INBOUND",
+    text: content.text,
+    media: content.media,
+    waMessageId: p.msg.key.id ?? undefined,
+    quotedWaMessageId: content.quotedWaMessageId,
+    socket: p.socket,
+    // Mandada do celular da empresa: igual a uma OUTBOUND num chat 1:1, não
+    // tem participante a mostrar.
+    grupo: fromMe
+      ? { autorJid: null, autorNome: null }
+      : {
+          autorJid: p.msg.key.participant ?? null,
+          autorNome: nomeDoAutor(p.msg.pushName, p.msg.key.participant, p.msg.key.participantAlt),
+        },
+  });
+}
+
+/**
+ * Grava nome e tamanho dos grupos que o WhatsApp informou. O que ainda não
+ * existe entra como disponível — nunca ativa nada sozinho.
+ */
+async function atualizarCatalogoDeGrupos(tenantId: string, grupos: Array<Partial<GroupMetadata>>) {
+  for (const g of grupos) {
+    if (!ehGrupo(g.id)) continue;
+    const subject = g.subject?.trim() || undefined;
+    const participantes = g.participants?.length || undefined;
+    try {
+      await prisma.contact.upsert({
+        where: { tenantId_waJid: { tenantId, waJid: g.id } },
+        create: { tenantId, waJid: g.id, grupo: true, name: subject, waName: subject, grupoParticipantes: participantes },
+        update: {
+          grupo: true,
+          ...(subject ? { name: subject, waName: subject } : {}),
+          ...(participantes ? { grupoParticipantes: participantes } : {}),
+        },
+      });
+    } catch (err) {
+      logger.error({ err, jid: g.id }, "falha ao atualizar grupo");
+    }
+  }
+}
+
+/**
+ * "Atualizar lista" da tela de grupos: pede ao WhatsApp todos os grupos do
+ * número numa chamada só.
+ *
+ * Sob demanda e travado por INTERVALO_SINCRONIZACAO_MS. Nunca vira rotina
+ * automática: a lista chega sozinha pelos eventos de grupo e pelo histórico,
+ * e isto existe só pro caso de a equipe não achar um grupo que sabe que existe.
+ */
+export async function sincronizarGrupos(
+  tenantId: string
+): Promise<{ ok: boolean; reason?: string; total?: number }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "o número está desconectado" };
+
+  const agora = Date.now();
+  const falta = tempoRestante(ultimaSincronizacaoDeGrupos.get(tenantId), agora, INTERVALO_SINCRONIZACAO_MS);
+  if (falta > 0) {
+    return { ok: false, reason: `a lista foi atualizada há pouco — tente de novo em ${Math.ceil(falta / 60_000)} min` };
+  }
+  ultimaSincronizacaoDeGrupos.set(tenantId, agora);
+
+  try {
+    const todos = Object.values(await socket.groupFetchAllParticipating());
+    await atualizarCatalogoDeGrupos(tenantId, todos);
+    return { ok: true, total: todos.length };
+  } catch (err) {
+    logger.error({ err }, "falha ao buscar a lista de grupos");
+    return { ok: false, reason: "o WhatsApp não respondeu agora — tente de novo mais tarde" };
   }
 }
 
@@ -1528,7 +1736,7 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
         include: {
           conversation: { include: { contact: true } },
           sender: { select: { name: true } },
-          quotedMessage: { select: { waMessageId: true, direction: true, body: true } },
+          quotedMessage: { select: { waMessageId: true, direction: true, body: true, autorJid: true } },
         },
       });
 
@@ -1570,6 +1778,9 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
                   remoteJid: jid,
                   id: message.quotedMessage.waMessageId,
                   fromMe: message.quotedMessage.direction === "OUTBOUND",
+                  // Em grupo, citar a mensagem de outra pessoa exige dizer de
+                  // quem ela é — sem isso a citação sai quebrada no aparelho.
+                  ...(message.quotedMessage.autorJid ? { participant: message.quotedMessage.autorJid } : {}),
                 },
                 message: { conversation: message.quotedMessage.body || "" },
               }
