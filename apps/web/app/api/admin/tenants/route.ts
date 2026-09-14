@@ -57,7 +57,8 @@ export async function POST(req: Request) {
     data: {
       name: tenantName,
       slug,
-      users: { create: { name: ownerName, email, passwordHash, role: "OWNER" } },
+      // Senha gerada aqui e repassada pela Dilon Tech: o responsável troca no primeiro acesso.
+      users: { create: { name: ownerName, email, passwordHash, role: "OWNER", senhaProvisoria: true } },
       sessions: { create: { label: whatsappLabel?.trim() || "Principal" } },
       // Toda empresa nova nasce com assinatura, em TESTE. Antes nascia sem
       // nenhuma, e foi assim que tres clientes ficaram sem cadastro de

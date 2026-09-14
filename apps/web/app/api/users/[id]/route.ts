@@ -57,7 +57,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     data: {
       ...(name !== undefined ? { name } : {}),
       ...(role !== undefined ? { role } : {}),
-      ...(password !== undefined ? { passwordHash: await bcrypt.hash(password, 10) } : {}),
+      // Senha redefinida pelo responsável é provisória pra quem vai usá-la;
+      // o responsável redefinindo a própria não precisa trocar de novo.
+      ...(password !== undefined
+        ? { passwordHash: await bcrypt.hash(password, 10), senhaProvisoria: alvo.id !== user.id }
+        : {}),
       ...(ativo !== undefined ? { deactivatedAt: ativo ? null : new Date() } : {}),
     },
     select: { id: true, name: true, email: true, role: true, createdAt: true, deactivatedAt: true },

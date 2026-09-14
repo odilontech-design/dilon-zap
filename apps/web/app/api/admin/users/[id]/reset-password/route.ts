@@ -18,7 +18,8 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   const password = generatePassword();
   const passwordHash = await bcrypt.hash(password, 10);
 
-  await prisma.user.update({ where: { id: user.id }, data: { passwordHash } });
+  // Quem redefiniu viu a senha: vale só até a pessoa trocar no próximo acesso.
+  await prisma.user.update({ where: { id: user.id }, data: { passwordHash, senhaProvisoria: true } });
 
   await logAudit({
     actor: admin,

@@ -84,6 +84,8 @@ export async function POST(req: Request) {
       name: parsed.data.name,
       email: parsed.data.email,
       passwordHash: await bcrypt.hash(parsed.data.password, 10),
+      // Quem cadastrou conhece a senha: a pessoa troca no primeiro acesso.
+      senhaProvisoria: true,
       role: parsed.data.role,
     },
     select: { id: true, name: true, email: true, role: true, createdAt: true, deactivatedAt: true },

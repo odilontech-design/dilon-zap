@@ -243,6 +243,16 @@ model User {
   // Nulo = ativo.
   deactivatedAt DateTime?
 
+  // A senha foi definida por outra pessoa — no cadastro ou numa redefinição
+  // feita pelo responsável — e o dono da conta ainda não trocou. Enquanto
+  // for true o painel não abre e manda pra troca de senha.
+  //
+  // Existe porque a senha provisória é simples e circula por mensagem e em
+  // reunião: sem obrigar a troca, quem a ouviu entraria na conta de outra
+  // pessoa pra sempre. Padrão false de propósito: quem já usava o sistema
+  // não é interrompido pela atualização.
+  senhaProvisoria Boolean @default(false)
+
   assignedConversations Conversation[] @relation("AssignedAgent")
   transfersMade         Conversation[] @relation("AssignedBy")
   uraOpcoes             UraOpcao[]     @relation("UraDestino")

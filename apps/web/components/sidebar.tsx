@@ -315,6 +315,15 @@ export function Sidebar({
             <p className={`font-medium text-neutral-700 truncate flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>
               {name}
             </p>
+            <Link
+              href="/trocar-senha"
+              onClick={() => setOpen(false)}
+              aria-label="Trocar senha"
+              title="Trocar senha"
+              className="grid place-items-center w-7 h-7 rounded-md text-neutral-400 hover:text-accent hover:bg-neutral-100"
+            >
+              {icon(<><circle cx="8" cy="15" r="4" /><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14 9l2 2" /></>)}
+            </Link>
             <ThemeToggle compact />
           </div>
 
