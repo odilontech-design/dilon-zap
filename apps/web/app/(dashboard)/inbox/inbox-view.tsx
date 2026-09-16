@@ -69,8 +69,14 @@ type ConversationDetail = {
   tags: string[];
   contact: ContactRef & { stageId: string | null; notes: string | null; grupoParticipantes?: number | null };
   assignedTo: { id: string; name: string } | null;
+  setor: { id: string; nome: string } | null;
   closeReason: string | null;
 };
+
+type SetorDef = { id: string; nome: string; ativo: boolean };
+
+/** Um trecho do histórico ficou escondido (outro setor) — ver historico-setor.ts. */
+type MarcadorSetor = { antesDe: string; setorNome: string | null };
 
 type MediaType = "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO";
 
@@ -660,13 +666,19 @@ export function ConversationThread({
     fetcher,
     { refreshInterval: 30_000 }
   );
-  const { data: messages, mutate: mutateMessages } = useSWR<Message[]>(
+  const { data: messagesData, mutate: mutateMessages } = useSWR<{ mensagens: Message[]; marcadores: MarcadorSetor[] }>(
     `/api/conversations/${conversationId}/messages`,
     fetcher,
     { refreshInterval: MESSAGES_INTERVAL }
   );
+  const messages = messagesData?.mensagens;
+  const marcadoresSetor = messagesData?.marcadores ?? [];
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
+  // Lista de setores só quando a empresa usa Setores — mesmo recurso que
+  // já esconde o item "Setores" do menu pra quem não tem no plano.
+  const temSetores = useRecurso("SETORES");
+  const { data: setores } = useSWR<SetorDef[]>(temSetores ? "/api/setores" : null, fetcher);
 
   // Ciclos de atendimento desta conversa. Rota própria e sem polling rápido:
   // isto só muda quando alguém fecha ou reabre, e não precisa viajar junto das
@@ -1060,6 +1072,23 @@ export function ConversationThread({
                   </option>
                 ))}
               </select>
+              {temSetores && (
+                <select
+                  value={conversation.setor?.id ?? ""}
+                  onChange={(e) => patchConversation({ setorId: e.target.value || null })}
+                  className="text-xs rounded-md border border-neutral-300 px-2 py-1.5"
+                  title="Encaminhar para outro setor"
+                >
+                  <option value="">Sem setor</option>
+                  {(setores ?? [])
+                    .filter((s) => s.ativo || s.id === conversation.setor?.id)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.nome}
+                      </option>
+                    ))}
+                </select>
+              )}
               <button
                 onClick={() => setShowContact((v) => !v)}
                 className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
@@ -1145,6 +1174,9 @@ export function ConversationThread({
             const hasReaction = !m.isDeleted && (myReaction || theirReaction);
             return (
               <Fragment key={m.id}>
+              {marcadoresSetor.find((mk) => mk.antesDe === m.id) && (
+                <MarcaTransferenciaSetor setorNome={marcadoresSetor.find((mk) => mk.antesDe === m.id)!.setorNome} />
+              )}
               {eventosAqui.map((e) => (
                 <MarcaAtendimento key={e.chave} evento={e} />
               ))}
@@ -2414,6 +2446,27 @@ function mesmoDia(isoA: string, isoB: string) {
  * porque o cliente desistiu" — e é o motivo que responde, meses depois, por
  * que aquele atendimento parou onde parou.
  */
+/**
+ * Marca o ponto em que a conversa foi encaminhada pra outro setor, na
+ * empresa que isola o histórico entre setores (ver historico-setor.ts). Só
+ * o aviso aparece — o conteúdo de antes fica de fato fora da resposta da
+ * API, não só escondido na tela.
+ */
+function MarcaTransferenciaSetor({ setorNome }: { setorNome: string | null }) {
+  return (
+    <div className="self-center my-3 flex w-full max-w-md items-center gap-2">
+      <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
+      <span
+        title="O histórico de antes deste ponto pertence a outro setor e não aparece aqui."
+        className="rounded-md px-2.5 py-1 text-[11px] font-medium bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300"
+      >
+        {setorNome ? `→ Conversa encaminhada para ${setorNome}` : "→ Conversa movida para a fila geral"}
+      </span>
+      <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
+    </div>
+  );
+}
+
 function MarcaAtendimento({ evento }: { evento: EventoAtendimento }) {
   const hora = new Date(evento.iso).toLocaleTimeString("pt-BR", {
     hour: "2-digit",

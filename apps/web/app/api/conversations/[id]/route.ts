@@ -9,6 +9,9 @@ import { conversationVisibilityWhere } from "@/lib/conversation-access";
 const bodySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED"]).optional(),
   assignedToId: z.string().nullable().optional(),
+  // Encaminhar pra outro setor (ou nulo, de volta pra fila geral). Distinto
+  // de assignedToId: setor é fila de equipe, responsável é uma pessoa só.
+  setorId: z.string().nullable().optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
   closeReason: z.string().trim().min(1).max(60).optional(),
 });
@@ -21,6 +24,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     include: {
       contact: true,
       assignedTo: { select: { id: true, name: true } },
+      setor: { select: { id: true, nome: true } },
     },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -47,11 +51,32 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!agent) return NextResponse.json({ error: "agente inválido" }, { status: 400 });
   }
 
+  // Mesma checagem pro setor — e só um setor ativo, que ainda aparece pra
+  // alguém puxar. Encaminhar pra um desativado deixaria a conversa numa fila
+  // que ninguém enxerga.
+  if (parsed.data.setorId) {
+    const setor = await prisma.setor.findFirst({
+      where: { id: parsed.data.setorId, tenantId: user.tenantId, ativo: true },
+    });
+    if (!setor) return NextResponse.json({ error: "setor inválido" }, { status: 400 });
+  }
+
+  const mudouSetor = parsed.data.setorId !== undefined && parsed.data.setorId !== conversation.setorId;
+
+  // Encaminhar pra outro setor esvazia o responsável — vira a fila do setor,
+  // do jeito que a URA já entrega (ver direcionarParaSetor no worker). Sem
+  // isso a conversa continuaria só na vista de quem já era responsável, e
+  // ninguém do setor novo a veria — o oposto do que transferir quer dizer.
+  // Só não mexe se o mesmo pedido já estiver escolhendo alguém.
+  const dados = { ...parsed.data };
+  if (mudouSetor && dados.assignedToId === undefined) {
+    dados.assignedToId = null;
+  }
+
   // Transferência: só conta quando o responsável REALMENTE muda. Sem essa
   // comparação, salvar etiqueta ou status numa conversa já atribuída
   // reacenderia o aviso de "transferida pra você" do nada.
-  const transferiu =
-    parsed.data.assignedToId !== undefined && parsed.data.assignedToId !== conversation.assignedToId;
+  const transferiu = dados.assignedToId !== undefined && dados.assignedToId !== conversation.assignedToId;
 
   // Fechando agora: carimba quando. Reabrindo: limpa o carimbo mas MANTÉM o
   // motivo, que é o registro do que aconteceu da vez anterior — apagar seria
@@ -80,27 +105,30 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return tx.conversation.update({
     where: { id: conversation.id },
     data: {
-      ...parsed.data,
+      ...dados,
       ...(fechando ? { closedAt: agora } : {}),
       ...(reabrindo ? { closedAt: null } : {}),
       ...(transferiu
         ? {
-            assignedAt: parsed.data.assignedToId ? new Date() : null,
-            assignedById: parsed.data.assignedToId ? user.id : null,
+            assignedAt: dados.assignedToId ? new Date() : null,
+            // Encaminhamento por setor não foi ninguém "passando" a conversa
+            // pra uma pessoa — foi pra uma fila. Mesmo critério da URA: sem
+            // assignedById aqui.
+            assignedById: dados.assignedToId && !mudouSetor ? user.id : null,
             // Quem pega a conversa pra si não precisa ser avisado de que
             // pegou — já marca como visto pra não nascer um aviso inútil.
-            assignmentSeenAt: parsed.data.assignedToId === user.id ? new Date() : null,
+            assignmentSeenAt: dados.assignedToId === user.id ? new Date() : null,
           }
         : {}),
       },
     });
   });
 
-  if (Object.keys(parsed.data).length > 0) {
+  if (Object.keys(dados).length > 0) {
     await logAudit({
       actor: user,
       action: "conversation.update",
-      metadata: { conversationId: conversation.id, ticketNumber: conversation.ticketNumber, changes: parsed.data },
+      metadata: { conversationId: conversation.id, ticketNumber: conversation.ticketNumber, changes: dados },
     });
   }
 

@@ -49,6 +49,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           mediaFileName: source.mediaFileName,
           mediaDurationSeconds: source.mediaDurationSeconds,
           isForwarded: true,
+          // Foto do setor de CADA conversa de destino, não da origem — ver
+          // Message.setorId no schema.
+          setorId: conversation.setorId,
         },
       })
     )

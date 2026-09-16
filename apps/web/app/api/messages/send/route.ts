@@ -61,6 +61,8 @@ export async function POST(req: Request) {
       mediaFileName: parsed.data.media?.mediaFileName,
       mediaDurationSeconds: parsed.data.media?.durationSeconds,
       quotedMessageId: quotedMessage?.id,
+      // Foto do setor da conversa neste instante — ver Message.setorId no schema.
+      setorId: conversation.setorId,
     },
   });
 

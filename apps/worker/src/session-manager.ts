@@ -1012,6 +1012,9 @@ async function recordMessage(params: {
     quotedMessageId: quotedMessage?.id,
     autorJid: params.grupo?.autorJid ?? undefined,
     autorNome: params.grupo?.autorNome ?? undefined,
+    // Foto do setor da conversa neste instante — ver o comentário de
+    // Message.setorId no schema.
+    setorId: conversation.setorId,
     ...mediaFields,
   };
 
@@ -1046,6 +1049,7 @@ async function recordMessage(params: {
       ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
       contactId: contact.id,
       saudacaoEnviadaEm: contact.saudacaoEnviadaEm,
+      setorAtualId: conversation.setorId,
       uraAtiva: atendimento.uraAtiva,
       uraMensagem: atendimento.uraMensagem,
       uraOpcoes: atendimento.uraOpcoes,
@@ -1555,6 +1559,10 @@ async function maybeAutoReply(params: {
   ausenciaAvisadaEm: Date | null;
   contactId: string;
   saudacaoEnviadaEm: Date | null;
+  // Setor da conversa ANTES desta rodada — pra marcar a resposta automática
+  // com o setor certo mesmo quando é ELA quem está encaminhando pra lá (ver
+  // Message.setorId).
+  setorAtualId: string | null;
   uraAtiva: boolean;
   uraMensagem: string | null;
   uraOpcoes: OpcaoUra[];
@@ -1598,6 +1606,9 @@ async function maybeAutoReply(params: {
       direction: "OUTBOUND",
       status: "PENDING",
       body: texto,
+      // Se esta é a resposta que encaminha pro setor, ela já nasce marcada
+      // com o setor de destino — é a primeira mensagem que a equipe de lá vê.
+      setorId: direcionarParaSetor ?? params.setorAtualId,
     },
   });
 

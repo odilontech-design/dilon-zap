@@ -36,6 +36,18 @@ model Tenant {
   // toda vez que uma opção mudasse de nome.
   uraMensagem String?
 
+  // Quando uma conversa passa de um setor pra outro, o histórico do setor
+  // anterior some de quem recebeu a conversa agora — só um marcador avisa
+  // que houve encaminhamento. Existe pra contabilidade: o que o Departamento
+  // Pessoal discutiu sobre um funcionário não é assunto do Fiscal, mesmo que
+  // a conversa com o cliente continue a mesma. O Responsável pela conta
+  // sempre vê tudo — a barreira é só entre setores/atendentes.
+  //
+  // Fica desligado por padrão: nas empresas sem essa necessidade (Believe,
+  // por exemplo), transferir de setor continua levando o histórico junto,
+  // como sempre foi.
+  isolarHistoricoPorSetor Boolean @default(false)
+
   // Cabeçalho do recibo impresso. Separado de `name` de propósito: o nome
   // que a equipe vê no sistema ("Believe Cosméticos") não é o que vai no
   // comprovante — ali vai a razão social ou o nome do MEI, que é o que
@@ -102,6 +114,7 @@ model Setor {
   membros   SetorMembro[]
   opcoes    UraOpcao[]
   conversas Conversation[]
+  mensagens Message[]
 
   @@unique([tenantId, nome])
   @@index([tenantId, ativo])
@@ -1040,6 +1053,15 @@ model Message {
   // responder e reagir a essa mensagem precisam pra achá-la dentro do grupo.
   autorJid  String?
   autorNome String?
+
+  // Setor da conversa NO MOMENTO em que esta mensagem foi trocada — não o
+  // setor atual dela. É essa foto que permite esconder o histórico de um
+  // setor do próximo que receber a conversa (ver Tenant.isolarHistoricoPorSetor)
+  // sem precisar reconstruir uma linha do tempo de transferências toda vez
+  // que alguém abre a conversa. Nulo = trocada antes de ir pra algum setor
+  // (fila geral), e por isso nunca fica escondida — não tem de quem esconder.
+  setorId String?
+  setor   Setor?  @relation(fields: [setorId], references: [id], onDelete: SetNull)
 
   mediaType         MediaType?
   mediaKey          String?  // chave do objeto no bucket R2
