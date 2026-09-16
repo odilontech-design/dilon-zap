@@ -10,6 +10,7 @@ import { impedimentoParaAlterarStatus, liberarConversasDe } from "@/lib/user-sta
 const patchSchema = z
   .object({
     name: z.string().trim().min(2).max(80).optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
     role: z.enum(["OWNER", "AGENT", "FINANCEIRO"]).optional(),
     password: z.string().min(8).max(72).optional(),
     ativo: z.boolean().optional(),
@@ -30,10 +31,19 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   });
   if (!alvo) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { name, role, password, ativo } = parsed.data;
+  const { name, email, role, password, ativo } = parsed.data;
 
   const impedimento = await impedimentoParaAlterarStatus(alvo, ativo ?? true, role === "AGENT", user.id);
   if (impedimento) return NextResponse.json({ error: impedimento }, { status: 400 });
+
+  // E-mail é único no sistema inteiro (é o login), não só nesta empresa —
+  // mesma checagem do cadastro. Sem isso, um OWNER consegue "roubar" sem
+  // querer o e-mail de alguém de outra empresa, e as duas contas passam a
+  // disputar o mesmo login.
+  if (email !== undefined && email !== alvo.email) {
+    const emEmUso = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (emEmUso) return NextResponse.json({ error: "esse e-mail já está em uso" }, { status: 409 });
+  }
 
   // Reativar ocupa vaga igual a cadastrar. Sem conferir aqui, desativar e
   // reativar viraria o atalho pra furar o limite do plano — o cadastro novo
@@ -56,6 +66,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     where: { id: alvo.id },
     data: {
       ...(name !== undefined ? { name } : {}),
+      ...(email !== undefined ? { email } : {}),
       ...(role !== undefined ? { role } : {}),
       // Senha redefinida pelo responsável é provisória pra quem vai usá-la;
       // o responsável redefinindo a própria não precisa trocar de novo.
@@ -75,6 +86,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     metadata: {
       userId: alvo.id,
       name: atualizado.name,
+      ...(email !== undefined ? { email } : {}),
       ...(role !== undefined ? { role } : {}),
       ...(password !== undefined ? { senhaRedefinida: true } : {}),
       ...(ativo === false ? { conversasDesatribuidas: desatribuidas } : {}),

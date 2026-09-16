@@ -28,6 +28,44 @@ function formatarData(iso: string) {
   return new Date(iso).toLocaleDateString("pt-BR");
 }
 
+/**
+ * Nome e e-mail editam do mesmo jeito: campo de texto que salva sozinho ao
+ * perder o foco, só quando o valor de fato mudou — mesmo padrão da ficha do
+ * contato. Erro de salvar (e-mail duplicado, por exemplo) aparece no aviso lá
+ * em cima; o campo volta a mostrar o valor válido sozinho, porque sem
+ * `mutate()` o dado que veio do servidor nunca mudou.
+ */
+function CampoEditavel({
+  valor,
+  tipo,
+  desabilitado,
+  onSalvar,
+  className,
+}: {
+  valor: string;
+  tipo?: string;
+  desabilitado: boolean;
+  onSalvar: (novoValor: string) => void;
+  className: string;
+}) {
+  const [rascunho, setRascunho] = useState<string | null>(null);
+
+  return (
+    <input
+      type={tipo ?? "text"}
+      value={rascunho ?? valor}
+      disabled={desabilitado}
+      onChange={(e) => setRascunho(e.target.value)}
+      onBlur={() => {
+        const limpo = rascunho?.trim();
+        if (limpo && limpo !== valor) onSalvar(limpo);
+        setRascunho(null);
+      }}
+      className={className}
+    />
+  );
+}
+
 export function UsersPanel({ meuId }: { meuId: string }) {
   const { data: usuarios, mutate } = useSWR<Usuario[]>("/api/users?incluirInativos=1", fetcher);
   const [criando, setCriando] = useState(false);
@@ -98,7 +136,11 @@ export function UsersPanel({ meuId }: { meuId: string }) {
         <p className="mb-4 rounded-md border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm">{erro}</p>
       )}
 
-      <div className="rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
+      {/* Tabela a partir de md: a partir daí cabem as 5 colunas sem cortar
+          nenhuma. Abaixo disso vira lista de cartões — rolar uma tabela de
+          lado pra ler "Redefinir senha" cortado no canto é pior do que só
+          empilhar os campos. */}
+      <div className="hidden md:block rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-xs text-neutral-500 border-b border-neutral-200">
             <tr>
@@ -114,16 +156,35 @@ export function UsersPanel({ meuId }: { meuId: string }) {
               const inativo = Boolean(u.deactivatedAt);
               return (
                 <tr key={u.id} className="border-b border-neutral-200 last:border-0">
-                  <td className="px-4 py-3">
-                    <span className={inativo ? "text-neutral-400" : "font-medium text-neutral-800"}>{u.name}</span>
-                    {u.id === meuId && <span className="ml-2 text-xs text-neutral-400">(você)</span>}
+                  <td className="px-4 py-2">
+                    <div className="flex items-center gap-2">
+                      <CampoEditavel
+                        valor={u.name}
+                        desabilitado={inativo}
+                        onSalvar={(v) => chamar(`/api/users/${u.id}`, "PATCH", { name: v })}
+                        className={`w-40 rounded-md border border-transparent hover:border-neutral-300 focus:border-accent bg-transparent px-2 py-1 -mx-2 focus:outline-none disabled:opacity-50 disabled:hover:border-transparent ${
+                          inativo ? "text-neutral-400" : "font-medium text-neutral-800"
+                        }`}
+                      />
+                      {u.id === meuId && <span className="text-xs text-neutral-400 shrink-0">(você)</span>}
+                    </div>
                     {inativo && (
-                      <span className="ml-2 text-[10px] rounded-full bg-neutral-100 text-neutral-500 px-2 py-0.5">
+                      <span className="ml-1 text-[10px] rounded-full bg-neutral-100 text-neutral-500 px-2 py-0.5">
                         desativada em {formatarData(u.deactivatedAt!)}
                       </span>
                     )}
                   </td>
-                  <td className={`px-4 py-3 ${inativo ? "text-neutral-400" : "text-neutral-600"}`}>{u.email}</td>
+                  <td className="px-4 py-2">
+                    <CampoEditavel
+                      valor={u.email}
+                      tipo="email"
+                      desabilitado={inativo}
+                      onSalvar={(v) => chamar(`/api/users/${u.id}`, "PATCH", { email: v })}
+                      className={`w-56 rounded-md border border-transparent hover:border-neutral-300 focus:border-accent bg-transparent px-2 py-1 -mx-2 focus:outline-none disabled:opacity-50 disabled:hover:border-transparent ${
+                        inativo ? "text-neutral-400" : "text-neutral-600"
+                      }`}
+                    />
+                  </td>
                   <td className="px-4 py-3">
                     <select
                       value={u.role}
@@ -157,6 +218,83 @@ export function UsersPanel({ meuId }: { meuId: string }) {
             })}
           </tbody>
         </table>
+      </div>
+
+      <div className="md:hidden flex flex-col gap-3">
+        {(usuarios ?? []).map((u) => {
+          const inativo = Boolean(u.deactivatedAt);
+          return (
+            <div key={u.id} className="rounded-lg border border-neutral-200 bg-surface p-4">
+              <div className="flex items-start justify-between gap-2 mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CampoEditavel
+                      valor={u.name}
+                      desabilitado={inativo}
+                      onSalvar={(v) => chamar(`/api/users/${u.id}`, "PATCH", { name: v })}
+                      className={`flex-1 min-w-0 rounded-md border border-transparent hover:border-neutral-300 focus:border-accent bg-transparent px-2 py-1 -mx-2 focus:outline-none disabled:opacity-50 disabled:hover:border-transparent text-base ${
+                        inativo ? "text-neutral-400" : "font-medium text-neutral-800"
+                      }`}
+                    />
+                    {u.id === meuId && <span className="text-xs text-neutral-400 shrink-0">(você)</span>}
+                  </div>
+                  {inativo && (
+                    <span className="inline-block mt-1 text-[10px] rounded-full bg-neutral-100 text-neutral-500 px-2 py-0.5">
+                      desativada em {formatarData(u.deactivatedAt!)}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <label className="block text-xs font-medium text-neutral-500 mb-1">E-mail</label>
+              <CampoEditavel
+                valor={u.email}
+                tipo="email"
+                desabilitado={inativo}
+                onSalvar={(v) => chamar(`/api/users/${u.id}`, "PATCH", { email: v })}
+                className={`w-full mb-3 rounded-md border border-neutral-300 bg-surface px-2 py-1.5 text-sm disabled:opacity-50 ${
+                  inativo ? "text-neutral-400" : "text-neutral-700"
+                }`}
+              />
+
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <label className="flex-1 min-w-0">
+                  <span className="block text-xs font-medium text-neutral-500 mb-1">Papel</span>
+                  <select
+                    value={u.role}
+                    disabled={inativo}
+                    onChange={(e) => chamar(`/api/users/${u.id}`, "PATCH", { role: e.target.value })}
+                    className="w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5 text-sm disabled:opacity-50"
+                  >
+                    <option value="AGENT">{PAPEL_LABEL.AGENT}</option>
+                    <option value="FINANCEIRO">{PAPEL_LABEL.FINANCEIRO}</option>
+                    <option value="OWNER">{PAPEL_LABEL.OWNER}</option>
+                  </select>
+                </label>
+                <div className="text-right shrink-0">
+                  <span className="block text-xs font-medium text-neutral-500 mb-1">Desde</span>
+                  <span className="text-sm text-neutral-600 tabular-nums">{formatarData(u.createdAt)}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 text-sm pt-3 border-t border-neutral-200">
+                <button
+                  onClick={() => redefinirSenha(u)}
+                  disabled={inativo}
+                  className="text-neutral-600 hover:text-accent disabled:opacity-40"
+                >
+                  Redefinir senha
+                </button>
+                <button
+                  onClick={() => alternarAtivo(u)}
+                  className={inativo ? "text-accent" : "text-red-600 hover:text-red-700"}
+                >
+                  {inativo ? "Reativar" : "Desativar"}
+                </button>
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <p className="mt-4 text-xs text-neutral-500">
