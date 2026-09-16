@@ -61,7 +61,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (!setor) return NextResponse.json({ error: "setor inválido" }, { status: 400 });
   }
 
-  const mudouSetor = parsed.data.setorId !== undefined && parsed.data.setorId !== conversation.setorId;
+  // Só conta como transferência de setor EXPLÍCITA quem veio do seletor de
+  // setor — é o que zera o responsável e não credita "quem transferiu" (vira
+  // fila, não um passe de mão em mão). O realinhamento automático logo
+  // abaixo NÃO entra aqui, porque ali foi uma PESSOA que assumiu, só o setor
+  // seguiu junto.
+  const mudouSetorExplicitamente =
+    parsed.data.setorId !== undefined && parsed.data.setorId !== conversation.setorId;
 
   // Encaminhar pra outro setor esvazia o responsável — vira a fila do setor,
   // do jeito que a URA já entrega (ver direcionarParaSetor no worker). Sem
@@ -69,8 +75,27 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // ninguém do setor novo a veria — o oposto do que transferir quer dizer.
   // Só não mexe se o mesmo pedido já estiver escolhendo alguém.
   const dados = { ...parsed.data };
-  if (mudouSetor && dados.assignedToId === undefined) {
+  if (mudouSetorExplicitamente && dados.assignedToId === undefined) {
     dados.assignedToId = null;
+  }
+
+  // Atribuir a uma pessoa sem trocar o setor junto foi o que deixou a
+  // conversa #9871 desencontrada: o Gabriel (Departamento Pessoal) virou
+  // responsável por uma conversa que continuava marcada Fiscal, e o
+  // histórico dela sumiu atrás do isolamento por setor (ver
+  // historico-setor.ts) — ele só via um aviso de encaminhamento na própria
+  // conversa que era dele. Se a pessoa pertence a EXATAMENTE um setor,
+  // diferente do atual, o setor muda junto. Pessoa em 0 ou 2+ setores não
+  // mexe — não dá pra adivinhar qual valeria, e é melhor deixar como estava
+  // do que trocar errado.
+  if (parsed.data.assignedToId && dados.setorId === undefined) {
+    const setoresDoAgente = await prisma.setorMembro.findMany({
+      where: { userId: parsed.data.assignedToId },
+      select: { setorId: true },
+    });
+    if (setoresDoAgente.length === 1 && setoresDoAgente[0].setorId !== conversation.setorId) {
+      dados.setorId = setoresDoAgente[0].setorId;
+    }
   }
 
   // Transferência: só conta quando o responsável REALMENTE muda. Sem essa
@@ -114,7 +139,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
             // Encaminhamento por setor não foi ninguém "passando" a conversa
             // pra uma pessoa — foi pra uma fila. Mesmo critério da URA: sem
             // assignedById aqui.
-            assignedById: dados.assignedToId && !mudouSetor ? user.id : null,
+            assignedById: dados.assignedToId && !mudouSetorExplicitamente ? user.id : null,
             // Quem pega a conversa pra si não precisa ser avisado de que
             // pegou — já marca como visto pra não nascer um aviso inútil.
             assignmentSeenAt: dados.assignedToId === user.id ? new Date() : null,

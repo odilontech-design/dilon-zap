@@ -29,11 +29,22 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   // Isolamento de histórico entre setores: recurso ligado por empresa (hoje só
   // a Guttierres), e o Responsável sempre vê tudo — a barreira é só entre
   // setores/atendentes. Ver Tenant.isolarHistoricoPorSetor no schema.
+  //
+  // Quem é o responsável ATUAL da conversa também vê tudo, mesmo que o setor
+  // marcado não bata com o dele — foi exatamente essa a conversa #9871 que
+  // ficou desencontrada: a pessoa que estava efetivamente cuidando não podia
+  // ficar trancada fora do próprio atendimento por causa de uma etiqueta de
+  // setor desalinhada. A rota [id] já alinha o setor sozinha ao atribuir (ver
+  // o PATCH), mas esta segunda trava cobre o caso de sobrar desalinhado.
   const tenant = await prisma.tenant.findUniqueOrThrow({
     where: { id: user.tenantId },
     select: { isolarHistoricoPorSetor: true },
   });
-  const semRestricao = !tenant.isolarHistoricoPorSetor || user.role === "OWNER" || user.role === "SUPERADMIN";
+  const semRestricao =
+    !tenant.isolarHistoricoPorSetor ||
+    user.role === "OWNER" ||
+    user.role === "SUPERADMIN" ||
+    conversation.assignedToId === user.id;
   if (semRestricao) {
     return NextResponse.json({ mensagens, marcadores: [] });
   }
