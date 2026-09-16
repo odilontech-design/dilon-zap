@@ -6,48 +6,35 @@
  * (Message.setorId). Filtrar é comparar essa foto com os setores de quem
  * está olhando agora — não precisa reconstruir a linha do tempo de
  * transferências toda vez que a conversa é aberta.
+ *
+ * O "de onde veio e por quê" não sai daqui: quem conta isso é o registro de
+ * TransferenciaSetor, com o motivo que o atendente escreveu ao encaminhar.
  */
 
 export type MensagemComSetor = { id: string; setorId: string | null };
 
-export type MarcadorTransferencia = {
-  /** Id da mensagem visível logo depois do trecho escondido. */
-  antesDe: string;
-  /** Setor pra que a conversa foi encaminhada — o dono do trecho que reaparece. */
-  setorId: string | null;
-};
-
 /**
  * Separa as mensagens que quem está olhando pode ver das que ficam escondidas
- * (setor diferente do dele), e monta os marcadores de "conversa encaminhada"
- * nos pontos onde um trecho escondido termina.
+ * (setor diferente do dele).
  *
  * Mensagem sem setor (setorId nulo — fila geral, antes de qualquer
  * encaminhamento) é sempre visível: não tem setor anterior pra esconder dela.
+ *
+ * `escondeu` existe pra tela poder avisar que falta pedaço. Sem esse aviso a
+ * conversa simplesmente começaria no meio, e o atendente pensaria que o
+ * cliente chegou agora.
  */
 export function filtrarHistoricoPorSetor<T extends MensagemComSetor>(
   mensagens: T[],
   meusSetores: ReadonlySet<string>
-): { visiveis: T[]; marcadores: MarcadorTransferencia[] } {
+): { visiveis: T[]; escondeu: boolean } {
   const visiveis: T[] = [];
-  const marcadores: MarcadorTransferencia[] = [];
-  let escondendo = false;
+  let escondeu = false;
 
   for (const m of mensagens) {
-    const podeVer = m.setorId === null || meusSetores.has(m.setorId);
-    if (podeVer) {
-      // O marcador vai ANTES da primeira mensagem que reaparece depois de um
-      // trecho escondido — é o ponto exato em que a conversa passou a ser
-      // deste setor.
-      if (escondendo) {
-        marcadores.push({ antesDe: m.id, setorId: m.setorId });
-        escondendo = false;
-      }
-      visiveis.push(m);
-    } else {
-      escondendo = true;
-    }
+    if (m.setorId === null || meusSetores.has(m.setorId)) visiveis.push(m);
+    else escondeu = true;
   }
 
-  return { visiveis, marcadores };
+  return { visiveis, escondeu };
 }

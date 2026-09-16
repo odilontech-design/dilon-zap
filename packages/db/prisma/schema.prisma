@@ -30,18 +30,18 @@ model Tenant {
   // Ligado/desligado explícito em vez de "tem opção cadastrada?": a empresa
   // precisa poder desligar o menu por uma semana sem apagar a configuração
   // inteira e ter que remontar depois.
-  uraAtiva    Boolean @default(false)
+  uraAtiva               Boolean @default(false)
   // Cabeçalho do menu — as opções são montadas a partir de UraOpcao e coladas
   // embaixo. Guardar o menu pronto em texto obrigaria a reescrever a mensagem
   // toda vez que uma opção mudasse de nome.
-  uraMensagem String?
+  uraMensagem            String?
   // Depois de quantos minutos sem NENHUMA mensagem (em qualquer direção)
   // o menu volta a aparecer pro cliente, mesmo que a conversa continue
   // atribuída — trata como se fosse um contato novo. O atendente que fecha
   // o atendimento manualmente antecipa isso na hora, sem esperar o tempo
   // passar. Só vale enquanto uraAtiva estiver ligado: sem menu pra
   // oferecer, reabrir a triagem não faria sentido nenhum pro cliente.
-  uraReinicioAposMinutos Int @default(60)
+  uraReinicioAposMinutos Int     @default(60)
 
   // Quando uma conversa passa de um setor pra outro, o histórico do setor
   // anterior some de quem recebeu a conversa agora — só um marcador avisa
@@ -73,28 +73,28 @@ model Tenant {
   // 58 é o das impressoras portáteis. Fica na empresa, e não escolhido a cada
   // impressão, porque a impressora não muda — e errar a largura corta o texto
   // ou deixa uma faixa em branco.
-  reciboLarguraMm Int @default(80)
+  reciboLarguraMm Int     @default(80)
 
-  users         User[]
-  sessions      WhatsAppSession[]
-  contacts      Contact[]
-  conversations Conversation[]
-  orders        Order[]
-  contactBlocks ContactBlock[]
-  autoReplies   AutoReply[]
-  subscription  Subscription?
-  invoices      Invoice[]
-  tags          Tag[]
-  stages        Stage[]
-  uraOpcoes     UraOpcao[]
-  setores       Setor[]
-  apiKeys       ApiKey[]
-  recursos      TenantRecurso[]
-  businessHours BusinessHour[]
-  savedTexts    SavedText[]
+  users             User[]
+  sessions          WhatsAppSession[]
+  contacts          Contact[]
+  conversations     Conversation[]
+  orders            Order[]
+  contactBlocks     ContactBlock[]
+  autoReplies       AutoReply[]
+  subscription      Subscription?
+  invoices          Invoice[]
+  tags              Tag[]
+  stages            Stage[]
+  uraOpcoes         UraOpcao[]
+  setores           Setor[]
+  apiKeys           ApiKey[]
+  recursos          TenantRecurso[]
+  businessHours     BusinessHour[]
+  savedTexts        SavedText[]
   scheduledMessages ScheduledMessage[]
-  products      Product[]
-  stockMovements StockMovement[]
+  products          Product[]
+  stockMovements    StockMovement[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -108,10 +108,10 @@ model Setor {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  nome String
+  nome  String
   // Etiqueta visual no Inbox. É o que faz a fila ser legível de relance,
   // sem precisar abrir a conversa pra saber de quem é o assunto.
-  cor  String @default("#0F766E")
+  cor   String  @default("#0F766E")
   // Desativar em vez de apagar: setor que saiu de uso ainda é o setor das
   // conversas antigas, e apagar faria o histórico perder essa informação.
   ativo Boolean @default(true)
@@ -197,10 +197,10 @@ model ApiKey {
 
   // Pra que serve, em texto: "Dilon Saude - producao". Sem isso, revogar vira
   // adivinhacao no dia em que houver tres chaves.
-  nome      String
-  hash      String @unique
+  nome  String
+  hash  String @unique
   // Ultimos caracteres, so pra identificar na lista qual e qual.
-  final     String
+  final String
 
   // Revogacao e data, nao exclusao: saber que uma chave existiu e quando
   // parou de valer importa quando algo estranho aparece no log.
@@ -216,11 +216,11 @@ model ApiKey {
 // acidente só porque ninguém configurou nada (o que desligaria a mensagem de
 // ausência sem ninguém perceber).
 model BusinessHour {
-  id       String  @id @default(cuid())
+  id       String @id @default(cuid())
   tenantId String
-  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  weekday  Int     // 0 = domingo … 6 = sábado, igual Date#getDay()
+  weekday  Int // 0 = domingo … 6 = sábado, igual Date#getDay()
   isOpen   Boolean @default(true)
   // "HH:MM" no fuso do tenant. String e não DateTime de propósito: é hora do
   // relógio, não instante no tempo — guardar como DateTime traria uma data
@@ -273,47 +273,47 @@ model User {
   // não é interrompido pela atualização.
   senhaProvisoria Boolean @default(false)
 
-  assignedConversations Conversation[] @relation("AssignedAgent")
-  transfersMade         Conversation[] @relation("AssignedBy")
-  uraOpcoes             UraOpcao[]     @relation("UraDestino")
-  setores               SetorMembro[]
-  sentMessages          Message[]      @relation("MessageSender")
-  messageReactions      MessageReaction[]
-  scheduledMessages     ScheduledMessage[] @relation("ScheduledBy")
-  ordersCreated         Order[]            @relation("OrderCreatedBy")
-  ordersClosed          Order[]            @relation("OrderClosedBy")
-  stockMovements        StockMovement[]    @relation("StockMovementBy")
-  pagamentos            Pagamento[]        @relation("PagamentoPor")
-  atendimentosEncerrados Atendimento[]     @relation("AtendimentoEncerradoPor")
+  assignedConversations  Conversation[]     @relation("AssignedAgent")
+  transfersMade          Conversation[]     @relation("AssignedBy")
+  uraOpcoes              UraOpcao[]         @relation("UraDestino")
+  setores                SetorMembro[]
+  sentMessages           Message[]          @relation("MessageSender")
+  messageReactions       MessageReaction[]
+  scheduledMessages      ScheduledMessage[] @relation("ScheduledBy")
+  ordersCreated          Order[]            @relation("OrderCreatedBy")
+  ordersClosed           Order[]            @relation("OrderClosedBy")
+  stockMovements         StockMovement[]    @relation("StockMovementBy")
+  pagamentos             Pagamento[]        @relation("PagamentoPor")
+  atendimentosEncerrados Atendimento[]      @relation("AtendimentoEncerradoPor")
 
   @@index([tenantId])
 }
 
 enum SessionStatus {
-  PENDING_QR   // sessão criada, aguardando o dono escanear o QR Code
+  PENDING_QR // sessão criada, aguardando o dono escanear o QR Code
   CONNECTED
   DISCONNECTED // caiu, worker vai tentar reconectar sozinho
-  LOGGED_OUT   // usuário deslogou pelo celular, precisa parear de novo
+  LOGGED_OUT // usuário deslogou pelo celular, precisa parear de novo
 }
 
 // Uma sessão = uma conexão Baileys ativa para um número de WhatsApp de um tenant.
 // Fase 0: um tenant tem no máximo uma sessão. O schema já permite mais de uma
 // (para quando um negócio tiver múltiplos números conectados).
 model WhatsAppSession {
-  id            String        @id @default(cuid())
-  tenantId      String
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  label         String        @default("Principal")
-  phoneNumber   String? // preenchido depois de conectar, formato E.164
-  status        SessionStatus @default(PENDING_QR)
-  qrCode        String? // QR atual em base64 (Fase 0: worker escreve, web lê via polling)
+  id              String        @id @default(cuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  label           String        @default("Principal")
+  phoneNumber     String? // preenchido depois de conectar, formato E.164
+  status          SessionStatus @default(PENDING_QR)
+  qrCode          String? // QR atual em base64 (Fase 0: worker escreve, web lê via polling)
   lastConnectedAt DateTime?
-  lastError     String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  lastError       String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  authCreds String? @db.Text // credenciais Baileys (creds.json equivalente), serializado com BufferJSON
-  signalKeys WhatsAppSignalKey[]
+  authCreds     String?             @db.Text // credenciais Baileys (creds.json equivalente), serializado com BufferJSON
+  signalKeys    WhatsAppSignalKey[]
   conversations Conversation[]
   messages      Message[]
 
@@ -357,40 +357,40 @@ model Stage {
 // Um contato de WhatsApp dentro de um tenant (o mesmo número em tenants
 // diferentes é uma linha diferente — não há dado compartilhado entre negócios).
 model Contact {
-  id          String        @id @default(cuid())
-  tenantId    String
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  waJid       String // ex: 5511999999999@s.whatsapp.net — pode ser @lid quando o WhatsApp esconde o número real
+  id                String    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  waJid             String // ex: 5511999999999@s.whatsapp.net — pode ser @lid quando o WhatsApp esconde o número real
   // Nome que a tela mostra. Pode ter vindo da agenda do celular, do pushName
   // da própria pessoa, ou de alguém que digitou aqui.
-  name        String?
+  name              String?
   // Último nome que o WhatsApp nos informou pra esse contato (agenda ou
   // pushName). Não é pra exibir: serve pra saber se o nome MUDOU do lado de
   // lá. Sem isso, toda sincronização do WhatsApp parecia uma alteração nova
   // e reescrevia o `name` — inclusive por cima do que a atendente tinha
   // acabado de corrigir à mão.
-  waName      String?
+  waName            String?
   // Alguém editou esse nome aqui dentro. Quando é true, sincronização do
   // WhatsApp nunca sobrescreve: quem digitou sabe melhor como a empresa
   // chama o cliente do que o nome que o cliente escolheu pra própria conta.
-  nameManual  Boolean @default(false)
+  nameManual        Boolean   @default(false)
   // Número de telefone real (dígitos, sem sufixo de JID) quando waJid é @lid
   // e o WhatsApp revelou o par via senderPn/jid em alguma mensagem — @lid é
   // opaco por padrão, isso só existe quando conseguimos capturar o par.
-  phoneNumber String?
+  phoneNumber       String?
   // Endereço que a tela usa. Aponta pro NOSSO servidor, não pro WhatsApp:
   // as URLs de pps.whatsapp.net expiram — metade das que tínhamos guardadas
   // já respondia 403 — e a foto sumia da tela semanas depois sem nada ter
   // mudado.
-  avatarUrl   String?
+  avatarUrl         String?
   // Chave da imagem no R2. É o que a rota de avatar usa pra servir o arquivo.
-  avatarKey   String?
+  avatarKey         String?
   // Identificador da foto no WhatsApp (o nome do arquivo na URL original).
   // Coluna própria porque a reconciliação de contatos duplicados compara
   // contatos por foto: antes ela extraía isso da avatarUrl, e no dia em que
   // a avatarUrl deixasse de ser do WhatsApp a comparação pararia de casar em
   // silêncio — voltando a duplicar contato sem ninguém entender por quê.
-  avatarPhotoId String?
+  avatarPhotoId     String?
   // Quando a saudação de primeiro contato foi enviada pra este cliente.
   // Fica no contato e não na conversa: quem volta meses depois numa conversa
   // nova não é um contato novo, e receber "seja bem-vinda" de novo soaria
@@ -410,12 +410,12 @@ model Contact {
   // Último Status (Stories) que esse contato postou — "tem Status disponível"
   // é calculado na hora (últimas 24h), não guardado como boolean, porque
   // Status expira sozinho e não teria como saber quando "desligar" a flag.
-  lastStatusAt DateTime?
+  lastStatusAt    DateTime?
   // null = ainda não triado no funil (aparece numa coluna "Sem etapa" à
   // parte, nunca chuta o contato pra uma etapa que possa estar errada).
-  stageId        String?
-  stage          Stage?   @relation(fields: [stageId], references: [id], onDelete: SetNull)
-  dealValueCents Int      @default(0) // valor do negócio — soma no total de cada coluna do funil
+  stageId         String?
+  stage           Stage?    @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  dealValueCents  Int       @default(0) // valor do negócio — soma no total de cada coluna do funil
 
   // Anotação livre sobre o cliente. Fica no CONTATO e não na conversa: o
   // que vale saber ("prefere ser chamada de Lili", "só compra no fim do
@@ -439,8 +439,8 @@ model Contact {
   // Guarda a data junto porque a resposta envelhece: número pode ganhar
   // conta depois, e um "não tem" de seis meses atrás não vale como motivo
   // pra apagar ninguém.
-  hasWhatsapp        Boolean?
-  whatsappCheckedAt  DateTime?
+  hasWhatsapp       Boolean?
+  whatsappCheckedAt DateTime?
 
   // Grupo do WhatsApp (@g.us) em vez de pessoa. Mora em Contact, e não num
   // model próprio, pra reaproveitar tudo que uma conversa já tem: mídia,
@@ -459,7 +459,7 @@ model Contact {
   // WhatsApp manda sobre o grupo; nunca é consultado de propósito.
   grupoParticipantes Int?
 
-  createdAt      DateTime @default(now())
+  createdAt DateTime @default(now())
 
   conversations Conversation[]
   orders        Order[]
@@ -477,18 +477,18 @@ enum ConversationStatus {
 }
 
 model Conversation {
-  id        String              @id @default(cuid())
-  ticketNumber Int              @unique @default(autoincrement()) // identificador curto pro atendente citar por telefone/e-mail
-  tenantId  String
-  tenant    Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  sessionId String
-  session   WhatsAppSession     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  contactId String
-  contact   Contact             @relation(fields: [contactId], references: [id], onDelete: Cascade)
-  status    ConversationStatus  @default(OPEN)
-  tags      String[]            @default([])
+  id           String             @id @default(cuid())
+  ticketNumber Int                @unique @default(autoincrement()) // identificador curto pro atendente citar por telefone/e-mail
+  tenantId     String
+  tenant       Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId    String
+  session      WhatsAppSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  contactId    String
+  contact      Contact            @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  status       ConversationStatus @default(OPEN)
+  tags         String[]           @default([])
   assignedToId String?
-  assignedTo   User?            @relation("AssignedAgent", fields: [assignedToId], references: [id])
+  assignedTo   User?              @relation("AssignedAgent", fields: [assignedToId], references: [id])
 
   // De qual setor é este atendimento. É ORTOGONAL a assignedToId, e essa é a
   // ideia toda: setor responde "de quem é o assunto", responsável responde
@@ -500,10 +500,10 @@ model Conversation {
   //
   // onDelete: SetNull porque apagar um setor não pode levar junto o histórico
   // de atendimento — a conversa aconteceu, mesmo que o setor não exista mais.
-  setorId String?
-  setor   Setor?  @relation(fields: [setorId], references: [id], onDelete: SetNull)
-  lastMessageAt DateTime        @default(now())
-  createdAt DateTime            @default(now())
+  setorId       String?
+  setor         Setor?   @relation(fields: [setorId], references: [id], onDelete: SetNull)
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
 
   // Última vez que a mensagem de ausência foi mandada nesta conversa. É a
   // trava que impede o cliente levar cinco respostas iguais por mandar cinco
@@ -546,10 +546,11 @@ model Conversation {
   closedAt    DateTime?
   closeReason String?
 
-  messages Message[]
+  messages          Message[]
   scheduledMessages ScheduledMessage[]
   orders            Order[]
   atendimentos      Atendimento[]
+  transferencias    TransferenciaSetor[]
 
   // Impede duas conversas pro mesmo contato na mesma sessão — sem isso, duas
   // mensagens chegando quase juntas (poucos ms de diferença) podem disparar
@@ -622,20 +623,20 @@ model ContactBlock {
 // (substring, case-insensitive) quando a conversa ainda não tem atendente
 // atribuído. isDefault = usada quando nenhuma palavra-chave bate.
 model AutoReply {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  keyword   String
-  response  String
-  isDefault Boolean  @default(false)
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  keyword    String
+  response   String
+  isDefault  Boolean  @default(false)
   // Saudação de primeiro contato: dispara sem palavra-chave, uma vez por
   // cliente, quando ele fala com a empresa pela primeira vez.
   //
   // É diferente da resposta padrão, e a diferença é o ponto: a padrão
   // responde a TODA mensagem que não casa palavra-chave, então usá-la como
   // boas-vindas mandaria a mesma saudação pro mesmo cliente pra sempre.
-  isGreeting Boolean @default(false)
-  createdAt DateTime @default(now())
+  isGreeting Boolean  @default(false)
+  createdAt  DateTime @default(now())
 
   @@index([tenantId])
 }
@@ -664,10 +665,10 @@ enum TipoItem {
 }
 
 model Product {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name      String
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name     String
 
   // Produto ou serviço. A diferença que importa é UMA: serviço não tem
   // estoque. Não é "estoque infinito" nem "estoque zero" — é que a pergunta
@@ -686,13 +687,13 @@ model Product {
   duracaoMinutos Int?
   // Código interno da Believe, quando existir. Opcional porque nem todo
   // produto tem, e exigir um código inventado só pra cadastrar é atrito.
-  sku       String?
-  categoria String?
-  priceCents Int
+  sku            String?
+  categoria      String?
+  priceCents     Int
   // Desativado some dos seletores de pedido mas continua no histórico: um
   // produto que saiu de linha ainda aparece nos pedidos antigos, e apagar
   // faria o pedido antigo perder o que foi vendido.
-  isActive  Boolean  @default(true)
+  isActive       Boolean @default(true)
 
   // Saldo atual, mantido em cache.
   //
@@ -701,7 +702,7 @@ model Product {
   // alteração passa por registrarMovimento(), que grava a movimentação e
   // atualiza o saldo na MESMA transação. Se alguém escrever aqui por fora,
   // o cache descola do histórico e o número deixa de valer.
-  stockQty  Int      @default(0)
+  stockQty Int @default(0)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -741,8 +742,8 @@ model Order {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  contactId String
-  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId      String
+  contact        Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
   // De qual conversa nasceu. Opcional porque um pedido pode ser criado
   // direto da ficha do cliente, sem conversa aberta.
   conversationId String?
@@ -764,8 +765,8 @@ model Order {
   // nunca é escrito direto — só por registrarPagamento(), que grava o
   // pagamento e atualiza isto na MESMA transação. Escrever por fora descola
   // o cache do histórico e o número deixa de valer.
-  pago   Boolean   @default(false)
-  pagoEm DateTime?
+  pago          Boolean        @default(false)
+  pagoEm        DateTime?
 
   // Quando o cliente combinou de pagar.
   //
@@ -879,12 +880,12 @@ enum StockMovementType {
 // AJUSTE, não uma correção da anterior. Reescrever o passado é justamente o
 // que faz o histórico perder a serventia.
 model StockMovement {
-  id        String            @id @default(cuid())
-  tenantId  String
-  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  productId String
-  product   Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
-  tipo      StockMovementType
+  id         String            @id @default(cuid())
+  tenantId   String
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId  String
+  product    Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  tipo       StockMovementType
   // Positivo entra, negativo sai. AJUSTE aceita os dois sinais; os demais
   // têm sinal fixo pelo tipo, e isso é garantido em lib/stock.
   quantidade Int
@@ -921,11 +922,11 @@ enum ScheduledMessageStatus {
 // registrar no histórico, reenviar se o cliente não conseguir decifrar.
 // Um caminho de envio paralelo seria um segundo lugar pra esquecer regra.
 model ScheduledMessage {
-  id             String                @id @default(cuid())
+  id             String                 @id @default(cuid())
   tenantId       String
-  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   conversationId String
-  conversation   Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   Conversation           @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   body           String
   scheduledFor   DateTime
   status         ScheduledMessageStatus @default(PENDING)
@@ -1005,7 +1006,7 @@ enum MessageDirection {
 }
 
 enum MessageStatus {
-  PENDING   // outbound, ainda não enviada pelo worker
+  PENDING // outbound, ainda não enviada pelo worker
   SENT
   DELIVERED
   READ
@@ -1020,27 +1021,27 @@ enum MediaType {
 }
 
 model Message {
-  id             String            @id @default(cuid())
-  conversationId String
-  conversation   Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sessionId      String
-  session        WhatsAppSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  direction      MessageDirection
-  status         MessageStatus     @default(SENT)
+  id              String           @id @default(cuid())
+  conversationId  String
+  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sessionId       String
+  session         WhatsAppSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  direction       MessageDirection
+  status          MessageStatus    @default(SENT)
   // Quando o status mudou pela última vez. Sem isso não dava pra responder
   // "essa mensagem está parada em SENT há quanto tempo?" — que é a diferença
   // entre um recibo que ainda vai chegar e um que nunca vem.
   statusUpdatedAt DateTime?
-  body           String // legenda/texto — pode ser vazio quando é só mídia
+  body            String // legenda/texto — pode ser vazio quando é só mídia
   // Id da mensagem no WhatsApp. É por ele que os recibos de entrega e leitura
   // encontram a mensagem — por isso ele é GERADO POR NÓS e gravado ANTES do
   // envio. Quando era o WhatsApp que gerava, ele só existia aqui depois do
   // sendMessage resolver, e todo recibo que chegasse nessa janela procurava
   // um id que ainda não estava no banco e era descartado calado.
-  waMessageId    String?
-  errorMessage   String?
-  createdAt      DateTime          @default(now())
-  readAt         DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
+  waMessageId     String?
+  errorMessage    String?
+  createdAt       DateTime         @default(now())
+  readAt          DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
 
   // Quem mandou (OUTBOUND enviada por um atendente pelo Inbox) — null pra
   // auto-resposta, histórico importado e tudo que é INBOUND. O worker usa
@@ -1070,11 +1071,11 @@ model Message {
   setorId String?
   setor   Setor?  @relation(fields: [setorId], references: [id], onDelete: SetNull)
 
-  mediaType         MediaType?
-  mediaKey          String?  // chave do objeto no bucket R2
-  mediaMimeType     String?
-  mediaFileName     String?  // nome original, relevante pra DOCUMENT
-  mediaDurationSeconds Int?  // relevante pra AUDIO e VIDEO
+  mediaType            MediaType?
+  mediaKey             String? // chave do objeto no bucket R2
+  mediaMimeType        String?
+  mediaFileName        String? // nome original, relevante pra DOCUMENT
+  mediaDurationSeconds Int? // relevante pra AUDIO e VIDEO
 
   isEdited  Boolean   @default(false)
   editedAt  DateTime?
@@ -1121,18 +1122,18 @@ model Message {
 // reagindo a uma mensagem: a empresa (fromMe=true) e o contato (fromMe=false)
 // — por isso a unicidade é [messageId, fromMe], não por usuário.
 model MessageReaction {
-  id        String   @id @default(cuid())
-  messageId String
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  fromMe    Boolean // true = reação da empresa, false = reação do contato
-  emoji     String
+  id            String   @id @default(cuid())
+  messageId     String
+  message       Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  fromMe        Boolean // true = reação da empresa, false = reação do contato
+  emoji         String
   // Atendente que reagiu pelo Inbox — só preenchido quando a reação partiu
   // do sistema (não quando alguém reagiu direto pelo celular, e nunca
   // quando fromMe=false).
   reactorUserId String?
-  reactorUser   User?   @relation(fields: [reactorUserId], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  reactorUser   User?    @relation(fields: [reactorUserId], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   @@unique([messageId, fromMe])
 }
@@ -1142,16 +1143,16 @@ model MessageReaction {
 // momento da ação) pra o registro sobreviver a edição/exclusão do
 // usuário/tenant e não exigir join pra exibir a lista.
 model AuditLog {
-  id             String   @id @default(cuid())
-  actorUserId    String
-  actorName      String
-  actorEmail     String
-  actorTenantId  String
-  targetTenantId String // igual a actorTenantId pra ação normal; diferente quando super-admin age sobre outro tenant
+  id               String   @id @default(cuid())
+  actorUserId      String
+  actorName        String
+  actorEmail       String
+  actorTenantId    String
+  targetTenantId   String // igual a actorTenantId pra ação normal; diferente quando super-admin age sobre outro tenant
   targetTenantName String
-  action         String // ex: "login", "contact.create", "whatsapp.connect", "tenant.create"
-  metadata       Json?
-  createdAt      DateTime @default(now())
+  action           String // ex: "login", "contact.create", "whatsapp.connect", "tenant.create"
+  metadata         Json?
+  createdAt        DateTime @default(now())
 
   @@index([targetTenantId, createdAt])
   @@index([actorUserId, createdAt])
@@ -1196,13 +1197,13 @@ enum Recurso {
 // Mercado Pago é um passo futuro (mpPreapprovalId fica pronto pra isso);
 // por ora o controle é manual pelo painel /admin.
 model Subscription {
-  id              String        @id @default(cuid())
-  tenantId        String        @unique
-  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  amountCents     Int
-  cycleDay        Int // dia do mês em que vence a próxima fatura (1-28)
-  status          BillingStatus @default(ACTIVE)
-  notes           String?
+  id          String        @id @default(cuid())
+  tenantId    String        @unique
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  amountCents Int
+  cycleDay    Int // dia do mês em que vence a próxima fatura (1-28)
+  status      BillingStatus @default(ACTIVE)
+  notes       String?
 
   plano Plano @default(ESSENCIAL)
 
@@ -1242,9 +1243,9 @@ model Subscription {
   // fechou a empresa — e são três conversas completamente diferentes.
   canceladoEm        DateTime?
   motivoCancelamento String?
-  mpPreapprovalId String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  mpPreapprovalId    String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
 
   invoices Invoice[]
 }
@@ -1256,10 +1257,10 @@ model Subscription {
 // pra quem tem o Dilon Saúde) ou desligar um que ele inclui (uma empresa que
 // não quer Pedidos poluindo o menu da equipe).
 model TenantRecurso {
-  tenantId String
-  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  recurso  Recurso
-  ativo    Boolean
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  recurso   Recurso
+  ativo     Boolean
   // Pra que ninguém tenha que adivinhar daqui a seis meses por que esta
   // empresa tem um recurso fora do plano.
   motivo    String?
@@ -1279,19 +1280,49 @@ enum InvoiceStatus {
 // ("+ Gerar próxima cobrança"). status OVERDUE é calculado on-the-fly (ver
 // lib/billing.ts) a partir de PENDING + dueDate vencida, não escrito direto.
 model Invoice {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   subscriptionId String
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscription   Subscription  @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
   tenantId       String
-  tenant         Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   amountCents    Int
   dueDate        DateTime
   status         InvoiceStatus @default(PENDING)
   paidAt         DateTime?
   mpPaymentId    String?
-  createdAt      DateTime     @default(now())
+  createdAt      DateTime      @default(now())
 
   @@index([tenantId, dueDate])
   @@index([subscriptionId, dueDate])
   @@index([status])
+}
+
+/// Cada vez que uma conversa troca de setor, com o motivo escrito por quem
+/// encaminhou.
+///
+/// Existe por causa do isolamento de histórico (ver
+/// Tenant.isolarHistoricoPorSetor): o setor que recebe não enxerga o que foi
+/// conversado antes, então precisa de alguém dizendo do que se trata. Sem o
+/// motivo, a conversa chega muda na fila e o cliente tem que repetir tudo.
+///
+/// Nomes de setor gravados como foto, e não por relação: o registro é o que
+/// aconteceu naquele dia, e continua legível mesmo que o setor seja renomeado
+/// ou desativado depois.
+model TransferenciaSetor {
+  id             String       @id @default(cuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  deSetorNome   String?
+  paraSetorId   String?
+  paraSetorNome String?
+
+  /// O que o setor que recebe precisa saber. Obrigatório na transferência
+  /// feita à mão; quando o setor muda junto com a atribuição a uma pessoa, o
+  /// sistema escreve sozinho.
+  motivo   String
+  porNome  String?
+  criadoEm DateTime @default(now())
+
+  @@index([conversationId, criadoEm])
 }

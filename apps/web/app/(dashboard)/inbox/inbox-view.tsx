@@ -76,7 +76,15 @@ type ConversationDetail = {
 type SetorDef = { id: string; nome: string; ativo: boolean };
 
 /** Um trecho do histórico ficou escondido (outro setor) — ver historico-setor.ts. */
-type MarcadorSetor = { antesDe: string; setorNome: string | null };
+/** Um encaminhamento entre setores, com o motivo que o atendente escreveu. */
+type MarcadorSetor = {
+  id: string;
+  criadoEm: string;
+  deSetorNome: string | null;
+  paraSetorNome: string | null;
+  motivo: string;
+  porNome: string | null;
+};
 
 type MediaType = "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO";
 
@@ -615,6 +623,9 @@ export function ConversationThread({
   const [showTextos, setShowTextos] = useState(false);
   const [pedindoMotivo, setPedindoMotivo] = useState(false);
   const [pedindoBloqueio, setPedindoBloqueio] = useState(false);
+  // Setor escolhido no seletor, esperando o motivo. Só vira transferência
+  // depois que o atendente escreve do que se trata.
+  const [transferindoPara, setTransferindoPara] = useState<{ id: string | null; nome: string } | null>(null);
   const [agendando, setAgendando] = useState(false);
   const [pedidoAberto, setPedidoAberto] = useState<Pedido | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -666,13 +677,16 @@ export function ConversationThread({
     fetcher,
     { refreshInterval: 30_000 }
   );
-  const { data: messagesData, mutate: mutateMessages } = useSWR<{ mensagens: Message[]; marcadores: MarcadorSetor[] }>(
-    `/api/conversations/${conversationId}/messages`,
-    fetcher,
-    { refreshInterval: MESSAGES_INTERVAL }
-  );
+  const { data: messagesData, mutate: mutateMessages } = useSWR<{
+    mensagens: Message[];
+    marcadores: MarcadorSetor[];
+    historicoOculto: boolean;
+  }>(`/api/conversations/${conversationId}/messages`, fetcher, { refreshInterval: MESSAGES_INTERVAL });
   const messages = messagesData?.mensagens;
   const marcadoresSetor = messagesData?.marcadores ?? [];
+  // Parte da conversa pertence a outro setor e nem veio da API. Sem o aviso, o
+  // atendimento pareceria começar do nada no meio do assunto.
+  const historicoOculto = messagesData?.historicoOculto ?? false;
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
   // Lista de setores só quando a empresa usa Setores — mesmo recurso que
@@ -1075,7 +1089,15 @@ export function ConversationThread({
               {temSetores && (
                 <select
                   value={conversation.setor?.id ?? ""}
-                  onChange={(e) => patchConversation({ setorId: e.target.value || null })}
+                  // Não encaminha na hora: pergunta o motivo antes. O seletor
+                  // continua controlado pela conversa, então desistir do modal
+                  // já devolve ele pro setor atual sozinho.
+                  onChange={(e) =>
+                    setTransferindoPara({
+                      id: e.target.value || null,
+                      nome: e.target.selectedOptions[0]?.text ?? "fila geral",
+                    })
+                  }
                   className="text-xs rounded-md border border-neutral-300 px-2 py-1.5"
                   title="Encaminhar para outro setor"
                 >
@@ -1154,6 +1176,11 @@ export function ConversationThread({
           className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
           onScroll={handleMessagesScroll}
         >
+          {historicoOculto && (
+            <p className="self-center mb-2 rounded-md bg-neutral-100 px-3 py-1.5 text-center text-[11px] text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+              Parte desta conversa foi atendida por outro setor e não aparece aqui.
+            </p>
+          )}
           {messages?.map((m, i) => {
             // Separador de data igual ao WhatsApp: so aparece quando a mensagem
             // cai num dia diferente da anterior. Sem ele, uma conversa antiga
@@ -1174,9 +1201,14 @@ export function ConversationThread({
             const hasReaction = !m.isDeleted && (myReaction || theirReaction);
             return (
               <Fragment key={m.id}>
-              {marcadoresSetor.find((mk) => mk.antesDe === m.id) && (
-                <MarcaTransferenciaSetor setorNome={marcadoresSetor.find((mk) => mk.antesDe === m.id)!.setorNome} />
-              )}
+              {marcadoresSetor
+                .filter((mk) => {
+                  const t = new Date(mk.criadoEm).getTime();
+                  return t > desde && t <= ate;
+                })
+                .map((mk) => (
+                  <MarcaTransferenciaSetor key={mk.id} marcador={mk} />
+                ))}
               {eventosAqui.map((e) => (
                 <MarcaAtendimento key={e.chave} evento={e} />
               ))}
@@ -1377,6 +1409,22 @@ export function ConversationThread({
               <MarcaAtendimento key={e.chave} evento={e} />
             ))}
 
+          {/* Encaminhamento recém-feito, antes de qualquer mensagem nova — é
+              justamente o caso de quem ACABOU de receber a conversa: se o
+              marcador só aparecesse entre mensagens, o setor que recebeu abriria
+              um atendimento em branco, sem saber sequer que veio transferido. */}
+          {marcadoresSetor
+            .filter(
+              (mk) =>
+                new Date(mk.criadoEm).getTime() >
+                (messages && messages.length > 0
+                  ? new Date(messages[messages.length - 1].createdAt).getTime()
+                  : 0)
+            )
+            .map((mk) => (
+              <MarcaTransferenciaSetor key={mk.id} marcador={mk} />
+            ))}
+
           <div ref={messagesEndRef} />
         </div>
         <div className="border-t border-neutral-200">
@@ -1564,6 +1612,21 @@ export function ConversationThread({
             // menos 1 caractere, então mandar "" faria o "Fechar sem motivo"
             // devolver 400 e a conversa simplesmente não fechar.
             patchConversation(motivo ? { status: "RESOLVED", closeReason: motivo } : { status: "RESOLVED" });
+          }}
+        />
+      )}
+      {transferindoPara && (
+        <MotivoTransferencia
+          destino={transferindoPara.nome}
+          onFechar={() => setTransferindoPara(null)}
+          onConfirmar={async (motivo) => {
+            const destino = transferindoPara;
+            setTransferindoPara(null);
+            await patchConversation({ setorId: destino.id, motivoTransferencia: motivo });
+            // As mensagens mudam junto: o marcador novo vem da mesma rota, e
+            // quem encaminhou pode perder a vista do trecho que era do setor
+            // dele.
+            mutateMessages();
           }}
         />
       )}
@@ -2436,6 +2499,96 @@ function mesmoDia(isoA: string, isoB: string) {
 }
 
 /**
+ * Marca o ponto em que a conversa foi encaminhada pra outro setor, com o
+ * motivo que quem encaminhou escreveu.
+ *
+ * Aparece pra todo mundo, isole a empresa o histórico ou não: saber que a
+ * conversa mudou de mão é contexto de quem atende. Na empresa que isola (ver
+ * historico-setor.ts), o trecho do setor anterior fica de fato fora da
+ * resposta da API — não só escondido na tela —, e este motivo é tudo o que o
+ * setor novo recebe sobre o que já foi conversado.
+ */
+function MarcaTransferenciaSetor({ marcador }: { marcador: MarcadorSetor }) {
+  const destino = marcador.paraSetorNome ?? "fila geral";
+  const origem = marcador.deSetorNome;
+  const hora = new Date(marcador.criadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className="self-center my-3 w-full max-w-md">
+      <div className="flex items-center gap-2">
+        <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
+        <span className="rounded-md px-2.5 py-1 text-[11px] font-medium bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300">
+          {origem ? `→ Encaminhada do ${origem} para ${destino}` : `→ Encaminhada para ${destino}`} · {hora}
+        </span>
+        <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
+      </div>
+      {/* O motivo é o que substitui o histórico pra quem recebeu: sem ele o
+          cliente teria que contar tudo de novo. Por isso vem em destaque, e
+          não escondido num title. */}
+      <p className="mt-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-snug text-amber-900 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-200">
+        <span className="font-medium">Motivo:</span> {marcador.motivo}
+        {marcador.porNome && <span className="text-amber-700 dark:text-amber-300/70"> — {marcador.porNome}</span>}
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Pergunta do que se trata antes de passar a conversa pra outro setor.
+ *
+ * Obrigatório porque o setor que recebe não enxerga o histórico do anterior
+ * (ver Tenant.isolarHistoricoPorSetor): sem uma linha explicando o assunto, a
+ * conversa chega muda e quem paga é o cliente, repetindo tudo.
+ */
+function MotivoTransferencia({
+  destino,
+  onFechar,
+  onConfirmar,
+}: {
+  destino: string;
+  onFechar: () => void;
+  onConfirmar: (motivo: string) => void;
+}) {
+  const [motivo, setMotivo] = useState("");
+  const texto = motivo.trim();
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+      >
+        <h2 className="text-base font-semibold mb-1">Encaminhar para {destino}</h2>
+        <p className="text-xs text-neutral-500 mb-4">
+          Quem receber não vê o que foi conversado até aqui. Escreva do que se trata.
+        </p>
+        <textarea
+          autoFocus
+          value={motivo}
+          onChange={(e) => setMotivo(e.target.value)}
+          maxLength={200}
+          rows={3}
+          placeholder="Ex.: cliente quer falar sobre FGTS do funcionário novo"
+          className="w-full mb-4 rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm"
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={onFechar} className="text-sm px-3 py-2 text-neutral-600 hover:underline">
+            Cancelar
+          </button>
+          <button
+            onClick={() => onConfirmar(texto)}
+            disabled={texto.length < 3}
+            className="text-sm rounded-md bg-accent px-4 py-2 font-medium text-white hover:opacity-90 disabled:opacity-40"
+          >
+            Encaminhar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Marcador de início ou fim de um atendimento na linha do tempo.
  *
  * Visualmente irmão do separador de data, e não um balão: é informação sobre a
@@ -2446,27 +2599,6 @@ function mesmoDia(isoA: string, isoB: string) {
  * porque o cliente desistiu" — e é o motivo que responde, meses depois, por
  * que aquele atendimento parou onde parou.
  */
-/**
- * Marca o ponto em que a conversa foi encaminhada pra outro setor, na
- * empresa que isola o histórico entre setores (ver historico-setor.ts). Só
- * o aviso aparece — o conteúdo de antes fica de fato fora da resposta da
- * API, não só escondido na tela.
- */
-function MarcaTransferenciaSetor({ setorNome }: { setorNome: string | null }) {
-  return (
-    <div className="self-center my-3 flex w-full max-w-md items-center gap-2">
-      <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
-      <span
-        title="O histórico de antes deste ponto pertence a outro setor e não aparece aqui."
-        className="rounded-md px-2.5 py-1 text-[11px] font-medium bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300"
-      >
-        {setorNome ? `→ Conversa encaminhada para ${setorNome}` : "→ Conversa movida para a fila geral"}
-      </span>
-      <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
-    </div>
-  );
-}
-
 function MarcaAtendimento({ evento }: { evento: EventoAtendimento }) {
   const hora = new Date(evento.iso).toLocaleTimeString("pt-BR", {
     hour: "2-digit",

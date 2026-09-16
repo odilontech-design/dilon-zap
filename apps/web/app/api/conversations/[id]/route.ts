@@ -12,6 +12,9 @@ const bodySchema = z.object({
   // Encaminhar pra outro setor (ou nulo, de volta pra fila geral). Distinto
   // de assignedToId: setor é fila de equipe, responsável é uma pessoa só.
   setorId: z.string().nullable().optional(),
+  // O que o setor que recebe precisa saber. Obrigatório quando o setor muda
+  // de verdade — ver TransferenciaSetor no schema.
+  motivoTransferencia: z.string().trim().min(3).max(200).optional(),
   tags: z.array(z.string().min(1).max(40)).max(20).optional(),
   closeReason: z.string().trim().min(1).max(60).optional(),
 });
@@ -44,11 +47,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   // Se atribuindo a alguém, confere que esse alguém é do mesmo tenant —
   // senão dá pra atribuir conversa da Believe pra um agente de outro negócio.
+  let agente: { id: string; name: string } | null = null;
   if (parsed.data.assignedToId) {
-    const agent = await prisma.user.findFirst({
+    agente = await prisma.user.findFirst({
       where: { id: parsed.data.assignedToId, tenantId: user.tenantId },
+      select: { id: true, name: true },
     });
-    if (!agent) return NextResponse.json({ error: "agente inválido" }, { status: 400 });
+    if (!agente) return NextResponse.json({ error: "agente inválido" }, { status: 400 });
   }
 
   // Mesma checagem pro setor — e só um setor ativo, que ainda aparece pra
@@ -69,12 +74,25 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const mudouSetorExplicitamente =
     parsed.data.setorId !== undefined && parsed.data.setorId !== conversation.setorId;
 
+  // Encaminhar sem dizer do que se trata joga o cliente numa fila muda: o
+  // setor que recebe não vê o histórico do setor anterior (ver
+  // Tenant.isolarHistoricoPorSetor) e, sem o motivo, a única saída é pedir
+  // pro cliente contar tudo de novo. Por isso é barrado aqui no servidor, e
+  // não só no formulário.
+  if (mudouSetorExplicitamente && !parsed.data.motivoTransferencia) {
+    return NextResponse.json({ error: "informe o motivo da transferência" }, { status: 400 });
+  }
+
+  // motivoTransferencia vira registro próprio (TransferenciaSetor), não coluna
+  // da conversa — por isso sai daqui antes de virar `data` do update.
+  const { motivoTransferencia, ...campos } = parsed.data;
+  const dados: typeof campos = { ...campos };
+
   // Encaminhar pra outro setor esvazia o responsável — vira a fila do setor,
   // do jeito que a URA já entrega (ver direcionarParaSetor no worker). Sem
   // isso a conversa continuaria só na vista de quem já era responsável, e
   // ninguém do setor novo a veria — o oposto do que transferir quer dizer.
   // Só não mexe se o mesmo pedido já estiver escolhendo alguém.
-  const dados = { ...parsed.data };
   if (mudouSetorExplicitamente && dados.assignedToId === undefined) {
     dados.assignedToId = null;
   }
@@ -96,6 +114,40 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (setoresDoAgente.length === 1 && setoresDoAgente[0].setorId !== conversation.setorId) {
       dados.setorId = setoresDoAgente[0].setorId;
     }
+  }
+
+  // Registro da troca de setor, com os nomes em foto (ver TransferenciaSetor
+  // no schema). Cobre os dois caminhos: o seletor de setor, que traz o motivo
+  // escrito à mão, e a atribuição a uma pessoa de outro setor, em que o setor
+  // só seguiu quem assumiu — aí o próprio sistema escreve o motivo, porque
+  // pedir um texto pra quem só puxou a conversa pra si seria atrito sem
+  // ganho.
+  const setorNovo = dados.setorId !== undefined ? dados.setorId : conversation.setorId;
+  const mudouSetor = setorNovo !== conversation.setorId;
+  let transferenciaParaGravar: {
+    deSetorNome: string | null;
+    paraSetorId: string | null;
+    paraSetorNome: string | null;
+    motivo: string;
+    porNome: string;
+  } | null = null;
+  if (mudouSetor) {
+    const envolvidos = [conversation.setorId, setorNovo].filter((s): s is string => s !== null);
+    const nomes = new Map(
+      (
+        await prisma.setor.findMany({
+          where: { id: { in: envolvidos } },
+          select: { id: true, nome: true },
+        })
+      ).map((s) => [s.id, s.nome])
+    );
+    transferenciaParaGravar = {
+      deSetorNome: conversation.setorId ? (nomes.get(conversation.setorId) ?? null) : null,
+      paraSetorId: setorNovo,
+      paraSetorNome: setorNovo ? (nomes.get(setorNovo) ?? null) : null,
+      motivo: motivoTransferencia ?? `Assumida por ${agente?.name ?? user.name}`,
+      porNome: user.name,
+    };
   }
 
   // Transferência: só conta quando o responsável REALMENTE muda. Sem essa
@@ -124,6 +176,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         motivo: parsed.data.closeReason ?? conversation.closeReason,
         encerradoById: user.id,
         encerradoEm: agora,
+      });
+    }
+
+    if (transferenciaParaGravar) {
+      await tx.transferenciaSetor.create({
+        data: { conversationId: conversation.id, ...transferenciaParaGravar },
       });
     }
 

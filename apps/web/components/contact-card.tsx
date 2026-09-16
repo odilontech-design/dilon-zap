@@ -180,9 +180,12 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
         </header>
 
         <div className="overflow-y-auto p-5 flex flex-col gap-5">
-          <div className="grid grid-cols-2 gap-4">
+          {/* Uma coluna no celular. Em duas, cada campo ficaria com metade de
+              uma tela de 360px, e o valor em reais e o CNPJ (18 caracteres)
+              não cabem nisso — é onde a ficha quebrava. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <label className="text-sm">
-              <span className="text-xs font-medium text-neutral-700">Etapa do funil</span>
+              <span className="block text-xs font-medium text-neutral-700">Etapa do funil</span>
               <select
                 value={ficha.stageId ?? ""}
                 onChange={(e) => salvar({ stageId: e.target.value || null })}
@@ -198,7 +201,7 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
             </label>
 
             <label className="text-sm">
-              <span className="text-xs font-medium text-neutral-700">Valor do negócio</span>
+              <span className="block text-xs font-medium text-neutral-700">Valor do negócio</span>
               <input
                 value={valor ?? (ficha.dealValueCents / 100).toFixed(2)}
                 onChange={(e) => setValor(e.target.value)}
@@ -215,9 +218,9 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
 
           {/* Só servem pro recibo impresso. Ficam aqui, e não num cadastro à
               parte, porque é na ficha que a equipe já procura o cliente. */}
-          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
             <label className="text-sm">
-              <span className="text-xs font-medium text-neutral-700">CPF / CNPJ</span>
+              <span className="block text-xs font-medium text-neutral-700">CPF / CNPJ</span>
               <input
                 value={documento ?? ficha.documento ?? ""}
                 onChange={(e) => setDocumento(e.target.value)}
@@ -230,7 +233,7 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
               />
             </label>
             <label className="text-sm">
-              <span className="text-xs font-medium text-neutral-700">Endereço</span>
+              <span className="block text-xs font-medium text-neutral-700">Endereço</span>
               <input
                 value={endereco ?? ficha.endereco ?? ""}
                 onChange={(e) => setEndereco(e.target.value)}
@@ -244,7 +247,7 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
           </div>
 
           <label className="text-sm">
-            <span className="text-xs font-medium text-neutral-700">Anotações</span>
+            <span className="block text-xs font-medium text-neutral-700">Anotações</span>
             <textarea
               value={anotacoes ?? ficha.notes ?? ""}
               onChange={(e) => setAnotacoes(e.target.value)}
@@ -260,7 +263,7 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
             )}
           </label>
 
-          <div className="flex gap-6 text-sm border-y border-neutral-200 py-3">
+          <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm border-y border-neutral-200 py-3">
             <div>
               <p className="text-xs text-neutral-500">Atendimentos</p>
               <p className="font-semibold tabular-nums">{totalAtendimentos}</p>

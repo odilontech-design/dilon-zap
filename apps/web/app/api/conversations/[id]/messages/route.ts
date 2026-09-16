@@ -26,42 +26,55 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     },
   });
 
+  // Encaminhamentos de setor com o motivo escrito por quem encaminhou. Vão
+  // pra todo mundo, isolamento ligado ou não: saber que a conversa mudou de
+  // mão, e por quê, é contexto útil pra qualquer um que abra o atendimento.
+  const transferencias = await prisma.transferenciaSetor.findMany({
+    where: { conversationId: params.id },
+    orderBy: { criadoEm: "asc" },
+    select: {
+      id: true,
+      criadoEm: true,
+      deSetorNome: true,
+      paraSetorNome: true,
+      motivo: true,
+      porNome: true,
+    },
+  });
+
   // Isolamento de histórico entre setores: recurso ligado por empresa (hoje só
   // a Guttierres), e o Responsável sempre vê tudo — a barreira é só entre
   // setores/atendentes. Ver Tenant.isolarHistoricoPorSetor no schema.
   //
-  // Quem é o responsável ATUAL da conversa também vê tudo, mesmo que o setor
-  // marcado não bata com o dele — foi exatamente essa a conversa #9871 que
-  // ficou desencontrada: a pessoa que estava efetivamente cuidando não podia
-  // ficar trancada fora do próprio atendimento por causa de uma etiqueta de
-  // setor desalinhada. A rota [id] já alinha o setor sozinha ao atribuir (ver
-  // o PATCH), mas esta segunda trava cobre o caso de sobrar desalinhado.
+  // Ser o responsável ATUAL não abre o histórico. Já abriu, e foi justamente
+  // isso que furou o isolamento no teste do Carlos: transferir pro
+  // Departamento Pessoal atribuindo ao Gabriel fazia dele o responsável, e o
+  // histórico do Fiscal aparecia inteiro pra ele. Quem recebe a conversa
+  // recebe o motivo da transferência — não o que foi conversado no outro
+  // setor.
   const tenant = await prisma.tenant.findUniqueOrThrow({
     where: { id: user.tenantId },
     select: { isolarHistoricoPorSetor: true },
   });
   const semRestricao =
-    !tenant.isolarHistoricoPorSetor ||
-    user.role === "OWNER" ||
-    user.role === "SUPERADMIN" ||
-    conversation.assignedToId === user.id;
+    !tenant.isolarHistoricoPorSetor || user.role === "OWNER" || user.role === "SUPERADMIN";
   if (semRestricao) {
-    return NextResponse.json({ mensagens, marcadores: [] });
+    return NextResponse.json({ mensagens, marcadores: transferencias, historicoOculto: false });
   }
 
-  const [meusSetores, setores] = await Promise.all([
-    prisma.setorMembro.findMany({ where: { userId: user.id }, select: { setorId: true } }),
-    prisma.setor.findMany({ where: { tenantId: user.tenantId }, select: { id: true, nome: true } }),
-  ]);
-  const nomePorSetor = new Map(setores.map((s) => [s.id, s.nome]));
+  const meusSetores = await prisma.setorMembro.findMany({
+    where: { userId: user.id },
+    select: { setorId: true },
+  });
 
-  const { visiveis, marcadores } = filtrarHistoricoPorSetor(
+  const { visiveis, escondeu } = filtrarHistoricoPorSetor(
     mensagens,
     new Set(meusSetores.map((m) => m.setorId))
   );
 
   return NextResponse.json({
     mensagens: visiveis,
-    marcadores: marcadores.map((m) => ({ antesDe: m.antesDe, setorNome: m.setorId ? (nomePorSetor.get(m.setorId) ?? null) : null })),
+    marcadores: transferencias,
+    historicoOculto: escondeu,
   });
 }
