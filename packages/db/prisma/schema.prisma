@@ -55,6 +55,18 @@ model Tenant {
   // como sempre foi.
   isolarHistoricoPorSetor Boolean @default(false)
 
+  // Conversa sem responsável E sem setor (a "fila geral") aparece só pro
+  // Responsável pela conta, em vez de pra todo atendente. Existe pela mesma
+  // razão do isolamento de histórico: numa contabilidade, quem é do
+  // Departamento Pessoal não deveria ver o assunto que chegou e ainda não foi
+  // triado — e a URA, ao reabrir a triagem por inatividade, devolve a conversa
+  // justamente pra essa fila, o que fazia um atendimento do Fiscal reaparecer
+  // pra empresa inteira.
+  //
+  // Desligado por padrão: na empresa sem setores (Believe) TODA conversa está
+  // nessa fila, e ligar isso deixaria o Inbox dos atendentes vazio.
+  restringirFilaGeral Boolean @default(false)
+
   // Cabeçalho do recibo impresso. Separado de `name` de propósito: o nome
   // que a equipe vê no sistema ("Believe Cosméticos") não é o que vai no
   // comprovante — ali vai a razão social ou o nome do MEI, que é o que
