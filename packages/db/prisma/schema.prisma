@@ -35,6 +35,13 @@ model Tenant {
   // embaixo. Guardar o menu pronto em texto obrigaria a reescrever a mensagem
   // toda vez que uma opção mudasse de nome.
   uraMensagem String?
+  // Depois de quantos minutos sem NENHUMA mensagem (em qualquer direção)
+  // o menu volta a aparecer pro cliente, mesmo que a conversa continue
+  // atribuída — trata como se fosse um contato novo. O atendente que fecha
+  // o atendimento manualmente antecipa isso na hora, sem esperar o tempo
+  // passar. Só vale enquanto uraAtiva estiver ligado: sem menu pra
+  // oferecer, reabrir a triagem não faria sentido nenhum pro cliente.
+  uraReinicioAposMinutos Int @default(60)
 
   // Quando uma conversa passa de um setor pra outro, o histórico do setor
   // anterior some de quem recebeu a conversa agora — só um marcador avisa

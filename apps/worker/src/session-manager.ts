@@ -18,7 +18,7 @@ import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/stor
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
-import { decidirAutoResposta, automacaoPodeFalar, type OpcaoUra } from "./auto-reply-decisao";
+import { decidirAutoResposta, avaliarAutomacao, type OpcaoUra } from "./auto-reply-decisao";
 import {
   ehGrupo,
   nomeDoAutor,
@@ -939,6 +939,20 @@ async function recordMessage(params: {
   // sua própria Conversation pro mesmo contato. upsert é uma operação atômica
   // no Postgres (INSERT ... ON CONFLICT), não tem essa janela de corrida.
   //
+  // Estado ANTES desta mensagem — o upsert logo abaixo já sobrescreve status
+  // e lastMessageAt, e é o valor de ANTES que diz se o atendimento tinha
+  // acabado de ser fechado ou fazia tempo que ninguém escrevia (ver
+  // avaliarAutomacao). Lido separado, e não dentro de uma transação com o
+  // upsert: uma leitura ligeiramente desatualizada aqui, num caso raro de
+  // corrida, no máximo faz o menu reaparecer ou deixar de reaparecer uma vez
+  // a mais — não é dado que precisa de atomicidade.
+  const estadoAntesDaMensagem = isInbound
+    ? await prisma.conversation.findUnique({
+        where: { contactId_sessionId: { contactId: contact.id, sessionId: params.sessionId } },
+        select: { status: true, lastMessageAt: true },
+      })
+    : null;
+
   // Mensagem OUTBOUND vinda do celular (fora do Inbox) só atualiza a data —
   // não força status "OPEN" como faz uma mensagem nova do cliente, porque
   // não é uma demanda nova que precisa de atendimento.
@@ -1033,29 +1047,60 @@ async function recordMessage(params: {
     await prisma.message.create({ data: messageData });
   }
 
-  // A regra de quem cala o robô tem nome e teste — ver automacaoPodeFalar.
-  // Em grupo o robô nunca fala: saudação, aviso de ausência e menu de triagem
-  // mandados pra dezenas de pessoas são spam, e é o tipo de coisa que faz o
-  // WhatsApp derrubar o número.
-  if (isInbound && !params.grupo && automacaoPodeFalar(conversation)) {
+  // A regra de quem cala o robô e de quando a triagem reinicia tem nome e
+  // teste — ver avaliarAutomacao. Em grupo o robô nunca fala: saudação,
+  // aviso de ausência e menu de triagem mandados pra dezenas de pessoas são
+  // spam, e é o tipo de coisa que faz o WhatsApp derrubar o número.
+  if (isInbound && !params.grupo) {
     const atendimento = await carregarAtendimento(session.tenantId);
-    await maybeAutoReply({
-      tenantId: session.tenantId,
-      sessionId: params.sessionId,
-      conversationId: conversation.id,
-      inboundText: params.text,
-      foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone),
-      mensagemAusencia: atendimento.outOfHoursMessage,
-      ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
-      contactId: contact.id,
-      saudacaoEnviadaEm: contact.saudacaoEnviadaEm,
-      setorAtualId: conversation.setorId,
-      uraAtiva: atendimento.uraAtiva,
-      uraMensagem: atendimento.uraMensagem,
-      uraOpcoes: atendimento.uraOpcoes,
-      uraEnviadaEm: conversation.uraEnviadaEm,
-      uraReenvios: conversation.uraReenvios,
-    });
+    const menuLigado = atendimento.uraAtiva && atendimento.uraOpcoes.length > 0;
+    const decisao = avaliarAutomacao(
+      { assignedToId: conversation.assignedToId, setorId: conversation.setorId },
+      estadoAntesDaMensagem,
+      new Date(),
+      atendimento.uraReinicioAposMinutos * 60_000,
+      menuLigado
+    );
+
+    if (decisao.podeFalar) {
+      // Esquece o roteamento anterior ANTES de decidir a resposta: sem isso
+      // o menu não seria remontado (uraEnviadaEm continuaria preenchido, e o
+      // texto do cliente seria lido como resposta a um menu que ele nem viu
+      // de novo) e a conversa reapareceria atribuída a quem já não é mais
+      // quem está cuidando.
+      if (decisao.reiniciarRoteamento) {
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            uraEnviadaEm: null,
+            uraReenvios: 0,
+            assignedToId: null,
+            setorId: null,
+            assignedAt: null,
+            assignedById: null,
+            assignmentSeenAt: null,
+          },
+        });
+      }
+
+      await maybeAutoReply({
+        tenantId: session.tenantId,
+        sessionId: params.sessionId,
+        conversationId: conversation.id,
+        inboundText: params.text,
+        foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone),
+        mensagemAusencia: atendimento.outOfHoursMessage,
+        ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
+        contactId: contact.id,
+        saudacaoEnviadaEm: contact.saudacaoEnviadaEm,
+        setorAtualId: decisao.reiniciarRoteamento ? null : conversation.setorId,
+        uraAtiva: atendimento.uraAtiva,
+        uraMensagem: atendimento.uraMensagem,
+        uraOpcoes: atendimento.uraOpcoes,
+        uraEnviadaEm: decisao.reiniciarRoteamento ? null : conversation.uraEnviadaEm,
+        uraReenvios: decisao.reiniciarRoteamento ? 0 : conversation.uraReenvios,
+      });
+    }
   }
 }
 
@@ -1225,6 +1270,7 @@ const cacheAtendimento = new Map<
       uraAtiva: boolean;
       uraMensagem: string | null;
       uraOpcoes: OpcaoUra[];
+      uraReinicioAposMinutos: number;
     };
   }
 >();
@@ -1236,7 +1282,13 @@ async function carregarAtendimento(tenantId: string) {
   const [tenant, dias, uraOpcoes] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
       where: { id: tenantId },
-      select: { timezone: true, outOfHoursMessage: true, uraAtiva: true, uraMensagem: true },
+      select: {
+        timezone: true,
+        outOfHoursMessage: true,
+        uraAtiva: true,
+        uraMensagem: true,
+        uraReinicioAposMinutos: true,
+      },
     }),
     prisma.businessHour.findMany({
       where: { tenantId },
@@ -1274,6 +1326,7 @@ async function carregarAtendimento(tenantId: string) {
     uraAtiva: tenant.uraAtiva,
     uraMensagem: tenant.uraMensagem,
     uraOpcoes,
+    uraReinicioAposMinutos: tenant.uraReinicioAposMinutos,
   };
   cacheAtendimento.set(tenantId, { em: Date.now(), dados });
   return dados;

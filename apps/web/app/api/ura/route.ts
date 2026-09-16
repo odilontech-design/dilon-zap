@@ -31,6 +31,11 @@ const destinoSchema = z.discriminatedUnion("tipo", [
 const bodySchema = z.object({
   ativa: z.boolean(),
   mensagem: z.string().max(4096).nullable(),
+  // Depois de quanto tempo sem nenhuma mensagem o menu volta a aparecer,
+  // mesmo pra quem já tinha sido atendido. 5 min de piso pra não virar spam
+  // de menu numa conversa com pausas normais; 24h de teto — depois disso o
+  // atendimento fica pra revisão manual, não pra reaparecer sozinho.
+  reinicioAposMinutos: z.number().int().min(5).max(1440),
   opcoes: z
     .array(
       z.object({
@@ -51,7 +56,7 @@ export async function GET() {
   const [tenant, opcoes] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
       where: { id: user.tenantId },
-      select: { uraAtiva: true, uraMensagem: true },
+      select: { uraAtiva: true, uraMensagem: true, uraReinicioAposMinutos: true },
     }),
     prisma.uraOpcao.findMany({
       where: { tenantId: user.tenantId },
@@ -80,6 +85,7 @@ export async function GET() {
   return NextResponse.json({
     ativa: tenant.uraAtiva,
     mensagem: tenant.uraMensagem,
+    reinicioAposMinutos: tenant.uraReinicioAposMinutos,
     opcoes: opcoes.map((o) => ({
       ordem: o.ordem,
       rotulo: o.rotulo,
@@ -118,7 +124,7 @@ export async function PUT(req: Request) {
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { ativa, opcoes } = parsed.data;
+  const { ativa, opcoes, reinicioAposMinutos } = parsed.data;
   const mensagem = parsed.data.mensagem?.trim() || null;
 
   // Ligar o menu sem opção nenhuma não faria nada visível (o worker trata
@@ -192,7 +198,7 @@ export async function PUT(req: Request) {
     }),
     prisma.tenant.update({
       where: { id: user.tenantId },
-      data: { uraAtiva: ativa, uraMensagem: mensagem },
+      data: { uraAtiva: ativa, uraMensagem: mensagem, uraReinicioAposMinutos: reinicioAposMinutos },
     }),
   ]);
 
@@ -201,6 +207,7 @@ export async function PUT(req: Request) {
     action: "ura.update",
     metadata: {
       ativa,
+      reinicioAposMinutos,
       opcoes: opcoes.length,
       setores: idsSetor.length,
       atendentes: idsAtendente.length,

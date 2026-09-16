@@ -1,9 +1,10 @@
 // Tabela de decisão da resposta automática. Puro, sem banco.
 // Rodar com: npx tsx apps/worker/src/auto-reply-decisao.test-manual.ts
 import {
-  automacaoPodeFalar,
+  avaliarAutomacao,
   decidirAutoResposta,
   type EntradaDecisao,
+  type EstadoAntesDaMensagem,
   type OpcaoUra,
   type RegraAuto,
 } from "./auto-reply-decisao";
@@ -487,28 +488,83 @@ checa(
 // de novo — porque encaminhar pro setor NAO preenche assignedToId.
 // ---------------------------------------------------------------------------
 
+const UMA_HORA_MS = 60 * 60 * 1000;
+const donoQualquer = { assignedToId: "user-fiscal", setorId: null };
+const estado = (status: "OPEN" | "PENDING" | "RESOLVED", minutosAtras: number): EstadoAntesDaMensagem => ({
+  status,
+  lastMessageAt: new Date(AGORA.getTime() - minutosAtras * 60_000),
+});
+
 checa(
-  "conversa sem dono nenhum — o robo fala",
-  automacaoPodeFalar({ assignedToId: null, setorId: null }),
-  true
+  "conversa sem dono nenhum — o robo fala, mesmo sem URA e mesmo com mensagem recente",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 0), AGORA, UMA_HORA_MS, false),
+  { podeFalar: true, reiniciarRoteamento: false }
 );
 
 checa(
-  "conversa com responsavel — o robo cala (comportamento de sempre)",
-  automacaoPodeFalar({ assignedToId: "user-fiscal", setorId: null }),
-  false
+  "conversa NA FILA de um setor, sem responsavel — setor sozinho ja conta como dono, cala sem URA",
+  avaliarAutomacao({ assignedToId: null, setorId: "setor-fiscal" }, estado("OPEN", 0), AGORA, UMA_HORA_MS, false),
+  { podeFalar: false, reiniciarRoteamento: false }
 );
 
 checa(
-  "conversa NA FILA de um setor, sem responsavel — o robo tem que calar",
-  automacaoPodeFalar({ assignedToId: null, setorId: "setor-fiscal" }),
-  false
+  "mesma fila de setor, agora com URA ligada e fechada ha muito tempo — reinicia tambem",
+  avaliarAutomacao({ assignedToId: null, setorId: "setor-fiscal" }, estado("RESOLVED", 999), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
 );
 
 checa(
-  "setor com responsavel ja definido — cala tambem",
-  automacaoPodeFalar({ assignedToId: "user-fiscal", setorId: "setor-fiscal" }),
-  false
+  "com dono e SEM URA ligada — cala pra sempre, mesmo fechada ha muito tempo (comportamento de sempre)",
+  avaliarAutomacao(donoQualquer, estado("RESOLVED", 999), AGORA, UMA_HORA_MS, false),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "com dono, URA ligada, mensagem recente e conversa aberta — cala",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 5), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "atendente fechou o atendimento — volta a falar e reinicia, mesmo que a ultima mensagem seja de agora mesmo",
+  avaliarAutomacao(donoQualquer, estado("RESOLVED", 0), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "aberta mas sem NENHUMA interacao ha mais que o tempo configurado — volta e reinicia",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 61), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "aberta e AINDA dentro do tempo configurado — continua calada",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 59), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "exatamente no limite conta como 'ja passou' (>=)",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 60), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "tempo configuravel: 15 minutos tambem funciona, nao so o padrao de 60",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 16), AGORA, 15 * 60_000, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "PENDING (nem aberta nem fechada) segue a mesma regra de inatividade que OPEN",
+  avaliarAutomacao(donoQualquer, estado("PENDING", 61), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "estado anterior desconhecido, mas ja tem dono (nao deveria acontecer) — lado seguro: reinicia",
+  avaliarAutomacao(donoQualquer, null, AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
 );
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);

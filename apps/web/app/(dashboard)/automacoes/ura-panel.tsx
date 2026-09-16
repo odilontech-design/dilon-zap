@@ -33,6 +33,7 @@ type SetorLista = { id: string; nome: string; ativo: boolean; membros: { id: str
 type Config = {
   ativa: boolean;
   mensagem: string | null;
+  reinicioAposMinutos: number;
   opcoes: Opcao[];
 };
 
@@ -55,6 +56,7 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
 
   const [ativa, setAtiva] = useState(false);
   const [mensagem, setMensagem] = useState("");
+  const [reinicioAposMinutos, setReinicioAposMinutos] = useState(60);
   const [opcoes, setOpcoes] = useState<Opcao[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -64,6 +66,7 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
     if (data && opcoes === null) {
       setAtiva(data.ativa);
       setMensagem(data.mensagem ?? "");
+      setReinicioAposMinutos(data.reinicioAposMinutos);
       setOpcoes(data.opcoes);
     }
   }, [data, opcoes]);
@@ -109,6 +112,7 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
       body: JSON.stringify({
         ativa,
         mensagem: mensagem.trim() || null,
+        reinicioAposMinutos,
         opcoes: (opcoes ?? []).map((o) => ({
           rotulo: o.rotulo,
           // O botão de salvar fica travado enquanto houver opção sem destino
@@ -176,6 +180,34 @@ export function UraPanel({ podeEditar }: { podeEditar: boolean }) {
         />
         <p className="text-xs text-neutral-500 mt-1">
           As opções entram embaixo dela, numeradas automaticamente.
+        </p>
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-neutral-700 mb-1">
+          Menu volta a aparecer depois de
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            type="number"
+            min={5}
+            max={1440}
+            step={5}
+            value={reinicioAposMinutos}
+            disabled={!podeEditar}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              if (Number.isFinite(v)) setReinicioAposMinutos(Math.min(1440, Math.max(5, Math.round(v))));
+              mexeu();
+            }}
+            className="w-24 rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <span className="text-sm text-neutral-600">minutos sem nenhuma mensagem</span>
+        </div>
+        <p className="text-xs text-neutral-500 mt-1">
+          Passado esse tempo, o próximo contato do cliente recebe o menu de novo, mesmo que a
+          conversa continue atribuída a alguém — como se fosse a primeira vez. O atendente que
+          resolve o atendimento antecipa isso na hora, sem esperar o tempo passar.
         </p>
       </div>
 

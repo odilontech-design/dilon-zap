@@ -65,8 +65,29 @@ export type Decisao = {
   direcionarParaSetor?: string;
 };
 
+/** O estado da conversa ANTES desta mensagem — de propósito, e não o atual: a
+ * própria mensagem que está chegando já reabre o status pra OPEN e atualiza
+ * lastMessageAt antes da automação ser decidida, e é o valor de ANTES que diz
+ * se o atendimento tinha acabado de ser fechado ou fazia tempo que ninguém
+ * escrevia. Nulo = conversa nova, nunca existiu (mesmo caso de "sem dono").
+ */
+export type EstadoAntesDaMensagem = { status: "OPEN" | "PENDING" | "RESOLVED"; lastMessageAt: Date } | null;
+
+export type DecisaoDeRoteamento = {
+  /** O robô pode responder esta mensagem. */
+  podeFalar: boolean;
+  /**
+   * Além de poder falar, é hora de ESQUECER o roteamento anterior —
+   * responsável, setor e o menu já mostrado — e tratar como primeiro contato
+   * de novo. Só true quando JÁ havia dono e ele deixou de valer: o atendente
+   * fechou o atendimento, ou faz tempo demais que ninguém escreve.
+   */
+  reiniciarRoteamento: boolean;
+};
+
 /**
- * A automação só fala quando NINGUÉM ainda é dono da conversa.
+ * Quando a automação pode falar — e quando isso significa esquecer o dono
+ * anterior e recomeçar a triagem.
  *
  * Dono é pessoa ou setor, e o setor conta tanto quanto a pessoa — essa é a
  * parte fácil de esquecer. Encaminhar pro setor não preenche assignedToId de
@@ -75,13 +96,35 @@ export type Decisao = {
  * conversa como órfã, e o cliente que escolheu "1 - Fiscal" receberia o menu
  * de novo logo depois de ser encaminhado.
  *
+ * Sem dono, sempre pode falar (comportamento de sempre). COM dono, só volta
+ * a falar — e só reinicia o roteamento — se o menu de triagem estiver
+ * ligado: reabrir a triagem sem ter um menu pra oferecer não faria sentido
+ * nenhum pro cliente, e empresa sem URA continua com "uma vez atribuída,
+ * fica atribuída pra sempre", que é o comportamento que ela já conhece.
+ *
  * Vive aqui, e não solto no meio do session-manager, pra ter nome e teste.
  */
-export function automacaoPodeFalar(conversa: {
-  assignedToId: string | null;
-  setorId: string | null;
-}) {
-  return !conversa.assignedToId && !conversa.setorId;
+export function avaliarAutomacao(
+  conversa: { assignedToId: string | null; setorId: string | null },
+  antes: EstadoAntesDaMensagem,
+  agora: Date,
+  reinicioAposInatividadeMs: number,
+  menuDeTriagemLigado: boolean
+): DecisaoDeRoteamento {
+  const semDono = !conversa.assignedToId && !conversa.setorId;
+  if (semDono) return { podeFalar: true, reiniciarRoteamento: false };
+
+  if (!menuDeTriagemLigado) return { podeFalar: false, reiniciarRoteamento: false };
+
+  // Não deveria acontecer (conversa com dono precisa ter existido antes desta
+  // mensagem), mas se acontecer o lado seguro é tratar como reinício.
+  if (!antes) return { podeFalar: true, reiniciarRoteamento: true };
+
+  const atendenteFechou = antes.status === "RESOLVED";
+  const semInteracaoHaMuito = agora.getTime() - antes.lastMessageAt.getTime() >= reinicioAposInatividadeMs;
+  const reinicia = atendenteFechou || semInteracaoHaMuito;
+
+  return { podeFalar: reinicia, reiniciarRoteamento: reinicia };
 }
 
 /** Quantas vezes o menu é reapresentado antes de o robô se calar. */
