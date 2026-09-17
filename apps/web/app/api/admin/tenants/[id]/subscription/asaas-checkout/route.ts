@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import { createAsaasSubscriptionCheckout, getLatestCheckoutUrl } from "@/lib/asaas";
+import { createAsaasSubscriptionCheckout, getLatestCheckoutUrl, AsaasError } from "@/lib/asaas";
 
 const bodySchema = z.object({
   billingEmail: z.string().email("e-mail inválido"),
@@ -58,13 +58,21 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     });
   }
 
-  const checkout = await createAsaasSubscriptionCheckout({
-    tenantName: tenant.name,
-    amountCents: tenant.subscription.amountCents,
-    cycleDay: tenant.subscription.cycleDay,
-    payerEmail: parsed.data.billingEmail,
-    payerDocument: parsed.data.billingDocument,
-  });
+  let checkout;
+  try {
+    checkout = await createAsaasSubscriptionCheckout({
+      tenantName: tenant.name,
+      amountCents: tenant.subscription.amountCents,
+      cycleDay: tenant.subscription.cycleDay,
+      payerEmail: parsed.data.billingEmail,
+      payerDocument: parsed.data.billingDocument,
+    });
+  } catch (error) {
+    // O motivo da Asaas (ex: valor mínimo de R$5 pra cartão) é o que ajuda o
+    // superadmin a corrigir — um 500 genérico não diria nada disso.
+    const motivo = error instanceof AsaasError ? error.motivo : "erro inesperado ao falar com a Asaas";
+    return NextResponse.json({ error: motivo }, { status: 502 });
+  }
 
   const subscription = await prisma.subscription.update({
     where: { id: tenant.subscription.id },

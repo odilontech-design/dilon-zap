@@ -34,11 +34,37 @@ function headers() {
   };
 }
 
+/**
+ * Erro que carrega a mensagem que a Asaas de fato mandou (ex: "O valor mínimo
+ * para cobranças via cartão de crédito é R$ 5,00"), separada do texto técnico
+ * — é o que a rota devolve pro painel em vez de um "não deu pra gerar o link"
+ * sem pista nenhuma do que corrigir.
+ */
+export class AsaasError extends Error {
+  constructor(
+    public readonly motivo: string,
+    technicalMessage: string
+  ) {
+    super(technicalMessage);
+  }
+}
+
 async function asaasFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${baseUrl()}${path}`, { ...init, headers: { ...headers(), ...init?.headers } });
   if (!res.ok) {
     const corpo = await res.text().catch(() => "");
-    throw new Error(`Asaas: ${path} respondeu ${res.status} — ${corpo.slice(0, 300)}`);
+    // A Asaas devolve { errors: [{ description }] } nas validações — é essa
+    // frase que faz sentido pra quem está preenchendo o formulário no painel.
+    // Sem parsear, sobrava só o JSON cru truncado.
+    const motivo =
+      (() => {
+        try {
+          return JSON.parse(corpo)?.errors?.[0]?.description as string | undefined;
+        } catch {
+          return undefined;
+        }
+      })() ?? `a Asaas recusou (HTTP ${res.status})`;
+    throw new AsaasError(motivo, `Asaas: ${path} respondeu ${res.status} — ${corpo.slice(0, 300)}`);
   }
   return res.json() as Promise<T>;
 }
