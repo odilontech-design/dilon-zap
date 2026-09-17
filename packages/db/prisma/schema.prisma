@@ -1205,9 +1205,9 @@ enum Recurso {
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
-// catálogo fixo de planos), um por tenant. Cobrança automática via
-// Mercado Pago é um passo futuro (mpPreapprovalId fica pronto pra isso);
-// por ora o controle é manual pelo painel /admin.
+// catálogo fixo de planos), um por tenant. Cobrança automática via cartão de
+// crédito (Mercado Pago Assinaturas) é opcional por tenant — quem não tem
+// mpPreapprovalId continua no controle manual pelo painel /admin (boleto/PIX).
 model Subscription {
   id          String        @id @default(cuid())
   tenantId    String        @unique
@@ -1255,9 +1255,23 @@ model Subscription {
   // fechou a empresa — e são três conversas completamente diferentes.
   canceladoEm        DateTime?
   motivoCancelamento String?
-  mpPreapprovalId    String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+
+  // Cobrança automática via Mercado Pago (Assinaturas / PreApproval). Estes
+  // três campos ficam vazios enquanto a empresa paga por boleto/PIX avulso
+  // gerado manualmente — as duas formas convivem, nada aqui obriga migrar.
+  mpPreapprovalId String? // id da assinatura no Mercado Pago, gerado ao criar o link
+  // Cache do último status que o Mercado Pago informou (pending, authorized,
+  // paused, cancelled) — evita bater na API deles só pra desenhar a tela.
+  // Fonte da verdade real é sempre o webhook; isto é só o que sabíamos por
+  // último.
+  mpPreapprovalStatus String?
+  // E-mail pro qual a assinatura é criada no Mercado Pago (o pagador). Pode
+  // ser diferente do e-mail de nenhum usuário do tenant — quem paga às vezes
+  // não é quem usa o sistema.
+  billingEmail String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   invoices Invoice[]
 }
@@ -1288,9 +1302,12 @@ enum InvoiceStatus {
   CANCELED
 }
 
-// Uma cobrança de um ciclo — gerada manualmente pelo painel por enquanto
-// ("+ Gerar próxima cobrança"). status OVERDUE é calculado on-the-fly (ver
-// lib/billing.ts) a partir de PENDING + dueDate vencida, não escrito direto.
+// Uma cobrança de um ciclo. Nasce de dois jeitos: manual pelo painel
+// ("+ Gerar próxima cobrança", fica PENDING até alguém marcar como paga) ou
+// automática pelo webhook do Mercado Pago quando a assinatura cobra o cartão
+// sozinha (nasce já PAID, com mpPaymentId preenchido). status OVERDUE é
+// calculado on-the-fly (ver lib/billing.ts) a partir de PENDING + dueDate
+// vencida, não escrito direto.
 model Invoice {
   id             String        @id @default(cuid())
   subscriptionId String
@@ -1301,8 +1318,10 @@ model Invoice {
   dueDate        DateTime
   status         InvoiceStatus @default(PENDING)
   paidAt         DateTime?
-  mpPaymentId    String?
-  createdAt      DateTime      @default(now())
+  // @unique é o que impede duplicar a fatura se o Mercado Pago reenviar o
+  // mesmo webhook (eles reenviam de propósito até receberem 200 — é normal).
+  mpPaymentId String?  @unique
+  createdAt   DateTime @default(now())
 
   @@index([tenantId, dueDate])
   @@index([subscriptionId, dueDate])

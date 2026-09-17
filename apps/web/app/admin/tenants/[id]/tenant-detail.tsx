@@ -57,6 +57,9 @@ type Subscription = {
   setupPagoEm: string | null;
   canceladoEm: string | null;
   motivoCancelamento: string | null;
+  mpPreapprovalId: string | null;
+  mpPreapprovalStatus: string | null;
+  billingEmail: string | null;
 };
 
 type Invoice = {
@@ -366,6 +369,8 @@ function BillingSection({
         )}
         {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
 
+        {subscription && <AutoBillingPanel tenantId={tenantId} subscription={subscription} onChanged={onChanged} />}
+
         {invoices.length > 0 && (
           <div className="divide-y divide-neutral-800 border-t border-neutral-800 -mx-4 mt-3">
             {invoices.map((inv) => {
@@ -404,6 +409,159 @@ function BillingSection({
         />
       )}
     </section>
+  );
+}
+
+const MP_STATUS_LABEL: Record<string, string> = {
+  pending: "Aguardando autorização do cliente",
+  authorized: "Cobrança automática ativa",
+  paused: "Cobrança automática pausada",
+  cancelled: "Cobrança automática cancelada",
+};
+
+const MP_STATUS_COLOR: Record<string, string> = {
+  pending: "bg-amber-950/40 text-amber-300",
+  authorized: "bg-emerald-950/60 text-emerald-300",
+  paused: "bg-neutral-800 text-neutral-400",
+  cancelled: "bg-neutral-800 text-neutral-500",
+};
+
+/**
+ * Cobrança automática via Mercado Pago, dentro da seção de Cobrança.
+ *
+ * Fica lado a lado com a cobrança manual (boleto/PIX avulso) — uma empresa
+ * pode não ter nenhuma automação e continuar sendo cobrada na mão pra
+ * sempre; isto aqui é opcional, não uma migração forçada.
+ */
+function AutoBillingPanel({
+  tenantId,
+  subscription,
+  onChanged,
+}: {
+  tenantId: string;
+  subscription: Subscription;
+  onChanged: () => void;
+}) {
+  const [billingEmail, setBillingEmail] = useState(subscription.billingEmail ?? "");
+  const [initPoint, setInitPoint] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const status = subscription.mpPreapprovalStatus;
+  const temAssinatura = Boolean(subscription.mpPreapprovalId);
+  const ativa = status === "authorized" || status === "pending";
+
+  async function gerarLink() {
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/mp-checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ billingEmail }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(typeof body.error === "string" ? body.error : "não deu pra gerar o link");
+      return;
+    }
+    setInitPoint(body.initPoint);
+    onChanged();
+  }
+
+  async function verLinkNovamente() {
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/mp-checkout`);
+    const body = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(typeof body.error === "string" ? body.error : "não deu pra buscar o link");
+      return;
+    }
+    setInitPoint(body.initPoint);
+  }
+
+  async function cancelar() {
+    if (!confirm("Cancelar a cobrança automática? O Mercado Pago para de cobrar o cartão a partir de agora.")) return;
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/mp-cancel`, { method: "POST" });
+    setLoading(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "não deu pra cancelar");
+      return;
+    }
+    setInitPoint(null);
+    onChanged();
+  }
+
+  function copiarLink() {
+    if (!initPoint) return;
+    navigator.clipboard.writeText(initPoint);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="border-t border-neutral-800 pt-3 mt-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+        <span className="text-xs font-medium text-neutral-300">Cobrança automática (cartão de crédito)</span>
+        {status && (
+          <span className={`text-xs rounded-full px-2 py-0.5 ${MP_STATUS_COLOR[status] ?? "bg-neutral-800 text-neutral-400"}`}>
+            {MP_STATUS_LABEL[status] ?? status}
+          </span>
+        )}
+      </div>
+
+      {!temAssinatura || !ativa ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="email"
+            placeholder="e-mail de quem vai pagar"
+            value={billingEmail}
+            onChange={(e) => setBillingEmail(e.target.value)}
+            className="rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-200 flex-1 min-w-[180px]"
+          />
+          <button
+            onClick={gerarLink}
+            disabled={loading || !billingEmail}
+            className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:opacity-90 disabled:opacity-40"
+          >
+            {loading ? "Gerando..." : "Gerar link de autorização"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 flex-wrap">
+          {status === "pending" && (
+            <button onClick={verLinkNovamente} disabled={loading} className="text-xs text-emerald-400 hover:underline">
+              Ver link de autorização
+            </button>
+          )}
+          <button onClick={cancelar} disabled={loading} className="text-xs text-red-400 hover:underline">
+            Cancelar cobrança automática
+          </button>
+        </div>
+      )}
+
+      {initPoint && (
+        <div className="mt-2 flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5">
+          <code className="flex-1 truncate text-xs text-neutral-400">{initPoint}</code>
+          <button onClick={copiarLink} className="text-xs text-emerald-400 hover:underline whitespace-nowrap">
+            {copied ? "Copiado!" : "Copiar"}
+          </button>
+        </div>
+      )}
+      {initPoint && (
+        <p className="mt-1 text-[11px] text-neutral-500">
+          Envie esse link pro cliente autorizar (o Mercado Pago não avisa ninguém sozinho).
+        </p>
+      )}
+
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+    </div>
   );
 }
 
