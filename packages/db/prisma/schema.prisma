@@ -1282,6 +1282,14 @@ model Subscription {
   // descrevem a mesma pessoa: quem paga, não necessariamente quem usa.
   billingDocument         String?
 
+  // Pix Automático — terceira opção de cobrança, ao lado do Mercado Pago e
+  // do cartão da própria Asaas. É uma API separada da Subscription de cartão
+  // (ver lib/asaas.ts): o pagador autoriza escaneando um QR code no PRÓPRIO
+  // banco dele, não numa página de checkout nossa, e a partir daí a Asaas
+  // debita via PIX sozinha todo mês.
+  asaasPixAuthorizationId     String?
+  asaasPixAuthorizationStatus String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

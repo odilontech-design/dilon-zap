@@ -61,6 +61,8 @@ type Subscription = {
   mpPreapprovalStatus: string | null;
   asaasSubscriptionId: string | null;
   asaasSubscriptionStatus: string | null;
+  asaasPixAuthorizationId: string | null;
+  asaasPixAuthorizationStatus: string | null;
   billingEmail: string | null;
   billingDocument: string | null;
 };
@@ -376,6 +378,7 @@ function BillingSection({
           <>
             <AutoBillingPanel tenantId={tenantId} subscription={subscription} onChanged={onChanged} />
             <AsaasBillingPanel tenantId={tenantId} subscription={subscription} onChanged={onChanged} />
+            <AsaasPixPanel tenantId={tenantId} subscription={subscription} onChanged={onChanged} />
           </>
         )}
 
@@ -724,6 +727,164 @@ function AsaasBillingPanel({
         <p className="mt-1 text-[11px] text-neutral-500">
           Envie esse link pro cliente cadastrar o cartão (a Asaas não avisa ninguém sozinho).
         </p>
+      )}
+
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+    </div>
+  );
+}
+
+const ASAAS_PIX_STATUS_LABEL: Record<string, string> = {
+  CREATED: "Aguardando o cliente escanear o QR code",
+  ACTIVE: "Cobrança automática (Pix) ativa",
+  CANCELLED: "Cobrança automática (Pix) cancelada",
+  REFUSED: "QR code expirou sem ser escaneado",
+  EXPIRED: "Cobrança automática (Pix) expirada",
+};
+
+const ASAAS_PIX_STATUS_COLOR: Record<string, string> = {
+  CREATED: "bg-amber-950/40 text-amber-300",
+  ACTIVE: "bg-emerald-950/60 text-emerald-300",
+  CANCELLED: "bg-neutral-800 text-neutral-500",
+  REFUSED: "bg-red-950/40 text-red-300",
+  EXPIRED: "bg-neutral-800 text-neutral-500",
+};
+
+/**
+ * Pix Automático — terceira opção, ao lado do cartão da Asaas acima. Bem
+ * diferente na experiência: não tem link pra copiar e mandar, é um QR code
+ * (mais o texto copia-e-cola) que o cliente escaneia no PRÓPRIO app do banco
+ * dele — é lá que ele autoriza, não numa página nossa. E não existe
+ * "reemitir o mesmo QR": expirou sem escanear, a saída é gerar outro do zero.
+ */
+function AsaasPixPanel({
+  tenantId,
+  subscription,
+  onChanged,
+}: {
+  tenantId: string;
+  subscription: Subscription;
+  onChanged: () => void;
+}) {
+  const [billingEmail, setBillingEmail] = useState(subscription.billingEmail ?? "");
+  const [billingDocument, setBillingDocument] = useState(subscription.billingDocument ?? "");
+  const [qrCode, setQrCode] = useState<{ encodedImage: string; payload: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const status = subscription.asaasPixAuthorizationStatus;
+  const temAutorizacao = Boolean(subscription.asaasPixAuthorizationId);
+  // CREATED conta como "em andamento" — o QR já foi gerado e pode estar
+  // aberto na tela do cliente agora mesmo; gerar outro antes de saber se
+  // esse expirou criaria dois QR pendentes pro mesmo cliente.
+  const emAndamento = status === "ACTIVE" || status === "CREATED";
+
+  async function gerarQrCode() {
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/asaas-pix-checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ billingEmail, billingDocument }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(typeof body.error === "string" ? body.error : "não deu pra gerar o QR code");
+      return;
+    }
+    setQrCode({ encodedImage: body.encodedImage, payload: body.payload });
+    onChanged();
+  }
+
+  async function cancelar() {
+    if (!confirm("Cancelar a cobrança automática (Pix)? A Asaas para de debitar a partir de agora.")) return;
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/asaas-pix-cancel`, { method: "POST" });
+    setLoading(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "não deu pra cancelar");
+      return;
+    }
+    setQrCode(null);
+    onChanged();
+  }
+
+  function copiarPayload() {
+    if (!qrCode) return;
+    navigator.clipboard.writeText(qrCode.payload);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="border-t border-neutral-800 pt-3 mt-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+        <span className="text-xs font-medium text-neutral-300">Cobrança automática — Pix (Asaas)</span>
+        {status && (
+          <span
+            className={`text-xs rounded-full px-2 py-0.5 ${ASAAS_PIX_STATUS_COLOR[status] ?? "bg-neutral-800 text-neutral-400"}`}
+          >
+            {ASAAS_PIX_STATUS_LABEL[status] ?? status}
+          </span>
+        )}
+      </div>
+
+      {!temAutorizacao || !emAndamento ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="email"
+            placeholder="e-mail de quem vai pagar"
+            value={billingEmail}
+            onChange={(e) => setBillingEmail(e.target.value)}
+            className="rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-200 flex-1 min-w-[180px]"
+          />
+          <input
+            type="text"
+            placeholder="CPF ou CNPJ de quem vai pagar"
+            value={billingDocument}
+            onChange={(e) => setBillingDocument(e.target.value)}
+            className="rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-200 flex-1 min-w-[180px]"
+          />
+          <button
+            onClick={gerarQrCode}
+            disabled={loading || !billingEmail || !billingDocument}
+            className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:opacity-90 disabled:opacity-40"
+          >
+            {loading ? "Gerando..." : "Gerar QR code"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={cancelar} disabled={loading} className="text-xs text-red-400 hover:underline">
+            Cancelar cobrança automática
+          </button>
+        </div>
+      )}
+
+      {qrCode && (
+        <div className="mt-2 flex flex-col items-start gap-2">
+          {/* eslint-disable-next-line @next/next/no-img-element -- imagem vem em base64 da própria Asaas, não é asset do projeto */}
+          <img
+            src={`data:image/png;base64,${qrCode.encodedImage}`}
+            alt="QR code Pix para autorizar a cobrança automática"
+            className="w-40 h-40 rounded-md border border-neutral-800 bg-white p-1"
+          />
+          <div className="flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 w-full">
+            <code className="flex-1 truncate text-xs text-neutral-400">{qrCode.payload}</code>
+            <button onClick={copiarPayload} className="text-xs text-emerald-400 hover:underline whitespace-nowrap">
+              {copied ? "Copiado!" : "Copiar"}
+            </button>
+          </div>
+          <p className="text-[11px] text-neutral-500">
+            Peça pro cliente escanear no app do banco dele, ou colar o código copia-e-cola. Diferente de um
+            Pix avulso: esse pagamento também é a autorização — a partir dele a Asaas passa a debitar
+            sozinha todo mês, sem pedir de novo. Expira em 24h sem uso.
+          </p>
+        </div>
       )}
 
       {error && <p className="mt-2 text-xs text-red-400">{error}</p>}

@@ -182,3 +182,104 @@ export const ASAAS_STATUS_LABEL: Record<string, string> = {
   EXPIRED: "Cobrança automática expirada",
   INACTIVE: "Cobrança automática cancelada",
 };
+
+/**
+ * Pix Automático — terceira opção de cobrança recorrente, API separada da
+ * Subscription de cartão acima (POST /v3/pix/automatic/authorizations, não
+ * /v3/subscriptions). O pagador autoriza escaneando um QR code no PRÓPRIO
+ * banco dele — diferente do cartão, aqui não existe link de checkout pra
+ * mandar; o que a Dilon Tech manda é a IMAGEM do QR code (e o texto
+ * copia-e-cola, como alternativa a escanear).
+ *
+ * Cada cobrança gerada por essa autorização (a primeira e as recorrentes)
+ * cria uma Payment normal por baixo dos panos, e os eventos de sempre
+ * (PAYMENT_RECEIVED/PAYMENT_CONFIRMED) disparam do mesmo jeito — não é uma
+ * lógica de "virou paga" nova, é a mesma. O que muda é como achar a QUAL
+ * assinatura aquele pagamento pertence: um pagamento de Pix Automático não
+ * necessariamente vem com `payment.subscription` preenchido (esse campo é
+ * do mundo das Subscriptions de cartão/boleto/PIX comum), então o webhook
+ * (ver route.ts) usa o evento PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_CREATED
+ * — que chega ANTES do pagamento em si, com o paymentId já nele — pra
+ * pré-gravar a fatura como PENDING, e só atualiza pra PAID quando o
+ * PAYMENT_RECEIVED chega depois pra aquele mesmo id.
+ */
+/**
+ * Descrição da autorização de Pix Automático. Diferente da Subscription de
+ * cartão (que aceita texto livre, inclusive "—"), o campo do Pix vai
+ * literalmente dentro do BR Code — texto do padrão do Banco Central, sem
+ * travessão e com no máximo 35 caracteres. Corta o nome da empresa, não o
+ * "Dilon Zap - " na frente: é a parte que identifica de quem é a cobrança
+ * pra quem olha o QR no banco.
+ */
+function descricaoPix(nomeDaEmpresa: string) {
+  return `Dilon Zap - ${nomeDaEmpresa}`.slice(0, 35);
+}
+
+type AsaasPixAuthorization = {
+  id: string;
+  status: string; // "CREATED" | "ACTIVE" | "CANCELLED" | "REFUSED" | "EXPIRED"
+  encodedImage: string; // QR code em base64 (PNG)
+  payload: string; // QR code em texto, copia-e-cola
+};
+
+/**
+ * Cria o Customer (se preciso) e a autorização de Pix Automático, e devolve
+ * o QR code da primeira cobrança + consentimento — é essa imagem que o
+ * superadmin manda pro cliente escanear no banco dele.
+ */
+export async function createPixAutomaticAuthorization(params: {
+  subscriptionId: string; // vira o contractId — é o que identifica a autorização do nosso lado
+  tenantName: string;
+  amountCents: number;
+  payerEmail: string;
+  payerDocument: string;
+}) {
+  const customerId = await acharOuCriarCustomer({
+    name: params.tenantName,
+    email: params.payerEmail,
+    cpfCnpj: params.payerDocument,
+  });
+
+  const valor = Number((params.amountCents / 100).toFixed(2));
+  const authorization = await asaasFetch<AsaasPixAuthorization>("/pix/automatic/authorizations", {
+    method: "POST",
+    body: JSON.stringify({
+      customerId,
+      contractId: params.subscriptionId,
+      frequency: "MONTHLY",
+      startDate: new Date().toISOString().slice(0, 10),
+      value: valor,
+      description: descricaoPix(params.tenantName),
+      // SUBSCRIPTION: a Asaas gera sozinha as cobranças dos meses seguintes.
+      // Com MANUAL, seríamos nós quem teria que criar cada cobrança na mão —
+      // o oposto do que "cobra sozinha todo mês" pede.
+      paymentCreationMode: "SUBSCRIPTION",
+      immediateQrCode: {
+        // 24h pro cliente escanear e autorizar. Passado isso sem pagar, a
+        // autorização vira REFUSED e precisa ser recriada do zero — não tem
+        // "reemitir o mesmo QR" como tem o link do cartão.
+        expirationSeconds: 86400,
+        originalValue: valor,
+        description: descricaoPix(params.tenantName),
+      },
+    }),
+  });
+
+  return { id: authorization.id, customerId, status: authorization.status, encodedImage: authorization.encodedImage, payload: authorization.payload };
+}
+
+export async function getPixAuthorization(id: string) {
+  return asaasFetch<AsaasPixAuthorization>(`/pix/automatic/authorizations/${id}`);
+}
+
+export async function cancelPixAuthorization(id: string) {
+  return asaasFetch<AsaasPixAuthorization>(`/pix/automatic/authorizations/${id}`, { method: "DELETE" });
+}
+
+export const ASAAS_PIX_STATUS_LABEL: Record<string, string> = {
+  CREATED: "Aguardando o cliente escanear o QR code",
+  ACTIVE: "Cobrança automática (Pix) ativa",
+  CANCELLED: "Cobrança automática (Pix) cancelada",
+  REFUSED: "QR code expirou sem ser escaneado",
+  EXPIRED: "Cobrança automática (Pix) expirada",
+};
