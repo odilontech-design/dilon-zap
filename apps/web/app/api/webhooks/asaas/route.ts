@@ -60,15 +60,55 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-/** Atualiza o cache de status da autorização de Pix Automático. */
+/**
+ * Atualiza o cache de status da autorização de Pix Automático.
+ *
+ * ACTIVATED é também o gatilho da PRIMEIRA fatura: a Asaas só ativa a
+ * autorização depois que o primeiro pagamento (o do QR imediato) é
+ * concluído — é a própria documentação deles que garante isso ("a
+ * autorização é ativada após a conclusão do primeiro pagamento"). Achado
+ * testando: esse primeiro pagamento NÃO chega com `payment.subscription`
+ * preenchido nem é precedido de PIX_AUTOMATIC_RECURRING_PAYMENT_INSTRUCTION_CREATED
+ * (isso só existe pros ciclos seguintes) — e tentar achar de quem é olhando
+ * só o `customer` do pagamento é perigoso: QUALQUER cobrança pro mesmo
+ * Customer (um teste de saldo, uma venda avulsa) acabaria creditada como
+ * mensalidade paga. Por isso a primeira fatura nasce AQUI, a partir do
+ * evento de ativação em si — que só existe quando o primeiro pagamento
+ * realmente aconteceu — e não tentando casar um pagamento solto.
+ */
 async function tratarAutorizacao(evento: string, authorization: Record<string, unknown>) {
   const id = authorization.id as string | undefined;
   const status = authorization.status as string | undefined;
   if (!id || !status) return;
 
-  await prisma.subscription.updateMany({
-    where: { asaasPixAuthorizationId: id },
+  const subscription = await prisma.subscription.findFirst({ where: { asaasPixAuthorizationId: id } });
+  if (!subscription) return;
+
+  await prisma.subscription.update({
+    where: { id: subscription.id },
     data: { asaasPixAuthorizationStatus: status },
+  });
+
+  if (status !== "ACTIVE") return;
+
+  // Idempotência: sem um asaasPaymentId pra essa primeira fatura (a Asaas não
+  // devolve o id do pagamento imediato em lugar nenhum do payload da
+  // autorização), o jeito de não duplicar se o evento chegar de novo é
+  // perguntar se essa assinatura já tem alguma fatura paga.
+  const jaTemFaturaPaga = await prisma.invoice.findFirst({
+    where: { subscriptionId: subscription.id, status: "PAID" },
+  });
+  if (jaTemFaturaPaga) return;
+
+  await prisma.invoice.create({
+    data: {
+      subscriptionId: subscription.id,
+      tenantId: subscription.tenantId,
+      amountCents: subscription.amountCents,
+      dueDate: new Date(),
+      status: "PAID",
+      paidAt: new Date(),
+    },
   });
 }
 
@@ -132,30 +172,19 @@ async function tratarEventoDePagamento(evento: string, pagamento: Record<string,
   }
 
   // Caminho normal (cartão/boleto/PIX avulso via Subscription de cartão): o
-  // próprio pagamento carrega o id da Subscription.
+  // próprio pagamento carrega o id da Subscription. De propósito NÃO existe
+  // um terceiro caminho tentando achar a assinatura pelo `customer` do
+  // pagamento — qualquer cobrança pro mesmo Customer bateria aqui (um teste
+  // de saldo, uma venda avulsa), e creditar errado é pior que não creditar:
+  // a primeira fatura do Pix Automático nasce em tratarAutorizacao, no
+  // evento de ativação, não aqui.
   const subscriptionId = pagamento.subscription as string | null;
-  let subscription = subscriptionId
+  const subscription = subscriptionId
     ? await prisma.subscription.findFirst({ where: { asaasSubscriptionId: subscriptionId } })
     : null;
 
-  // Primeira cobrança do Pix Automático: não veio de uma instrução (essas só
-  // existem pros ciclos seguintes) nem carrega `subscription` (isso é campo
-  // do mundo das Subscriptions de cartão). O que sobra pra achar de quem é:
-  // o Customer — que é o mesmo Customer usado pra criar a autorização.
   if (!subscription) {
-    const customerId = pagamento.customer as string | undefined;
-    if (customerId) {
-      const candidatas = await prisma.subscription.findMany({
-        where: { asaasCustomerId: customerId, asaasPixAuthorizationId: { not: null } },
-      });
-      // Só usa se achar EXATAMENTE uma — duas candidatas seria adivinhação,
-      // e adivinhar errado credita a mensalidade de um cliente a outro.
-      if (candidatas.length === 1) subscription = candidatas[0];
-    }
-  }
-
-  if (!subscription) {
-    console.error("[webhook asaas] pagamento sem subscription/autorização correspondente", paymentId);
+    console.error("[webhook asaas] pagamento sem subscription correspondente", paymentId);
     return;
   }
 
@@ -171,14 +200,11 @@ async function tratarEventoDePagamento(evento: string, pagamento: Record<string,
     },
   });
 
-  // O status ACTIVE do cartão é a prova de que a primeira cobrança passou;
-  // do lado do Pix Automático quem faz esse papel é o próprio evento de
-  // AUTHORIZATION_ACTIVATED, então só mexe aqui quando resolvemos por
-  // asaasSubscriptionId (o caminho do cartão).
-  if (subscriptionId) {
-    await prisma.subscription.update({
-      where: { id: subscription.id },
-      data: { asaasSubscriptionStatus: "ACTIVE" },
-    });
-  }
+  // Chegou até aqui só pelo caminho do cartão (asaasSubscriptionId) — o Pix
+  // Automático nunca passa por este ponto do código (ver os comentários
+  // acima). ACTIVE é a prova de que a primeira cobrança do cartão passou.
+  await prisma.subscription.update({
+    where: { id: subscription.id },
+    data: { asaasSubscriptionStatus: "ACTIVE" },
+  });
 }
