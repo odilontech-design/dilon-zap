@@ -59,7 +59,10 @@ type Subscription = {
   motivoCancelamento: string | null;
   mpPreapprovalId: string | null;
   mpPreapprovalStatus: string | null;
+  asaasSubscriptionId: string | null;
+  asaasSubscriptionStatus: string | null;
   billingEmail: string | null;
+  billingDocument: string | null;
 };
 
 type Invoice = {
@@ -369,7 +372,12 @@ function BillingSection({
         )}
         {error && <p className="text-sm text-red-400 mb-2">{error}</p>}
 
-        {subscription && <AutoBillingPanel tenantId={tenantId} subscription={subscription} onChanged={onChanged} />}
+        {subscription && (
+          <>
+            <AutoBillingPanel tenantId={tenantId} subscription={subscription} onChanged={onChanged} />
+            <AsaasBillingPanel tenantId={tenantId} subscription={subscription} onChanged={onChanged} />
+          </>
+        )}
 
         {invoices.length > 0 && (
           <div className="divide-y divide-neutral-800 border-t border-neutral-800 -mx-4 mt-3">
@@ -557,6 +565,164 @@ function AutoBillingPanel({
       {initPoint && (
         <p className="mt-1 text-[11px] text-neutral-500">
           Envie esse link pro cliente autorizar (o Mercado Pago não avisa ninguém sozinho).
+        </p>
+      )}
+
+      {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
+    </div>
+  );
+}
+
+const ASAAS_STATUS_LABEL: Record<string, string> = {
+  ACTIVE: "Cobrança automática ativa",
+  EXPIRED: "Cobrança automática expirada",
+  INACTIVE: "Cobrança automática cancelada",
+};
+
+const ASAAS_STATUS_COLOR: Record<string, string> = {
+  ACTIVE: "bg-emerald-950/60 text-emerald-300",
+  EXPIRED: "bg-amber-950/40 text-amber-300",
+  INACTIVE: "bg-neutral-800 text-neutral-500",
+};
+
+/**
+ * Cobrança automática via Asaas, segunda opção ao lado do Mercado Pago (ver
+ * AutoBillingPanel acima) — mesma ideia de link único que o cliente abre pra
+ * cadastrar o cartão, só que a Asaas exige CPF/CNPJ pra cadastrar o cliente,
+ * o que o Mercado Pago não pede.
+ */
+function AsaasBillingPanel({
+  tenantId,
+  subscription,
+  onChanged,
+}: {
+  tenantId: string;
+  subscription: Subscription;
+  onChanged: () => void;
+}) {
+  const [billingEmail, setBillingEmail] = useState(subscription.billingEmail ?? "");
+  const [billingDocument, setBillingDocument] = useState(subscription.billingDocument ?? "");
+  const [checkoutUrl, setCheckoutUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const status = subscription.asaasSubscriptionStatus;
+  const temAssinatura = Boolean(subscription.asaasSubscriptionId);
+  const ativa = status === "ACTIVE";
+
+  async function gerarLink() {
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/asaas-checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ billingEmail, billingDocument }),
+    });
+    const body = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(typeof body.error === "string" ? body.error : "não deu pra gerar o link");
+      return;
+    }
+    setCheckoutUrl(body.checkoutUrl);
+    onChanged();
+  }
+
+  async function verLinkNovamente() {
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/asaas-checkout`);
+    const body = await res.json().catch(() => ({}));
+    setLoading(false);
+    if (!res.ok) {
+      setError(typeof body.error === "string" ? body.error : "não deu pra buscar o link");
+      return;
+    }
+    setCheckoutUrl(body.checkoutUrl);
+  }
+
+  async function cancelar() {
+    if (!confirm("Cancelar a cobrança automática (Asaas)? A Asaas para de cobrar o cartão a partir de agora.")) return;
+    setLoading(true);
+    setError(null);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/subscription/asaas-cancel`, { method: "POST" });
+    setLoading(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setError(body.error ?? "não deu pra cancelar");
+      return;
+    }
+    setCheckoutUrl(null);
+    onChanged();
+  }
+
+  function copiarLink() {
+    if (!checkoutUrl) return;
+    navigator.clipboard.writeText(checkoutUrl);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  return (
+    <div className="border-t border-neutral-800 pt-3 mt-3">
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+        <span className="text-xs font-medium text-neutral-300">Cobrança automática — Asaas</span>
+        {status && (
+          <span
+            className={`text-xs rounded-full px-2 py-0.5 ${ASAAS_STATUS_COLOR[status] ?? "bg-neutral-800 text-neutral-400"}`}
+          >
+            {ASAAS_STATUS_LABEL[status] ?? status}
+          </span>
+        )}
+      </div>
+
+      {!temAssinatura || !ativa ? (
+        <div className="flex items-center gap-2 flex-wrap">
+          <input
+            type="email"
+            placeholder="e-mail de quem vai pagar"
+            value={billingEmail}
+            onChange={(e) => setBillingEmail(e.target.value)}
+            className="rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-200 flex-1 min-w-[180px]"
+          />
+          <input
+            type="text"
+            placeholder="CPF ou CNPJ de quem vai pagar"
+            value={billingDocument}
+            onChange={(e) => setBillingDocument(e.target.value)}
+            className="rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5 text-xs text-neutral-200 flex-1 min-w-[180px]"
+          />
+          <button
+            onClick={gerarLink}
+            disabled={loading || !billingEmail || !billingDocument}
+            className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:opacity-90 disabled:opacity-40"
+          >
+            {loading ? "Gerando..." : "Gerar link de cobrança"}
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 flex-wrap">
+          <button onClick={verLinkNovamente} disabled={loading} className="text-xs text-emerald-400 hover:underline">
+            Ver link da cobrança
+          </button>
+          <button onClick={cancelar} disabled={loading} className="text-xs text-red-400 hover:underline">
+            Cancelar cobrança automática
+          </button>
+        </div>
+      )}
+
+      {checkoutUrl && (
+        <div className="mt-2 flex items-center gap-2 rounded-md border border-neutral-800 bg-neutral-950 px-2.5 py-1.5">
+          <code className="flex-1 truncate text-xs text-neutral-400">{checkoutUrl}</code>
+          <button onClick={copiarLink} className="text-xs text-emerald-400 hover:underline whitespace-nowrap">
+            {copied ? "Copiado!" : "Copiar"}
+          </button>
+        </div>
+      )}
+      {checkoutUrl && (
+        <p className="mt-1 text-[11px] text-neutral-500">
+          Envie esse link pro cliente cadastrar o cartão (a Asaas não avisa ninguém sozinho).
         </p>
       )}
 

@@ -1259,7 +1259,7 @@ model Subscription {
   // Cobrança automática via Mercado Pago (Assinaturas / PreApproval). Estes
   // três campos ficam vazios enquanto a empresa paga por boleto/PIX avulso
   // gerado manualmente — as duas formas convivem, nada aqui obriga migrar.
-  mpPreapprovalId String? // id da assinatura no Mercado Pago, gerado ao criar o link
+  mpPreapprovalId     String? // id da assinatura no Mercado Pago, gerado ao criar o link
   // Cache do último status que o Mercado Pago informou (pending, authorized,
   // paused, cancelled) — evita bater na API deles só pra desenhar a tela.
   // Fonte da verdade real é sempre o webhook; isto é só o que sabíamos por
@@ -1268,7 +1268,19 @@ model Subscription {
   // E-mail pro qual a assinatura é criada no Mercado Pago (o pagador). Pode
   // ser diferente do e-mail de nenhum usuário do tenant — quem paga às vezes
   // não é quem usa o sistema.
-  billingEmail String?
+  billingEmail        String?
+
+  // Cobrança automática via Asaas — segunda opção ao lado do Mercado Pago,
+  // pro cliente que prefere boleto/PIX recorrente em vez de cartão só. Mesma
+  // lógica de cache: fonte da verdade é o webhook, isto é só o que sabíamos
+  // por último.
+  asaasCustomerId         String?
+  asaasSubscriptionId     String?
+  asaasSubscriptionStatus String?
+  // CPF/CNPJ de quem paga — a Asaas EXIGE isso pra cadastrar o cliente (o
+  // Mercado Pago não pede). Fica junto de billingEmail porque os dois
+  // descrevem a mesma pessoa: quem paga, não necessariamente quem usa.
+  billingDocument         String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1320,8 +1332,12 @@ model Invoice {
   paidAt         DateTime?
   // @unique é o que impede duplicar a fatura se o Mercado Pago reenviar o
   // mesmo webhook (eles reenviam de propósito até receberem 200 — é normal).
-  mpPaymentId String?  @unique
-  createdAt   DateTime @default(now())
+  mpPaymentId    String?       @unique
+  // Mesma ideia do mpPaymentId, pro lado da Asaas — impede duplicar a
+  // fatura se o webhook reenviar o mesmo evento (a Asaas também reenvia até
+  // receber 200).
+  asaasPaymentId String?       @unique
+  createdAt      DateTime      @default(now())
 
   @@index([tenantId, dueDate])
   @@index([subscriptionId, dueDate])
