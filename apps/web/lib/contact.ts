@@ -39,9 +39,15 @@ export function contactLabel(contact: { name: string | null; waJid: string; phon
   // nada pra ninguém, e parecer telefone seria pior.
   if (contact.waJid.endsWith("@g.us")) return "Grupo sem nome";
   const digits = realPhoneDigits(contact);
-  // Sem nome e sem telefone real conhecido (ex: @lid nunca resolvido) — o ID
-  // opaco é o único identificador que sobra, mostrado cru mesmo.
-  return digits ? formatBRDigits(digits) : contact.waJid.replace("@lid", "");
+  if (digits) return formatBRDigits(digits);
+  // Sem nome E sem telefone real conhecido: às vezes é @lid, o identificador
+  // opaco que o WhatsApp usa no lugar do número em parte das mensagens — sem
+  // telefone nem foto de perfil pra religar (ver resolveContact no worker),
+  // não dá pra saber automaticamente quem é. Mostrar o ID cru (tipo
+  // "80384758927435") parecia um número de telefone estranho e escondia que
+  // podia ser alguém já conhecido — só o atendente, pelo contexto da
+  // conversa, consegue reconhecer e (por ora) pedir o nome/confirmar quem é.
+  return "Contato novo sem nome";
 }
 
 /** Dígitos crus do telefone — pra busca e pra pré-preencher o campo de edição. */
