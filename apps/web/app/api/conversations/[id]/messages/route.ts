@@ -14,7 +14,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const mensagens = await prisma.message.findMany({
+  const mensagensCruas = await prisma.message.findMany({
     where: { conversationId: params.id },
     orderBy: { createdAt: "asc" },
     include: {
@@ -25,6 +25,24 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       reactions: { select: { id: true, emoji: true, fromMe: true } },
     },
   });
+
+  // Telefone de quem falou, em grupo. A mensagem chega com o autor em @lid —
+  // sem número nenhum — e quem sabe o par @lid ↔ telefone são os membros do
+  // grupo guardados em GrupoParticipante. Em conversa 1:1 a consulta volta
+  // vazia e nada muda.
+  const membros = await prisma.grupoParticipante.findMany({
+    where: { grupoId: conversation.contactId, telefone: { not: null } },
+    select: { jid: true, lid: true, telefone: true },
+  });
+  const telefonePorAutor = new Map<string, string>();
+  for (const m of membros) {
+    telefonePorAutor.set(m.jid, m.telefone!);
+    if (m.lid) telefonePorAutor.set(m.lid, m.telefone!);
+  }
+  const mensagens = mensagensCruas.map((m) => ({
+    ...m,
+    autorTelefone: m.autorJid ? (telefonePorAutor.get(m.autorJid) ?? null) : null,
+  }));
 
   // Encaminhamentos de setor com o motivo escrito por quem encaminhou. Vão
   // pra todo mundo, isolamento ligado ou não: saber que a conversa mudou de

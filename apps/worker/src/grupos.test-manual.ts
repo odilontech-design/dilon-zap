@@ -1,6 +1,6 @@
 // Grupos: identificação, nome do autor e trava de consulta. Puro, sem conexão.
 // Dados fictícios. Rodar com: npx tsx apps/worker/src/grupos.test-manual.ts
-import { ehGrupo, nomeDoAutor, tempoRestante, INTERVALO_SINCRONIZACAO_MS } from "./grupos";
+import { ehGrupo, nomeDoAutor, tempoRestante, INTERVALO_SINCRONIZACAO_MS, normalizarParticipantes } from "./grupos";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -48,6 +48,32 @@ checa("nunca consultou: pode agora", tempoRestante(undefined, agora, INTERVALO_S
 checa("consultou há 1 min: faltam 9", tempoRestante(agora - 60_000, agora, INTERVALO_SINCRONIZACAO_MS), 9 * 60_000);
 checa("consultou há exatos 10 min: pode", tempoRestante(agora - INTERVALO_SINCRONIZACAO_MS, agora, INTERVALO_SINCRONIZACAO_MS), 0);
 checa("consultou há 1 hora: pode", tempoRestante(agora - 3_600_000, agora, INTERVALO_SINCRONIZACAO_MS), 0);
+
+console.log("\n— participantes do grupo —");
+const cmp = (o: unknown) => JSON.stringify(o);
+checa(
+  "grupo em modo lid: id @lid, telefone vem em phoneNumber",
+  cmp(normalizarParticipantes([{ id: "111@lid", phoneNumber: "5521900001111@s.whatsapp.net", admin: null }])),
+  cmp([{ jid: "111@lid", lid: "111@lid", telefone: "5521900001111", admin: false }])
+);
+checa(
+  "grupo em modo antigo: id é o telefone, @lid vem à parte",
+  cmp(normalizarParticipantes([{ id: "5511900002222@s.whatsapp.net", lid: "222@lid", admin: "admin" }])),
+  cmp([{ jid: "5511900002222@s.whatsapp.net", lid: "222@lid", telefone: "5511900002222", admin: true }])
+);
+checa(
+  "comunidade com número oculto: telefone nulo, nunca o id do @lid",
+  cmp(normalizarParticipantes([{ id: "333@lid" }])),
+  cmp([{ jid: "333@lid", lid: "333@lid", telefone: null, admin: false }])
+);
+checa(
+  "sufixo de aparelho no telefone é ignorado",
+  normalizarParticipantes([{ id: "444@lid", phoneNumber: "5521900000000:7@s.whatsapp.net" }])[0].telefone,
+  "5521900000000"
+);
+checa("superadmin conta como admin", normalizarParticipantes([{ id: "5@lid", admin: "superadmin" }])[0].admin, true);
+checa("membro repetido na resposta entra uma vez só", normalizarParticipantes([{ id: "6@lid" }, { id: "6@lid" }]).length, 1);
+checa("lista vazia", normalizarParticipantes([]).length, 0);
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);

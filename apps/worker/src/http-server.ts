@@ -9,6 +9,7 @@ import {
   setWhatsAppBlock,
   sincronizarGrupos,
   buscarHistoricoDeGrupo,
+  atualizarParticipantesDoGrupo,
 } from "./session-manager";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
@@ -78,6 +79,11 @@ export function startInternalServer() {
 
     if (req.method === "POST" && req.url === "/internal/groups/sync") {
       handleSyncGroups(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/groups/participants") {
+      handleGroupParticipants(req, res);
       return;
     }
 
@@ -236,6 +242,29 @@ function handleWakeOutbox(req: http.IncomingMessage, res: http.ServerResponse) {
 
 // Lista de grupos do número, pedida pela tela de grupos. A trava contra
 // repetição mora em sincronizarGrupos, junto de quem fala com o WhatsApp.
+/** Atualiza os membros (com telefone) de UM grupo — ver atualizarParticipantesDoGrupo. */
+function handleGroupParticipants(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { tenantId, contactId } = JSON.parse(body) as { tenantId?: string; contactId?: string };
+      if (!tenantId || !contactId) {
+        res
+          .writeHead(400, { "Content-Type": "application/json" })
+          .end(JSON.stringify({ error: "tenantId e contactId são obrigatórios" }));
+        return;
+      }
+      const result = await atualizarParticipantesDoGrupo(tenantId, contactId);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
+    } catch (err) {
+      res
+        .writeHead(500, { "Content-Type": "application/json" })
+        .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
 /**
  * Pede ao WhatsApp o histórico anterior de UM grupo (ver
  * buscarHistoricoDeGrupo). Um por chamada, sempre disparado por alguém da

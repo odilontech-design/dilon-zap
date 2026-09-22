@@ -44,7 +44,7 @@ export function contactLabel(contact: { name: string | null; waJid: string; phon
   // opaco que o WhatsApp usa no lugar do número em parte das mensagens — sem
   // telefone nem foto de perfil pra religar (ver resolveContact no worker),
   // não dá pra saber automaticamente quem é. Mostrar o ID cru (tipo
-  // "80384758927435") parecia um número de telefone estranho e escondia que
+  // "11112222333344") parecia um número de telefone estranho e escondia que
   // podia ser alguém já conhecido — só o atendente, pelo contexto da
   // conversa, consegue reconhecer e (por ora) pedir o nome/confirmar quem é.
   return "Contato novo sem nome";
@@ -63,14 +63,30 @@ export function formatPhone(waJid: string) {
  * equipe precisa do número pra chamar a pessoa no privado — é o pedido da
  * Hemoderi, que opera pela agenda de cirurgias em grupo.
  *
- * Null quando o autor vem como @lid: esse identificador não tem relação
- * nenhuma com o telefone (ver resolveContact no worker), e imprimir o número
- * opaco dele passaria por telefone de verdade — alguém tentaria ligar.
+ * Na prática o autor quase sempre chega como @lid — na Hemoderi, 100% das
+ * mensagens de grupo —, e o @lid não tem relação nenhuma com o telefone.
+ * Quem resolve é `autorTelefone`, que a API de mensagens preenche a partir
+ * dos membros do grupo (GrupoParticipante). O JID só serve quando ele mesmo
+ * já é um telefone.
+ *
+ * Null quando nenhum dos dois dá o número: imprimir o id opaco do @lid
+ * passaria por telefone de verdade — alguém tentaria ligar.
  */
-export function telefoneDoAutor(autorJid: string | null | undefined): string | null {
+export function telefoneDoAutor(
+  autorJid: string | null | undefined,
+  autorTelefone?: string | null
+): string | null {
+  const resolvido = autorTelefone?.replace(/\D/g, "");
+  if (resolvido && resolvido.length >= 8) return formatBRDigits(resolvido);
   if (!autorJid || !autorJid.endsWith("@s.whatsapp.net")) return null;
   const digits = autorJid.replace("@s.whatsapp.net", "").replace(/\D/g, "");
   return digits.length >= 8 ? formatBRDigits(digits) : null;
+}
+
+/** Telefone formatado a partir de dígitos crus — pra lista de membros do grupo. */
+export function formatarTelefone(digitos: string | null | undefined): string | null {
+  const d = digitos?.replace(/\D/g, "");
+  return d && d.length >= 8 ? formatBRDigits(d) : null;
 }
 
 /** Telefone formatado pra exibição, com o mesmo fallback @lid → phoneNumber do contactLabel. */

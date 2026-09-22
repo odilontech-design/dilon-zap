@@ -12,6 +12,7 @@ import {
   formatPhoneDisplay,
   formatTime,
   telefoneDoAutor,
+  formatarTelefone,
   type ContactRef,
 } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
@@ -121,9 +122,12 @@ type Message = {
   sender: { name: string } | null;
   // Quem mandou, em mensagem de grupo. Nulo em chat 1:1.
   autorNome: string | null;
-  // JID de quem mandou, no grupo — é dele que sai o telefone mostrado ao lado
-  // do nome, pra equipe conseguir chamar a pessoa no privado.
+  // JID de quem mandou, no grupo. Quase sempre @lid, sem número.
   autorJid: string | null;
+  // Telefone de quem mandou, resolvido pela API a partir dos membros do grupo
+  // (o @lid sozinho não diz o número). Nulo fora de grupo ou se ninguém
+  // atualizou os participantes ainda.
+  autorTelefone: string | null;
   isEdited: boolean;
   isDeleted: boolean;
   isForwarded: boolean;
@@ -636,6 +640,7 @@ export function ConversationThread({
   // Setor escolhido no seletor, esperando o motivo. Só vira transferência
   // depois que o atendente escreve do que se trata.
   const [transferindoPara, setTransferindoPara] = useState<{ id: string | null; nome: string } | null>(null);
+  const [vendoParticipantes, setVendoParticipantes] = useState(false);
   const [agendando, setAgendando] = useState(false);
   const [pedidoAberto, setPedidoAberto] = useState<Pedido | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -1129,6 +1134,14 @@ export function ConversationThread({
               </button>
               </>
               )}
+              {modoGrupo && (
+                <button
+                  onClick={() => setVendoParticipantes(true)}
+                  className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
+                >
+                  Participantes
+                </button>
+              )}
               <button
                 onClick={toggleSelectionMode}
                 className={`text-xs rounded-md border px-2.5 py-1.5 ${
@@ -1206,7 +1219,7 @@ export function ConversationThread({
             const eventosAqui = eventosAtendimento.filter((e) => e.quando > desde && e.quando <= ate);
             const editable = m.direction === "OUTBOUND" && !m.isDeleted && !m.mediaType && SENT_STATUSES.includes(m.status);
             const deletable = m.direction === "OUTBOUND" && !m.isDeleted;
-            const telefoneAutor = telefoneDoAutor(m.autorJid);
+            const telefoneAutor = telefoneDoAutor(m.autorJid, m.autorTelefone);
             const myReaction = m.reactions.find((r) => r.fromMe);
             const theirReaction = m.reactions.find((r) => !r.fromMe);
             const hasReaction = !m.isDeleted && (myReaction || theirReaction);
@@ -1631,6 +1644,15 @@ export function ConversationThread({
             // devolver 400 e a conversa simplesmente não fechar.
             patchConversation(motivo ? { status: "RESOLVED", closeReason: motivo } : { status: "RESOLVED" });
           }}
+        />
+      )}
+      {vendoParticipantes && (
+        <ParticipantesDoGrupo
+          grupoId={conversation.contact.id}
+          onFechar={() => setVendoParticipantes(false)}
+          // Atualizar os membros muda o telefone mostrado em cada mensagem,
+          // então a conversa recarrega junto.
+          onAtualizado={() => mutateMessages()}
         />
       )}
       {transferindoPara && (
@@ -2558,6 +2580,123 @@ function MarcaTransferenciaSetor({ marcador }: { marcador: MarcadorSetor }) {
  * (ver Tenant.isolarHistoricoPorSetor): sem uma linha explicando o assunto, a
  * conversa chega muda e quem paga é o cliente, repetindo tudo.
  */
+type Participante = { jid: string; telefone: string | null; admin: boolean; nome: string | null };
+
+/**
+ * Membros de um grupo, com telefone — pedido da Hemoderi pra chamar o
+ * profissional no privado a partir do grupo.
+ *
+ * A lista é a foto da última atualização, guardada no banco; "Atualizar"
+ * pede de novo ao WhatsApp. Não consulta sozinho ao abrir de propósito:
+ * abrir vários grupos em sequência viraria uma varredura contra o WhatsApp.
+ */
+function ParticipantesDoGrupo({
+  grupoId,
+  onFechar,
+  onAtualizado,
+}: {
+  grupoId: string;
+  onFechar: () => void;
+  onAtualizado: () => void;
+}) {
+  const { data, mutate } = useSWR<{ participantes: Participante[]; atualizadoEm: string | null }>(
+    `/api/grupos/${grupoId}/participantes`,
+    fetcher
+  );
+  const [atualizando, setAtualizando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
+
+  async function atualizar() {
+    setAtualizando(true);
+    setAviso(null);
+    const res = await fetch(`/api/grupos/${grupoId}/participantes`, { method: "POST" });
+    const b = await res.json().catch(() => ({}));
+    setAtualizando(false);
+    if (!res.ok) {
+      setAviso(typeof b.error === "string" ? b.error : "não foi possível atualizar agora");
+      return;
+    }
+    // Comunidade com número oculto devolve membros sem telefone — dizer isso
+    // explica a lista vazia de números em vez de parecer defeito.
+    setAviso(
+      b.comTelefone < b.total
+        ? `${b.total} membros; o WhatsApp informou o telefone de ${b.comTelefone}.`
+        : `${b.total} membros atualizados.`
+    );
+    mutate();
+    onAtualizado();
+  }
+
+  const lista = data?.participantes ?? [];
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md max-h-[85vh] flex flex-col"
+      >
+        <header className="p-4 border-b border-neutral-200 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="font-semibold">Participantes</h2>
+            <p className="text-xs text-neutral-500 mt-0.5">
+              {data?.atualizadoEm
+                ? `Atualizado em ${new Date(data.atualizadoEm).toLocaleString("pt-BR")}`
+                : "Ainda não atualizado — toque em Atualizar pra buscar no WhatsApp."}
+            </p>
+          </div>
+          <button
+            onClick={atualizar}
+            disabled={atualizando}
+            className="shrink-0 rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {atualizando ? "Atualizando..." : "Atualizar"}
+          </button>
+        </header>
+
+        {aviso && <p className="px-4 pt-3 text-xs text-neutral-600">{aviso}</p>}
+
+        <ul className="overflow-y-auto divide-y divide-neutral-100 px-4">
+          {data && lista.length === 0 && (
+            <li className="py-6 text-sm text-neutral-500 text-center">Nenhum membro guardado ainda.</li>
+          )}
+          {lista.map((p) => {
+            const telefone = formatarTelefone(p.telefone);
+            return (
+              <li key={p.jid} className="py-2.5 flex items-center justify-between gap-3 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate">
+                    {p.nome ?? <span className="text-neutral-400">Sem nome (ainda não falou no grupo)</span>}
+                    {p.admin && (
+                      <span className="ml-2 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">
+                        admin
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-neutral-500 tabular-nums">{telefone ?? "número oculto pelo WhatsApp"}</p>
+                </div>
+                {telefone && (
+                  <button
+                    onClick={() => navigator.clipboard.writeText(p.telefone!)}
+                    className="shrink-0 text-xs text-accent hover:underline"
+                  >
+                    Copiar
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        <footer className="p-3 border-t border-neutral-200 flex justify-end">
+          <button onClick={onFechar} className="rounded-md border border-neutral-300 px-4 py-1.5 text-sm">
+            Fechar
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 function MotivoTransferencia({
   destino,
   onFechar,

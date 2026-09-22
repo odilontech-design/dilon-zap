@@ -462,7 +462,7 @@ model Contact {
   // grupo das telas que são de pessoa (Inbox, contatos, funil, relatórios),
   // e é pra isso que o campo existe: filtrar pelo sufixo do JID em cada
   // consulta seria fácil de esquecer na próxima tela que alguém criar.
-  grupo              Boolean   @default(false)
+  grupo              Boolean             @default(false)
   // Quando a equipe ativou. Nulo = grupo só "disponível": o worker sabe que
   // ele existe mas não grava mensagem nem baixa mídia. O número costuma
   // estar em grupo de família e de fornecedor, e gravar tudo encheria a tela
@@ -472,6 +472,9 @@ model Contact {
   // Só pra lista de grupos mostrar o tamanho. Vem junto dos dados que o
   // WhatsApp manda sobre o grupo; nunca é consultado de propósito.
   grupoParticipantes Int?
+  // Membros do grupo, com telefone quando o WhatsApp informa (ver
+  // GrupoParticipante). Vazio em contato que não é grupo.
+  participantes      GrupoParticipante[]
 
   createdAt DateTime @default(now())
 
@@ -1408,4 +1411,34 @@ model PushSubscription {
   criadoEm  DateTime @default(now())
 
   @@index([userId])
+}
+
+/// Um membro de um grupo do WhatsApp, com o telefone quando o WhatsApp informa.
+///
+/// Existe porque a mensagem de grupo chega com o autor em @lid — um
+/// identificador anônimo, sem relação com o número. Na Hemoderi, 100% das
+/// mensagens de grupo chegaram assim, e a equipe precisa do telefone pra
+/// chamar o profissional no privado. Quem entrega o número é a consulta dos
+/// dados do grupo (groupMetadata), que traz o par @lid ↔ telefone de cada
+/// membro.
+///
+/// É uma foto da última consulta, não a verdade ao vivo: quem sair do grupo
+/// continua aqui até alguém atualizar. Por isso a tela mostra a data.
+model GrupoParticipante {
+  id      String  @id @default(cuid())
+  grupoId String
+  grupo   Contact @relation(fields: [grupoId], references: [id], onDelete: Cascade)
+
+  /// Como o WhatsApp identifica a pessoa no grupo (@lid ou @s.whatsapp.net).
+  jid      String
+  /// O @lid, quando conhecido — é por ele que a mensagem aponta o autor.
+  lid      String?
+  /// Só dígitos. Nulo quando o grupo esconde os números (comunidade).
+  telefone String?
+  admin    Boolean @default(false)
+
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([grupoId, jid])
+  @@index([grupoId, lid])
 }

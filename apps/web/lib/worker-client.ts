@@ -247,3 +247,29 @@ export async function fetchGroupHistory(
     return { ok: false, reason: "worker fora do ar" };
   }
 }
+
+/**
+ * Atualiza os membros (com telefone) de UM grupo pelo WhatsApp — ver
+ * atualizarParticipantesDoGrupo no worker.
+ */
+export async function refreshGroupParticipants(
+  tenantId: string,
+  contactId: string
+): Promise<{ ok: boolean; reason?: string; total?: number; comTelefone?: number }> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret) return { ok: false, reason: "worker não configurado" };
+
+  try {
+    const res = await fetch(`${baseUrl}/internal/groups/participants`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId, contactId }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };
+    return await res.json();
+  } catch {
+    return { ok: false, reason: "worker fora do ar" };
+  }
+}

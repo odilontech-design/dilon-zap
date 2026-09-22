@@ -58,3 +58,55 @@ export function tempoRestante(ultima: number | undefined, agora: number, interva
   if (ultima === undefined) return 0;
   return Math.max(0, intervaloMs - (agora - ultima));
 }
+
+/** Um participante como o Baileys devolve em groupMetadata. */
+export type ParticipanteBruto = {
+  id: string;
+  lid?: string | null;
+  phoneNumber?: string | null;
+  admin?: string | null;
+};
+
+export type ParticipanteNormalizado = {
+  jid: string;
+  lid: string | null;
+  telefone: string | null;
+  admin: boolean;
+};
+
+function digitosDoJid(jid: string | null | undefined): string | null {
+  if (!jid || !jid.endsWith("@s.whatsapp.net")) return null;
+  // "5521999990000:12@s.whatsapp.net" — o que vem depois do ":" é o aparelho.
+  const digitos = jid.split("@")[0].split(":")[0].replace(/\D/g, "");
+  return digitos.length >= 8 ? digitos : null;
+}
+
+/**
+ * Transforma a lista de membros que o WhatsApp devolve no formato que
+ * guardamos: o par @lid ↔ telefone de cada pessoa.
+ *
+ * Os dois formatos de grupo aparecem na prática. Grupo em modo "lid" manda o
+ * id como @lid e o número à parte, em phone_number. Grupo em modo antigo manda
+ * o id já como telefone e o @lid à parte. Guardar os dois lados é o que
+ * permite achar o telefone a partir do autor da mensagem — que sempre chega
+ * como @lid.
+ *
+ * Telefone ausente é normal (comunidade com número oculto) e vira null, nunca
+ * o número opaco do @lid.
+ */
+export function normalizarParticipantes(brutos: ParticipanteBruto[]): ParticipanteNormalizado[] {
+  const vistos = new Set<string>();
+  const saida: ParticipanteNormalizado[] = [];
+  for (const p of brutos) {
+    if (!p.id || vistos.has(p.id)) continue;
+    vistos.add(p.id);
+    const idEhLid = p.id.endsWith("@lid");
+    saida.push({
+      jid: p.id,
+      lid: idEhLid ? p.id : p.lid?.endsWith("@lid") ? p.lid : null,
+      telefone: idEhLid ? digitosDoJid(p.phoneNumber) : digitosDoJid(p.id),
+      admin: p.admin === "admin" || p.admin === "superadmin",
+    });
+  }
+  return saida;
+}

@@ -28,6 +28,8 @@ import {
   tempoRestante,
   INTERVALO_CONSULTA_GRUPO_MS,
   INTERVALO_SINCRONIZACAO_MS,
+  normalizarParticipantes,
+  type ParticipanteBruto,
 } from "./grupos";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
@@ -1130,6 +1132,69 @@ async function recordMessage(params: {
 // e o worker reiniciando já espaça as consultas por conta própria.
 const ultimaConsultaDeGrupo = new Map<string, number>();
 const ultimaSincronizacaoDeGrupos = new Map<string, number>();
+// Última "Atualizar participantes", por tenant. Curto de propósito — é um
+// grupo por clique — mas existe pra que clicar em sequência em dez grupos não
+// vire dez consultas ao WhatsApp no mesmo segundo.
+const ultimaConsultaDeParticipantes = new Map<string, number>();
+const INTERVALO_PARTICIPANTES_MS = 15_000;
+
+/**
+ * Substitui a foto dos membros de um grupo pela lista que o WhatsApp acabou de
+ * devolver. Substitui em vez de somar: quem saiu do grupo tem que sumir daqui,
+ * senão a equipe ligaria pra alguém que já não faz mais parte.
+ */
+async function salvarParticipantes(grupoId: string, brutos: ParticipanteBruto[]) {
+  const participantes = normalizarParticipantes(brutos);
+  await prisma.$transaction([
+    prisma.grupoParticipante.deleteMany({ where: { grupoId } }),
+    prisma.grupoParticipante.createMany({
+      data: participantes.map((p) => ({ grupoId, ...p })),
+      skipDuplicates: true,
+    }),
+  ]);
+  return participantes;
+}
+
+/**
+ * "Atualizar participantes" de um grupo: pede ao WhatsApp a lista de membros
+ * com telefone. É o único jeito de saber o número de quem fala no grupo — a
+ * mensagem chega com o autor em @lid, sem número nenhum.
+ *
+ * Sob comando e um grupo por vez: nunca uma rotina que varra todos os grupos.
+ */
+export async function atualizarParticipantesDoGrupo(
+  tenantId: string,
+  contactId: string
+): Promise<{ ok: boolean; reason?: string; total?: number; comTelefone?: number }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "o número está desconectado" };
+
+  const grupo = await prisma.contact.findFirst({
+    where: { id: contactId, tenantId, grupo: true },
+    select: { id: true, waJid: true },
+  });
+  if (!grupo) return { ok: false, reason: "grupo não encontrado" };
+
+  const agora = Date.now();
+  const falta = tempoRestante(ultimaConsultaDeParticipantes.get(tenantId), agora, INTERVALO_PARTICIPANTES_MS);
+  if (falta > 0) {
+    return { ok: false, reason: `aguarde ${Math.ceil(falta / 1000)}s antes de atualizar outro grupo` };
+  }
+  ultimaConsultaDeParticipantes.set(tenantId, agora);
+
+  try {
+    const meta = await socket.groupMetadata(grupo.waJid);
+    const salvos = await salvarParticipantes(grupo.id, meta.participants ?? []);
+    await prisma.contact.update({
+      where: { id: grupo.id },
+      data: { grupoParticipantes: salvos.length || undefined },
+    });
+    return { ok: true, total: salvos.length, comTelefone: salvos.filter((p) => p.telefone).length };
+  } catch (err) {
+    logger.error({ err, grupo: grupo.waJid }, "falha ao buscar participantes do grupo");
+    return { ok: false, reason: "o WhatsApp não respondeu agora — tente de novo mais tarde" };
+  }
+}
 
 /**
  * Acha o grupo, ou registra como disponível na primeira mensagem dele.
@@ -1151,6 +1216,7 @@ async function garantirGrupo(tenantId: string, jid: string, socket: ReturnType<t
 
   let subject: string | undefined;
   let participantes: number | undefined;
+  let membros: ParticipanteBruto[] | undefined;
   const agora = Date.now();
   if (tempoRestante(ultimaConsultaDeGrupo.get(tenantId), agora, INTERVALO_CONSULTA_GRUPO_MS) === 0) {
     ultimaConsultaDeGrupo.set(tenantId, agora);
@@ -1158,6 +1224,7 @@ async function garantirGrupo(tenantId: string, jid: string, socket: ReturnType<t
       const meta = await socket.groupMetadata(jid);
       subject = meta.subject?.trim() || undefined;
       participantes = meta.participants?.length || undefined;
+      membros = meta.participants;
     } catch (err) {
       // Sem nome agora não é problema: o evento de grupo ou o "Atualizar
       // lista" preenchem depois. Travar a mensagem por isso seria pior.
@@ -1165,7 +1232,7 @@ async function garantirGrupo(tenantId: string, jid: string, socket: ReturnType<t
     }
   }
 
-  return prisma.contact.upsert({
+  const salvo = await prisma.contact.upsert({
     where: { tenantId_waJid: { tenantId, waJid: jid } },
     create: { tenantId, waJid: jid, grupo: true, name: subject, waName: subject, grupoParticipantes: participantes },
     update: {
@@ -1175,6 +1242,17 @@ async function garantirGrupo(tenantId: string, jid: string, socket: ReturnType<t
     },
     select: { id: true, grupo: true, grupoAtivadoEm: true },
   });
+
+  // A consulta acima já trouxe os membros com telefone — guardar agora não
+  // custa chamada nenhuma a mais ao WhatsApp. Falhar aqui não pode travar a
+  // mensagem que está chegando: sem membros, o telefone só não aparece.
+  if (membros?.length) {
+    await salvarParticipantes(salvo.id, membros).catch((err) =>
+      logger.warn({ err, jid }, "não deu pra guardar os membros do grupo")
+    );
+  }
+
+  return salvo;
 }
 
 /**
