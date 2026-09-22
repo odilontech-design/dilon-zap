@@ -285,6 +285,8 @@ model User {
   // não é interrompido pela atualização.
   senhaProvisoria Boolean @default(false)
 
+  pushSubscriptions PushSubscription[]
+
   assignedConversations  Conversation[]     @relation("AssignedAgent")
   transfersMade          Conversation[]     @relation("AssignedBy")
   uraOpcoes              UraOpcao[]         @relation("UraDestino")
@@ -1380,4 +1382,30 @@ model TransferenciaSetor {
   criadoEm DateTime @default(now())
 
   @@index([conversationId, criadoEm])
+}
+
+/// Um aparelho que aceitou receber notificação do Dilon Zap.
+///
+/// Uma linha por APARELHO, não por pessoa: quem usa no computador e no
+/// celular quer ser avisado nos dois. O endpoint é a URL que o navegador dá
+/// pra gente empurrar a notificação, e é único por instalação — por isso ele
+/// serve de chave: reinstalou o app, vira outro endpoint, e o antigo morre
+/// sozinho (o serviço de push passa a responder 410, e a gente apaga).
+model PushSubscription {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  endpoint String @unique
+  /// Chaves da criptografia ponta a ponta do push: o navegador gera, e sem
+  /// elas o serviço de push recusa a mensagem. Não são segredo nosso — são
+  /// específicas daquele aparelho.
+  p256dh   String
+  auth     String
+
+  /// Pra saber qual aparelho é qual quando alguém tiver vários.
+  userAgent String?
+  criadoEm  DateTime @default(now())
+
+  @@index([userId])
 }

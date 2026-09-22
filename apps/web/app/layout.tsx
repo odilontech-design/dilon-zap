@@ -1,9 +1,19 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Dilon Zap",
   description: "Atendimento via WhatsApp — Dilon Tech",
+  // O manifesto (app/manifest.ts) é o que deixa instalar na tela inicial do
+  // celular. appleWebApp é a parte que o iPhone lê: sem ela o atalho abre
+  // dentro do Safari, com barra de endereço, e — o que importa de verdade —
+  // o Safari não entrega notificação push pra site que não foi instalado.
+  appleWebApp: { capable: true, title: "Dilon Zap", statusBarStyle: "default" },
+  icons: { apple: "/icone-192.png" },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0f766e",
 };
 
 // Roda antes da primeira pintura, ainda no <head>, porque a preferência mora

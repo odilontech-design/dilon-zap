@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { encerrarCiclo } from "@/lib/atendimentos";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { avisarNoCelular } from "@/lib/push";
+import { contactLabel } from "@/lib/contact";
 
 const bodySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED"]).optional(),
@@ -42,6 +44,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const conversation = await prisma.conversation.findFirst({
     where: { id: params.id, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
+    // contact entra por causa da notificação de transferência: o aviso no
+    // celular precisa dizer de QUEM é a conversa, não só o número do ticket.
+    include: { contact: { select: { name: true, waJid: true, phoneNumber: true } } },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -212,6 +217,24 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       actor: user,
       action: "conversation.update",
       metadata: { conversationId: conversation.id, ticketNumber: conversation.ticketNumber, changes: dados },
+    });
+  }
+
+  // Avisa no celular de quem RECEBEU a conversa — o pedido da Hemoderi, pra
+  // quem não fica no computador o dia todo. Nunca avisa quem pegou a conversa
+  // pra si (a pessoa acabou de clicar, já sabe).
+  //
+  // Sem await: notificação é secundária à transferência. Se o serviço de push
+  // estiver fora do ar ou demorar, a conversa já foi transferida do mesmo
+  // jeito — travar a resposta da tela por causa do aviso seria inverter a
+  // prioridade.
+  if (transferiu && dados.assignedToId && dados.assignedToId !== user.id) {
+    const nome = contactLabel(conversation.contact);
+    void avisarNoCelular(dados.assignedToId, {
+      titulo: "Conversa transferida pra você",
+      corpo: `${nome} · #${conversation.ticketNumber} — de ${user.name}`,
+      url: `/inbox?open=${conversation.id}`,
+      tag: `conversa-${conversation.id}`,
     });
   }
 
