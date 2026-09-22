@@ -55,6 +55,24 @@ export function formatPhone(waJid: string) {
   return waJid.replace("@s.whatsapp.net", "").replace("@lid", "");
 }
 
+/**
+ * Telefone de quem mandou uma mensagem DENTRO de um grupo, a partir do JID do
+ * autor — ou null quando não dá pra saber.
+ *
+ * Num grupo, quem fala não é o contato da conversa (o contato é o grupo), e a
+ * equipe precisa do número pra chamar a pessoa no privado — é o pedido da
+ * Hemoderi, que opera pela agenda de cirurgias em grupo.
+ *
+ * Null quando o autor vem como @lid: esse identificador não tem relação
+ * nenhuma com o telefone (ver resolveContact no worker), e imprimir o número
+ * opaco dele passaria por telefone de verdade — alguém tentaria ligar.
+ */
+export function telefoneDoAutor(autorJid: string | null | undefined): string | null {
+  if (!autorJid || !autorJid.endsWith("@s.whatsapp.net")) return null;
+  const digits = autorJid.replace("@s.whatsapp.net", "").replace(/\D/g, "");
+  return digits.length >= 8 ? formatBRDigits(digits) : null;
+}
+
 /** Telefone formatado pra exibição, com o mesmo fallback @lid → phoneNumber do contactLabel. */
 export function formatPhoneDisplay(contact: { waJid: string; phoneNumber?: string | null }) {
   const digits = realPhoneDigits(contact);

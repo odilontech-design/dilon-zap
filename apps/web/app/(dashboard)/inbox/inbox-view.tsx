@@ -6,7 +6,14 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
-import { contactLabel, formatListTimestamp, formatPhoneDisplay, formatTime, type ContactRef } from "@/lib/contact";
+import {
+  contactLabel,
+  formatListTimestamp,
+  formatPhoneDisplay,
+  formatTime,
+  telefoneDoAutor,
+  type ContactRef,
+} from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 import { OrderPanel, type Pedido } from "@/components/order-panel";
 import { MOTIVOS_FECHAMENTO, MOTIVO_OUTRO } from "@/lib/close-reasons";
@@ -114,6 +121,9 @@ type Message = {
   sender: { name: string } | null;
   // Quem mandou, em mensagem de grupo. Nulo em chat 1:1.
   autorNome: string | null;
+  // JID de quem mandou, no grupo — é dele que sai o telefone mostrado ao lado
+  // do nome, pra equipe conseguir chamar a pessoa no privado.
+  autorJid: string | null;
   isEdited: boolean;
   isDeleted: boolean;
   isForwarded: boolean;
@@ -1196,6 +1206,7 @@ export function ConversationThread({
             const eventosAqui = eventosAtendimento.filter((e) => e.quando > desde && e.quando <= ate);
             const editable = m.direction === "OUTBOUND" && !m.isDeleted && !m.mediaType && SENT_STATUSES.includes(m.status);
             const deletable = m.direction === "OUTBOUND" && !m.isDeleted;
+            const telefoneAutor = telefoneDoAutor(m.autorJid);
             const myReaction = m.reactions.find((r) => r.fromMe);
             const theirReaction = m.reactions.find((r) => !r.fromMe);
             const hasReaction = !m.isDeleted && (myReaction || theirReaction);
@@ -1234,7 +1245,14 @@ export function ConversationThread({
                   <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
                 )}
                 {m.direction === "INBOUND" && m.autorNome && (
-                  <p className="text-[11px] font-semibold text-accent mb-0.5">{m.autorNome}</p>
+                  <p className="text-[11px] font-semibold text-accent mb-0.5">
+                    {m.autorNome}
+                    {/* Telefone de quem falou no grupo, quando dá pra saber — a
+                        equipe precisa dele pra chamar a pessoa no privado sem
+                        ter que procurar em outro lugar. Some quando o autor
+                        veio como @lid (aí não existe telefone). */}
+                    {telefoneAutor && <span className="font-normal text-neutral-500"> · {telefoneAutor}</span>}
+                  </p>
                 )}
                 {m.isDeleted ? (
                   <p className={`italic ${m.direction === "OUTBOUND" ? "text-white/60" : "text-neutral-400"}`}>
