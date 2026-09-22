@@ -161,6 +161,7 @@ function GerenciarGrupos({ onFechar }: { onFechar: () => void }) {
   const { data: grupos, error, mutate } = useSWR<GrupoCatalogo[]>("/api/grupos/catalogo", fetcher);
   const [busca, setBusca] = useState("");
   const [salvando, setSalvando] = useState<string | null>(null);
+  const [buscandoHistorico, setBuscandoHistorico] = useState<string | null>(null);
   const [sincronizando, setSincronizando] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
@@ -198,6 +199,29 @@ function GerenciarGrupos({ onFechar }: { onFechar: () => void }) {
     mutate();
   }
 
+  /**
+   * Pede ao WhatsApp as mensagens anteriores à primeira que temos deste
+   * grupo. Um grupo por vez, por clique: buscar em lote é chamada
+   * concentrada contra o WhatsApp, que é o que derruba número.
+   */
+  async function buscarHistorico(g: GrupoCatalogo) {
+    setBuscandoHistorico(g.id);
+    setAviso(null);
+    const res = await fetch(`/api/grupos/${g.id}/historico`, { method: "POST" });
+    const b = await res.json().catch(() => ({}));
+    setBuscandoHistorico(null);
+    if (!res.ok) {
+      setAviso({ tipo: "erro", texto: typeof b.error === "string" ? b.error : "não foi possível buscar agora" });
+      return;
+    }
+    // O WhatsApp responde por fora, quando quiser: as mensagens entram pelo
+    // mesmo caminho das novas, então não dá pra dizer aqui quantas vieram.
+    setAviso({
+      tipo: "ok",
+      texto: `Pedido enviado. As mensagens antigas de "${contactLabel(g)}" vão aparecer na conversa em alguns instantes.`,
+    });
+  }
+
   async function sincronizar() {
     setSincronizando(true);
     setAviso(null);
@@ -222,8 +246,8 @@ function GerenciarGrupos({ onFechar }: { onFechar: () => void }) {
           <div>
             <h2 className="font-semibold">Gerenciar grupos</h2>
             <p className="text-sm text-neutral-500 mt-0.5">
-              Só os grupos ativos têm as mensagens gravadas e aparecem pra equipe. Mensagens de antes da ativação não
-              são trazidas.
+              Só os grupos ativos têm as mensagens gravadas e aparecem pra equipe. As de antes da ativação não vêm
+              sozinhas — use &quot;Buscar histórico&quot; pra pedir ao WhatsApp o que veio antes.
             </p>
           </div>
           <button
@@ -293,6 +317,18 @@ function GerenciarGrupos({ onFechar }: { onFechar: () => void }) {
                       ` · acompanhando desde ${new Date(g.grupoAtivadoEm).toLocaleDateString("pt-BR")}`}
                   </p>
                 </div>
+                {/* Só faz sentido em grupo ativo: é dele que existe mensagem
+                    pra servir de ponto de partida do pedido. */}
+                {g.grupoAtivadoEm && (
+                  <button
+                    onClick={() => buscarHistorico(g)}
+                    disabled={buscandoHistorico === g.id}
+                    title="Pedir ao WhatsApp as mensagens anteriores às que já estão aqui"
+                    className="shrink-0 text-xs text-accent hover:underline disabled:opacity-50 disabled:no-underline"
+                  >
+                    {buscandoHistorico === g.id ? "Buscando..." : "Buscar histórico"}
+                  </button>
+                )}
                 <button
                   onClick={() => alternar(g)}
                   disabled={salvando === g.id}

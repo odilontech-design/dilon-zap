@@ -5,7 +5,10 @@ import makeWASocket, {
   makeCacheableSignalKeyStore,
   generateMessageID,
   WAMessageStatus,
-  type proto,
+  // Valor, não só tipo: o enum HistorySyncType é lido em runtime pra
+  // distinguir a resposta de "buscar histórico anterior" (ON_DEMAND) do
+  // sync que chega sozinho ao parear.
+  proto,
   type WAMessage,
   type GroupMetadata,
 } from "@whiskeysockets/baileys";
@@ -593,8 +596,26 @@ export async function startSession(sessionId: string) {
   // um número novo, e às vezes um resumo de "o que rolou enquanto eu tava
   // offline" em reconexões. Sem esse listener, o Inbox só teria conversa
   // a partir do momento em que o worker ligou.
-  socket.ev.on("messaging-history.set", async ({ messages, contacts, chats, isLatest }) => {
+  socket.ev.on("messaging-history.set", async ({ messages, contacts, chats, isLatest, syncType }) => {
     try {
+      // Resposta a um "buscar histórico anterior" de grupo (ver
+      // buscarHistoricoDeGrupo): SÓ aqui mensagem antiga de grupo entra. No
+      // sync do pareamento continua valendo a regra de sempre — grupo não
+      // traz histórico — senão parear um número que está em dezenas de grupos
+      // baixaria mídia antiga de todos eles de uma vez.
+      if (syncType === proto.HistorySync.HistorySyncType.ON_DEMAND) {
+        const doGrupo = (messages ?? []).filter((m) => ehGrupo(m.key?.remoteJid));
+        for (const msg of doGrupo) {
+          // registrarMensagemDeGrupo já ignora grupo não ativado, deduplica
+          // por waMessageId e grava o autor — é o mesmo caminho da mensagem
+          // ao vivo, então histórico e tempo real ficam idênticos na tela.
+          await registrarMensagemDeGrupo({ sessionId, tenantId: entry.tenantId, msg, socket });
+        }
+        if (doGrupo.length > 0) {
+          logger.info({ sessionId, count: doGrupo.length }, "histórico de grupo importado");
+        }
+      }
+
       // Os grupos vêm na lista de chats do histórico, já com nome: é a fonte
       // mais barata da lista de disponíveis, porque já chegou. Mensagem antiga
       // de grupo NÃO é importada — o grupo só tem histórico aqui a partir de
@@ -1220,6 +1241,76 @@ async function atualizarCatalogoDeGrupos(tenantId: string, grupos: Array<Partial
     } catch (err) {
       logger.error({ err, jid: g.id }, "falha ao atualizar grupo");
     }
+  }
+}
+
+/** Quantas mensagens anteriores pedir de uma vez. O WhatsApp cobra por
+ * mensagem, não por dia, então "uns 10 dias" vira uma quantidade — num grupo
+ * parado isso vai longe, num movimentado cobre pouco. 50 é o que a própria
+ * Meta usa como lote padrão de sincronização sob demanda. */
+const MENSAGENS_POR_PEDIDO_DE_HISTORICO = 50;
+
+/**
+ * Pede ao WhatsApp as mensagens ANTERIORES às que já temos de um grupo.
+ *
+ * Existe porque grupo só passa a ter histórico aqui a partir do momento em
+ * que a equipe ativa (ver registrarMensagemDeGrupo) — e a Hemoderi opera pela
+ * agenda de cirurgias em grupo, onde o que foi combinado ontem importa.
+ *
+ * Sempre sob comando, um grupo por vez: disparar isso pra dezenas de grupos
+ * de uma vez é concentração de chamada contra o WhatsApp, que é exatamente o
+ * que derruba número (ver o incidente da Believe). Não existe versão
+ * automática disto de propósito.
+ *
+ * A resposta NÃO volta aqui: chega depois pelo evento messaging-history.set,
+ * marcada como ON_DEMAND, e é lá que as mensagens entram (ver o listener).
+ */
+export async function buscarHistoricoDeGrupo(
+  tenantId: string,
+  contactId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const socket = getSocketForTenant(tenantId);
+  if (!socket) return { ok: false, reason: "o número está desconectado" };
+
+  const grupo = await prisma.contact.findFirst({
+    where: { id: contactId, tenantId, grupo: true },
+    select: { id: true, waJid: true, grupoAtivadoEm: true },
+  });
+  if (!grupo) return { ok: false, reason: "grupo não encontrado" };
+  if (!grupo.grupoAtivadoEm) return { ok: false, reason: "ative o grupo antes de buscar o histórico" };
+
+  // Âncora: o pedido é "o que veio ANTES desta mensagem", então sem nenhuma
+  // mensagem nossa daquele grupo não há de onde partir. Acontece com grupo
+  // recém-ativado que ainda não recebeu nada — aí é só esperar a primeira.
+  const conversa = await prisma.conversation.findFirst({
+    where: { contactId: grupo.id },
+    select: { id: true },
+  });
+  const ancora = conversa
+    ? await prisma.message.findFirst({
+        where: { conversationId: conversa.id, waMessageId: { not: null } },
+        orderBy: { createdAt: "asc" },
+        select: { waMessageId: true, createdAt: true, direction: true },
+      })
+    : null;
+  if (!ancora?.waMessageId) {
+    return {
+      ok: false,
+      reason: "esse grupo ainda não tem nenhuma mensagem aqui — assim que chegar a primeira, dá pra buscar o que veio antes",
+    };
+  }
+
+  try {
+    await socket.fetchMessageHistory(
+      MENSAGENS_POR_PEDIDO_DE_HISTORICO,
+      { remoteJid: grupo.waJid, id: ancora.waMessageId, fromMe: ancora.direction === "OUTBOUND" },
+      ancora.createdAt.getTime()
+    );
+    logger.info({ tenantId, grupo: grupo.waJid }, "histórico de grupo pedido ao WhatsApp");
+    return { ok: true };
+  } catch (err) {
+    logger.error({ err, grupo: grupo.waJid }, "falha ao pedir histórico do grupo");
+    return { ok: false, reason: "o WhatsApp não respondeu agora — tente de novo mais tarde" };
   }
 }
 

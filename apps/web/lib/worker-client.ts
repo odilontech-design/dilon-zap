@@ -219,3 +219,31 @@ export async function setWhatsAppBlockStatus(
     return { ok: false, reason: "worker fora do ar" };
   }
 }
+
+/**
+ * Pede o histórico anterior de UM grupo (ver buscarHistoricoDeGrupo no
+ * worker). Um por chamada, sempre disparado por alguém da equipe na tela —
+ * nunca em lote, porque chamada concentrada contra o WhatsApp é o que derruba
+ * número.
+ */
+export async function fetchGroupHistory(
+  tenantId: string,
+  contactId: string
+): Promise<{ ok: boolean; reason?: string }> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret) return { ok: false, reason: "worker não configurado" };
+
+  try {
+    const res = await fetch(`${baseUrl}/internal/groups/history`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ tenantId, contactId }),
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };
+    return await res.json();
+  } catch {
+    return { ok: false, reason: "worker fora do ar" };
+  }
+}
