@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { exigirRecurso } from "@/lib/plano";
+import { exigirAlgumRecurso } from "@/lib/plano";
 
 /**
  * Atendente lê o catálogo (vai precisar pra montar pedido). Cadastrar e
@@ -18,13 +18,16 @@ function podeEditarCatalogo(role: string) {
 }
 export async function GET(req: Request) {
   const user = await requireUser();
-  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  const bloqueio = await exigirAlgumRecurso(user, ["PEDIDOS", "MATERIAIS"]);
   if (bloqueio) return bloqueio;
   const incluirInativos = new URL(req.url).searchParams.get("incluirInativos") === "1";
 
   const produtos = await prisma.product.findMany({
     where: { tenantId: user.tenantId, ...(incluirInativos ? {} : { isActive: true }) },
     orderBy: [{ categoria: "asc" }, { name: "asc" }],
+    // Quantos arquivos cada produto tem na biblioteca — o número aparece no
+    // botão "Materiais" pra dar pra ver de relance o que falta preencher.
+    include: { _count: { select: { materiais: true } } },
   });
   return NextResponse.json(produtos);
 }
@@ -45,7 +48,7 @@ const criarSchema = z.object({
 
 export async function POST(req: Request) {
   const user = await requireUser();
-  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  const bloqueio = await exigirAlgumRecurso(user, ["PEDIDOS", "MATERIAIS"]);
   if (bloqueio) return bloqueio;
   if (!podeEditarCatalogo(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 

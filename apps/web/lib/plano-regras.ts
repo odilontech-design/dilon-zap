@@ -14,9 +14,9 @@
  */
 
 export type Plano = "ESSENCIAL" | "PROFISSIONAL" | "ESCALA";
-export type Recurso = "URA" | "SETORES" | "GRUPOS" | "PEDIDOS" | "CONTAS_RECEBER" | "INTEGRACAO_API";
+export type Recurso = "URA" | "SETORES" | "GRUPOS" | "PEDIDOS" | "CONTAS_RECEBER" | "INTEGRACAO_API" | "MATERIAIS";
 
-export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API"];
+export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API", "MATERIAIS"];
 
 export const PLANOS: Record<
   Plano,
@@ -35,7 +35,10 @@ export const PLANOS: Record<
     // um setor, e setor faz sentido a partir do tamanho de equipe deste plano.
     // Grupos entra pelo mesmo motivo: é a equipe inteira acompanhando conversa
     // com várias pessoas de uma vez, e esse é o tamanho de operação daqui.
-    recursos: ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER"],
+    // Materiais junto de Pedidos: os dois vivem em cima do mesmo catálogo de
+    // produtos. Separados porque há quem use o catálogo só pra mandar
+    // documento e vídeo ao cliente, sem vender pelo chat (a Hemoderi).
+    recursos: ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "MATERIAIS"],
     resumo: "Organizar e vender: triagem, setores, grupos, pedidos, estoque e contas a receber.",
   },
   ESCALA: {
@@ -53,6 +56,7 @@ export const ROTULO_RECURSO: Record<Recurso, string> = {
   PEDIDOS: "Pedidos, produtos e estoque",
   CONTAS_RECEBER: "Contas a receber",
   INTEGRACAO_API: "Integração com outros sistemas",
+  MATERIAIS: "Biblioteca de materiais dos produtos",
 };
 
 export type Assinatura = {

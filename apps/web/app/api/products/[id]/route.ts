@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { exigirRecurso } from "@/lib/plano";
+import { exigirAlgumRecurso } from "@/lib/plano";
 
 const patchSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
@@ -12,6 +12,8 @@ const patchSchema = z.object({
   isActive: z.boolean().optional(),
   tipo: z.enum(["PRODUTO", "SERVICO"]).optional(),
   duracaoMinutos: z.number().int().min(1).max(24 * 60).nullable().optional(),
+  // Texto longo de referência (protocolo, indicação, cuidados). Vazio limpa.
+  descricao: z.string().trim().max(4000).optional(),
 });
 
 // Responsável e Financeiro editam o catálogo, inclusive preço. Ver o
@@ -22,7 +24,7 @@ function podeEditarCatalogo(role: string) {
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
-  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  const bloqueio = await exigirAlgumRecurso(user, ["PEDIDOS", "MATERIAIS"]);
   if (bloqueio) return bloqueio;
   if (!podeEditarCatalogo(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
@@ -34,7 +36,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const alvo = await prisma.product.findFirst({ where: { id: params.id, tenantId: user.tenantId } });
   if (!alvo) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { sku, categoria, ...resto } = parsed.data;
+  const { sku, categoria, descricao, ...resto } = parsed.data;
 
   try {
     const atualizado = await prisma.product.update({
@@ -43,6 +45,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         ...resto,
         ...(sku !== undefined ? { sku: sku || null } : {}),
         ...(categoria !== undefined ? { categoria: categoria || null } : {}),
+        ...(descricao !== undefined ? { descricao: descricao || null } : {}),
       },
     });
     return NextResponse.json(atualizado);

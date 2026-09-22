@@ -86,6 +86,9 @@ const NAV_ITEMS = [
   {
     href: "/produtos",
     recurso: "PEDIDOS" as Recurso,
+    // O catálogo também serve à biblioteca de materiais — quem desligou
+    // Pedidos (Hemoderi) continua precisando dele pra mandar documento e vídeo.
+    recursoAlternativo: "MATERIAIS" as Recurso,
     label: "Produtos",
     icon: icon(<><path d="M20.5 7.5 12 3 3.5 7.5v9L12 21l8.5-4.5v-9Z" /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" /></>),
   },
@@ -280,7 +283,14 @@ export function Sidebar({
               // Item de recurso fora do plano some do menu. Não é a barreira —
               // essa é a rota — mas evita a pessoa clicar e dar de cara com
               // uma recusa.
-              (!("recurso" in item) || !item.recurso || !ativos || ativos.has(item.recurso))
+              //
+              // Item que serve a mais de um recurso (Produtos: Pedidos ou
+              // Materiais) aparece com qualquer um deles.
+              (!("recurso" in item) ||
+                !item.recurso ||
+                !ativos ||
+                ativos.has(item.recurso) ||
+                ("recursoAlternativo" in item && !!item.recursoAlternativo && ativos.has(item.recursoAlternativo)))
           ).map((item) => {
             const active = pathname === item.href || pathname?.startsWith(item.href + "/");
             return (

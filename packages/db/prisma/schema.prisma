@@ -107,6 +107,7 @@ model Tenant {
   scheduledMessages ScheduledMessage[]
   products          Product[]
   stockMovements    StockMovement[]
+  produtoMateriais  ProdutoMaterial[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -707,10 +708,15 @@ model Product {
   sku            String?
   categoria      String?
   priceCents     Int
+
+  // Descrição detalhada do serviço, pra equipe usar no atendimento (o
+  // atendente copia pra conversa e ajusta). Separada do nome porque é texto
+  // longo — protocolo, indicação, cuidados — que não cabe numa listagem.
+  descricao String?
   // Desativado some dos seletores de pedido mas continua no histórico: um
   // produto que saiu de linha ainda aparece nos pedidos antigos, e apagar
   // faria o pedido antigo perder o que foi vendido.
-  isActive       Boolean @default(true)
+  isActive  Boolean @default(true)
 
   // Saldo atual, mantido em cache.
   //
@@ -726,6 +732,7 @@ model Product {
 
   movements  StockMovement[]
   orderItems OrderItem[]
+  materiais  ProdutoMaterial[]
 
   @@unique([tenantId, name])
   @@unique([tenantId, sku])
@@ -1207,6 +1214,10 @@ enum Recurso {
   CONTAS_RECEBER
   INTEGRACAO_API
   GRUPOS
+  // Biblioteca de materiais dos produtos (descrição, documentos, vídeos).
+  // Também libera o catálogo de Produtos sem precisar do fluxo de Pedidos —
+  // a Hemoderi usa o catálogo pra mandar material, não pra vender pelo chat.
+  MATERIAIS
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -1441,4 +1452,37 @@ model GrupoParticipante {
 
   @@unique([grupoId, jid])
   @@index([grupoId, lid])
+}
+
+/// Um arquivo da biblioteca de um produto: termo de consentimento, ficha de
+/// anamnese, protocolo, vídeo explicativo do serviço.
+///
+/// Pedido da Hemoderi (reunião 21/09): a equipe manda esses arquivos pro
+/// cliente o dia inteiro e hoje procura cada um no celular. Aqui fica um
+/// lugar só, e a conversa tem um botão pra mandar.
+///
+/// O arquivo mora no armazenamento (R2) pela mediaKey e é reaproveitado a
+/// cada envio — nada é copiado. Por isso tirar da biblioteca NÃO apaga o
+/// arquivo: as mensagens que já foram com ele continuam precisando dele pra
+/// abrir na conversa.
+model ProdutoMaterial {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  titulo          String
+  mediaKey        String
+  mediaType       MediaType
+  mimeType        String
+  fileName        String
+  tamanhoBytes    Int
+  /// Só vídeo. A Hemoderi combinou vídeos de até 90s.
+  duracaoSegundos Int?
+
+  criadoEm DateTime @default(now())
+
+  @@index([productId])
+  @@index([tenantId])
 }

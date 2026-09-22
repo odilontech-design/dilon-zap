@@ -67,6 +67,32 @@ export async function exigirRecurso(
 }
 
 /**
+ * Como exigirRecurso, mas passa se a empresa tiver QUALQUER um dos recursos.
+ *
+ * Existe pro catálogo de Produtos, que serve a dois recursos: Pedidos (vender
+ * pelo chat) e Materiais (mandar documento e vídeo do serviço). Quem tem só um
+ * dos dois precisa do catálogo do mesmo jeito.
+ */
+export async function exigirAlgumRecurso(
+  user: { tenantId: string; role: string },
+  recursos: Recurso[]
+): Promise<NextResponse | null> {
+  if (user.role === "SUPERADMIN") return null;
+
+  const ativos = await recursosDoTenant(user.tenantId);
+  if (recursos.some((r) => ativos.has(r))) return null;
+
+  return NextResponse.json(
+    {
+      error: `${recursos.map((r) => ROTULO_RECURSO[r]).join(" ou ")} não faz parte do plano desta empresa. Fale com a Dilon Tech para incluir.`,
+      recurso: recursos[0],
+      foraDoPlano: true,
+    },
+    { status: 403 }
+  );
+}
+
+/**
  * Se ainda cabe mais um atendente ativo.
  *
  * Conta só quem está ativo: desativar alguém tem que liberar a vaga, senão

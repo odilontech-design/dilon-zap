@@ -16,6 +16,8 @@ type Product = {
   stockQty: number;
   tipo: "PRODUTO" | "SERVICO";
   duracaoMinutos: number | null;
+  descricao: string | null;
+  _count?: { materiais: number };
 };
 
 type Movimento = {
@@ -89,7 +91,21 @@ export function parsePreco(texto: string): number | null {
 
 const VAZIO = { name: "", sku: "", categoria: "", preco: "" };
 
-export function ProductsPanel({ podeEditar, podeMexerEstoque }: { podeEditar: boolean; podeMexerEstoque: boolean }) {
+export function ProductsPanel({
+  podeEditar,
+  podeMexerEstoque,
+  temEstoque,
+  temMateriais,
+}: {
+  podeEditar: boolean;
+  podeMexerEstoque: boolean;
+  // Empresa com Pedidos: produto tem estoque. Sem Pedidos (só Materiais), a
+  // coluna some — lançar estoque seria recusado pela rota.
+  temEstoque: boolean;
+  // Biblioteca de documentos e vídeos por produto.
+  temMateriais: boolean;
+}) {
+  const [materiaisDe, setMateriaisDe] = useState<Product | null>(null);
   const { data: produtos, mutate } = useSWR<Product[]>("/api/products?incluirInativos=1", fetcher);
   const [editando, setEditando] = useState<Product | typeof VAZIO | null>(null);
   const [busca, setBusca] = useState("");
@@ -226,7 +242,7 @@ export function ProductsPanel({ podeEditar, podeMexerEstoque }: { podeEditar: bo
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Produto</th>
               <th className="text-left font-medium px-4 py-2.5">Categoria</th>
-              <th className="text-right font-medium px-4 py-2.5">Estoque</th>
+              {temEstoque && <th className="text-right font-medium px-4 py-2.5">Estoque</th>}
               <th className="text-right font-medium px-4 py-2.5">Preço</th>
               {podeEditar && <th className="text-right font-medium px-4 py-2.5">Ações</th>}
             </tr>
@@ -253,6 +269,7 @@ export function ProductsPanel({ podeEditar, podeMexerEstoque }: { podeEditar: bo
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-neutral-500">{p.categoria ?? "—"}</td>
+                {temEstoque && (
                 <td className="px-4 py-2.5 text-right">
                   {/* Serviço não abre extrato: não há movimentação pra ver, e o
                       botão sugeriria que dá pra lançar entrada. O traço diz
@@ -273,9 +290,20 @@ export function ProductsPanel({ podeEditar, podeMexerEstoque }: { podeEditar: bo
                     </button>
                   )}
                 </td>
+                )}
                 <td className="px-4 py-2.5 text-right tabular-nums">{centsToBRL(p.priceCents)}</td>
                 {podeEditar && (
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {temMateriais && (
+                      <button onClick={() => setMateriaisDe(p)} className="text-neutral-600 hover:text-accent mr-3">
+                        Materiais
+                        {(p._count?.materiais ?? 0) > 0 && (
+                          <span className="ml-1 rounded-full bg-accent/10 text-accent px-1.5 text-[10px]">
+                            {p._count!.materiais}
+                          </span>
+                        )}
+                      </button>
+                    )}
                     <button onClick={() => setEditando(p)} className="text-neutral-600 hover:text-accent mr-3">
                       Editar
                     </button>
@@ -305,6 +333,9 @@ export function ProductsPanel({ podeEditar, podeMexerEstoque }: { podeEditar: bo
           onFechar={() => setEstoqueDe(null)}
           onMudou={mutate}
         />
+      )}
+      {materiaisDe && (
+        <PainelMateriais produto={materiaisDe} onFechar={() => setMateriaisDe(null)} onMudou={mutate} />
       )}
 
       {editando && (
@@ -621,6 +652,199 @@ function EditorProduto({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+type Material = {
+  id: string;
+  titulo: string;
+  mediaType: "IMAGE" | "DOCUMENT" | "VIDEO";
+  fileName: string;
+  tamanhoBytes: number;
+  duracaoSegundos: number | null;
+};
+
+const ROTULO_MIDIA: Record<Material["mediaType"], string> = {
+  DOCUMENT: "Documento",
+  IMAGE: "Imagem",
+  VIDEO: "Vídeo",
+};
+
+function tamanhoLegivel(bytes: number) {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
+/**
+ * Duração do vídeo, medida no navegador antes de subir. O servidor não tem
+ * como ler vídeo sem ferramenta extra, e o limite de 90s combinado com a
+ * Hemoderi precisa ser conferido antes de gastar o upload.
+ */
+function medirDuracao(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(file);
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.onloadedmetadata = () => {
+      URL.revokeObjectURL(url);
+      resolve(Number.isFinite(video.duration) ? video.duration : null);
+    };
+    video.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve(null);
+    };
+    video.src = url;
+  });
+}
+
+/**
+ * Biblioteca de um produto: descrição de referência e arquivos (termo de
+ * consentimento, ficha de anamnese, protocolo, vídeo do serviço) que a equipe
+ * manda pro cliente pela conversa, em "Enviar material".
+ */
+function PainelMateriais({
+  produto,
+  onFechar,
+  onMudou,
+}: {
+  produto: Product;
+  onFechar: () => void;
+  onMudou: () => void;
+}) {
+  const { data: materiais, mutate } = useSWR<Material[]>(`/api/products/${produto.id}/materiais`, fetcher);
+  const [descricao, setDescricao] = useState(produto.descricao ?? "");
+  const [descricaoSalva, setDescricaoSalva] = useState(produto.descricao ?? "");
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const arquivoRef = useRef<HTMLInputElement>(null);
+
+  async function salvarDescricao() {
+    if (descricao.trim() === descricaoSalva.trim()) return;
+    const res = await fetch(`/api/products/${produto.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ descricao: descricao.trim() }),
+    });
+    if (res.ok) {
+      setDescricaoSalva(descricao);
+      onMudou();
+    } else {
+      setErro("não deu pra salvar a descrição");
+    }
+  }
+
+  async function subir(file: File) {
+    setErro(null);
+    setEnviando(true);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      if (file.type.startsWith("video/")) {
+        const duracao = await medirDuracao(file);
+        if (duracao != null) form.append("duracaoSegundos", String(duracao));
+      }
+      const res = await fetch(`/api/products/${produto.id}/materiais`, { method: "POST", body: form });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErro(typeof b.error === "string" ? b.error : "não deu pra enviar o arquivo");
+        return;
+      }
+      mutate();
+      onMudou();
+    } finally {
+      setEnviando(false);
+      if (arquivoRef.current) arquivoRef.current.value = "";
+    }
+  }
+
+  async function remover(m: Material) {
+    if (!confirm(`Tirar "${m.titulo}" da biblioteca?\n\nQuem já recebeu esse arquivo continua com ele na conversa.`)) return;
+    const res = await fetch(`/api/products/${produto.id}/materiais/${m.id}`, { method: "DELETE" });
+    if (res.ok) {
+      mutate();
+      onMudou();
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 w-full max-w-lg max-h-[90vh] flex flex-col"
+      >
+        <header className="p-5 border-b border-neutral-200">
+          <h2 className="font-semibold">Materiais — {produto.name}</h2>
+          <p className="text-xs text-neutral-500 mt-0.5">
+            O que a equipe manda pro cliente pela conversa, em &quot;Enviar material&quot;.
+          </p>
+        </header>
+
+        <div className="overflow-y-auto p-5 flex flex-col gap-5">
+          <label className="text-sm">
+            <span className="block text-xs font-medium text-neutral-700 mb-1">Descrição</span>
+            <textarea
+              value={descricao}
+              onChange={(e) => setDescricao(e.target.value)}
+              onBlur={salvarDescricao}
+              rows={4}
+              maxLength={4000}
+              placeholder="Indicação, protocolo, cuidados — o atendente copia pra conversa e ajusta."
+              className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm resize-y"
+            />
+          </label>
+
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs font-medium text-neutral-700">Arquivos</span>
+              <button
+                onClick={() => arquivoRef.current?.click()}
+                disabled={enviando}
+                className="rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {enviando ? "Enviando..." : "+ Adicionar arquivo"}
+              </button>
+              <input
+                ref={arquivoRef}
+                type="file"
+                accept="application/pdf,.doc,.docx,.xls,.xlsx,image/*,video/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) subir(f);
+                }}
+              />
+            </div>
+            <p className="text-[11px] text-neutral-500 mb-2">PDF, documento, imagem ou vídeo de até 90s — até 16MB.</p>
+            {erro && <p className="text-xs text-red-600 mb-2">{erro}</p>}
+
+            <ul className="divide-y divide-neutral-100 border border-neutral-200 rounded-md">
+              {materiais && materiais.length === 0 && (
+                <li className="px-3 py-4 text-sm text-neutral-400 text-center">Nenhum arquivo ainda.</li>
+              )}
+              {(materiais ?? []).map((m) => (
+                <li key={m.id} className="px-3 py-2 flex items-center justify-between gap-3 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate">{m.titulo}</p>
+                    <p className="text-[11px] text-neutral-500">
+                      {ROTULO_MIDIA[m.mediaType]} · {tamanhoLegivel(m.tamanhoBytes)}
+                      {m.duracaoSegundos != null && ` · ${m.duracaoSegundos}s`}
+                    </p>
+                  </div>
+                  <button onClick={() => remover(m)} className="shrink-0 text-xs text-red-600 hover:underline">
+                    Remover
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+
+        <footer className="p-4 border-t border-neutral-200 flex justify-end">
+          <button onClick={onFechar} className="rounded-md border border-neutral-300 px-4 py-2 text-sm">
+            Concluir
+          </button>
+        </footer>
+      </div>
     </div>
   );
 }

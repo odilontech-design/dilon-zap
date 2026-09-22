@@ -674,6 +674,10 @@ export function ConversationThread({
   // busca. Sem isso a rota responderia 403 a cada 30 segundos, pra sempre,
   // numa tela que fica aberta o dia inteiro.
   const temPedidos = useRecurso("PEDIDOS");
+  // Biblioteca de documentos e vídeos dos produtos (ver PainelMateriais em
+  // Produtos). Em grupo não aparece: é material pra mandar a cliente.
+  const temMateriais = useRecurso("MATERIAIS");
+  const [escolhendoMaterial, setEscolhendoMaterial] = useState(false);
   const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
     temPedidos && !modoGrupo ? `/api/orders?conversationId=${conversationId}` : null,
     fetcher,
@@ -1162,6 +1166,14 @@ export function ConversationThread({
                   </span>
                 )}
               </button>
+              {temMateriais && !modoGrupo && (
+                <button
+                  onClick={() => setEscolhendoMaterial(true)}
+                  className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
+                >
+                  Material
+                </button>
+              )}
               {/* Bloquear é de pessoa: num grupo travaria a fila de envio pra
                   todo mundo dele. Pra parar de acompanhar, Gerenciar grupos. */}
               {!modoGrupo && (
@@ -1643,6 +1655,19 @@ export function ConversationThread({
             // menos 1 caractere, então mandar "" faria o "Fechar sem motivo"
             // devolver 400 e a conversa simplesmente não fechar.
             patchConversation(motivo ? { status: "RESOLVED", closeReason: motivo } : { status: "RESOLVED" });
+          }}
+        />
+      )}
+      {escolhendoMaterial && (
+        <EscolherMaterial
+          conversationId={conversationId}
+          onFechar={() => setEscolhendoMaterial(false)}
+          onEnviado={() => mutateMessages()}
+          // Descrição vai pro campo de digitação, não direto pro cliente: é
+          // texto de referência, e o atendente quase sempre ajusta antes.
+          onUsarDescricao={(texto) => {
+            setDraft((atual) => (atual.trim() ? `${atual}\n\n${texto}` : texto));
+            setEscolhendoMaterial(false);
           }}
         />
       )}
@@ -2580,6 +2605,160 @@ function MarcaTransferenciaSetor({ marcador }: { marcador: MarcadorSetor }) {
  * (ver Tenant.isolarHistoricoPorSetor): sem uma linha explicando o assunto, a
  * conversa chega muda e quem paga é o cliente, repetindo tudo.
  */
+type ProdutoComMaterial = {
+  id: string;
+  name: string;
+  categoria: string | null;
+  descricao: string | null;
+  materiais: {
+    id: string;
+    titulo: string;
+    mediaType: "IMAGE" | "DOCUMENT" | "VIDEO";
+    fileName: string;
+    duracaoSegundos: number | null;
+  }[];
+};
+
+const ICONE_MIDIA: Record<ProdutoComMaterial["materiais"][number]["mediaType"], string> = {
+  DOCUMENT: "📄",
+  IMAGE: "🖼️",
+  VIDEO: "🎬",
+};
+
+/**
+ * "Enviar material": termo de consentimento, ficha de anamnese, protocolo ou
+ * vídeo de um serviço, direto da biblioteca pro cliente — pedido da Hemoderi,
+ * que hoje procura esses arquivos no celular a cada atendimento.
+ *
+ * Um clique manda o arquivo; a descrição vai pro campo de digitação, pra o
+ * atendente revisar antes.
+ */
+function EscolherMaterial({
+  conversationId,
+  onFechar,
+  onEnviado,
+  onUsarDescricao,
+}: {
+  conversationId: string;
+  onFechar: () => void;
+  onEnviado: () => void;
+  onUsarDescricao: (texto: string) => void;
+}) {
+  const { data: produtos } = useSWR<ProdutoComMaterial[]>("/api/materiais", fetcher);
+  const [busca, setBusca] = useState("");
+  const [aberto, setAberto] = useState<string | null>(null);
+  const [enviandoId, setEnviandoId] = useState<string | null>(null);
+  const [enviados, setEnviados] = useState<Set<string>>(new Set());
+  const [erro, setErro] = useState<string | null>(null);
+
+  const termo = busca.trim().toLowerCase();
+  const lista = (produtos ?? []).filter(
+    (p) => !termo || p.name.toLowerCase().includes(termo) || (p.categoria ?? "").toLowerCase().includes(termo)
+  );
+
+  async function enviar(materialId: string) {
+    setErro(null);
+    setEnviandoId(materialId);
+    const res = await fetch(`/api/conversations/${conversationId}/materiais`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ materialId }),
+    });
+    setEnviandoId(null);
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      setErro(typeof b.error === "string" ? b.error : "não deu pra enviar");
+      return;
+    }
+    // Marca como enviado e deixa o modal aberto: é comum mandar termo e ficha
+    // juntos, e fechar a cada envio obrigaria a procurar o produto de novo.
+    setEnviados((s) => new Set(s).add(materialId));
+    onEnviado();
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md max-h-[85vh] flex flex-col"
+      >
+        <header className="p-4 border-b border-neutral-200">
+          <h2 className="font-semibold mb-2">Enviar material</h2>
+          <input
+            autoFocus
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar serviço ou produto"
+            className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm"
+          />
+        </header>
+
+        {erro && <p className="px-4 pt-3 text-xs text-red-600">{erro}</p>}
+
+        <ul className="overflow-y-auto divide-y divide-neutral-100">
+          {produtos && produtos.length === 0 && (
+            <li className="p-6 text-sm text-neutral-500 text-center">
+              Nenhum material cadastrado ainda. Os responsáveis adicionam em Produtos → Materiais.
+            </li>
+          )}
+          {lista.map((p) => (
+            <li key={p.id}>
+              <button
+                onClick={() => setAberto(aberto === p.id ? null : p.id)}
+                className="w-full text-left px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-neutral-50"
+              >
+                <span className="text-sm font-medium truncate">{p.name}</span>
+                <span className="text-xs text-neutral-400 shrink-0">
+                  {p.materiais.length > 0 ? `${p.materiais.length} arquivo(s)` : "só descrição"}
+                </span>
+              </button>
+              {aberto === p.id && (
+                <div className="px-4 pb-3 flex flex-col gap-1.5">
+                  {p.descricao && (
+                    <button
+                      onClick={() => onUsarDescricao(p.descricao!)}
+                      className="text-left text-xs rounded-md border border-neutral-200 px-2.5 py-2 hover:border-accent"
+                    >
+                      <span className="font-medium text-accent">Usar descrição</span>
+                      <span className="block text-neutral-500 line-clamp-2 mt-0.5">{p.descricao}</span>
+                    </button>
+                  )}
+                  {p.materiais.map((m) => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 px-2.5 py-2"
+                    >
+                      <span className="text-xs truncate">
+                        {ICONE_MIDIA[m.mediaType]} {m.titulo}
+                        {m.duracaoSegundos != null && <span className="text-neutral-400"> · {m.duracaoSegundos}s</span>}
+                      </span>
+                      <button
+                        onClick={() => enviar(m.id)}
+                        disabled={enviandoId === m.id}
+                        className={`shrink-0 text-xs ${
+                          enviados.has(m.id) ? "text-neutral-400" : "text-accent hover:underline"
+                        } disabled:opacity-50`}
+                      >
+                        {enviandoId === m.id ? "Enviando..." : enviados.has(m.id) ? "Enviado ✓" : "Enviar"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        <footer className="p-3 border-t border-neutral-200 flex justify-end">
+          <button onClick={onFechar} className="rounded-md border border-neutral-300 px-4 py-1.5 text-sm">
+            Fechar
+          </button>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
 type Participante = { jid: string; telefone: string | null; admin: boolean; nome: string | null };
 
 /**

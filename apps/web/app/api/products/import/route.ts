@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { exigirRecurso } from "@/lib/plano";
+import { exigirAlgumRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
 
 // Mesmo desenho da importação de contatos: o CSV é lido no navegador (onde
@@ -23,7 +23,7 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   const user = await requireUser();
-  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  const bloqueio = await exigirAlgumRecurso(user, ["PEDIDOS", "MATERIAIS"]);
   if (bloqueio) return bloqueio;
   // Mesma permissão do cadastro manual: Responsável e Financeiro.
   if (user.role !== "OWNER" && user.role !== "FINANCEIRO") {
