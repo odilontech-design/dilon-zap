@@ -1,8 +1,21 @@
 import { prisma } from "@dilon-zap/db";
 import type { PaymentMethod } from "@prisma/client";
+import { saldoDoPedido, faixaDeVencimento, diasDeAtraso, precisaLembrarHoje } from "@dilon-zap/receivables";
+import type { Faixa } from "@dilon-zap/receivables";
+
+// Reexportados pra quem já importa daqui (rotas de API, a tela, o teste
+// manual) não precisar saber que a matemática pura mudou de endereço.
+export { saldoDoPedido, faixaDeVencimento, diasDeAtraso, precisaLembrarHoje, mesmoDiaCalendario } from "@dilon-zap/receivables";
+export type { Faixa };
 
 /**
  * Contas a receber: quem deve, quanto e há quanto tempo.
+ *
+ * A matemática pura (saldo, faixa, régua do acompanhamento) mora em
+ * @dilon-zap/receivables, reexportada aqui — o worker precisa dela também
+ * pra decidir o mesmo dia de aviso que esta tela mostra (ver
+ * apps/worker/src/receivables-followup.ts). O que fica só aqui é o que toca
+ * banco.
  *
  * Mesma arquitetura do estoque, e de propósito. `Order.pago` é CACHE da soma
  * de Pagamento — só continua valendo se nunca for escrito por fora daqui.
@@ -10,12 +23,6 @@ import type { PaymentMethod } from "@prisma/client";
  * acontecer, então tudo roda em transação e não existe um `update({ pago })`
  * solto em lugar nenhum.
  */
-
-/** Quanto ainda falta receber deste pedido, em centavos. */
-export function saldoDoPedido(totalCents: number, pagamentos: { valorCents: number }[]) {
-  const recebido = pagamentos.reduce((s, p) => s + p.valorCents, 0);
-  return totalCents - recebido;
-}
 
 export type PagamentoInput = {
   orderId: string;
@@ -80,27 +87,6 @@ export async function registrarPagamento(entrada: PagamentoInput) {
   });
 }
 
-/** Faixas de atraso. O que interessa numa lista de recebíveis é há quanto tempo. */
-export type Faixa = "vencido" | "vence_hoje" | "a_vencer" | "sem_prazo";
-
-export function faixaDeVencimento(vencimento: Date | null, agora = new Date()): Faixa {
-  if (!vencimento) return "sem_prazo";
-
-  // Compara DIA, não instante: um pedido que vence hoje às 9h não está
-  // vencido às 10h. Quem combinou "dia 15" quis dizer o dia inteiro.
-  const dia = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  const diff = dia(vencimento) - dia(agora);
-
-  if (diff < 0) return "vencido";
-  if (diff === 0) return "vence_hoje";
-  return "a_vencer";
-}
-
-export function diasDeAtraso(vencimento: Date, agora = new Date()) {
-  const dia = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
-  return Math.max(0, Math.round((dia(agora) - dia(vencimento)) / 86_400_000));
-}
-
 /**
  * Tudo que a empresa tem a receber, já com saldo e faixa de atraso.
  *
@@ -146,6 +132,11 @@ export async function listarRecebiveis(tenantId: string) {
       faixa,
       diasAtraso: p.vencimento && faixa === "vencido" ? diasDeAtraso(p.vencimento, agora) : 0,
       paymentMethod: p.paymentMethod,
+      // Mesmo dia em que o acompanhamento interno avisa o financeiro (ver
+      // apps/worker/src/receivables-followup.ts) — pra quem está olhando a
+      // tela na hora não precisar depender só do push pra saber o que
+      // puxar primeiro.
+      precisaAtencaoHoje: p.vencimento ? precisaLembrarHoje(p.vencimento, agora) : false,
     };
   });
 }

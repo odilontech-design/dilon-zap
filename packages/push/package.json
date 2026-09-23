@@ -1,0 +1,14 @@
+{
+  "name": "@dilon-zap/push",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2",
+    "@types/web-push": "^3.6.4"
+  }
+}

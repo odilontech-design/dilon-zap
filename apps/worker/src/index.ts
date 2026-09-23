@@ -31,12 +31,14 @@ async function main() {
   const { startInternalServer } = await import("./http-server");
   const { watchForDuplicateContacts } = await import("./reconcile-contacts");
   const { startScheduledMessagesLoop } = await import("./scheduled-messages");
+  const { startReceivablesFollowupLoop } = await import("./receivables-followup");
 
   console.log("[dilon-zap worker] iniciando...");
   await syncSessions();
   watchForNewSessions();
   watchForDuplicateContacts();
   startScheduledMessagesLoop();
+  startReceivablesFollowupLoop();
   startInternalServer();
   console.log("[dilon-zap worker] no ar, observando sessões a cada 5s.");
 }

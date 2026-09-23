@@ -1,6 +1,6 @@
 // Contas a receber: saldo, faixa de vencimento e dias de atraso. Puro, sem banco.
 // Rodar com: npx tsx apps/web/lib/receivables.test-manual.ts
-import { saldoDoPedido, faixaDeVencimento, diasDeAtraso } from "./receivables";
+import { saldoDoPedido, faixaDeVencimento, diasDeAtraso, precisaLembrarHoje, mesmoDiaCalendario } from "./receivables";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -74,6 +74,25 @@ checa(
   diasDeAtraso(new Date(2025, 11, 28), new Date(2026, 0, 3)),
   6
 );
+
+// ---------------------------------------------------------------------------
+// Régua do acompanhamento interno: em quais dias o financeiro é avisado.
+// HOJE = 10/09/2026.
+// ---------------------------------------------------------------------------
+
+checa("2 dias antes de vencer — avisa", precisaLembrarHoje(new Date(2026, 8, 12), HOJE), true);
+checa("3 dias antes — ainda não", precisaLembrarHoje(new Date(2026, 8, 13), HOJE), false);
+checa("1 dia antes — ainda não", precisaLembrarHoje(new Date(2026, 8, 11), HOJE), false);
+checa("vence hoje — avisa", precisaLembrarHoje(new Date(2026, 8, 10), HOJE), true);
+checa("venceu ontem — não é dia de aviso", precisaLembrarHoje(new Date(2026, 8, 9), HOJE), false);
+checa("venceu há 7 dias — avisa de novo", precisaLembrarHoje(new Date(2026, 8, 3), HOJE), true);
+checa("venceu há 6 dias — ainda não é múltiplo de 7", precisaLembrarHoje(new Date(2026, 8, 4), HOJE), false);
+checa("venceu há 14 dias — avisa de novo", precisaLembrarHoje(new Date(2026, 7, 27), HOJE), true);
+checa("venceu há 21 dias — avisa de novo", precisaLembrarHoje(new Date(2026, 7, 20), HOJE), true);
+checa("vence daqui a 10 dias — nada a avisar ainda", precisaLembrarHoje(new Date(2026, 8, 20), HOJE), false);
+
+checa("mesmo dia, horas diferentes — é o mesmo dia", mesmoDiaCalendario(new Date(2026, 8, 10, 8, 0), new Date(2026, 8, 10, 23, 0)), true);
+checa("dias diferentes — não é o mesmo dia", mesmoDiaCalendario(new Date(2026, 8, 10), new Date(2026, 8, 11)), false);
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);

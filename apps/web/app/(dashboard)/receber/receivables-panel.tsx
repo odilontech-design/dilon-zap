@@ -27,6 +27,7 @@ type Item = {
   faixa: Faixa;
   diasAtraso: number;
   paymentMethod: string | null;
+  precisaAtencaoHoje: boolean;
 };
 
 type Resposta = {
@@ -107,6 +108,17 @@ export function ReceivablesPanel({ podeReceber }: { podeReceber: boolean }) {
                       {faixa.rotulo}
                       {i.faixa === "vencido" && ` há ${i.diasAtraso} dia(s)`}
                     </span>
+                    {/* Mesmo critério que dispara o push pro financeiro (ver
+                        receivables-followup.ts) — quem está com a tela
+                        aberta enxerga sem depender da notificação. */}
+                    {i.precisaAtencaoHoje && (
+                      <span
+                        title="Hoje é dia de dar atenção a este pedido"
+                        className="rounded border border-accent/30 bg-accent/10 px-1.5 py-0.5 text-[11px] font-medium text-accent"
+                      >
+                        ⏰ Hoje
+                      </span>
+                    )}
                   </div>
 
                   <p className="text-sm text-neutral-600">

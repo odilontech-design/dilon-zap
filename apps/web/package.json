@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@dilon-zap/db": "*",
+    "@dilon-zap/push": "*",
+    "@dilon-zap/receivables": "*",
     "@dilon-zap/storage": "*",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",

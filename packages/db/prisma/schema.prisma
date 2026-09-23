@@ -818,6 +818,14 @@ model Order {
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
+  // Último dia em que o acompanhamento interno de cobrança avisou o
+  // financeiro sobre este pedido (ver precisaLembrarHoje em
+  // packages/receivables). Só marca o dia, não a mensagem — o mesmo pedido
+  // pode gerar avisos em datas diferentes (2 dias antes, no vencimento, a
+  // cada 7 dias depois), e este campo existe só pra não avisar duas vezes
+  // no mesmo dia se o ciclo rodar mais de uma vez.
+  ultimoLembreteInternoEm DateTime?
+
   items OrderItem[]
 
   @@index([tenantId, status, createdAt])

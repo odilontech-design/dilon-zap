@@ -13,7 +13,7 @@ const { version } = require("../../package.json");
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@dilon-zap/db", "@dilon-zap/storage"],
+  transpilePackages: ["@dilon-zap/db", "@dilon-zap/storage", "@dilon-zap/push"],
   env: {
     NEXT_PUBLIC_APP_VERSION: version,
     NEXT_PUBLIC_BUILD_DATE: new Date().toISOString(),

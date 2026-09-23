@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@dilon-zap/db": "*",
+    "@dilon-zap/push": "*",
+    "@dilon-zap/receivables": "*",
     "@dilon-zap/storage": "*",
     "@whiskeysockets/baileys": "^7.0.0-rc14",
     "@hapi/boom": "^10.0.1",
