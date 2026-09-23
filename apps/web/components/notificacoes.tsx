@@ -28,7 +28,14 @@ function chaveParaBytes(base64: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
-type Estado = "carregando" | "sem-suporte" | "precisa-instalar" | "desligado" | "ligado" | "bloqueado";
+type Estado =
+  | "carregando"
+  | "sem-suporte"
+  | "sem-chave"
+  | "precisa-instalar"
+  | "desligado"
+  | "ligado"
+  | "bloqueado";
 
 export function Notificacoes() {
   const [estado, setEstado] = useState<Estado>("carregando");
@@ -69,9 +76,12 @@ export function Notificacoes() {
         return;
       }
 
+      // Chave ausente é falha nossa (build sem a variável), não limitação do
+      // aparelho — dizer "seu navegador não recebe" mandaria o cliente caçar
+      // defeito no lugar errado.
       const chave = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
       if (!chave) {
-        setEstado("sem-suporte");
+        setEstado("sem-chave");
         return;
       }
 
@@ -126,6 +136,14 @@ export function Notificacoes() {
 
   if (estado === "sem-suporte") {
     return <p className="text-xs text-neutral-500">Este navegador não recebe notificação.</p>;
+  }
+
+  if (estado === "sem-chave") {
+    return (
+      <p className="text-xs text-neutral-500">
+        Os avisos ainda não estão configurados neste servidor — fale com o suporte da Dilon Tech.
+      </p>
+    );
   }
 
   if (estado === "bloqueado") {

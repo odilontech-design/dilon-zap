@@ -58,6 +58,10 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
+      args:
+        # Vem do .env pela interpolação do compose. Ver o comentário no
+        # Dockerfile do web: NEXT_PUBLIC_* tem que existir no build.
+        NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY}
     restart: unless-stopped
     logging: *log
     env_file: .env

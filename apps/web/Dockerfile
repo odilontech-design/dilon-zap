@@ -21,6 +21,15 @@ RUN npm install
 
 COPY . .
 RUN npm run db:generate
+
+# A chave pública das notificações precisa existir NO BUILD: o Next troca cada
+# NEXT_PUBLIC_* pelo valor dentro do bundle que vai pro navegador, e o
+# env_file do compose só chega em runtime — tarde demais. Sem isso o botão de
+# ativar aviso some e vira "este navegador não recebe notificação" num Chrome
+# que recebe muito bem. Ela é pública por natureza (o navegador a entrega ao
+# serviço de push); a privada continua só no servidor, em runtime.
+ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY=""
+ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
 RUN npm run build -w apps/web
 
 ENV NODE_ENV=production
