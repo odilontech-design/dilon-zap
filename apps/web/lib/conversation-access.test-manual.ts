@@ -1,6 +1,6 @@
 // Ramos de visibilidade de conversa. Puro. Rodar com:
 // npx tsx apps/web/lib/conversation-access.test-manual.ts
-import { ramosDeVisibilidade } from "./conversation-access";
+import { ramosDeVisibilidade, temVisaoLivreDoTenant } from "./conversation-access";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -56,6 +56,13 @@ checa(
   ],
   [MINHA, MINHA]
 );
+
+// O bug relatado pela Guttierres: FINANCEIRO precisa cair na regra de setor
+// igual o AGENT, não na visão livre de OWNER/SUPERADMIN.
+checa("OWNER vê tudo", temVisaoLivreDoTenant("OWNER"), true);
+checa("SUPERADMIN vê tudo", temVisaoLivreDoTenant("SUPERADMIN"), true);
+checa("AGENT segue a regra de setor", temVisaoLivreDoTenant("AGENT"), false);
+checa("FINANCEIRO segue a regra de setor", temVisaoLivreDoTenant("FINANCEIRO"), false);
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);

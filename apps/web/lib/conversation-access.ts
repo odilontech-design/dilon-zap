@@ -3,6 +3,16 @@ import { prisma } from "@dilon-zap/db";
 import type { CurrentUser } from "@/lib/session";
 
 /**
+ * Só quem administra a conta enxerga tudo do tenant sem filtro. Separado da
+ * função async pra dar pra testar sem banco — foi justamente listar "!==
+ * AGENT" em vez desta lista que deixou o FINANCEIRO ver o inbox inteiro da
+ * Guttierres em vez de só o setor dele.
+ */
+export function temVisaoLivreDoTenant(role: CurrentUser["role"]): boolean {
+  return role === "OWNER" || role === "SUPERADMIN";
+}
+
+/**
  * Os ramos de visibilidade de um AGENT. Puro, pra ter teste — é a regra que
  * decide quem enxerga o atendimento de quem, e errar aqui vaza conversa de
  * cliente entre setores.
@@ -38,9 +48,9 @@ export function ramosDeVisibilidade({
 /**
  * O que este usuário pode enxergar em Conversation.
  *
- * AGENT só vê conversa sem dono ou atribuída a si mesmo — evita, por exemplo,
- * um comercial abordar alguém que já está em atendimento com o financeiro.
- * OWNER e SUPERADMIN continuam vendo tudo do tenant.
+ * AGENT e FINANCEIRO só veem conversa sem dono ou atribuída a si mesmo —
+ * evita, por exemplo, um comercial abordar alguém que já está em atendimento
+ * com o financeiro. OWNER e SUPERADMIN continuam vendo tudo do tenant.
  *
  * Setor entra como um terceiro caso, e não como detalhe: encaminhar pro setor
  * deixa assignedToId nulo de propósito, então sem tratá-lo aqui a fila do
@@ -55,7 +65,7 @@ export function ramosDeVisibilidade({
 export async function conversationVisibilityWhere(
   user: CurrentUser
 ): Promise<Prisma.ConversationWhereInput> {
-  if (user.role !== "AGENT") return {};
+  if (temVisaoLivreDoTenant(user.role)) return {};
 
   const [membros, tenant] = await Promise.all([
     prisma.setorMembro.findMany({ where: { userId: user.id }, select: { setorId: true } }),
