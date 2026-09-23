@@ -7,7 +7,12 @@ WORKDIR /app
 # node:20-slim (Debian) não vem com openssl — sem isso o Prisma não consegue
 # detectar a versão de libssl certa e o client falha em runtime (não só um
 # aviso: a query engine não carrega de verdade sem esse pacote).
-RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+#
+# ffmpeg converte o áudio gravado no navegador (webm/opus) pra ogg/opus antes
+# de mandar pro WhatsApp como nota de voz — ver lib/audio-transcode.ts. Sem
+# isso o áudio "envia" (o WhatsApp aceita o upload) mas nunca chega de
+# verdade do outro lado, porque o contêiner webm não é o que um ptt espera.
+RUN apt-get update && apt-get install -y openssl ffmpeg && rm -rf /var/lib/apt/lists/*
 
 COPY package.json package-lock.json ./
 COPY apps/web/package.json apps/web/package.json

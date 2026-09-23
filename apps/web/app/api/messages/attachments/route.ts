@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { uploadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { transcodeParaOggOpus } from "@/lib/audio-transcode";
 
 const MAX_SIZE_BYTES = 16 * 1024 * 1024; // 16MB — mesmo teto que o WhatsApp usa pra mídia
 
@@ -47,11 +48,34 @@ export async function POST(req: Request) {
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const mimeType = file.type || "application/octet-stream";
-  const mediaType = classify(mimeType);
-  const key = `${user.tenantId}/${conversation.id}/${randomUUID()}${extensionFor(file.name, mimeType)}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const mimeTypeOriginal = file.type || "application/octet-stream";
+  const mediaType = classify(mimeTypeOriginal);
+  let buffer: Buffer = Buffer.from(await file.arrayBuffer());
+  let mimeType = mimeTypeOriginal;
+  let extensao = extensionFor(file.name, mimeTypeOriginal);
+  let durationSeconds: number | undefined;
 
+  if (mediaType === "AUDIO") {
+    // Todo áudio sai como nota de voz (ver sendOutboundMedia no worker), e o
+    // WhatsApp só reconhece nota de voz em ogg/opus de verdade — não basta
+    // rotular. Sem isso o áudio "enviava" e nunca chegava do outro lado (foi
+    // o que a Guttierres relatou em 23/09).
+    try {
+      const convertido = await transcodeParaOggOpus(buffer);
+      buffer = convertido.buffer;
+      mimeType = "audio/ogg; codecs=opus";
+      extensao = ".ogg";
+      durationSeconds = convertido.durationSeconds ?? undefined;
+    } catch (err) {
+      console.error("falha ao converter áudio pra ogg/opus", err);
+      return NextResponse.json(
+        { error: "não deu pra processar esse áudio. Tenta gravar de novo ou envie outro arquivo." },
+        { status: 422 }
+      );
+    }
+  }
+
+  const key = `${user.tenantId}/${conversation.id}/${randomUUID()}${extensao}`;
   await uploadMedia(key, buffer, mimeType);
 
   return NextResponse.json({
@@ -59,5 +83,6 @@ export async function POST(req: Request) {
     mediaType,
     mediaMimeType: mimeType,
     mediaFileName: file.name || undefined,
+    durationSeconds,
   });
 }

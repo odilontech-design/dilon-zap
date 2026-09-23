@@ -975,6 +975,8 @@ export function ConversationThread({
       await fetch("/api/messages/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // durationSeconds vem calculado no upload (áudio já convertido) — é
+        // isso que tira o player do "0:00/0:00" na nossa própria tela.
         body: JSON.stringify({ conversationId, media }),
       });
       mutateMessages();
