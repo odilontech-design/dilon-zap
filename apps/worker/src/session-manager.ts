@@ -68,6 +68,14 @@ const AUSENCIA_INTERVALO_MS = 6 * 60 * 60 * 1000;
 const NEW_SESSION_POLL_INTERVAL_MS = 5_000;
 const RETRY_WINDOW_MS = 60_000; // quanto tempo tenta de novo sozinho antes de marcar FAILED de vez
 
+// Quando o número está DESCONECTADO, o problema não é a mensagem: ela vai
+// sair assim que alguém reconectar, e desistir em 60 segundos só produz três
+// áudios marcados como "falhou" que ninguém reenvia (foi o que aconteceu com
+// a Guttierres). Então, nesse caso, a mensagem espera — com um teto de um dia,
+// porque mandar de madrugada algo escrito na véspera confundiria o cliente
+// mais do que ajudaria.
+const ESPERA_RECONEXAO_MS = 24 * 60 * 60 * 1000;
+
 export function isSessionActive(sessionId: string) {
   return activeSessions.has(sessionId);
 }
@@ -2061,6 +2069,22 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
           // depois de RETRY_WINDOW_MS ou se o erro não parecer transitório.
           const isTransient = /connection closed|timed out|econnreset|socket.*closed|not connected/i.test(errorMessage);
           const ageMs = Date.now() - message.createdAt.getTime();
+
+          // Número desconectado é caso à parte: a espera vale o dia inteiro,
+          // porque o que falta é o QR Code ser lido, não a mensagem ser
+          // reenviada. Ver ESPERA_RECONEXAO_MS.
+          const sessao = await prisma.whatsAppSession.findUnique({
+            where: { id: sessionId },
+            select: { status: true },
+          });
+          if (sessao && sessao.status !== "CONNECTED" && ageMs < ESPERA_RECONEXAO_MS) {
+            await prisma.message.update({
+              where: { id: message.id },
+              data: { errorMessage: "aguardando o número reconectar" },
+            });
+            continue;
+          }
+
           if (isTransient && ageMs < RETRY_WINDOW_MS) {
             await prisma.message.update({
               where: { id: message.id },

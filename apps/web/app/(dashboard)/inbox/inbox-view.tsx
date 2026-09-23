@@ -953,6 +953,13 @@ export function ConversationThread({
   }
 
   async function uploadAndSend(file: File) {
+    // A mesma trava do texto. Sem ela, anexo e áudio saíam por fora do
+    // bloqueio e falhavam calados com o número desconectado — três áudios
+    // gravados na Guttierres em 22/09 morreram exatamente assim.
+    if (aviso?.bloqueiaEnvio) {
+      alert("O número está desconectado do WhatsApp. Leia o QR Code em Conectar número antes de enviar.");
+      return;
+    }
     setUploading(true);
     try {
       const form = new FormData();
@@ -1345,7 +1352,9 @@ export function ConversationThread({
                   <div className="flex items-center gap-1 shrink-0">
                     {m.isEdited && !m.isDeleted && <span className="italic">editado</span>}
                     {m.status === "PENDING" ? (
-                      <span>enviando...</span>
+                      // Com o número desconectado, "enviando..." sem fim faria
+                      // a atendente achar que já foi.
+                      <span>{aviso?.bloqueiaEnvio ? "aguardando conexão" : "enviando..."}</span>
                     ) : m.status === "FAILED" ? (
                       <span className={m.direction === "OUTBOUND" ? "text-red-100" : "text-red-500"}>falhou</span>
                     ) : (
@@ -1557,7 +1566,7 @@ export function ConversationThread({
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
-              disabled={uploading || recording || !!editingMessage}
+              disabled={uploading || recording || !!editingMessage || aviso?.bloqueiaEnvio}
               title="Anexar imagem, áudio ou arquivo"
               className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
             >
@@ -1584,7 +1593,7 @@ export function ConversationThread({
             <button
               type="button"
               onClick={recording ? stopRecording : startRecording}
-              disabled={uploading || !!editingMessage}
+              disabled={uploading || !!editingMessage || aviso?.bloqueiaEnvio}
               title={recording ? "Parar gravação" : "Gravar áudio"}
               className={`text-lg px-1 disabled:opacity-40 ${recording ? "text-red-600" : "text-neutral-500 hover:text-accent"}`}
             >

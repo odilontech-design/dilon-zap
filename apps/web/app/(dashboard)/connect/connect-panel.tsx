@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { DASHBOARD_INTERVAL, WHATSAPP_STATUS_INTERVAL } from "@/lib/polling";
+import { explicarErroDeConexao } from "@/lib/erro-conexao";
 
 type WhatsAppSessionView = {
   id: string;
@@ -78,8 +79,8 @@ export function ConnectPanel() {
     <div className="max-w-sm">
       <p className="text-sm font-medium mb-1">{STATUS_LABEL[session.status]}</p>
       {session.phoneNumber && <p className="text-sm text-neutral-500 mb-4">{session.phoneNumber}</p>}
-      {session.lastError && session.status !== "CONNECTED" && (
-        <p className="text-xs text-red-600 mb-4">{session.lastError}</p>
+      {session.status !== "CONNECTED" && explicarErroDeConexao(session.lastError) && (
+        <p className="text-xs text-red-600 mb-4">{explicarErroDeConexao(session.lastError)}</p>
       )}
       {error && <p className="text-xs text-red-600 mb-4">{error}</p>}
 
