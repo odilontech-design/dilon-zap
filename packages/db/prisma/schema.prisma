@@ -108,6 +108,7 @@ model Tenant {
   products          Product[]
   stockMovements    StockMovement[]
   produtoMateriais  ProdutoMaterial[]
+  teamMessages      TeamMessage[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -131,10 +132,11 @@ model Setor {
 
   createdAt DateTime @default(now())
 
-  membros   SetorMembro[]
-  opcoes    UraOpcao[]
-  conversas Conversation[]
-  mensagens Message[]
+  membros      SetorMembro[]
+  opcoes       UraOpcao[]
+  conversas    Conversation[]
+  mensagens    Message[]
+  teamMessages TeamMessage[]
 
   @@unique([tenantId, nome])
   @@index([tenantId, ativo])
@@ -155,6 +157,37 @@ model SetorMembro {
 
   @@id([setorId, userId])
   @@index([userId])
+}
+
+// Chat interno da equipe — pedido do Carlos (Guttierres): um lugar pra falar
+// com o time, separado do atendimento ao cliente. Não é mais um "modelo de
+// canal": um canal É um Setor. setorId nulo é o canal Geral, que todo mundo
+// da empresa vê; setorId preenchido é a conversa daquele setor. Criar um
+// setor novo já cria o canal dele de graça, sem cadastro duplicado.
+model TeamMessage {
+  id       String  @id @default(cuid())
+  tenantId String
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  setorId  String?
+  setor    Setor?  @relation(fields: [setorId], references: [id], onDelete: Cascade)
+
+  authorId String
+  author   User   @relation("TeamMessageAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  body String // pode ser vazio quando é só mídia, igual Message.body
+
+  mediaType            MediaType?
+  mediaKey             String? // chave do objeto no bucket R2
+  mediaMimeType        String?
+  mediaFileName        String?
+  mediaDurationSeconds Int?
+
+  isDeleted Boolean   @default(false) // mantém a linha (quem mandou o quê), some o conteúdo na UI
+  deletedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, setorId, createdAt])
 }
 
 model UraOpcao {
@@ -300,6 +333,7 @@ model User {
   stockMovements         StockMovement[]    @relation("StockMovementBy")
   pagamentos             Pagamento[]        @relation("PagamentoPor")
   atendimentosEncerrados Atendimento[]      @relation("AtendimentoEncerradoPor")
+  teamMessages           TeamMessage[]      @relation("TeamMessageAuthor")
 
   @@index([tenantId])
 }
