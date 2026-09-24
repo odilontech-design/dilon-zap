@@ -722,6 +722,13 @@ export function ConversationThread({
   const [pedidoAberto, setPedidoAberto] = useState<Pedido | null>(null);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
+  // Imagem/arquivo colado ou anexado espera aqui até confirmar — igual o
+  // WhatsApp mostra a prévia antes de mandar, em vez de sair enviando na
+  // hora que a pessoa cola ou escolhe o arquivo.
+  const [anexoPendente, setAnexoPendente] = useState<{ file: File; url: string; ehImagem: boolean } | null>(
+    null
+  );
+  const [legendaAnexo, setLegendaAnexo] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [forwardBatch, setForwardBatch] = useState<Message[] | null>(null);
@@ -1029,7 +1036,7 @@ export function ConversationThread({
     setForwardBatch(batch);
   }
 
-  async function uploadAndSend(file: File) {
+  async function uploadAndSend(file: File, legenda?: string) {
     // A mesma trava do texto. Sem ela, anexo e áudio saíam por fora do
     // bloqueio e falhavam calados com o número desconectado — três áudios
     // gravados na Guttierres em 22/09 morreram exatamente assim.
@@ -1054,12 +1061,39 @@ export function ConversationThread({
         headers: { "Content-Type": "application/json" },
         // durationSeconds vem calculado no upload (áudio já convertido) — é
         // isso que tira o player do "0:00/0:00" na nossa própria tela.
-        body: JSON.stringify({ conversationId, media }),
+        // text é a legenda escolhida na prévia — sem ela, a foto chegava
+        // sempre sem legenda nenhuma, mesmo quando a pessoa escrevia algo.
+        body: JSON.stringify({ conversationId, media, text: legenda?.trim() || undefined }),
       });
       mutateMessages();
     } finally {
       setUploading(false);
     }
+  }
+
+  // Abre a prévia (imagem, ou nome do arquivo pros outros tipos) em vez de
+  // mandar na hora — igual o WhatsApp deixa revisar e escrever a legenda
+  // antes de confirmar. Usado tanto por colar quanto pelo 📎.
+  function abrirPreviaDeAnexo(file: File) {
+    if (aviso?.bloqueiaEnvio) {
+      alert("O número está desconectado do WhatsApp. Leia o QR Code em Conectar número antes de enviar.");
+      return;
+    }
+    setAnexoPendente({ file, url: URL.createObjectURL(file), ehImagem: file.type.startsWith("image/") });
+    setLegendaAnexo("");
+  }
+
+  function fecharPreviaDeAnexo() {
+    if (anexoPendente) URL.revokeObjectURL(anexoPendente.url);
+    setAnexoPendente(null);
+    setLegendaAnexo("");
+  }
+
+  async function confirmarEnvioDoAnexo() {
+    if (!anexoPendente) return;
+    const { file } = anexoPendente;
+    fecharPreviaDeAnexo(); // já libera a tela — o envio segue em segundo plano, igual ao resto do composer
+    await uploadAndSend(file, legendaAnexo);
   }
 
   // Print colado direto no campo de mensagem — sem isso a atendente tinha
@@ -1077,7 +1111,7 @@ export function ConversationThread({
     // Cole de área de transferência não vem com nome — sem isso o servidor
     // teria que adivinhar a extensão só pelo mimetype.
     const extensao = file.type.split("/")[1] || "png";
-    uploadAndSend(new File([file], `print.${extensao}`, { type: file.type }));
+    abrirPreviaDeAnexo(new File([file], `print.${extensao}`, { type: file.type }));
   }
 
   async function startRecording() {
@@ -1647,7 +1681,7 @@ export function ConversationThread({
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) uploadAndSend(file);
+                if (file) abrirPreviaDeAnexo(file);
                 e.target.value = "";
               }}
             />
@@ -1732,6 +1766,16 @@ export function ConversationThread({
             mutatePedidos();
           }}
           onMudou={mutatePedidos}
+        />
+      )}
+      {anexoPendente && (
+        <PreviaDeAnexo
+          anexo={anexoPendente}
+          legenda={legendaAnexo}
+          onLegendaChange={setLegendaAnexo}
+          enviando={uploading}
+          onCancelar={fecharPreviaDeAnexo}
+          onEnviar={confirmarEnvioDoAnexo}
         />
       )}
       {agendando && (
@@ -2364,6 +2408,76 @@ function AgendarMensagem({
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+/**
+ * Prévia do anexo antes de enviar — imagem grande, campo de legenda e só
+ * então o botão de mandar. Sem isto, colar um print ou escolher um arquivo
+ * saía direto pro cliente, sem chance de conferir ou escrever nada junto —
+ * o WhatsApp de verdade sempre para nessa tela antes de enviar.
+ */
+function PreviaDeAnexo({
+  anexo,
+  legenda,
+  onLegendaChange,
+  enviando,
+  onCancelar,
+  onEnviar,
+}: {
+  anexo: { file: File; url: string; ehImagem: boolean };
+  legenda: string;
+  onLegendaChange: (v: string) => void;
+  enviando: boolean;
+  onCancelar: () => void;
+  onEnviar: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-surface rounded-lg w-full max-w-md shadow-lg flex flex-col max-h-[90vh]">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
+          <h2 className="text-sm font-semibold">Enviar anexo</h2>
+          <button onClick={onCancelar} className="text-neutral-400 hover:text-neutral-700 text-lg leading-none">
+            ✕
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto flex items-center justify-center bg-neutral-50 p-4">
+          {anexo.ehImagem ? (
+            // eslint-disable-next-line @next/next/no-img-element -- prévia local, vem de um blob: URL
+            <img src={anexo.url} alt="Prévia" className="max-h-[50vh] max-w-full rounded-md object-contain" />
+          ) : (
+            <div className="flex flex-col items-center gap-2 py-8 text-neutral-500">
+              <span className="text-4xl">📎</span>
+              <span className="text-sm text-center break-all px-4">{anexo.file.name}</span>
+            </div>
+          )}
+        </div>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            onEnviar();
+          }}
+          className="flex items-center gap-2 p-3 border-t border-neutral-200"
+        >
+          <input
+            autoFocus
+            value={legenda}
+            onChange={(e) => onLegendaChange(e.target.value)}
+            placeholder="Adicionar legenda..."
+            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          <button
+            type="submit"
+            disabled={enviando}
+            className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {enviando ? "Enviando..." : "Enviar"}
+          </button>
+        </form>
+      </div>
     </div>
   );
 }
