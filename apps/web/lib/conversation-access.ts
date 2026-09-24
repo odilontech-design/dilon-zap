@@ -24,10 +24,22 @@ export function ramosDeVisibilidade({
   userId,
   setorIds,
   filaGeralRestrita,
+  vePendenciaFinanceira = false,
 }: {
   userId: string;
   setorIds: string[];
   filaGeralRestrita: boolean;
+  /**
+   * Só pro FINANCEIRO: alcança a conversa de QUALQUER contato com pedido
+   * fechado e não pago, mesmo que ela seja de outro atendente ou de outro
+   * setor. Cobrar é uma tarefa que atravessa setor — sem este ramo, o
+   * financeiro clicava em "Abrir conversa" a partir de A receber e batia
+   * num 404, porque a conversa do cliente já era do Departamento Pessoal ou
+   * de quem sabe qual atendente (foi o caso relatado pela Guttierres).
+   * Mandar mensagem aqui NÃO transfere a conversa — ela continua do dono
+   * original, só ganha uma mensagem de cobrança no meio.
+   */
+  vePendenciaFinanceira?: boolean;
 }): Prisma.ConversationWhereInput[] {
   return [
     // Minha, esteja em que setor estiver — inclusive num que eu não componho
@@ -42,15 +54,21 @@ export function ramosDeVisibilidade({
     // ninguém "assume" um grupo. Sem este ramo a atendente abriria a tela
     // de Grupos e receberia 404 ao responder.
     { contact: { grupo: true } },
+    ...(vePendenciaFinanceira
+      ? [{ contact: { orders: { some: { status: "FECHADO" as const, pago: false } } } }]
+      : []),
   ];
 }
 
 /**
  * O que este usuário pode enxergar em Conversation.
  *
- * AGENT e FINANCEIRO só veem conversa sem dono ou atribuída a si mesmo —
- * evita, por exemplo, um comercial abordar alguém que já está em atendimento
- * com o financeiro. OWNER e SUPERADMIN continuam vendo tudo do tenant.
+ * AGENT só vê conversa sem dono ou atribuída a si mesmo — evita, por exemplo,
+ * um comercial abordar alguém que já está em atendimento com o financeiro.
+ * FINANCEIRO segue a mesma regra, e além dela também alcança qualquer
+ * contato com pedido pendente (ver vePendenciaFinanceira em
+ * ramosDeVisibilidade) — cobrar atravessa setor de propósito. OWNER e
+ * SUPERADMIN continuam vendo tudo do tenant.
  *
  * Setor entra como um terceiro caso, e não como detalhe: encaminhar pro setor
  * deixa assignedToId nulo de propósito, então sem tratá-lo aqui a fila do
@@ -82,6 +100,7 @@ export async function conversationVisibilityWhere(
       // Tenant sumido não deveria acontecer; se acontecer, o lado seguro é
       // mostrar de menos, não de mais.
       filaGeralRestrita: tenant?.restringirFilaGeral ?? true,
+      vePendenciaFinanceira: user.role === "FINANCEIRO",
     }),
   };
 }

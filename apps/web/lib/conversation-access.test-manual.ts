@@ -14,6 +14,7 @@ function checa(nome: string, obtido: unknown, esperado: unknown) {
 const MINHA = { assignedToId: "eu" };
 const FILA_GERAL = { assignedToId: null, setorId: null };
 const GRUPO = { contact: { grupo: true } };
+const PENDENCIA = { contact: { orders: { some: { status: "FECHADO", pago: false } } } };
 
 checa(
   "empresa sem setores e sem restrição: minha + fila geral + grupos",
@@ -63,6 +64,30 @@ checa("OWNER vê tudo", temVisaoLivreDoTenant("OWNER"), true);
 checa("SUPERADMIN vê tudo", temVisaoLivreDoTenant("SUPERADMIN"), true);
 checa("AGENT segue a regra de setor", temVisaoLivreDoTenant("AGENT"), false);
 checa("FINANCEIRO segue a regra de setor", temVisaoLivreDoTenant("FINANCEIRO"), false);
+
+// Segundo caso da Guttierres: financeiro tentando cobrar um contato cuja
+// conversa já é de outro setor/atendente batia num 404. vePendenciaFinanceira
+// é o ramo que resolve isso — só entra quando ligado, e só pra quem cobra.
+checa(
+  "sem vePendenciaFinanceira: ramo de pendência não aparece (comportamento de AGENT)",
+  ramosDeVisibilidade({ userId: "eu", setorIds: [], filaGeralRestrita: true }),
+  [MINHA, GRUPO]
+);
+checa(
+  "com vePendenciaFinanceira: entra o ramo de qualquer contato com pedido em aberto",
+  ramosDeVisibilidade({ userId: "eu", setorIds: [], filaGeralRestrita: true, vePendenciaFinanceira: true }),
+  [MINHA, GRUPO, PENDENCIA]
+);
+checa(
+  "vePendenciaFinanceira soma aos outros ramos, não substitui",
+  ramosDeVisibilidade({
+    userId: "eu",
+    setorIds: ["fiscal"],
+    filaGeralRestrita: false,
+    vePendenciaFinanceira: true,
+  }),
+  [MINHA, FILA_GERAL, { assignedToId: null, setorId: { in: ["fiscal"] } }, GRUPO, PENDENCIA]
+);
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);
