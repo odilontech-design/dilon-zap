@@ -23,3 +23,21 @@ export function podeVerCanal(
   if (role === "OWNER" || role === "SUPERADMIN") return true;
   return meusSetorIds.includes(canalSetorId);
 }
+
+/**
+ * Conversa direta 1 a 1: só quem escreveu e quem recebeu enxerga. Sem exceção
+ * de papel — nem o Responsável lê a conversa privada de dois colegas, ao
+ * contrário dos canais de setor, que ele acompanha.
+ */
+export function podeVerConversaDireta(meuId: string, autorId: string, destinatarioId: string): boolean {
+  return meuId === autorId || meuId === destinatarioId;
+}
+
+/**
+ * Onde a mensagem mora, a partir dos dois campos do banco. Geral não tem
+ * setor nem destinatário; direta tem destinatário (e nunca setor).
+ */
+export function tipoDeConversa(setorId: string | null, destinatarioId: string | null): "GERAL" | "SETOR" | "DIRETA" {
+  if (destinatarioId) return "DIRETA";
+  return setorId ? "SETOR" : "GERAL";
+}

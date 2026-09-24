@@ -11,12 +11,14 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
 
   const mensagem = await prisma.teamMessage.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
-    select: { id: true, authorId: true },
+    select: { id: true, authorId: true, destinatarioId: true },
   });
   if (!mensagem) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const podeApagar =
-    mensagem.authorId === user.id || user.role === "OWNER" || user.role === "SUPERADMIN";
+  // Conversa direta é privada: nem o Responsável mexe nela, só quem escreveu.
+  const podeApagar = mensagem.destinatarioId
+    ? mensagem.authorId === user.id
+    : mensagem.authorId === user.id || user.role === "OWNER" || user.role === "SUPERADMIN";
   if (!podeApagar) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
   await prisma.teamMessage.update({

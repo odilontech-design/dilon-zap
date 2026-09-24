@@ -41,6 +41,8 @@ export async function POST(req: Request) {
   const file = form.get("file");
   const setorIdRaw = form.get("setorId");
   const setorId = typeof setorIdRaw === "string" && setorIdRaw ? setorIdRaw : null;
+  const destinatarioRaw = form.get("destinatarioId");
+  const destinatarioId = typeof destinatarioRaw === "string" && destinatarioRaw ? destinatarioRaw : null;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "arquivo é obrigatório" }, { status: 400 });
@@ -49,14 +51,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "arquivo maior que 16MB" }, { status: 400 });
   }
 
-  const membros = await prisma.setorMembro.findMany({ where: { userId: user.id }, select: { setorId: true } });
-  if (!podeVerCanal(user.role, membros.map((m) => m.setorId), setorId)) {
-    return NextResponse.json({ error: "sem acesso a este canal" }, { status: 403 });
+  if (destinatarioId) {
+    // Conversa direta: o colega precisa existir, ser da empresa e estar ativo.
+    const colega = await prisma.user.findFirst({
+      where: { id: destinatarioId, tenantId: user.tenantId, deactivatedAt: null, NOT: { id: user.id } },
+      select: { id: true },
+    });
+    if (!colega) return NextResponse.json({ error: "colega não encontrado" }, { status: 404 });
+  } else {
+    const membros = await prisma.setorMembro.findMany({ where: { userId: user.id }, select: { setorId: true } });
+    if (!podeVerCanal(user.role, membros.map((m) => m.setorId), setorId)) {
+      return NextResponse.json({ error: "sem acesso a este canal" }, { status: 403 });
+    }
   }
 
   const mimeType = file.type || "application/octet-stream";
   const mediaType = classify(mimeType);
-  const key = `${user.tenantId}/chat-equipe/${setorId ?? "geral"}/${randomUUID()}${extensionFor(file.name, mimeType)}`;
+  const key = `${user.tenantId}/chat-equipe/${destinatarioId ? "direta" : (setorId ?? "geral")}/${randomUUID()}${extensionFor(file.name, mimeType)}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   await uploadMedia(key, buffer, mimeType);

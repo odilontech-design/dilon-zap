@@ -15,6 +15,10 @@ import { MESSAGES_INTERVAL, LISTING_INTERVAL } from "@/lib/polling";
  */
 
 type Canal = { setorId: string | null; nome: string; cor: string | null };
+type Pessoa = { id: string; name: string };
+
+// O que está aberto: um canal (Geral ou de setor) ou uma conversa direta.
+type Selecao = { tipo: "canal"; setorId: string | null } | { tipo: "pessoa"; id: string; nome: string };
 
 type Mensagem = {
   id: string;
@@ -33,14 +37,19 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
   const { data: canais } = useSWR<Canal[]>("/api/team-chat/channels", fetcher, {
     refreshInterval: LISTING_INTERVAL,
   });
-  const [canalSelecionado, setCanalSelecionado] = useState<string | null | undefined>(undefined);
+  // Todo colega ativo da empresa, de qualquer setor — o ponto da conversa
+  // direta é justamente falar com quem está em outro setor.
+  const { data: pessoas } = useSWR<Pessoa[]>("/api/team-chat/people", fetcher, {
+    refreshInterval: LISTING_INTERVAL,
+  });
+  const [selecao, setSelecao] = useState<Selecao | undefined>(undefined);
 
   // Geral assim que os canais chegam, se ainda não tiver nada escolhido —
   // abrir o chat sem nenhuma conversa selecionada deixaria a tela vazia à
   // toa na primeira visita.
   useEffect(() => {
-    if (canais && canalSelecionado === undefined) setCanalSelecionado(null);
-  }, [canais, canalSelecionado]);
+    if (canais && selecao === undefined) setSelecao({ tipo: "canal", setorId: null });
+  }, [canais, selecao]);
 
   return (
     <div className="flex h-[calc(100dvh-3rem)] md:h-screen">
@@ -56,9 +65,9 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
             canais.map((c) => (
               <button
                 key={c.setorId ?? "geral"}
-                onClick={() => setCanalSelecionado(c.setorId)}
+                onClick={() => setSelecao({ tipo: "canal", setorId: c.setorId })}
                 className={`w-full flex items-center gap-2.5 px-4 py-3 text-left border-b border-neutral-100 hover:bg-neutral-50 ${
-                  canalSelecionado === c.setorId ? "bg-accent/10" : ""
+                  selecao?.tipo === "canal" && selecao.setorId === c.setorId ? "bg-accent/10" : ""
                 }`}
               >
                 <span
@@ -69,18 +78,47 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
               </button>
             ))
           )}
+
+          <p className="px-4 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+            Conversas diretas
+          </p>
+          {!pessoas ? (
+            <p className="px-4 py-2 text-sm text-neutral-400">Carregando...</p>
+          ) : pessoas.length === 0 ? (
+            <p className="px-4 py-2 text-sm text-neutral-400">Você é o único usuário ativo.</p>
+          ) : (
+            pessoas.map((pe) => (
+              <button
+                key={pe.id}
+                onClick={() => setSelecao({ tipo: "pessoa", id: pe.id, nome: pe.name })}
+                className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left border-b border-neutral-100 hover:bg-neutral-50 ${
+                  selecao?.tipo === "pessoa" && selecao.id === pe.id ? "bg-accent/10" : ""
+                }`}
+              >
+                <span className="w-6 h-6 rounded-full bg-accent/15 text-accent text-xs font-medium flex items-center justify-center shrink-0">
+                  {pe.name.charAt(0).toUpperCase()}
+                </span>
+                <span className="text-sm text-neutral-900 truncate">{pe.name}</span>
+              </button>
+            ))
+          )}
         </div>
       </div>
 
-      {canalSelecionado === undefined ? (
+      {selecao === undefined ? (
         <div className="hidden md:flex flex-1 items-center justify-center text-sm text-neutral-400">
           Carregando...
         </div>
       ) : (
         <CanalAberto
-          key={canalSelecionado ?? "geral"}
-          setorId={canalSelecionado}
-          nomeCanal={canais?.find((c) => c.setorId === canalSelecionado)?.nome ?? ""}
+          key={selecao.tipo === "pessoa" ? `pessoa-${selecao.id}` : (selecao.setorId ?? "geral")}
+          setorId={selecao.tipo === "canal" ? selecao.setorId : null}
+          destinatarioId={selecao.tipo === "pessoa" ? selecao.id : null}
+          nomeCanal={
+            selecao.tipo === "pessoa"
+              ? selecao.nome
+              : (canais?.find((c) => c.setorId === selecao.setorId)?.nome ?? "")
+          }
           meuId={meuId}
         />
       )}
@@ -90,14 +128,17 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
 
 function CanalAberto({
   setorId,
+  destinatarioId,
   nomeCanal,
   meuId,
 }: {
   setorId: string | null;
+  /** Preenchido = conversa direta com esta pessoa (setorId vem null). */
+  destinatarioId: string | null;
   nomeCanal: string;
   meuId: string;
 }) {
-  const query = setorId ? `?setorId=${setorId}` : "";
+  const query = destinatarioId ? `?com=${destinatarioId}` : setorId ? `?setorId=${setorId}` : "";
   const { data: mensagens, mutate } = useSWR<Mensagem[]>(`/api/team-chat/messages${query}`, fetcher, {
     refreshInterval: MESSAGES_INTERVAL,
   });
@@ -122,7 +163,7 @@ function CanalAberto({
     await fetch("/api/team-chat/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ setorId, text: texto }),
+      body: JSON.stringify({ setorId, destinatarioId, text: texto }),
     });
     setEnviando(false);
     mutate();
@@ -134,6 +175,7 @@ function CanalAberto({
       const form = new FormData();
       form.append("file", file);
       if (setorId) form.append("setorId", setorId);
+      if (destinatarioId) form.append("destinatarioId", destinatarioId);
       const uploadRes = await fetch("/api/team-chat/attachments", { method: "POST", body: form });
       if (!uploadRes.ok) {
         const body = await uploadRes.json().catch(() => ({}));
@@ -144,7 +186,7 @@ function CanalAberto({
       await fetch("/api/team-chat/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ setorId, text: legenda.trim() || undefined, media }),
+        body: JSON.stringify({ setorId, destinatarioId, text: legenda.trim() || undefined, media }),
       });
       mutate();
     } finally {
@@ -167,7 +209,7 @@ function CanalAberto({
   }
 
   async function apagar(id: string) {
-    if (!confirm("Apagar essa mensagem pra todo mundo do canal?")) return;
+    if (!confirm("Apagar essa mensagem?")) return;
     await fetch(`/api/team-chat/messages/${id}`, { method: "DELETE" });
     mutate();
   }
@@ -176,6 +218,7 @@ function CanalAberto({
     <div className="flex-1 flex flex-col min-w-0">
       <div className="p-4 border-b border-neutral-200">
         <h2 className="text-sm font-semibold text-neutral-900">{nomeCanal}</h2>
+        {destinatarioId && <p className="text-xs text-neutral-500">Conversa privada — só vocês dois veem.</p>}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5">
