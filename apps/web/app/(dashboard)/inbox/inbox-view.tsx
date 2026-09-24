@@ -528,6 +528,15 @@ export function InboxView({ ehFinanceiro }: { ehFinanceiro: boolean }) {
   );
 }
 
+type ContatoDaAgenda = {
+  id: string;
+  name: string | null;
+  waJid: string;
+  phoneNumber: string | null;
+  avatarUrl: string | null;
+  lastStatusAt: string | null;
+};
+
 function NewConversationModal({
   onClose,
   onStarted,
@@ -537,8 +546,41 @@ function NewConversationModal({
 }) {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [busca, setBusca] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Reusa a mesma agenda que a tela de Contatos já busca — mesma chave do
+  // SWR, então quem passou por lá nesta sessão abre o modal com a lista
+  // pronta na hora, sem esperar um round-trip novo.
+  const { data: contatos } = useSWR<ContatoDaAgenda[]>("/api/contacts", fetcher);
+
+  const encontrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo || !contatos) return [];
+    const digitos = termo.replace(/\D/g, "");
+    return contatos
+      .filter((c) => {
+        const nome = (c.name ?? "").toLowerCase();
+        const foneDigitos = (c.phoneNumber ?? "").replace(/\D/g, "");
+        return nome.includes(termo) || (digitos.length >= 3 && foneDigitos.includes(digitos));
+      })
+      .slice(0, 8);
+  }, [busca, contatos]);
+
+  async function iniciarComContato(contactId: string) {
+    setSaving(true);
+    setError(null);
+    const convRes = await fetch(`/api/contacts/${contactId}/start-conversation`, { method: "POST" });
+    setSaving(false);
+    if (!convRes.ok) {
+      const body = await convRes.json().catch(() => ({}));
+      setError(typeof body.error === "string" ? body.error : "não deu pra iniciar a conversa");
+      return;
+    }
+    const conversation = await convRes.json();
+    onStarted(conversation.id);
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -557,22 +599,58 @@ function NewConversationModal({
       return;
     }
     const contact = await contactRes.json();
-
-    const convRes = await fetch(`/api/contacts/${contact.id}/start-conversation`, { method: "POST" });
-    setSaving(false);
-    if (!convRes.ok) {
-      const body = await convRes.json().catch(() => ({}));
-      setError(typeof body.error === "string" ? body.error : "não deu pra iniciar a conversa");
-      return;
-    }
-    const conversation = await convRes.json();
-    onStarted(conversation.id);
+    await iniciarComContato(contact.id);
   }
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
       <div className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
         <h2 className="text-base font-semibold mb-4">Nova conversa</h2>
+
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-neutral-700 mb-1">Buscar na agenda</label>
+          <input
+            autoFocus
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Nome ou número..."
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+          />
+          {busca.trim() && (
+            <div className="mt-1.5 max-h-48 overflow-y-auto rounded-md border border-neutral-200 divide-y divide-neutral-100">
+              {encontrados.length === 0 ? (
+                <p className="px-3 py-2.5 text-sm text-neutral-400">
+                  {contatos ? "Ninguém na agenda com esse nome ou número." : "Buscando..."}
+                </p>
+              ) : (
+                encontrados.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    disabled={saving}
+                    onClick={() => iniciarComContato(c.id)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 text-left text-sm hover:bg-neutral-50 disabled:opacity-50"
+                  >
+                    <Avatar contact={c} size={28} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium text-neutral-900">
+                        {c.name || "Contato sem nome"}
+                      </span>
+                      {c.phoneNumber && <span className="block text-xs text-neutral-500">{c.phoneNumber}</span>}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="mb-1 flex items-center gap-2 text-xs text-neutral-400">
+          <span className="h-px flex-1 bg-neutral-200" />
+          não achou? cadastre um novo
+          <span className="h-px flex-1 bg-neutral-200" />
+        </div>
+
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
             <label className="block text-xs font-medium text-neutral-700 mb-1">Nome (opcional)</label>
@@ -586,7 +664,6 @@ function NewConversationModal({
             <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone (com DDD)</label>
             <input
               required
-              autoFocus
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="21967411481"
@@ -983,6 +1060,24 @@ export function ConversationThread({
     } finally {
       setUploading(false);
     }
+  }
+
+  // Print colado direto no campo de mensagem — sem isso a atendente tinha
+  // que salvar a imagem num arquivo antes, só pra poder clicar em 📎 e achar
+  // esse arquivo de novo. Ctrl+V já é o gesto natural de quem acabou de tirar
+  // um print (Windows/Mac colam a imagem, não um caminho de arquivo).
+  function handlePasteImage(e: React.ClipboardEvent<HTMLInputElement>) {
+    const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
+    if (!item) return; // colar texto normal continua colando texto normal
+
+    e.preventDefault();
+    const file = item.getAsFile();
+    if (!file) return;
+
+    // Cole de área de transferência não vem com nome — sem isso o servidor
+    // teria que adivinhar a extensão só pelo mimetype.
+    const extensao = file.type.split("/")[1] || "png";
+    uploadAndSend(new File([file], `print.${extensao}`, { type: file.type }));
   }
 
   async function startRecording() {
@@ -1605,6 +1700,7 @@ export function ConversationThread({
               ref={draftInputRef}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onPaste={handlePasteImage}
               placeholder={
                 aviso?.bloqueiaEnvio
                   ? "Número desconectado — leia o QR code em Conectar número"
