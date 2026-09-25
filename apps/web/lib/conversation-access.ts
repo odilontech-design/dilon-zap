@@ -8,7 +8,10 @@ import type { CurrentUser } from "@/lib/session";
  * AGENT" em vez desta lista que deixou o FINANCEIRO ver o inbox inteiro da
  * Guttierres em vez de só o setor dele.
  */
-export function temVisaoLivreDoTenant(role: CurrentUser["role"]): boolean {
+export function temVisaoLivreDoTenant(role: CurrentUser["role"], empresaAberta = false): boolean {
+  // Empresa com a caixa aberta (Tenant.conversasAbertasATodos): ninguém é
+  // filtrado, seja qual for o papel.
+  if (empresaAberta) return true;
   return role === "OWNER" || role === "SUPERADMIN";
 }
 
@@ -89,9 +92,12 @@ export async function conversationVisibilityWhere(
     prisma.setorMembro.findMany({ where: { userId: user.id }, select: { setorId: true } }),
     prisma.tenant.findUnique({
       where: { id: user.tenantId },
-      select: { restringirFilaGeral: true },
+      select: { restringirFilaGeral: true, conversasAbertasATodos: true },
     }),
   ]);
+
+  // Caixa aberta a todos: sem filtro nenhum.
+  if (temVisaoLivreDoTenant(user.role, tenant?.conversasAbertasATodos ?? false)) return {};
 
   return {
     OR: ramosDeVisibilidade({

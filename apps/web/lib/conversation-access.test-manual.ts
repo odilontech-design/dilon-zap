@@ -89,5 +89,11 @@ checa(
   [MINHA, FILA_GERAL, { assignedToId: null, setorId: { in: ["fiscal"] } }, GRUPO, PENDENCIA]
 );
 
+// Empresa com a caixa aberta (Believe): ninguém é filtrado, qualquer papel.
+checa("caixa aberta: AGENT vê tudo", temVisaoLivreDoTenant("AGENT", true), true);
+checa("caixa aberta: FINANCEIRO vê tudo", temVisaoLivreDoTenant("FINANCEIRO", true), true);
+checa("caixa fechada (padrão): AGENT continua filtrado", temVisaoLivreDoTenant("AGENT", false), false);
+checa("sem informar a empresa, o padrão é fechada", temVisaoLivreDoTenant("FINANCEIRO"), false);
+
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);

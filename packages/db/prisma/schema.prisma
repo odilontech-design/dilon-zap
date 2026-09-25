@@ -67,6 +67,14 @@ model Tenant {
   // nessa fila, e ligar isso deixaria o Inbox dos atendentes vazio.
   restringirFilaGeral Boolean @default(false)
 
+  // Empresa que trabalha com a caixa de entrada aberta: todo atendente e o
+  // financeiro enxergam e respondem QUALQUER conversa, sem a divisão por dono
+  // ou por setor. É o jeito de antes dos setores — a Believe tem uma
+  // consultora e um financeiro no mesmo balcão, e ficar sem poder abrir a
+  // conversa de um cliente por ela ser "da outra" atrapalha em vez de
+  // organizar. Ligado à mão no banco, como restringirFilaGeral.
+  conversasAbertasATodos Boolean @default(false)
+
   // Cabeçalho do recibo impresso. Separado de `name` de propósito: o nome
   // que a equipe vê no sistema ("Believe Cosméticos") não é o que vai no
   // comprovante — ali vai a razão social ou o nome do MEI, que é o que
