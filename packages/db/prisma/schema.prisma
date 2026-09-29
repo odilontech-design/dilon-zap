@@ -764,8 +764,12 @@ model Product {
   // longo — protocolo, indicação, cuidados — que não cabe numa listagem.
   descricao String?
   // Desativado some dos seletores de pedido mas continua no histórico: um
-  // produto que saiu de linha ainda aparece nos pedidos antigos, e apagar
-  // faria o pedido antigo perder o que foi vendido.
+  // produto que saiu de linha ainda aparece nos pedidos antigos. É o caminho
+  // recomendado pro dia a dia — excluir (ver DELETE em app/api/products/[id])
+  // também é seguro hoje (OrderItem copia nome e preço da venda e aponta pra
+  // cá com SetNull), mas apaga a biblioteca de materiais e o extrato de
+  // estoque deste produto junto, então é pra cadastro errado, não pra saída
+  // de linha comum.
   isActive  Boolean @default(true)
 
   // Saldo atual, mantido em cache.

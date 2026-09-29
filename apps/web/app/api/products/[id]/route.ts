@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirAlgumRecurso } from "@/lib/plano";
+import { logAudit } from "@/lib/audit";
 
 const patchSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
@@ -58,9 +59,31 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 }
 
 /**
- * Não existe DELETE de propósito: desativar é o caminho.
+ * Excluir de verdade — Desativar continua sendo o caminho recomendado pro
+ * dia a dia (some dos seletores, sem perder nada), mas às vezes o cadastro
+ * foi criado errado (importação duplicada, teste, nome trocado) e "inativo
+ * pra sempre" só suja a lista.
  *
- * Assim que o pedido existir, apagar um produto faria os pedidos antigos
- * perderem o que foi vendido. Como a fase do pedido vem logo em seguida, já
- * nasce sem a porta que teríamos que fechar depois.
+ * É seguro porque OrderItem guarda o nome e os valores praticados NO
+ * MOMENTO da venda (nomeProduto, precoTabelaCents, precoUnitCents) e aponta
+ * pra cá com onDelete: SetNull — um pedido antigo não perde o que foi vendido,
+ * só o link pro cadastro (que pode nem existir mais mesmo, sem excluir:
+ * mudar de tenant, reimportar). Estoque (StockMovement) e a biblioteca
+ * (ProdutoMaterial) vão junto por Cascade — são histórico DESTE produto, não
+ * de um pedido.
  */
+export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+  const user = await requireUser();
+  const bloqueio = await exigirAlgumRecurso(user, ["PEDIDOS", "MATERIAIS"]);
+  if (bloqueio) return bloqueio;
+  if (!podeEditarCatalogo(user.role)) return NextResponse.json({ error: "sem permissão" }, { status: 403 });
+
+  const alvo = await prisma.product.findFirst({ where: { id: params.id, tenantId: user.tenantId } });
+  if (!alvo) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  await prisma.product.delete({ where: { id: alvo.id } });
+
+  await logAudit({ actor: user, action: "product.delete", metadata: { productId: alvo.id, nome: alvo.name } });
+
+  return NextResponse.json({ ok: true });
+}

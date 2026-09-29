@@ -17,7 +17,7 @@ type Product = {
   tipo: "PRODUTO" | "SERVICO";
   duracaoMinutos: number | null;
   descricao: string | null;
-  _count?: { materiais: number };
+  _count?: { materiais: number; orderItems: number };
 };
 
 type Movimento = {
@@ -132,6 +132,25 @@ export function ProductsPanel({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ isActive: !p.isActive }),
     });
+    mutate();
+  }
+
+  async function excluir(p: Product) {
+    const vendas = p._count?.orderItems ?? 0;
+    const aviso =
+      `Excluir "${p.name}" de vez?\n\nNão dá pra desfazer. ` +
+      (vendas > 0
+        ? `Este item já entrou em ${vendas} pedido(s) — o histórico deles fica intacto (guarda o nome e o preço da venda), só some o cadastro. `
+        : "") +
+      `A biblioteca de materiais e o extrato de estoque deste produto vão junto.\n\nSe é só pra tirar de circulação, cancele e use "Desativar" em vez disso.`;
+    if (!confirm(aviso)) return;
+
+    const res = await fetch(`/api/products/${p.id}`, { method: "DELETE" });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      setAviso(typeof b.error === "string" ? b.error : "não deu pra excluir");
+      return;
+    }
     mutate();
   }
 
@@ -313,6 +332,9 @@ export function ProductsPanel({
                     >
                       {p.isActive ? "Desativar" : "Reativar"}
                     </button>
+                    <button onClick={() => excluir(p)} className="text-neutral-400 hover:text-red-700 ml-3">
+                      Excluir
+                    </button>
                   </td>
                 )}
               </tr>
@@ -341,6 +363,8 @@ export function ProductsPanel({
       {editando && (
         <EditorProduto
           inicial={editando}
+          temEstoque={temEstoque}
+          podeMexerEstoque={podeMexerEstoque}
           onFechar={() => setEditando(null)}
           onSalvo={() => {
             setEditando(null);
@@ -503,11 +527,15 @@ function PainelEstoque({
 
 function EditorProduto({
   inicial,
+  temEstoque,
+  podeMexerEstoque,
   onFechar,
   onSalvo,
   onErro,
 }: {
   inicial: Product | typeof VAZIO;
+  temEstoque: boolean;
+  podeMexerEstoque: boolean;
   onFechar: () => void;
   onSalvo: () => void;
   onErro: (m: string) => void;
@@ -527,7 +555,15 @@ function EditorProduto({
       ? String((inicial as Product).duracaoMinutos)
       : ""
   );
+  // Estoque atual, só pra edição rápida aqui no mesmo modal. Não sobrescreve
+  // o saldo por baixo: se o número mudar, salvar() lança um AJUSTE com a
+  // diferença (ver mais abaixo) — o extrato de movimentação continua
+  // completo, só ganha mais uma linha.
+  const estoqueInicial = existente ? String((inicial as Product).stockQty ?? 0) : "0";
+  const [estoque, setEstoque] = useState(estoqueInicial);
   const [salvando, setSalvando] = useState(false);
+
+  const mostraEstoque = existente && temEstoque && tipo === "PRODUTO";
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -535,6 +571,15 @@ function EditorProduto({
     if (priceCents === null) {
       onErro("Preço inválido. Use por exemplo 19,90.");
       return;
+    }
+    let ajusteEstoque = 0;
+    if (mostraEstoque && podeMexerEstoque) {
+      const novoEstoque = parseInt(estoque, 10);
+      if (!Number.isFinite(novoEstoque)) {
+        onErro("Estoque inválido.");
+        return;
+      }
+      ajusteEstoque = novoEstoque - Number(estoqueInicial);
     }
 
     setSalvando(true);
@@ -553,6 +598,29 @@ function EditorProduto({
         duracaoMinutos: tipo === "SERVICO" && duracao ? Number(duracao) : null,
       }),
     });
+
+    // Segunda chamada, só quando o número de estoque realmente mudou — vira
+    // um Ajuste de verdade (aparece no extrato), não uma escrita direta.
+    if (res.ok && ajusteEstoque !== 0) {
+      const resEstoque = await fetch(`/api/products/${(inicial as Product).id}/stock`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "AJUSTE",
+          quantidade: ajusteEstoque,
+          motivo: "Ajustado ao editar o produto",
+        }),
+      });
+      if (!resEstoque.ok) {
+        setSalvando(false);
+        const b = await resEstoque.json().catch(() => ({}));
+        onErro(
+          "Produto salvo, mas o estoque não foi ajustado: " +
+            (typeof b.error === "string" ? b.error : "erro desconhecido")
+        );
+        return;
+      }
+    }
     setSalvando(false);
 
     if (!res.ok) {
@@ -607,17 +675,37 @@ function EditorProduto({
           />
         </label>
 
-        <label className="block text-sm mb-3">
-          <span className="text-neutral-700">Preço</span>
-          <input
-            value={preco}
-            onChange={(e) => setPreco(e.target.value)}
-            required
-            inputMode="decimal"
-            placeholder="19,90"
-            className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 tabular-nums"
-          />
-        </label>
+        <div className={mostraEstoque ? "grid grid-cols-2 gap-3 mb-3" : "mb-3"}>
+          <label className="block text-sm">
+            <span className="text-neutral-700">Preço</span>
+            <input
+              value={preco}
+              onChange={(e) => setPreco(e.target.value)}
+              required
+              inputMode="decimal"
+              placeholder="19,90"
+              className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 tabular-nums"
+            />
+          </label>
+          {mostraEstoque && (
+            <label className="block text-sm">
+              <span className="text-neutral-700">Estoque</span>
+              <input
+                value={estoque}
+                onChange={(e) => setEstoque(e.target.value)}
+                disabled={!podeMexerEstoque}
+                inputMode="numeric"
+                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 tabular-nums disabled:bg-neutral-100 disabled:text-neutral-400"
+              />
+            </label>
+          )}
+        </div>
+        {mostraEstoque && podeMexerEstoque && (
+          <p className="-mt-2 mb-4 text-xs text-neutral-500">
+            Mudar este número aqui lança um Ajuste no extrato de estoque — pra ver o histórico completo, feche e
+            clique no número de estoque na lista.
+          </p>
+        )}
 
         <div className="grid grid-cols-2 gap-3 mb-5">
           <label className="block text-sm">

@@ -25,9 +25,9 @@ export async function GET(req: Request) {
   const produtos = await prisma.product.findMany({
     where: { tenantId: user.tenantId, ...(incluirInativos ? {} : { isActive: true }) },
     orderBy: [{ categoria: "asc" }, { name: "asc" }],
-    // Quantos arquivos cada produto tem na biblioteca — o número aparece no
-    // botão "Materiais" pra dar pra ver de relance o que falta preencher.
-    include: { _count: { select: { materiais: true } } },
+    // materiais alimenta o número no botão "Materiais"; orderItems avisa
+    // antes de excluir quando o produto já tem venda no histórico.
+    include: { _count: { select: { materiais: true, orderItems: true } } },
   });
   return NextResponse.json(produtos);
 }
