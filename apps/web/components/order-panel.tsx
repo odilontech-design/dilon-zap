@@ -118,6 +118,8 @@ export function OrderPanel({
   // painel vira a confirmação com o botão de imprimir — é o momento em que o
   // financeiro precisa do recibo, com a cliente ainda no balcão.
   const [fechadoAgora, setFechadoAgora] = useState<number | null>(null);
+  const [enviandoRecibo, setEnviandoRecibo] = useState(false);
+  const [reciboEnviado, setReciboEnviado] = useState(false);
 
   const editavel = pedido.status === "RASCUNHO" || pedido.status === "AGUARDANDO_FINANCEIRO";
   const podeFechar = ehFinanceiro && pedido.status === "AGUARDANDO_FINANCEIRO";
@@ -178,6 +180,22 @@ export function OrderPanel({
     return b;
   }
 
+  async function enviarReciboWhatsApp() {
+    setEnviandoRecibo(true);
+    setErro(null);
+    try {
+      const res = await fetch(`/api/orders/${pedido.id}/recibo-whatsapp`, { method: "POST" });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErro(typeof b.error === "string" ? b.error : "não deu pra enviar o recibo");
+        return;
+      }
+      setReciboEnviado(true);
+    } finally {
+      setEnviandoRecibo(false);
+    }
+  }
+
   async function salvarItens() {
     return acao({ acao: "salvarItens", itens, observacao });
   }
@@ -221,6 +239,13 @@ export function OrderPanel({
             >
               Imprimir recibo
             </a>
+            <button
+              onClick={enviarReciboWhatsApp}
+              disabled={enviandoRecibo || reciboEnviado}
+              className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
+            >
+              {reciboEnviado ? "✓ Enviado ao cliente" : enviandoRecibo ? "Enviando..." : "Enviar ao cliente"}
+            </button>
             <button onClick={onFechar} className="rounded-md border border-neutral-300 px-4 py-2">
               Concluir
             </button>
@@ -427,6 +452,16 @@ export function OrderPanel({
             >
               Imprimir recibo
             </a>
+          )}
+
+          {pedido.status === "FECHADO" && (
+            <button
+              onClick={enviarReciboWhatsApp}
+              disabled={enviandoRecibo || reciboEnviado}
+              className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
+            >
+              {reciboEnviado ? "✓ Enviado" : enviandoRecibo ? "Enviando..." : "Enviar ao cliente"}
+            </button>
           )}
 
           {pedido.status === "FECHADO" && !pedido.pago && ehFinanceiro && (
