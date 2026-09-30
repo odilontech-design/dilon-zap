@@ -73,7 +73,7 @@ export function ReciboImagemJSX({ recibo }: { recibo: Recibo }) {
         >
           {recibo.cliente.map((l) => (
             <div key={l.rotulo} style={{ display: "flex", fontSize: 13, gap: 6 }}>
-              <span style={{ fontWeight: 700, flexShrink: 0 }}>{l.rotulo}:</span>
+              <span style={{ fontWeight: 700, flexShrink: 0 }}>{`${l.rotulo}:`}</span>
               <span>{l.valor}</span>
             </div>
           ))}
@@ -130,7 +130,7 @@ export function ReciboImagemJSX({ recibo }: { recibo: Recibo }) {
             borderTop: `1px solid ${lightBorder}`,
           }}
         >
-          Qtd. de itens: {recibo.quantidadeDeItens}
+          {`Qtd. de itens: ${recibo.quantidadeDeItens}`}
         </div>
       </div>
 
