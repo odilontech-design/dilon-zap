@@ -1861,12 +1861,25 @@ async function maybeAutoReply(params: {
     mudancasNaConversa.assignedTo = { connect: { id: atribuirPara } };
     mudancasNaConversa.assignedAt = new Date();
   }
-  // Setor NÃO preenche assignedTo de propósito: a conversa vai pra fila do
-  // setor, sem responsável, que é o estado em que a equipe inteira enxerga e
-  // qualquer membro pode assumir. Preencher um responsável aqui escolheria
-  // uma pessoa por conta própria e desfaria justamente o que o setor resolve.
+  // Setor com VÁRIAS pessoas NÃO preenche assignedTo de propósito: a conversa
+  // vai pra fila do setor, sem responsável, que é o estado em que a equipe
+  // inteira enxerga e qualquer membro pode assumir. Escolher uma pessoa ali
+  // desfaria justamente o que o setor resolve.
+  //
+  // Setor com UMA pessoa só não tem fila pra repartir (ex.: "Sócio/Diretor" da
+  // Guttierres, que é só o Carlos) — então a conversa já nasce com ela
+  // responsável, igual a uma transferência, e o aviso de "chegou pra você" sai.
   if (direcionarParaSetor) {
     mudancasNaConversa.setor = { connect: { id: direcionarParaSetor } };
+    const membrosAtivos = await prisma.setorMembro.findMany({
+      where: { setorId: direcionarParaSetor, user: { deactivatedAt: null } },
+      select: { userId: true },
+      take: 2,
+    });
+    if (membrosAtivos.length === 1 && !atribuirPara) {
+      mudancasNaConversa.assignedTo = { connect: { id: membrosAtivos[0].userId } };
+      mudancasNaConversa.assignedAt = new Date();
+    }
   }
   if (Object.keys(mudancasNaConversa).length > 0) {
     await prisma.conversation.update({
