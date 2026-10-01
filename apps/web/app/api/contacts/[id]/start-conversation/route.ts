@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 // Fase 0/1: um número por tenant, então "iniciar conversa" sempre usa a
 // sessão mais recente do tenant. Quando existir mais de um número, isso
@@ -64,5 +65,64 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
       ? await prisma.conversation.update({ where: { id: conversation.id }, data: dadosDeQuemAssume })
       : conversation;
 
-  return NextResponse.json(assumida);
+  // O upsert devolve a conversa que o contato já tinha, de quem quer que seja.
+  // Se ela é de outro setor ou de outra pessoa, quem clicou não a enxerga, e a
+  // tela abriria um 404 mudo (foi o que a Paola, do Administrativo, viu ao
+  // iniciar conversa com um cliente cuja conversa antiga era do Fiscal).
+  const visivel = await prisma.conversation.findFirst({
+    where: { id: assumida.id, ...(await conversationVisibilityWhere(user)) },
+    select: { id: true },
+  });
+  if (visivel) return NextResponse.json(assumida);
+
+  const atual = await prisma.conversation.findUniqueOrThrow({
+    where: { id: assumida.id },
+    include: { assignedTo: { select: { name: true } }, setor: { select: { nome: true } } },
+  });
+
+  // Em atendimento com outra pessoa ou setor: não arranca de quem está
+  // cuidando. Diz com quem está, que é o que a atendente precisa pra pedir a
+  // transferência.
+  if (atual.status !== "RESOLVED") {
+    const com = [atual.assignedTo?.name, atual.setor?.nome && `setor ${atual.setor.nome}`]
+      .filter(Boolean)
+      .join(" · ");
+    return NextResponse.json(
+      {
+        error: `Este cliente já está em atendimento${com ? ` (${com})` : ""}. Peça a quem está com a conversa para transferir pra você.`,
+      },
+      { status: 409 }
+    );
+  }
+
+  // Encerrada: ninguém está cuidando dela. Quem pediu pra iniciar assume, igual
+  // ao caso da conversa sem dono acima — reabre, atribui e, se a pessoa
+  // pertence a um setor só, leva o setor junto (mesmo critério do PATCH).
+  const reaberta = await prisma.$transaction(async (tx) => {
+    const trocouSetor = setorId !== undefined && setorId !== atual.setorId;
+    if (trocouSetor) {
+      const setorNovo = await tx.setor.findUnique({ where: { id: setorId }, select: { nome: true } });
+      await tx.transferenciaSetor.create({
+        data: {
+          conversationId: atual.id,
+          deSetorNome: atual.setor?.nome ?? null,
+          paraSetorId: setorId,
+          paraSetorNome: setorNovo?.nome ?? null,
+          motivo: `Conversa reaberta por ${user.name}`,
+          porNome: user.name,
+        },
+      });
+    }
+    return tx.conversation.update({
+      where: { id: atual.id },
+      data: {
+        status: "OPEN",
+        closedAt: null,
+        ...dadosDeQuemAssume,
+        assignedById: null,
+      },
+    });
+  });
+
+  return NextResponse.json(reaberta);
 }
