@@ -1051,12 +1051,16 @@ export function ConversationThread({
       form.append("conversationId", conversationId);
       const uploadRes = await fetch("/api/messages/attachments", { method: "POST", body: form });
       if (!uploadRes.ok) {
-        const body = await uploadRes.json();
-        alert(typeof body.error === "string" ? body.error : "não deu pra enviar o anexo");
+        const body = await uploadRes.json().catch(() => ({}));
+        alert(
+          typeof body.error === "string"
+            ? body.error
+            : `não deu pra enviar o anexo (erro ${uploadRes.status} ao subir o arquivo)`
+        );
         return;
       }
       const media = await uploadRes.json();
-      await fetch("/api/messages/send", {
+      const sendRes = await fetch("/api/messages/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // durationSeconds vem calculado no upload (áudio já convertido) — é
@@ -1065,7 +1069,21 @@ export function ConversationThread({
         // sempre sem legenda nenhuma, mesmo quando a pessoa escrevia algo.
         body: JSON.stringify({ conversationId, media, text: legenda?.trim() || undefined }),
       });
+      // Antes a resposta era ignorada: se a criação da mensagem falhasse, o
+      // anexo sumia da tela sem nenhum aviso (relatado pelo Financeiro da
+      // Guttierres com um PDF).
+      if (!sendRes.ok) {
+        const body = await sendRes.json().catch(() => ({}));
+        alert(
+          typeof body.error === "string"
+            ? body.error
+            : `não deu pra enviar o anexo (erro ${sendRes.status} ao criar a mensagem)`
+        );
+        return;
+      }
       mutateMessages();
+    } catch (err) {
+      alert(`não deu pra enviar o anexo: ${err instanceof Error ? err.message : "falha de conexão"}`);
     } finally {
       setUploading(false);
     }
