@@ -2,6 +2,7 @@ import makeWASocket, {
   DisconnectReason,
   fetchLatestBaileysVersion,
   downloadMediaMessage,
+  normalizeMessageContent,
   makeCacheableSignalKeyStore,
   generateMessageID,
   WAMessageStatus,
@@ -735,7 +736,12 @@ async function extractInboundContent(
   msg: WAMessage,
   socket: ReturnType<typeof makeWASocket>
 ): Promise<{ text: string; media?: InboundMedia; quotedWaMessageId?: string } | null> {
-  const m = msg.message;
+  // Desembrulha antes de olhar o tipo: PDF/arquivo enviado COM legenda chega
+  // dentro de documentWithCaptionMessage (e o mesmo vale pra mensagem
+  // temporária e de visualização única). Sem isso o arquivo caía no
+  // "sem texto e sem mídia" e era descartado em silêncio — foi o que a Camila
+  // (Believe) relatou: PDF que não chegava.
+  const m = normalizeMessageContent(msg.message);
   if (!m) return null;
 
   const plainText = m.conversation ?? m.extendedTextMessage?.text ?? "";
@@ -1661,7 +1667,7 @@ async function importHistoricalMessages(
 }
 
 function extractHistoricalText(msg: proto.IWebMessageInfo): string {
-  const m = msg.message;
+  const m = normalizeMessageContent(msg.message);
   if (!m) return "";
   if (m.conversation) return m.conversation;
   if (m.extendedTextMessage?.text) return m.extendedTextMessage.text;
