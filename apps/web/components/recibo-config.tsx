@@ -23,6 +23,7 @@ type Config = {
   reciboTextoPendente: string | null;
   reciboTextoPago: string | null;
   reciboOcultarTelefone: boolean;
+  reciboMostrarDesconto: boolean;
   reciboLarguraMm: number;
 };
 
@@ -102,6 +103,7 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
         reciboTextoPendente: config.reciboTextoPendente,
         reciboTextoPago: config.reciboTextoPago,
         reciboOcultarTelefone: config.reciboOcultarTelefone,
+        reciboMostrarDesconto: config.reciboMostrarDesconto,
         reciboLarguraMm: config.reciboLarguraMm,
       }),
     });
@@ -316,6 +318,24 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
                   Na dúvida, meça a bobina: a larga é 80 mm, a estreita é 58 mm.
                 </p>
               </fieldset>
+
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={config.reciboMostrarDesconto}
+                  onChange={(e) => muda("reciboMostrarDesconto", e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="text-xs font-medium text-neutral-700">
+                    Mostrar preço de tabela e desconto
+                  </span>
+                  <span className="block text-xs text-neutral-500">
+                    Item vendido abaixo da tabela sai pelo preço cheio, com o abatimento embaixo.
+                    Desmarque se o valor é negociado por cliente: aí sai só o preço cobrado.
+                  </span>
+                </span>
+              </label>
 
               <label className="flex items-start gap-2">
                 <input

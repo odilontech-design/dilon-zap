@@ -116,6 +116,12 @@ model Tenant {
   // balcão. Quem emite pra empresa (contabilidade) identifica por CNPJ, e aí
   // o telefone no papel é ruído.
   reciboOcultarTelefone Boolean @default(false)
+  // Item cobrado abaixo da tabela sai pelo preço cheio com a linha de desconto
+  // embaixo (o comprovante da Believe, onde ver o abatimento é meia venda), ou
+  // sai direto pelo preço cobrado. Serviço negociado por cliente não tem
+  // "desconto": honorário de R$ 1.000 num item de tabela R$ 5.500 virava
+  // "Desconto - R$ 4.500,00", que no papel parece outra coisa.
+  reciboMostrarDesconto Boolean @default(true)
   // Largura do papel da impressora térmica, em mm. 80 é o padrão de balcão;
   // 58 é o das impressoras portáteis. Fica na empresa, e não escolhido a cada
   // impressão, porque a impressora não muda — e errar a largura corta o texto

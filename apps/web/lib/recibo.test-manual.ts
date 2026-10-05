@@ -41,6 +41,7 @@ function entrada(ajustes: {
       reciboTextoPendente: null,
       reciboTextoPago: null,
       reciboOcultarTelefone: false,
+      reciboMostrarDesconto: true,
       reciboLarguraMm: 80,
       timezone: "America/Sao_Paulo",
       ...ajustes.empresa,
@@ -599,6 +600,49 @@ checa(
   "Valor: {valorr}"
 );
 checa("variáveis repetidas são todas trocadas", aplicarVariaveis("{a} e {a}", { a: "x" }), "x e x");
+
+// Desconto desligado: serviço negociado por cliente não tem "desconto". Caso
+// real da Guttierres — honorário de R$ 1.000 num item de tabela R$ 5.500 saía
+// como "Desconto - R$ 4.500,00".
+const honorarioNegociado = {
+  empresa: { reciboMostrarDesconto: false },
+  pedido: {
+    itens: [
+      { nomeProduto: "Honorários Contábeis", precoTabelaCents: 550000, precoUnitCents: 100000, quantidade: 1 },
+    ],
+    subtotalCents: 100000,
+    descontoCents: 0,
+    totalCents: 100000,
+  },
+};
+checa("sem desconto, o item sai pelo preço cobrado", n(montarRecibo(entrada(honorarioNegociado)).itens[0].detalhe), "1 x R$ 1.000,00");
+checa("sem desconto, não há linha de ajuste no item", montarRecibo(entrada(honorarioNegociado)).itens[0].ajuste, null);
+checa("sem desconto, os totais não citam abatimento", totais(montarRecibo(entrada(honorarioNegociado))), [
+  ["Subtotal", "R$ 1.000,00"],
+  ["TOTAL", "R$ 1.000,00"],
+]);
+// Com a opção ligada (padrão) o comportamento da Believe continua igual.
+checa("com desconto ligado, o abatimento volta a aparecer", totais(montarRecibo(entrada({ ...honorarioNegociado, empresa: { reciboMostrarDesconto: true } }))), [
+  ["Subtotal", "R$ 5.500,00"],
+  ["Desconto nos itens", "- R$ 4.500,00"],
+  ["TOTAL", "R$ 1.000,00"],
+]);
+checa(
+  "sem desconto, preço acima da tabela também sai pelo cobrado",
+  n(
+    montarRecibo(
+      entrada({
+        empresa: { reciboMostrarDesconto: false },
+        pedido: {
+          itens: [{ nomeProduto: "Honorários", precoTabelaCents: 35000, precoUnitCents: 50000, quantidade: 1 }],
+          subtotalCents: 50000,
+          totalCents: 50000,
+        },
+      })
+    ).itens[0].detalhe
+  ),
+  "1 x R$ 500,00"
+);
 
 // Cor da faixa: o recibo é a cara da empresa do cliente, não a nossa. Mas cor
 // inválida não pode virar style quebrado nem texto ilegível no comprovante.

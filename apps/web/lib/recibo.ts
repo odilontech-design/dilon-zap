@@ -31,6 +31,7 @@ export type ReciboEntrada = {
     reciboTextoPago: string | null;
     reciboCorDestaque: string | null;
     reciboOcultarTelefone: boolean;
+    reciboMostrarDesconto: boolean;
     reciboLarguraMm: number;
     timezone: string;
   };
@@ -235,11 +236,16 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
   // faria sentido, mas em serviço não: o honorário da Guttierres é negociado
   // por cliente, e o valor do catálogo é só um ponto de partida. Chamar a
   // diferença de acréscimo faz o comprovante parecer que cobraram a mais.
+  // Empresa que não mostra desconto imprime sempre o preço cobrado, nos dois
+  // sentidos — é o caso de quem negocia o valor por cliente.
+  const mostraDesconto = empresa.reciboMostrarDesconto;
   const precoImpresso = (i: { tabela: number; precoUnitCents: number }) =>
-    Math.max(i.tabela, i.precoUnitCents);
+    mostraDesconto ? Math.max(i.tabela, i.precoUnitCents) : i.precoUnitCents;
 
   const subtotalImpresso = itensBase.reduce((s, i) => s + precoImpresso(i) * i.quantidade, 0);
-  const descontoItens = itensBase.reduce((s, i) => s + Math.max(i.tabela - i.precoUnitCents, 0) * i.quantidade, 0);
+  const descontoItens = mostraDesconto
+    ? itensBase.reduce((s, i) => s + Math.max(i.tabela - i.precoUnitCents, 0) * i.quantidade, 0)
+    : 0;
 
   // O subtotal gravado no fechamento é a soma dos preços praticados. Se a
   // conta a partir dos itens não bate com ele (pedido antigo, item mexido por
@@ -255,7 +261,8 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
       nome: i.nomeProduto,
       detalhe: `${i.quantidade} x ${centsToBRL(preco)}`,
       total: centsToBRL(preco * i.quantidade),
-      ajuste: detalhado && desconto > 0 ? `Desconto - ${centsToBRL(desconto)}` : null,
+      ajuste:
+        detalhado && mostraDesconto && desconto > 0 ? `Desconto - ${centsToBRL(desconto)}` : null,
     };
   });
 

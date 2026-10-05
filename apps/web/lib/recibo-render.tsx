@@ -45,6 +45,7 @@ const SELECAO_TENANT = {
   reciboTextoPendente: true,
   reciboTextoPago: true,
   reciboOcultarTelefone: true,
+  reciboMostrarDesconto: true,
   reciboLarguraMm: true,
 } as const;
 

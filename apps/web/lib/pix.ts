@@ -48,6 +48,35 @@ export function sanitizar(valor: string, maximo: number): string {
     .trim();
 }
 
+/**
+ * Chave no formato que o banco aceita.
+ *
+ * Isto não é cosmético: o padrão exige a chave na forma canônica, e CNPJ
+ * escrito "67.211.588/0001-01" faz o app do banco recusar o código inteiro —
+ * foi exatamente o que aconteceu com a Guttierres. Quem cadastra digita como
+ * lê no cartão; normalizar aqui é o que evita um QR bonito e inútil.
+ *
+ * Telefone precisa do código do país. Onze dígitos sem "+" são tratados como
+ * CPF, não como celular com DDD: chave de telefone no PIX sempre tem DDI, e
+ * adivinhar o contrário transformaria CPF em telefone calado.
+ */
+export function normalizarChavePix(bruta: string): string {
+  const t = bruta.trim();
+  if (!t) return t;
+  if (t.includes("@")) return t.toLowerCase(); // e-mail
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(t)) {
+    return t.toLowerCase(); // chave aleatória (UUID)
+  }
+
+  const digitos = t.replace(/\D/g, "");
+  if (t.startsWith("+")) return `+${digitos}`;
+  if (digitos.length === 11 || digitos.length === 14) return digitos; // CPF ou CNPJ
+  if (digitos.length === 12 || digitos.length === 13) return `+${digitos}`; // telefone com DDI
+  // Formato que não reconhecemos sai como foi digitado: melhor um código que
+  // o banco recusa do que um que paga outra pessoa.
+  return t;
+}
+
 export type EntradaBrCode = {
   chave: string;
   /** Em centavos. Ausente ou zero gera código sem valor, que o pagador digita. */
@@ -73,7 +102,7 @@ export function montarBrCode({
   const municipio = sanitizar(cidade, 15) || "BRASIL";
   const txid = sanitizar(identificador ?? "", 25) || "***";
 
-  const contaRecebedor = campo("00", "BR.GOV.BCB.PIX") + campo("01", chave.trim());
+  const contaRecebedor = campo("00", "BR.GOV.BCB.PIX") + campo("01", normalizarChavePix(chave));
 
   let payload =
     campo("00", "01") + // versão do payload

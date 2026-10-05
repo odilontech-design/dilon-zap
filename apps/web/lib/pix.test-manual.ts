@@ -1,7 +1,7 @@
 // BR Code do PIX: formato, limites e CRC. Puro, sem banco e sem rede.
 // Chaves e nomes fictícios — nunca de cliente real.
 // Rodar com: npx tsx apps/web/lib/pix.test-manual.ts
-import { montarBrCode, crc16, sanitizar } from "./pix";
+import { montarBrCode, crc16, sanitizar, normalizarChavePix } from "./pix";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -98,6 +98,43 @@ const comAcento = montarBrCode({ chave: "x", nomeRecebedor: "José Antônio", ci
 checa("tamanho do nome bate com o texto sem acento", comAcento.includes("5912Jose Antonio"), true);
 checa("tamanho da cidade bate com o texto sem acento", comAcento.includes("6009Sao Paulo"), true);
 checa("CRC confere mesmo com acento na entrada", crc16(comAcento.slice(0, -4)), comAcento.slice(-4));
+
+// Chave: o padrão exige a forma canônica. CNPJ pontuado fazia o app do banco
+// recusar o código inteiro — foi o caso real da Guttierres.
+checa("CNPJ pontuado vira 14 dígitos", normalizarChavePix("67.211.588/0001-01"), "67211588000101");
+checa("CPF pontuado vira 11 dígitos", normalizarChavePix("123.456.789-09"), "12345678909");
+checa("CNPJ já limpo não muda", normalizarChavePix("67211588000101"), "67211588000101");
+checa("e-mail vira minúsculo", normalizarChavePix("  Financeiro@Empresa.COM  "), "financeiro@empresa.com");
+checa(
+  "chave aleatória vira minúscula",
+  normalizarChavePix("123E4567-E12B-12D1-A456-426655440000"),
+  "123e4567-e12b-12d1-a456-426655440000"
+);
+checa("telefone pontuado mantém o +", normalizarChavePix("+55 (21) 96741-1481"), "+5521967411481");
+checa("telefone com DDI sem + ganha o +", normalizarChavePix("5521967411481"), "+5521967411481");
+// 11 dígitos sem "+" é CPF, não celular: chave de telefone no PIX sempre tem DDI.
+checa("onze dígitos sem + é CPF", normalizarChavePix("21967411481"), "21967411481");
+checa("formato desconhecido sai como veio", normalizarChavePix("minha-chave"), "minha-chave");
+
+// O que de fato entra no código: campo 01, dentro do 26.
+const comCnpjPontuado = montarBrCode({
+  chave: "67.211.588/0001-01",
+  valorCents: 100000,
+  nomeRecebedor: "Carlos Guttierres",
+  cidade: "BRASIL",
+  identificador: "PEDIDO52",
+});
+checa(
+  "o código carrega a chave já normalizada",
+  campos(campos(comCnpjPontuado)["26"])["01"],
+  "67211588000101"
+);
+checa("CRC continua fechando depois de normalizar", crc16(comCnpjPontuado.slice(0, -4)), comCnpjPontuado.slice(-4));
+checa(
+  "o tamanho do campo 26 acompanha a chave encurtada",
+  campos(comCnpjPontuado)["26"].length,
+  Number(comCnpjPontuado.slice(comCnpjPontuado.indexOf("26", 0) + 2, comCnpjPontuado.indexOf("26") + 4))
+);
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);

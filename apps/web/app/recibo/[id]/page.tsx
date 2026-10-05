@@ -74,6 +74,7 @@ export default async function ReciboPage({
         reciboTextoPendente: true,
         reciboTextoPago: true,
         reciboOcultarTelefone: true,
+        reciboMostrarDesconto: true,
         reciboLarguraMm: true,
       },
     }),
