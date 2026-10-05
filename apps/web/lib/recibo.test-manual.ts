@@ -28,6 +28,7 @@ function entrada(ajustes: {
       reciboEndereco: null,
       reciboTelefone: null,
       reciboRodape: null,
+      reciboChavePix: null,
       reciboLarguraMm: 80,
       timezone: "America/Sao_Paulo",
       ...ajustes.empresa,
@@ -284,6 +285,45 @@ checa(
   []
 );
 checa("observação em branco some", montarRecibo(entrada({ pedido: { observacao: "  " } })).observacao, null);
+
+// Chave PIX: só sai no pedido que fechou como PIX a pagar e ainda não foi
+// quitado. No já pago seria convite a pagar de novo; no boleto, ruído.
+const comChave = { reciboChavePix: "12.345.678/0001-90" };
+checa(
+  "PIX a pagar e em aberto: chave sai no recibo",
+  montarRecibo(
+    entrada({ empresa: comChave, pedido: { paymentMethod: "PIX_PENDENTE", pago: false, pagoEm: null } })
+  ).pagamento.find((l) => l.rotulo === "Chave PIX")?.valor,
+  "12.345.678/0001-90"
+);
+checa(
+  "PIX já pago: chave não sai",
+  montarRecibo(entrada({ empresa: comChave, pedido: { paymentMethod: "PIX", pago: true } })).pagamento.some(
+    (l) => l.rotulo === "Chave PIX"
+  ),
+  false
+);
+checa(
+  "boleto em aberto: chave não sai",
+  montarRecibo(
+    entrada({ empresa: comChave, pedido: { paymentMethod: "BOLETO", pago: false, pagoEm: null } })
+  ).pagamento.some((l) => l.rotulo === "Chave PIX"),
+  false
+);
+checa(
+  "PIX a pagar sem chave cadastrada: linha some em vez de sair vazia",
+  montarRecibo(
+    entrada({ empresa: { reciboChavePix: null }, pedido: { paymentMethod: "PIX_PENDENTE", pago: false, pagoEm: null } })
+  ).pagamento.some((l) => l.rotulo === "Chave PIX"),
+  false
+);
+checa(
+  "PIX a pagar sai como PIX pro cliente, sem 'pendente'",
+  montarRecibo(
+    entrada({ empresa: comChave, pedido: { paymentMethod: "PIX_PENDENTE", pago: false, pagoEm: null } })
+  ).pagamento.find((l) => l.rotulo === "Forma de pagamento")?.valor,
+  "PIX"
+);
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);

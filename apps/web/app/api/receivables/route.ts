@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
-import { listarRecebiveis } from "@/lib/receivables";
+import { listarRecebiveis, listarHistoricoRecebido, recebidoNoMes } from "@/lib/receivables";
 
 /**
  * O que a empresa tem a receber.
@@ -11,7 +11,12 @@ import { listarRecebiveis } from "@/lib/receivables";
  * quanto cada cliente deve e há quanto tempo, e isso é informação de gestão —
  * a consultora que atende no Inbox não precisa dela pra trabalhar.
  */
-export async function GET() {
+// Janela do histórico. 12 meses cobre o ano fiscal inteiro, que é o horizonte
+// de quem confere recebimento de honorário; acima disso a tela viraria um
+// extrato que ninguém lê rolando.
+const MESES_VALIDOS = [1, 3, 6, 12] as const;
+
+export async function GET(req: Request) {
   const user = await requireUser();
   const bloqueio = await exigirRecurso(user, "CONTAS_RECEBER");
   if (bloqueio) return bloqueio;
@@ -22,7 +27,23 @@ export async function GET() {
     );
   }
 
-  const itens = await listarRecebiveis(user.tenantId);
+  const params = new URL(req.url).searchParams;
+  const mesesPedidos = Number(params.get("meses"));
+  const meses = (MESES_VALIDOS as readonly number[]).includes(mesesPedidos) ? mesesPedidos : 3;
+
+  const tenant = await prisma.tenant.findUniqueOrThrow({
+    where: { id: user.tenantId },
+    select: { timezone: true },
+  });
+
+  const desde = new Date();
+  desde.setMonth(desde.getMonth() - meses);
+
+  const [itens, historico, recebidoNoMesCents] = await Promise.all([
+    listarRecebiveis(user.tenantId),
+    listarHistoricoRecebido(user.tenantId, desde),
+    recebidoNoMes(user.tenantId, tenant.timezone),
+  ]);
 
   // Totais por faixa, calculados aqui pra tela não precisar reduzir de novo e
   // pra que os dois números (lista e resumo) venham sempre da mesma conta.
@@ -32,7 +53,7 @@ export async function GET() {
     resumo.total += i.saldoCents;
   }
 
-  return NextResponse.json({ itens, resumo });
+  return NextResponse.json({ itens, resumo, historico, recebidoNoMesCents, meses });
 }
 
 /** Quanto um contato específico deve — usado na ficha dentro do Inbox. */

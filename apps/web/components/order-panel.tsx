@@ -27,7 +27,7 @@ export type Pedido = {
   id: string;
   numero: number;
   status: "RASCUNHO" | "AGUARDANDO_FINANCEIRO" | "FECHADO" | "CANCELADO";
-  paymentMethod: "PIX" | "CARTAO" | "BOLETO" | "FIADO" | null;
+  paymentMethod: "PIX" | "PIX_PENDENTE" | "CARTAO" | "BOLETO" | "FIADO" | null;
   pago: boolean;
   subtotalCents: number;
   descontoCents: number;
@@ -37,7 +37,13 @@ export type Pedido = {
   fechadoEm: string | null;
   createdBy: { name: string } | null;
   closedBy: { name: string } | null;
-  contact: { id: string; name: string | null; waJid: string; phoneNumber: string | null };
+  contact: {
+    id: string;
+    name: string | null;
+    waJid: string;
+    phoneNumber: string | null;
+    documento?: string | null;
+  };
   conversation: { id: string; ticketNumber: number } | null;
   items: PedidoItem[];
 };
@@ -88,6 +94,7 @@ const STATUS_LABEL: Record<Pedido["status"], string> = {
 
 const PAGAMENTO_LABEL: Record<NonNullable<Pedido["paymentMethod"]>, string> = {
   PIX: "PIX",
+  PIX_PENDENTE: "PIX",
   CARTAO: "Cartão",
   BOLETO: "Boleto",
   FIADO: "Fiado",
@@ -120,6 +127,11 @@ export function OrderPanel({
   const [fechadoAgora, setFechadoAgora] = useState<number | null>(null);
   const [enviandoRecibo, setEnviandoRecibo] = useState(false);
   const [reciboEnviado, setReciboEnviado] = useState(false);
+  const [confirmandoRecibo, setConfirmandoRecibo] = useState(false);
+  const [erroRecibo, setErroRecibo] = useState<string | null>(null);
+  // Vem da ficha do contato: no primeiro recibo chega vazio e a pessoa digita;
+  // do segundo em diante já vem preenchido.
+  const [documento, setDocumento] = useState(pedido.contact.documento ?? "");
 
   const editavel = pedido.status === "RASCUNHO" || pedido.status === "AGUARDANDO_FINANCEIRO";
   const podeFechar = ehFinanceiro && pedido.status === "AGUARDANDO_FINANCEIRO";
@@ -182,15 +194,23 @@ export function OrderPanel({
 
   async function enviarReciboWhatsApp() {
     setEnviandoRecibo(true);
-    setErro(null);
+    setErroRecibo(null);
     try {
-      const res = await fetch(`/api/orders/${pedido.id}/recibo-whatsapp`, { method: "POST" });
+      const res = await fetch(`/api/orders/${pedido.id}/recibo-whatsapp`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ documento: documento.trim() || null }),
+      });
       const b = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErro(typeof b.error === "string" ? b.error : "não deu pra enviar o recibo");
+        setErroRecibo(typeof b.error === "string" ? b.error : "não deu pra enviar o recibo");
         return;
       }
       setReciboEnviado(true);
+      setConfirmandoRecibo(false);
+      onMudou();
+    } catch {
+      setErroRecibo("não deu pra enviar o recibo — falha de conexão");
     } finally {
       setEnviandoRecibo(false);
     }
@@ -240,16 +260,28 @@ export function OrderPanel({
               Imprimir recibo
             </a>
             <button
-              onClick={enviarReciboWhatsApp}
-              disabled={enviandoRecibo || reciboEnviado}
+              onClick={() => setConfirmandoRecibo(true)}
+              disabled={reciboEnviado}
               className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
             >
-              {reciboEnviado ? "✓ Enviado ao cliente" : enviandoRecibo ? "Enviando..." : "Enviar ao cliente"}
+              {reciboEnviado ? "✓ Enviado ao cliente" : "Enviar ao cliente"}
             </button>
             <button onClick={onFechar} className="rounded-md border border-neutral-300 px-4 py-2">
               Concluir
             </button>
           </div>
+
+          {confirmandoRecibo && (
+            <ConfirmarEnvioDoRecibo
+              nomeCliente={pedido.contact.name ?? pedido.contact.phoneNumber ?? "o cliente"}
+              documento={documento}
+              setDocumento={setDocumento}
+              enviando={enviandoRecibo}
+              erro={erroRecibo}
+              onEnviar={enviarReciboWhatsApp}
+              onCancelar={() => setConfirmandoRecibo(false)}
+            />
+          )}
         </div>
       </div>
     );
@@ -426,6 +458,7 @@ export function OrderPanel({
                 className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
               >
                 <option value="PIX">PIX — já pago</option>
+                <option value="PIX_PENDENTE">PIX — a pagar (manda a chave no recibo)</option>
                 <option value="CARTAO">Cartão na maquininha — já pago</option>
                 <option value="BOLETO">Boleto — a receber</option>
                 <option value="FIADO">Fiado — a receber</option>
@@ -456,11 +489,11 @@ export function OrderPanel({
 
           {pedido.status === "FECHADO" && (
             <button
-              onClick={enviarReciboWhatsApp}
-              disabled={enviandoRecibo || reciboEnviado}
+              onClick={() => setConfirmandoRecibo(true)}
+              disabled={reciboEnviado}
               className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
             >
-              {reciboEnviado ? "✓ Enviado" : enviandoRecibo ? "Enviando..." : "Enviar ao cliente"}
+              {reciboEnviado ? "✓ Enviado" : "Enviar ao cliente"}
             </button>
           )}
 
@@ -514,6 +547,92 @@ export function OrderPanel({
             </button>
           )}
         </footer>
+      </div>
+
+      {confirmandoRecibo && (
+        <ConfirmarEnvioDoRecibo
+          nomeCliente={pedido.contact.name ?? pedido.contact.phoneNumber ?? "o cliente"}
+          documento={documento}
+          setDocumento={setDocumento}
+          enviando={enviandoRecibo}
+          erro={erroRecibo}
+          onEnviar={enviarReciboWhatsApp}
+          onCancelar={() => setConfirmandoRecibo(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Confirmação antes de mandar o recibo pro cliente.
+ *
+ * Existe por causa do CPF/CNPJ: a Guttierres precisa dele no comprovante pra
+ * amarrar o recibo ao cliente na contabilidade, e a hora em que alguém sabe o
+ * número é a hora de mandar o papel — não antes, cadastrando ficha. Digitado
+ * uma vez, fica salvo no contato e já vem preenchido nos próximos.
+ */
+function ConfirmarEnvioDoRecibo({
+  nomeCliente,
+  documento,
+  setDocumento,
+  enviando,
+  erro,
+  onEnviar,
+  onCancelar,
+}: {
+  nomeCliente: string;
+  documento: string;
+  setDocumento: (v: string) => void;
+  enviando: boolean;
+  erro: string | null;
+  onEnviar: () => void;
+  onCancelar: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onCancelar}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm p-5"
+      >
+        <h3 className="font-semibold">Enviar recibo ao cliente</h3>
+        <p className="text-sm text-neutral-500 mt-0.5">
+          Vai como imagem pela conversa do WhatsApp com {nomeCliente}.
+        </p>
+
+        <label className="block text-sm mt-4">
+          <span className="text-xs font-medium text-neutral-700">CPF / CNPJ do cliente</span>
+          <input
+            value={documento}
+            onChange={(e) => setDocumento(e.target.value)}
+            maxLength={40}
+            placeholder="Só os números já basta"
+            className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+          />
+          <span className="text-xs text-neutral-500">
+            Fica salvo na ficha do cliente e já vem preenchido nos próximos recibos. Pode deixar em
+            branco.
+          </span>
+        </label>
+
+        {erro && (
+          <p className="mt-3 rounded-md border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm">
+            {erro}
+          </p>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2 text-sm">
+          <button onClick={onCancelar} className="px-4 py-2 text-neutral-600">
+            Cancelar
+          </button>
+          <button
+            onClick={onEnviar}
+            disabled={enviando}
+            className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-50"
+          >
+            {enviando ? "Enviando..." : "Enviar"}
+          </button>
+        </div>
       </div>
     </div>
   );

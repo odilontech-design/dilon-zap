@@ -12,7 +12,7 @@
  */
 import { centsToBRL } from "./billing";
 
-export type MeioDePagamento = "PIX" | "CARTAO" | "BOLETO" | "FIADO";
+export type MeioDePagamento = "PIX" | "PIX_PENDENTE" | "CARTAO" | "BOLETO" | "FIADO";
 
 export type ReciboEntrada = {
   empresa: {
@@ -22,6 +22,7 @@ export type ReciboEntrada = {
     reciboEndereco: string | null;
     reciboTelefone: string | null;
     reciboRodape: string | null;
+    reciboChavePix: string | null;
     reciboLarguraMm: number;
     timezone: string;
   };
@@ -80,6 +81,9 @@ export type Recibo = {
 
 const ROTULO_MEIO: Record<MeioDePagamento, string> = {
   PIX: "PIX",
+  // Pro cliente é só "PIX" — a distinção entre pago e a pagar já aparece no
+  // selo PAGO/PENDENTE, e "PIX pendente" no papel soaria como cobrança dobrada.
+  PIX_PENDENTE: "PIX",
   CARTAO: "Cartão",
   BOLETO: "Boleto",
   FIADO: "Fiado",
@@ -204,6 +208,13 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
       pagamento.push({ rotulo: "Pago em", valor: formatar(pedido.pagoEm, tz, false) });
     }
   } else {
+    // Chave PIX só no pedido que fecha como PIX a pagar: é o único em que o
+    // cliente precisa saber pra onde mandar. No boleto e no fiado a chave
+    // seria ruído, e no já pago seria um convite a pagar de novo.
+    if (pedido.paymentMethod === "PIX_PENDENTE") {
+      const chave = texto(empresa.reciboChavePix);
+      if (chave) pagamento.push({ rotulo: "Chave PIX", valor: chave });
+    }
     if (pedido.vencimento) pagamento.push({ rotulo: "Vencimento", valor: formatar(pedido.vencimento, tz, false) });
     // Mesma conta de saldoDoPedido(): a verdade é o histórico de pagamentos.
     const recebido = pedido.pagamentos.reduce((s, p) => s + p.valorCents, 0);

@@ -23,7 +23,7 @@ const patchSchema = z.object({
   itens: z.array(itemSchema).max(100).optional(),
   observacao: z.string().trim().max(500).optional(),
   descontoCents: z.number().int().min(0).optional(),
-  paymentMethod: z.enum(["PIX", "CARTAO", "BOLETO", "FIADO"]).optional(),
+  paymentMethod: z.enum(["PIX", "PIX_PENDENTE", "CARTAO", "BOLETO", "FIADO"]).optional(),
   // Prazo combinado com o cliente. So vale em pedido que fecha devendo.
   vencimento: z.string().datetime().nullable().optional(),
 });
@@ -109,8 +109,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "escolha a forma de pagamento" }, { status: 400 });
   }
 
-  // PIX e cartão saem pagos na hora. Boleto e fiado ficam a receber — é o que
-  // faz o saldo devedor do cliente existir.
+  // PIX e cartão saem pagos na hora. PIX_PENDENTE, boleto e fiado ficam a
+  // receber — é o que faz o saldo devedor do cliente existir.
   const pagoNaHora = parsed.data.paymentMethod === "PIX" || parsed.data.paymentMethod === "CARTAO";
 
   try {

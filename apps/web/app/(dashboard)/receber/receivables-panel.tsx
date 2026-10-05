@@ -30,10 +30,42 @@ type Item = {
   precisaAtencaoHoje: boolean;
 };
 
+type Recebimento = {
+  id: string;
+  valorCents: number;
+  recebidoEm: string;
+  meio: string | null;
+  observacao: string | null;
+  numero: number;
+  orderId: string;
+  totalCents: number;
+  quitado: boolean;
+  conversationId: string | null;
+  contato: { id: string; name: string | null; waJid: string; phoneNumber: string | null };
+};
+
 type Resposta = {
   itens: Item[];
   resumo: Record<Faixa | "total", number>;
+  historico: Recebimento[];
+  recebidoNoMesCents: number;
+  meses: number;
 };
+
+const MEIO_LABEL: Record<string, string> = {
+  PIX: "PIX",
+  PIX_PENDENTE: "PIX",
+  CARTAO: "Cartão",
+  BOLETO: "Boleto",
+  FIADO: "Outro",
+};
+
+const PERIODOS = [
+  { meses: 1, rotulo: "1 mês" },
+  { meses: 3, rotulo: "3 meses" },
+  { meses: 6, rotulo: "6 meses" },
+  { meses: 12, rotulo: "12 meses" },
+];
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -53,47 +85,249 @@ function dataCurta(iso: string) {
   return `${d}/${m}/${a}`;
 }
 
+function dataHora(iso: string) {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 export function ReceivablesPanel({ podeReceber }: { podeReceber: boolean }) {
-  const { data, mutate } = useSWR<Resposta>("/api/receivables", fetcher);
+  const [aba, setAba] = useState<"aberto" | "historico">("aberto");
+  const [meses, setMeses] = useState(3);
+  const { data, mutate } = useSWR<Resposta>(`/api/receivables?meses=${meses}`, fetcher);
   const [recebendo, setRecebendo] = useState<Item | null>(null);
 
   if (!data) return <p className="text-sm text-neutral-400">Carregando...</p>;
   if ("error" in data) return <p className="text-sm text-red-600">{String(data.error)}</p>;
 
-  const { itens, resumo } = data;
-
-  if (itens.length === 0) {
-    return (
-      <div className="max-w-4xl">
-        <p className="rounded-lg border border-neutral-200 bg-surface px-4 py-10 text-center text-sm text-neutral-400">
-          Nada a receber. Pedido fechado como fiado ou boleto aparece aqui até ser quitado.
-        </p>
-      </div>
-    );
-  }
+  const { itens, resumo, historico, recebidoNoMesCents } = data;
+  const totalDoPeriodo = historico.reduce((s, h) => s + h.valorCents, 0);
 
   return (
     <div className="max-w-4xl">
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {ORDEM_FAIXAS.map((f) => (
-          <div
-            key={f}
-            className={`rounded-lg border px-3 py-2.5 ${
-              resumo[f] > 0 ? FAIXA[f].classe : "border-neutral-200 bg-surface text-neutral-400"
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2.5 text-accent">
+          <p className="text-xs">Recebido no mês</p>
+          <p className="text-lg font-semibold tabular-nums">{centsToBRL(recebidoNoMesCents)}</p>
+        </div>
+        <div
+          className={`rounded-lg border px-3 py-2.5 ${
+            resumo.total > 0
+              ? "border-neutral-300 bg-surface text-neutral-800"
+              : "border-neutral-200 bg-surface text-neutral-400"
+          }`}
+        >
+          <p className="text-xs">Em aberto</p>
+          <p className="text-lg font-semibold tabular-nums">{centsToBRL(resumo.total)}</p>
+        </div>
+        <div
+          className={`rounded-lg border px-3 py-2.5 ${
+            resumo.vencido > 0 ? FAIXA.vencido.classe : "border-neutral-200 bg-surface text-neutral-400"
+          }`}
+        >
+          <p className="text-xs">Vencido</p>
+          <p className="text-lg font-semibold tabular-nums">{centsToBRL(resumo.vencido)}</p>
+        </div>
+      </div>
+
+      <div className="mb-4 flex gap-1 border-b border-neutral-200 text-sm">
+        {([
+          ["aberto", `Em aberto${itens.length ? ` (${itens.length})` : ""}`],
+          ["historico", "Histórico"],
+        ] as const).map(([chave, rotulo]) => (
+          <button
+            key={chave}
+            onClick={() => setAba(chave)}
+            className={`-mb-px border-b-2 px-3 py-2 ${
+              aba === chave
+                ? "border-accent font-medium text-accent"
+                : "border-transparent text-neutral-500 hover:text-neutral-800"
             }`}
           >
-            <p className="text-xs">{FAIXA[f].rotulo}</p>
-            <p className="text-lg font-semibold tabular-nums">{centsToBRL(resumo[f])}</p>
-          </div>
+            {rotulo}
+          </button>
         ))}
       </div>
 
-      <p className="mb-4 text-sm text-neutral-600">
-        Total a receber: <b className="tabular-nums">{centsToBRL(resumo.total)}</b> em{" "}
-        {itens.length} pedido(s).
-      </p>
+      {aba === "historico" ? (
+        <HistoricoRecebido
+          historico={historico}
+          totalCents={totalDoPeriodo}
+          meses={meses}
+          setMeses={setMeses}
+        />
+      ) : itens.length === 0 ? (
+        <p className="rounded-lg border border-neutral-200 bg-surface px-4 py-10 text-center text-sm text-neutral-400">
+          Nada a receber. Pedido fechado como fiado, boleto ou PIX a pagar aparece aqui até ser
+          quitado.
+        </p>
+      ) : (
+        <>
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {ORDEM_FAIXAS.map((f) => (
+              <div
+                key={f}
+                className={`rounded-lg border px-3 py-2.5 ${
+                  resumo[f] > 0 ? FAIXA[f].classe : "border-neutral-200 bg-surface text-neutral-400"
+                }`}
+              >
+                <p className="text-xs">{FAIXA[f].rotulo}</p>
+                <p className="text-lg font-semibold tabular-nums">{centsToBRL(resumo[f])}</p>
+              </div>
+            ))}
+          </div>
 
-      <div className="flex flex-col gap-2">
+          <ListaEmAberto itens={itens} podeReceber={podeReceber} onReceber={setRecebendo} />
+        </>
+      )}
+
+      {recebendo && (
+        <FormRecebimento
+          item={recebendo}
+          onFechar={() => setRecebendo(null)}
+          onSalvo={() => {
+            setRecebendo(null);
+            mutate();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * O que já entrou, do mais recente pro mais antigo.
+ *
+ * A lista de A receber some com o pedido assim que ele é quitado — e some
+ * junto a prova de que foi pago. Aqui o pagamento continua visível depois de
+ * quitado, que é o que a Guttierres pediu pra conferir honorário recebido.
+ */
+function HistoricoRecebido({
+  historico,
+  totalCents,
+  meses,
+  setMeses,
+}: {
+  historico: Recebimento[];
+  totalCents: number;
+  meses: number;
+  setMeses: (m: number) => void;
+}) {
+  return (
+    <>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex gap-1 text-xs">
+          {PERIODOS.map((p) => (
+            <button
+              key={p.meses}
+              onClick={() => setMeses(p.meses)}
+              className={`rounded-md border px-2.5 py-1 ${
+                meses === p.meses
+                  ? "border-accent bg-accent/10 font-medium text-accent"
+                  : "border-neutral-300 text-neutral-600 hover:bg-neutral-100"
+              }`}
+            >
+              {p.rotulo}
+            </button>
+          ))}
+        </div>
+        <p className="text-sm text-neutral-600">
+          Recebido no período: <b className="tabular-nums">{centsToBRL(totalCents)}</b>
+        </p>
+      </div>
+
+      {historico.length === 0 ? (
+        <p className="rounded-lg border border-neutral-200 bg-surface px-4 py-10 text-center text-sm text-neutral-400">
+          Nenhum recebimento registrado nesse período.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {historico.map((h) => {
+            const nome = h.contato.name ?? h.contato.phoneNumber ?? "Sem nome";
+            const estorno = h.valorCents < 0;
+            return (
+              <div key={h.id} className="rounded-lg border border-neutral-200 bg-surface p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-neutral-900">{nome}</span>
+                      <span className="font-mono text-xs text-neutral-400">#{h.numero}</span>
+                      {estorno ? (
+                        <span className="rounded border border-red-200 bg-red-50 px-1.5 py-0.5 text-[11px] text-red-700">
+                          Estorno
+                        </span>
+                      ) : (
+                        <span
+                          className={`rounded border px-1.5 py-0.5 text-[11px] ${
+                            h.quitado
+                              ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                              : "border-amber-200 bg-amber-50 text-amber-800"
+                          }`}
+                        >
+                          {h.quitado ? "Quitado" : "Parcial"}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-sm text-neutral-600">
+                      <span
+                        className={`font-medium tabular-nums ${
+                          estorno ? "text-red-700" : "text-neutral-900"
+                        }`}
+                      >
+                        {centsToBRL(h.valorCents)}
+                      </span>
+                      {!h.quitado && !estorno && (
+                        <span className="ml-1.5 text-neutral-500">
+                          de {centsToBRL(h.totalCents)}
+                        </span>
+                      )}
+                      <span className="ml-1.5 text-neutral-500">· {dataHora(h.recebidoEm)}</span>
+                      {h.meio && (
+                        <span className="ml-1.5 text-neutral-500">
+                          · {MEIO_LABEL[h.meio] ?? h.meio}
+                        </span>
+                      )}
+                    </p>
+                    {h.observacao && (
+                      <p className="mt-0.5 text-xs text-neutral-500">{h.observacao}</p>
+                    )}
+                  </div>
+
+                  <div className="flex shrink-0 items-center gap-3 text-xs">
+                    {h.conversationId && (
+                      <Link
+                        href={`/inbox?open=${h.conversationId}`}
+                        className="text-accent hover:underline"
+                      >
+                        Abrir conversa
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+function ListaEmAberto({
+  itens,
+  podeReceber,
+  onReceber,
+}: {
+  itens: Item[];
+  podeReceber: boolean;
+  onReceber: (i: Item) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
         {itens.map((i) => {
           const faixa = FAIXA[i.faixa];
           const nome = i.contato.name ?? i.contato.phoneNumber ?? "Sem nome";
@@ -151,7 +385,7 @@ export function ReceivablesPanel({ podeReceber }: { podeReceber: boolean }) {
                     </Link>
                   )}
                   {podeReceber && (
-                    <button onClick={() => setRecebendo(i)} className="text-accent hover:underline">
+                    <button onClick={() => onReceber(i)} className="text-accent hover:underline">
                       Registrar recebimento
                     </button>
                   )}
@@ -160,18 +394,6 @@ export function ReceivablesPanel({ podeReceber }: { podeReceber: boolean }) {
             </div>
           );
         })}
-      </div>
-
-      {recebendo && (
-        <FormRecebimento
-          item={recebendo}
-          onFechar={() => setRecebendo(null)}
-          onSalvo={() => {
-            setRecebendo(null);
-            mutate();
-          }}
-        />
-      )}
     </div>
   );
 }

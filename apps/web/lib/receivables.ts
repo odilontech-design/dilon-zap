@@ -88,6 +88,90 @@ export async function registrarPagamento(entrada: PagamentoInput) {
 }
 
 /**
+ * Instante em que começou o mês corrente no fuso da empresa.
+ *
+ * Não dá pra usar meia-noite UTC: o container roda em UTC e o Brasil é UTC-3,
+ * então "início do mês" em UTC é o dia 31 às 21h daqui — e todo recebimento
+ * das últimas três horas do mês passado entraria no total deste mês.
+ */
+function inicioDoMesNoFuso(agora: Date, tz: string): Date {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: tz,
+    year: "numeric",
+    month: "2-digit",
+  }).formatToParts(agora);
+  const ano = Number(partes.find((p) => p.type === "year")!.value);
+  const mes = Number(partes.find((p) => p.type === "month")!.value);
+
+  // Meia-noite "ingênua" do dia 1, corrigida pelo deslocamento do fuso naquele
+  // instante — assim vale também pra quem usa um fuso com horário de verão.
+  const ingenuo = Date.UTC(ano, mes - 1, 1);
+  const referencia = new Date(ingenuo);
+  const deslocamento =
+    new Date(referencia.toLocaleString("en-US", { timeZone: "UTC" })).getTime() -
+    new Date(referencia.toLocaleString("en-US", { timeZone: tz })).getTime();
+  return new Date(ingenuo + deslocamento);
+}
+
+/** Quanto entrou no caixa no mês corrente, no fuso da empresa. */
+export async function recebidoNoMes(tenantId: string, timezone: string, agora = new Date()) {
+  const soma = await prisma.pagamento.aggregate({
+    where: { order: { tenantId }, recebidoEm: { gte: inicioDoMesNoFuso(agora, timezone) } },
+    _sum: { valorCents: true },
+  });
+  // Estorno entra como valor negativo e abate — é o número do caixa, não o
+  // de quantas vezes alguém clicou em registrar.
+  return soma._sum.valorCents ?? 0;
+}
+
+/**
+ * Histórico de recebimentos: o que já entrou, do mais recente pro mais antigo.
+ *
+ * A tela de A receber mostra só quem deve, e o pedido some dela quando é
+ * quitado — some junto a prova de que foi pago. Este histórico é o outro lado:
+ * lista os pagamentos registrados, com o pedido e o cliente de cada um.
+ */
+export async function listarHistoricoRecebido(tenantId: string, desde: Date, limite = 300) {
+  const pagamentos = await prisma.pagamento.findMany({
+    where: { order: { tenantId }, recebidoEm: { gte: desde } },
+    orderBy: { recebidoEm: "desc" },
+    take: limite,
+    select: {
+      id: true,
+      valorCents: true,
+      recebidoEm: true,
+      meio: true,
+      observacao: true,
+      order: {
+        select: {
+          id: true,
+          numero: true,
+          totalCents: true,
+          pago: true,
+          conversationId: true,
+          contact: { select: { id: true, name: true, waJid: true, phoneNumber: true } },
+        },
+      },
+    },
+  });
+
+  return pagamentos.map((p) => ({
+    id: p.id,
+    valorCents: p.valorCents,
+    recebidoEm: p.recebidoEm,
+    meio: p.meio,
+    observacao: p.observacao,
+    numero: p.order.numero,
+    orderId: p.order.id,
+    totalCents: p.order.totalCents,
+    // Quitado de vez ou foi só uma parcela: muda como a linha é lida.
+    quitado: p.order.pago,
+    conversationId: p.order.conversationId,
+    contato: p.order.contact,
+  }));
+}
+
+/**
  * Tudo que a empresa tem a receber, já com saldo e faixa de atraso.
  *
  * Calculado na hora a partir dos pedidos, e não guardado como saldo no

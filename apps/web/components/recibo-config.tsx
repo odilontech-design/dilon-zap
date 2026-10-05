@@ -17,6 +17,7 @@ type Config = {
   reciboEndereco: string | null;
   reciboTelefone: string | null;
   reciboRodape: string | null;
+  reciboChavePix: string | null;
   reciboLarguraMm: number;
 };
 
@@ -58,6 +59,7 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
         reciboEndereco: config.reciboEndereco,
         reciboTelefone: config.reciboTelefone,
         reciboRodape: config.reciboRodape,
+        reciboChavePix: config.reciboChavePix,
         reciboLarguraMm: config.reciboLarguraMm,
       }),
     });
@@ -106,6 +108,20 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
                   />
                 </label>
               ))}
+
+              <label>
+                <span className="text-xs font-medium text-neutral-700">Chave PIX para cobrança</span>
+                <input
+                  value={config.reciboChavePix ?? ""}
+                  onChange={(e) => muda("reciboChavePix", e.target.value)}
+                  maxLength={140}
+                  placeholder="CNPJ, telefone, e-mail ou chave aleatória"
+                  className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+                />
+                <span className="text-xs text-neutral-500">
+                  Sai no recibo só quando o pedido fecha como “PIX — a pagar”.
+                </span>
+              </label>
 
               <label>
                 <span className="text-xs font-medium text-neutral-700">Mensagem no pé do recibo</span>

@@ -89,6 +89,10 @@ model Tenant {
   reciboTelefone  String?
   // Mensagem no pé do recibo: política de troca, agradecimento, Instagram.
   reciboRodape    String?
+  // Chave PIX impressa no recibo quando o pedido fecha como "PIX — a pagar".
+  // Sem ela o cliente recebe o comprovante sabendo quanto deve e não pra onde
+  // mandar — foi o pedido da Guttierres, que cobra honorário por PIX.
+  reciboChavePix  String?
   // Largura do papel da impressora térmica, em mm. 80 é o padrão de balcão;
   // 58 é o das impressoras portáteis. Fica na empresa, e não escolhido a cada
   // impressão, porque a impressora não muda — e errar a largura corta o texto
@@ -802,6 +806,10 @@ enum OrderStatus {
 
 enum PaymentMethod {
   PIX
+  // PIX combinado mas ainda não recebido. Separado de PIX porque o que muda é
+  // o que acontece depois: PIX sai pago na hora, PIX_PENDENTE entra no a
+  // receber e faz o recibo imprimir a chave pra o cliente pagar.
+  PIX_PENDENTE
   CARTAO // maquininha, presencial ou por link — o Dilon Zap só registra
   BOLETO
   FIADO

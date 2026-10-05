@@ -9,8 +9,12 @@ import { montarRecibo } from "@/lib/recibo";
 import { wakeOutbox } from "@/lib/worker-client";
 import { ReciboImagemJSX } from "@/lib/recibo-imagem";
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+
+  // Documento vem da tela de confirmação do envio. null/ausente não apaga o
+  // que já está salvo — só um texto vazio explícito limpa.
+  const corpo = (await req.json().catch(() => ({}))) as { documento?: string | null };
 
   const [tenant, pedido] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
@@ -23,6 +27,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
         reciboEndereco: true,
         reciboTelefone: true,
         reciboRodape: true,
+        reciboChavePix: true,
         reciboLarguraMm: true,
       },
     }),
@@ -68,13 +73,22 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "Só pode enviar recibo de pedido já fechado." }, { status: 400 });
   }
 
+  // Salva antes de montar o recibo: o comprovante que sai já leva o número
+  // que a pessoa acabou de digitar, e os próximos pedidos deste cliente vêm
+  // com ele preenchido.
+  const documento =
+    corpo.documento === undefined ? pedido.contact.documento : corpo.documento?.trim() || null;
+  if (documento !== pedido.contact.documento) {
+    await prisma.contact.update({ where: { id: pedido.contact.id }, data: { documento } });
+  }
+
   const recibo = montarRecibo({
     empresa: { ...tenant, nome: tenant.name },
     pedido: { ...pedido, vendedor: pedido.createdBy?.name ?? null, itens: pedido.items },
     cliente: {
       nome: pedido.contact.name,
       telefone: telefoneConhecido(pedido.contact),
-      documento: pedido.contact.documento,
+      documento,
       endereco: pedido.contact.endereco,
     },
   });

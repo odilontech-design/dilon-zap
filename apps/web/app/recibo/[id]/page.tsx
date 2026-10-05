@@ -68,6 +68,7 @@ export default async function ReciboPage({
         reciboEndereco: true,
         reciboTelefone: true,
         reciboRodape: true,
+        reciboChavePix: true,
         reciboLarguraMm: true,
       },
     }),

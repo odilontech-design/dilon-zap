@@ -95,7 +95,7 @@ export function ReciboImagemJSX({ recibo }: { recibo: Recibo }) {
             borderBottom: `1px solid ${lightBorder}`,
           }}
         >
-          <span>Produto</span>
+          <span>Produto / Serviço</span>
           <span>Total</span>
         </div>
 

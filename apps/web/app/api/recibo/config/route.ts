@@ -20,6 +20,7 @@ const bodySchema = z.object({
   reciboEndereco: campo(200),
   reciboTelefone: campo(80),
   reciboRodape: campo(400),
+  reciboChavePix: campo(140),
   reciboLarguraMm: z.union([z.literal(58), z.literal(80)]),
 });
 
@@ -30,6 +31,7 @@ const SELECAO = {
   reciboEndereco: true,
   reciboTelefone: true,
   reciboRodape: true,
+  reciboChavePix: true,
   reciboLarguraMm: true,
 } as const;
 
@@ -66,6 +68,7 @@ export async function PUT(req: Request) {
       reciboEndereco: limpo(d.reciboEndereco),
       reciboTelefone: limpo(d.reciboTelefone),
       reciboRodape: limpo(d.reciboRodape),
+      reciboChavePix: limpo(d.reciboChavePix),
       reciboLarguraMm: d.reciboLarguraMm,
     },
     select: SELECAO,
