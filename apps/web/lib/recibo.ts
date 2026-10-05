@@ -9,6 +9,9 @@
  * no balcão: itens a preço de tabela, desconto dos itens somado à parte e o
  * desconto do pedido separado. A cliente que confere a sacola continua lendo
  * o papel do jeito que está acostumada.
+ *
+ * O caminho inverso não existe: item cobrado acima da tabela sai pelo próprio
+ * preço, sem "acréscimo" nenhum. Ver precoImpresso() em montarRecibo.
  */
 import { centsToBRL } from "./billing";
 
@@ -156,44 +159,50 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
 
   // Item sem preço de tabela (lançado à mão, fora do catálogo) não tem
   // referência pra dizer que houve desconto: o preço dele É o de tabela.
-  // Sem essa regra, todo item avulso apareceria como "acréscimo".
   const itensBase = pedido.itens.map((i) => ({
     ...i,
     tabela: i.precoTabelaCents > 0 ? i.precoTabelaCents : i.precoUnitCents,
   }));
 
-  const subtotalTabela = itensBase.reduce((s, i) => s + i.tabela * i.quantidade, 0);
+  // Preço que vai IMPRESSO em cada item.
+  //
+  // Cobrado abaixo da tabela: imprime o de tabela e mostra o desconto embaixo
+  // — é o que a cliente da Believe confere na sacola, e ver o abatimento é
+  // metade da graça.
+  //
+  // Cobrado ACIMA da tabela: imprime o próprio preço cobrado, sem linha de
+  // ajuste. Antes saía "Acréscimo + R$ 150,00", o que num produto de prateleira
+  // faria sentido, mas em serviço não: o honorário da Guttierres é negociado
+  // por cliente, e o valor do catálogo é só um ponto de partida. Chamar a
+  // diferença de acréscimo faz o comprovante parecer que cobraram a mais.
+  const precoImpresso = (i: { tabela: number; precoUnitCents: number }) =>
+    Math.max(i.tabela, i.precoUnitCents);
+
+  const subtotalImpresso = itensBase.reduce((s, i) => s + precoImpresso(i) * i.quantidade, 0);
   const descontoItens = itensBase.reduce((s, i) => s + Math.max(i.tabela - i.precoUnitCents, 0) * i.quantidade, 0);
-  const acrescimoItens = itensBase.reduce((s, i) => s + Math.max(i.precoUnitCents - i.tabela, 0) * i.quantidade, 0);
 
   // O subtotal gravado no fechamento é a soma dos preços praticados. Se a
   // conta a partir dos itens não bate com ele (pedido antigo, item mexido por
   // fora), o recibo detalhado mentiria em algum lugar. Nesse caso sai o
   // formato simples, com os itens pelo preço cobrado — o TOTAL impresso é
   // sempre o congelado no pedido, em qualquer um dos dois formatos.
-  const detalhado = subtotalTabela - descontoItens + acrescimoItens === pedido.subtotalCents;
+  const detalhado = subtotalImpresso - descontoItens === pedido.subtotalCents;
 
   const itens: ItemRecibo[] = itensBase.map((i) => {
-    const preco = detalhado ? i.tabela : i.precoUnitCents;
-    const diferenca = (i.tabela - i.precoUnitCents) * i.quantidade;
+    const preco = detalhado ? precoImpresso(i) : i.precoUnitCents;
+    const desconto = (i.tabela - i.precoUnitCents) * i.quantidade;
     return {
       nome: i.nomeProduto,
       detalhe: `${i.quantidade} x ${centsToBRL(preco)}`,
       total: centsToBRL(preco * i.quantidade),
-      ajuste:
-        !detalhado || diferenca === 0
-          ? null
-          : diferenca > 0
-            ? `Desconto - ${centsToBRL(diferenca)}`
-            : `Acréscimo + ${centsToBRL(-diferenca)}`,
+      ajuste: detalhado && desconto > 0 ? `Desconto - ${centsToBRL(desconto)}` : null,
     };
   });
 
   const totais: Recibo["totais"] = [];
   if (detalhado) {
-    totais.push({ rotulo: "Subtotal", valor: centsToBRL(subtotalTabela) });
+    totais.push({ rotulo: "Subtotal", valor: centsToBRL(subtotalImpresso) });
     if (descontoItens > 0) totais.push({ rotulo: "Desconto nos itens", valor: `- ${centsToBRL(descontoItens)}` });
-    if (acrescimoItens > 0) totais.push({ rotulo: "Acréscimo nos itens", valor: `+ ${centsToBRL(acrescimoItens)}` });
   } else {
     totais.push({ rotulo: "Subtotal", valor: centsToBRL(pedido.subtotalCents) });
   }

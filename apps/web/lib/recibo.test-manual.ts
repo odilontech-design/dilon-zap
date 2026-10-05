@@ -110,11 +110,15 @@ checa("sem desconto: subtotal e total", totais(montarRecibo(entrada())), [
       },
     })
   );
-  checa("preço acima da tabela vira acréscimo", totais(r), [
-    ["Subtotal", "R$ 50,00"],
-    ["Acréscimo nos itens", "+ R$ 5,00"],
+  // Já virou "Acréscimo nos itens". Não vira mais: preço negociado acima da
+  // tabela é só o preço, e chamar a diferença de acréscimo fazia o comprovante
+  // parecer cobrança a mais (relatado pela Guttierres, em honorário contábil).
+  checa("preço acima da tabela sai pelo próprio preço, sem acréscimo", totais(r), [
+    ["Subtotal", "R$ 55,00"],
     ["TOTAL", "R$ 55,00"],
   ]);
+  checa("preço acima da tabela não põe ajuste na linha do item", r.itens[0].ajuste, null);
+  checa("linha do item mostra o preço cobrado", n(r.itens[0].detalhe), "1 x R$ 55,00");
 }
 
 {
@@ -363,6 +367,72 @@ checa(
     { rotulo: "Cliente", valor: "Empresa Exemplo Ltda" },
     { rotulo: "CPF/CNPJ", valor: "12.345.678/0001-90" },
   ]
+);
+
+// Serviço cobrado acima da tabela: o preço negociado É o preço. Nada de
+// "Acréscimo", que fazia o comprovante da Guttierres parecer cobrança a mais.
+const servicoAcimaDaTabela = entrada({
+  pedido: {
+    itens: [
+      { nomeProduto: "Honorário Contábil - Outubro", precoTabelaCents: 35000, precoUnitCents: 50000, quantidade: 1 },
+    ],
+    subtotalCents: 50000,
+    descontoCents: 0,
+    totalCents: 50000,
+  },
+});
+const itemNegociado = montarRecibo(servicoAcimaDaTabela).itens[0];
+checa(
+  "item acima da tabela sai pelo preço cobrado",
+  { ...itemNegociado, detalhe: n(itemNegociado.detalhe), total: n(itemNegociado.total) },
+  { nome: "Honorário Contábil - Outubro", detalhe: "1 x R$ 500,00", total: "R$ 500,00", ajuste: null }
+);
+checa(
+  "item acima da tabela não gera linha de acréscimo nos totais",
+  montarRecibo(servicoAcimaDaTabela).totais.map((t) => t.rotulo),
+  ["Subtotal", "TOTAL"]
+);
+checa(
+  "subtotal impresso bate com o cobrado",
+  n(montarRecibo(servicoAcimaDaTabela).totais.find((t) => t.rotulo === "Subtotal")?.valor),
+  "R$ 500,00"
+);
+// Desconto segue intacto: é o caso da Believe, e ver o abatimento é o ponto.
+const comDesconto = entrada({
+  pedido: {
+    itens: [{ nomeProduto: "Sérum", precoTabelaCents: 10000, precoUnitCents: 8000, quantidade: 2 }],
+    subtotalCents: 16000,
+    descontoCents: 0,
+    totalCents: 16000,
+  },
+});
+checa(
+  "item abaixo da tabela ainda mostra desconto",
+  n(montarRecibo(comDesconto).itens[0].ajuste),
+  "Desconto - R$ 40,00"
+);
+checa(
+  "desconto nos itens continua somado à parte",
+  montarRecibo(comDesconto).totais.map((t) => `${t.rotulo}=${n(t.valor)}`),
+  ["Subtotal=R$ 200,00", "Desconto nos itens=- R$ 40,00", "TOTAL=R$ 160,00"]
+);
+// Um de cada no mesmo pedido: a conta tem que continuar fechando.
+checa(
+  "desconto e preço negociado no mesmo pedido fecham o subtotal",
+  montarRecibo(
+    entrada({
+      pedido: {
+        itens: [
+          { nomeProduto: "Honorário", precoTabelaCents: 35000, precoUnitCents: 50000, quantidade: 1 },
+          { nomeProduto: "Sérum", precoTabelaCents: 10000, precoUnitCents: 8000, quantidade: 2 },
+        ],
+        subtotalCents: 66000,
+        descontoCents: 0,
+        totalCents: 66000,
+      },
+    })
+  ).totais.map((t) => `${t.rotulo}=${n(t.valor)}`),
+  ["Subtotal=R$ 700,00", "Desconto nos itens=- R$ 40,00", "TOTAL=R$ 660,00"]
 );
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
