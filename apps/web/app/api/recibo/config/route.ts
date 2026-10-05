@@ -21,6 +21,11 @@ const bodySchema = z.object({
   reciboTelefone: campo(80),
   reciboRodape: campo(400),
   reciboChavePix: campo(140),
+  // Só #rrggbb. Texto livre aqui iria direto pro style do recibo.
+  reciboCorDestaque: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "use uma cor no formato #RRGGBB")
+    .nullable(),
   reciboTextoPendente: campo(600),
   reciboTextoPago: campo(600),
   reciboOcultarTelefone: z.boolean(),
@@ -35,6 +40,8 @@ const SELECAO = {
   reciboTelefone: true,
   reciboRodape: true,
   reciboChavePix: true,
+  reciboLogoKey: true,
+  reciboCorDestaque: true,
   reciboTextoPendente: true,
   reciboTextoPago: true,
   reciboOcultarTelefone: true,
@@ -75,6 +82,7 @@ export async function PUT(req: Request) {
       reciboTelefone: limpo(d.reciboTelefone),
       reciboRodape: limpo(d.reciboRodape),
       reciboChavePix: limpo(d.reciboChavePix),
+      reciboCorDestaque: limpo(d.reciboCorDestaque),
       reciboTextoPendente: limpo(d.reciboTextoPendente),
       reciboTextoPago: limpo(d.reciboTextoPago),
       reciboOcultarTelefone: d.reciboOcultarTelefone,

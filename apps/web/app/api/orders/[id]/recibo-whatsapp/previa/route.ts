@@ -35,7 +35,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   });
 
   const recibo = montarReciboDoPedido(carregado.empresa, carregado.pedido, cliente);
-  const png = await desenharReciboPng(recibo);
+  const png = await desenharReciboPng(recibo, carregado.empresa.reciboLogoKey);
 
   return new Response(new Uint8Array(png), {
     headers: {

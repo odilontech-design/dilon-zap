@@ -53,15 +53,19 @@ const ESTILO = `
 .recibo .selo { border: 1.5px solid #000; text-align: center; font-weight: 700; letter-spacing: 0.08em; padding: 1mm; margin: 2.5mm 0 1.5mm; }
 .recibo .texto-livre { white-space: pre-line; overflow-wrap: anywhere; }
 .recibo .corpo-recibo { margin: 1.5mm 0; text-align: justify; }
+.recibo .logo { max-width: 40mm; max-height: 18mm; margin: 0 auto 1.5mm; display: block; filter: grayscale(1) contrast(1.4); }
 .recibo .assinatura { font-size: 0.8em; margin-top: 2mm; }
 `;
 
-export function ReciboTermico({ recibo }: { recibo: Recibo }) {
+export function ReciboTermico({ recibo, logoUrl }: { recibo: Recibo; logoUrl?: string | null }) {
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: ESTILO }} />
       <div className="recibo" data-largura={recibo.larguraMm}>
         <header className="centro">
+          {/* Sem cor: a cabeça térmica só imprime preto, e a logo colorida
+              sairia como mancha. Em escala de cinza o desenho ainda se lê. */}
+          {logoUrl && <img className="logo" src={logoUrl} alt="" />}
           <div className="empresa">{recibo.empresa.nome}</div>
           {recibo.empresa.linhas.map((l) => (
             <div key={l} className="miudo texto-livre">

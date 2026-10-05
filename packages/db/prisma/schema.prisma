@@ -103,6 +103,14 @@ model Tenant {
   // em lib/recibo.ts.
   reciboTextoPendente String?
   reciboTextoPago     String?
+  // Logo impressa no topo do recibo. Guarda só a chave do objeto no R2, igual
+  // às mídias das conversas — o arquivo nunca entra no banco.
+  reciboLogoKey       String?
+  // Cor da faixa do topo e do TOTAL, em hex. Nulo mantém o verde do sistema,
+  // então empresa que nunca mexeu nisso não muda de aparência. Existe porque o
+  // recibo é a cara da empresa pro cliente dela, não a nossa: a Guttierres é
+  // cinza grafite, e um comprovante verde-água parecia de outro negócio.
+  reciboCorDestaque   String?
   // Esconde o telefone do cliente no bloco do recibo. Desligado por padrão:
   // quem vende pra pessoa física usa o telefone pra identificar a cliente no
   // balcão. Quem emite pra empresa (contabilidade) identifica por CNPJ, e aí

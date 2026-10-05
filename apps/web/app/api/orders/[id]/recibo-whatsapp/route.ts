@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   }
 
   const recibo = montarReciboDoPedido(empresa, pedido, cliente);
-  const png = await desenharReciboPng(recibo);
+  const png = await desenharReciboPng(recibo, empresa.reciboLogoKey);
 
   const mediaKey = `${user.tenantId}/recibos/${pedido.id}-${randomUUID().slice(0, 8)}.png`;
   await uploadMedia(mediaKey, png, "image/png");

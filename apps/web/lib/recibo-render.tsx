@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import QRCode from "qrcode";
+import { downloadMedia } from "@dilon-zap/storage";
 import { prisma } from "@dilon-zap/db";
 import { telefoneConhecido } from "@/lib/contact";
 import { montarRecibo, type Recibo } from "@/lib/recibo";
@@ -30,6 +31,8 @@ const SELECAO_TENANT = {
   reciboTelefone: true,
   reciboRodape: true,
   reciboChavePix: true,
+  reciboLogoKey: true,
+  reciboCorDestaque: true,
   reciboTextoPendente: true,
   reciboTextoPago: true,
   reciboOcultarTelefone: true,
@@ -130,12 +133,26 @@ export function montarReciboDoPedido(
  * foi o que a Guttierres viu. Passando `height: undefined`, o satori mede o
  * conteúdo e devolve a altura exata (ver setHeightAuto no satori).
  */
-export async function desenharReciboPng(recibo: Recibo): Promise<Buffer> {
+export async function desenharReciboPng(recibo: Recibo, logoKey?: string | null): Promise<Buffer> {
   const qrPix = recibo.pixCopiaECola
     ? await QRCode.toDataURL(recibo.pixCopiaECola, { margin: 1, width: 360 })
     : null;
 
-  const imagem = new ImageResponse(ReciboImagemJSX({ recibo, qrPix }), {
+  // O satori não busca URL — a imagem precisa chegar embutida. Logo quebrada
+  // (chave apagada do bucket, credencial trocada) não pode derrubar o recibo
+  // inteiro: sem ela o comprovante sai igual, só sem o desenho no topo.
+  let logo: string | null = null;
+  if (logoKey) {
+    try {
+      const bytes = await downloadMedia(logoKey);
+      const tipo = logoKey.endsWith(".png") ? "png" : logoKey.endsWith(".webp") ? "webp" : "jpeg";
+      logo = `data:image/${tipo};base64,${bytes.toString("base64")}`;
+    } catch {
+      logo = null;
+    }
+  }
+
+  const imagem = new ImageResponse(ReciboImagemJSX({ recibo, qrPix, logo }), {
     width: LARGURA_PX,
     height: undefined as unknown as number,
   });

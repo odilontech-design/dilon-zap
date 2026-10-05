@@ -1,4 +1,4 @@
-import type { Recibo } from "./recibo";
+import { corDoTextoSobre, type Recibo } from "./recibo";
 
 /**
  * Recibo visual para enviar como imagem pelo WhatsApp.
@@ -9,12 +9,16 @@ import type { Recibo } from "./recibo";
 export function ReciboImagemJSX({
   recibo,
   qrPix,
+  logo,
 }: {
   recibo: Recibo;
   /** QR do PIX já rasterizado como data URI. Ver recibo-render.tsx. */
   qrPix?: string | null;
+  /** Logo da empresa como data URI — o satori não busca URL do R2. */
+  logo?: string | null;
 }) {
-  const accentColor = "#0d9488";
+  const accentColor = recibo.cor;
+  const corDoTopo = corDoTextoSobre(accentColor);
   const bgColor = "#ffffff";
   const textColor = "#1e293b";
   const mutedColor = "#64748b";
@@ -40,10 +44,15 @@ export function ReciboImagemJSX({
           flexDirection: "column",
           alignItems: "center",
           backgroundColor: accentColor,
-          color: "#ffffff",
+          color: corDoTopo,
           padding: "28px 32px 24px",
         }}
       >
+        {logo && (
+          /* height fixa e width automática: logo quadrada e logo deitada
+             ocupam a mesma altura, em vez de uma esmagar a faixa. */
+          <img src={logo} height={64} style={{ marginBottom: 12, objectFit: "contain" }} alt="" />
+        )}
         <div style={{ fontSize: 22, fontWeight: 700, textAlign: "center" }}>{recibo.empresa.nome}</div>
         {recibo.empresa.linhas.map((l, i) => (
           <div key={i} style={{ fontSize: 13, opacity: 0.9, marginTop: 2, textAlign: "center" }}>

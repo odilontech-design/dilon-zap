@@ -69,6 +69,8 @@ export default async function ReciboPage({
         reciboTelefone: true,
         reciboRodape: true,
         reciboChavePix: true,
+        reciboLogoKey: true,
+        reciboCorDestaque: true,
         reciboTextoPendente: true,
         reciboTextoPago: true,
         reciboOcultarTelefone: true,
@@ -139,7 +141,7 @@ export default async function ReciboPage({
     <>
       <style dangerouslySetInnerHTML={{ __html: ESTILO_PAGINA }} />
       <ReciboAcoes larguraMm={recibo.larguraMm} imprimirAoAbrir={searchParams.imprimir !== "0"} />
-      <ReciboTermico recibo={recibo} />
+      <ReciboTermico recibo={recibo} logoUrl={tenant.reciboLogoKey ? "/api/recibo/logo" : null} />
     </>
   );
 }

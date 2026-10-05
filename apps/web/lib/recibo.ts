@@ -29,6 +29,7 @@ export type ReciboEntrada = {
     reciboChavePix: string | null;
     reciboTextoPendente: string | null;
     reciboTextoPago: string | null;
+    reciboCorDestaque: string | null;
     reciboOcultarTelefone: boolean;
     reciboLarguraMm: number;
     timezone: string;
@@ -91,6 +92,8 @@ export type Recibo = {
    * chave. Quem renderiza transforma em QR Code.
    */
   pixCopiaECola: string | null;
+  /** Cor da faixa e do TOTAL, já validada. */
+  cor: string;
   /**
    * Corpo do recibo, já escolhido pela situação (cobrança quando em aberto,
    * quitação quando pago) e com as variáveis substituídas.
@@ -158,6 +161,37 @@ export function formatarDocumento(valor: string | null | undefined): string | nu
  * "{valorr}" por engano, ver "{valorr}" no papel mostra o erro; ver um buraco
  * no meio da frase não mostra nada, e o recibo sai pro cliente sem o valor.
  */
+/** Verde do sistema. Vale pra quem nunca escolheu cor — ninguém muda sozinho. */
+export const COR_PADRAO = "#0d9488";
+
+/**
+ * Cor de destaque válida, ou o padrão.
+ *
+ * Texto livre que vai direto pro `style` de um SVG não pode passar sem conferir
+ * o formato: qualquer coisa fora de #rrggbb entra como valor inválido e o
+ * recibo sai sem cor nenhuma na faixa.
+ */
+export function corDeDestaque(valor: string | null | undefined): string {
+  const t = valor?.trim();
+  return t && /^#[0-9a-fA-F]{6}$/.test(t) ? t : COR_PADRAO;
+}
+
+/**
+ * Preto ou branco por cima da cor escolhida, pelo que dá pra ler.
+ *
+ * Sem isso, quem escolhesse um cinza claro ou um amarelo teria o nome da
+ * própria empresa em branco sobre fundo claro — ilegível no comprovante que
+ * vai pro cliente, e sem nada no sistema acusando.
+ */
+export function corDoTextoSobre(fundo: string): string {
+  const n = (i: number) => parseInt(fundo.slice(i, i + 2), 16) / 255;
+  // Luminância relativa (WCAG): o olho pesa verde mais que vermelho, e azul
+  // quase nada — média simples dos canais erraria no azul e no amarelo.
+  const canal = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  const luz = 0.2126 * canal(n(1)) + 0.7152 * canal(n(3)) + 0.0722 * canal(n(5));
+  return luz > 0.45 ? "#1e293b" : "#ffffff";
+}
+
 export function aplicarVariaveis(texto: string, valores: Record<string, string>): string {
   return texto.replace(/\{(\w+)\}/g, (original, chave: string) => valores[chave] ?? original);
 }
@@ -327,6 +361,7 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
     situacao: pedido.pago ? "PAGO" : "PENDENTE",
     pagamento,
     pixCopiaECola,
+    cor: corDeDestaque(empresa.reciboCorDestaque),
     mensagem,
     vendedor: texto(pedido.vendedor),
     observacao: texto(pedido.observacao),

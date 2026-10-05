@@ -18,6 +18,8 @@ type Config = {
   reciboTelefone: string | null;
   reciboRodape: string | null;
   reciboChavePix: string | null;
+  reciboLogoKey: string | null;
+  reciboCorDestaque: string | null;
   reciboTextoPendente: string | null;
   reciboTextoPago: string | null;
   reciboOcultarTelefone: boolean;
@@ -35,6 +37,7 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
   const [config, setConfig] = useState<Config | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
+  const [logoOcupada, setLogoOcupada] = useState(false);
 
   useEffect(() => {
     fetch("/api/recibo/config")
@@ -47,6 +50,38 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
 
   function muda<K extends keyof Config>(chave: K, valor: Config[K]) {
     setConfig((c) => (c ? { ...c, [chave]: valor } : c));
+  }
+
+  // Logo sobe na hora, fora do Salvar: é arquivo, não campo de texto, e
+  // guardá-la pra enviar junto com o resto obrigaria a segurar o arquivo em
+  // memória e a reenviá-lo a cada salvada.
+  async function enviarLogo(file: File) {
+    setErro(null);
+    setLogoOcupada(true);
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/recibo/logo", { method: "POST", body: form });
+    setLogoOcupada(false);
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      setErro(typeof b.error === "string" ? b.error : "não deu pra enviar a logo");
+      return;
+    }
+    const atual = await fetch("/api/recibo/config").then((r) => r.json());
+    setConfig(atual);
+  }
+
+  async function removerLogo() {
+    if (!confirm("Remover a logo do recibo?")) return;
+    setErro(null);
+    setLogoOcupada(true);
+    const res = await fetch("/api/recibo/logo", { method: "DELETE" });
+    setLogoOcupada(false);
+    if (!res.ok) {
+      setErro("não deu pra remover a logo");
+      return;
+    }
+    setConfig((c) => (c ? { ...c, reciboLogoKey: null } : c));
   }
 
   async function salvar() {
@@ -63,6 +98,7 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
         reciboTelefone: config.reciboTelefone,
         reciboRodape: config.reciboRodape,
         reciboChavePix: config.reciboChavePix,
+        reciboCorDestaque: config.reciboCorDestaque,
         reciboTextoPendente: config.reciboTextoPendente,
         reciboTextoPago: config.reciboTextoPago,
         reciboOcultarTelefone: config.reciboOcultarTelefone,
@@ -102,6 +138,76 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
 
           {config && (
             <>
+              <fieldset className="rounded-md border border-neutral-200 p-3 flex flex-col gap-3">
+                <legend className="px-1 text-xs font-medium text-neutral-700">
+                  Identidade visual
+                </legend>
+
+                <div className="flex items-center gap-3">
+                  <div
+                    className="grid h-16 w-16 shrink-0 place-items-center rounded-md border border-neutral-200"
+                    style={{ backgroundColor: config.reciboCorDestaque ?? "#0d9488" }}
+                  >
+                    {config.reciboLogoKey ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={`/api/recibo/logo?v=${encodeURIComponent(config.reciboLogoKey)}`}
+                        alt="Logo do recibo"
+                        className="max-h-14 max-w-14 object-contain"
+                      />
+                    ) : (
+                      <span className="text-[10px] text-white/80">sem logo</span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex gap-2">
+                      <label className="cursor-pointer rounded-md border border-neutral-300 px-3 py-1.5 text-xs hover:bg-neutral-100">
+                        {config.reciboLogoKey ? "Trocar logo" : "Enviar logo"}
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/webp"
+                          className="sr-only"
+                          onChange={(e) => {
+                            const f = e.target.files?.[0];
+                            e.target.value = "";
+                            if (f) enviarLogo(f);
+                          }}
+                        />
+                      </label>
+                      {config.reciboLogoKey && (
+                        <button
+                          onClick={removerLogo}
+                          disabled={logoOcupada}
+                          className="rounded-md px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
+                    <span className="text-xs text-neutral-500">
+                      {logoOcupada ? "Enviando..." : "PNG, JPG ou WEBP, até 2MB. Sai no topo do recibo."}
+                    </span>
+                  </div>
+                </div>
+
+                <label className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={config.reciboCorDestaque ?? "#0d9488"}
+                    onChange={(e) => muda("reciboCorDestaque", e.target.value)}
+                    className="h-9 w-14 cursor-pointer rounded border border-neutral-300 bg-surface"
+                  />
+                  <span>
+                    <span className="text-xs font-medium text-neutral-700">Cor da faixa do topo</span>
+                    <span className="block text-xs text-neutral-500">
+                      Também pinta o TOTAL. O texto sobre ela vira branco ou preto sozinho, pelo que
+                      dá pra ler.
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
+
               {CAMPOS.map((c) => (
                 <label key={c.chave}>
                   <span className="text-xs font-medium text-neutral-700">{c.rotulo}</span>

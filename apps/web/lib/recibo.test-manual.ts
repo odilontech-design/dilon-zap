@@ -1,7 +1,15 @@
 // Recibo impresso: contas, formato e o que some quando não está preenchido.
 // Puro, sem banco. Dados fictícios — nunca de cliente real.
 // Rodar com: npx tsx apps/web/lib/recibo.test-manual.ts
-import { montarRecibo, formatarDocumento, aplicarVariaveis, type ReciboEntrada } from "./recibo";
+import {
+  montarRecibo,
+  formatarDocumento,
+  aplicarVariaveis,
+  corDeDestaque,
+  corDoTextoSobre,
+  COR_PADRAO,
+  type ReciboEntrada,
+} from "./recibo";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -29,6 +37,7 @@ function entrada(ajustes: {
       reciboTelefone: null,
       reciboRodape: null,
       reciboChavePix: null,
+      reciboCorDestaque: null,
       reciboTextoPendente: null,
       reciboTextoPago: null,
       reciboOcultarTelefone: false,
@@ -590,6 +599,28 @@ checa(
   "Valor: {valorr}"
 );
 checa("variáveis repetidas são todas trocadas", aplicarVariaveis("{a} e {a}", { a: "x" }), "x e x");
+
+// Cor da faixa: o recibo é a cara da empresa do cliente, não a nossa. Mas cor
+// inválida não pode virar style quebrado nem texto ilegível no comprovante.
+checa("sem cor escolhida mantém o verde do sistema", montarRecibo(entrada()).cor, COR_PADRAO);
+checa(
+  "cor válida é respeitada",
+  montarRecibo(entrada({ empresa: { reciboCorDestaque: "#3f3f46" } })).cor,
+  "#3f3f46"
+);
+checa("texto solto não vira cor", corDeDestaque("cinza da logo"), COR_PADRAO);
+checa("hex sem # não passa", corDeDestaque("3f3f46"), COR_PADRAO);
+checa("hex curto não passa", corDeDestaque("#333"), COR_PADRAO);
+checa("tentativa de injetar CSS não passa", corDeDestaque("#000;background:url(x)"), COR_PADRAO);
+checa("maiúsculas passam", corDeDestaque("#3F3F46"), "#3F3F46");
+
+// Contraste: quem escolhe um tom claro não pode ficar com o nome da empresa
+// em branco sobre fundo claro no papel que vai pro cliente.
+checa("fundo escuro pede texto branco", corDoTextoSobre("#3f3f46"), "#ffffff");
+checa("verde do sistema pede texto branco", corDoTextoSobre(COR_PADRAO), "#ffffff");
+checa("fundo claro pede texto escuro", corDoTextoSobre("#f5f5f5"), "#1e293b");
+checa("amarelo pede texto escuro", corDoTextoSobre("#ffd400"), "#1e293b");
+checa("azul escuro pede texto branco", corDoTextoSobre("#1e3a8a"), "#ffffff");
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);
