@@ -206,6 +206,13 @@ export function ReciboImagemJSX({
         </div>
       </div>
 
+      {/* Corpo: cobrança enquanto em aberto, quitação depois de pago */}
+      {recibo.mensagem && (
+        <div style={{ display: "flex", padding: "4px 28px 12px" }}>
+          <span style={{ fontSize: 14, lineHeight: 1.5, color: textColor }}>{recibo.mensagem}</span>
+        </div>
+      )}
+
       {/* Pagamento */}
       {recibo.pagamento.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", padding: "8px 28px 12px", gap: 4 }}>

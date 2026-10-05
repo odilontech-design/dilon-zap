@@ -52,6 +52,7 @@ const ESTILO = `
 .recibo .total { font-size: 1.45em; font-weight: 700; margin-top: 1mm; }
 .recibo .selo { border: 1.5px solid #000; text-align: center; font-weight: 700; letter-spacing: 0.08em; padding: 1mm; margin: 2.5mm 0 1.5mm; }
 .recibo .texto-livre { white-space: pre-line; overflow-wrap: anywhere; }
+.recibo .corpo-recibo { margin: 1.5mm 0; text-align: justify; }
 .recibo .assinatura { font-size: 0.8em; margin-top: 2mm; }
 `;
 
@@ -124,6 +125,7 @@ export function ReciboTermico({ recibo }: { recibo: Recibo }) {
         ))}
 
         <div className="selo">{recibo.situacao === "PAGO" ? "PAGO" : "PAGAMENTO PENDENTE"}</div>
+        {recibo.mensagem && <div className="texto-livre corpo-recibo">{recibo.mensagem}</div>}
         {recibo.pagamento.map((l) => (
           <div key={l.rotulo} className="linha">
             <span>{l.rotulo}</span>

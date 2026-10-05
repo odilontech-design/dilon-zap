@@ -33,6 +33,8 @@ export type FecharInput = {
   /** Quando o cliente combinou de pagar. Só usado quando `pago` é falso. */
   vencimento?: Date | null;
   observacao?: string;
+  /** Competência cobrada ("Setembro/2026"), pro texto do recibo. */
+  mesReferencia?: string;
 };
 
 export async function fecharPedido(input: FecharInput) {
@@ -129,6 +131,7 @@ export async function fecharPedido(input: FecharInput) {
         descontoCents: totais.descontoCents,
         totalCents: totais.totalCents,
         observacao: input.observacao?.trim() || pedido.observacao,
+        mesReferencia: input.mesReferencia?.trim() || pedido.mesReferencia,
         closedById: input.userId,
         fechadoEm: agora,
       },

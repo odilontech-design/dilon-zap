@@ -21,6 +21,7 @@ const itemSchema = z.object({
 const patchSchema = z.object({
   acao: z.enum(["salvarItens", "enviarAoFinanceiro", "fechar", "cancelar", "marcarPago"]),
   itens: z.array(itemSchema).max(100).optional(),
+  mesReferencia: z.string().max(60).optional(),
   observacao: z.string().trim().max(500).optional(),
   descontoCents: z.number().int().min(0).optional(),
   paymentMethod: z.enum(["PIX", "PIX_PENDENTE", "CARTAO", "BOLETO", "FIADO"]).optional(),
@@ -123,6 +124,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       vencimento: parsed.data.vencimento ? new Date(parsed.data.vencimento) : null,
       pago: pagoNaHora,
       observacao: parsed.data.observacao,
+      mesReferencia: parsed.data.mesReferencia,
     });
 
     if (!r.jaEstavaFechado) {

@@ -27,6 +27,8 @@ export type ReciboEntrada = {
     reciboTelefone: string | null;
     reciboRodape: string | null;
     reciboChavePix: string | null;
+    reciboTextoPendente: string | null;
+    reciboTextoPago: string | null;
     reciboOcultarTelefone: boolean;
     reciboLarguraMm: number;
     timezone: string;
@@ -43,6 +45,7 @@ export type ReciboEntrada = {
     descontoCents: number;
     totalCents: number;
     observacao: string | null;
+    mesReferencia?: string | null;
     vendedor: string | null;
     itens: { nomeProduto: string; precoTabelaCents: number; precoUnitCents: number; quantidade: number }[];
     pagamentos: { valorCents: number }[];
@@ -88,6 +91,11 @@ export type Recibo = {
    * chave. Quem renderiza transforma em QR Code.
    */
   pixCopiaECola: string | null;
+  /**
+   * Corpo do recibo, já escolhido pela situação (cobrança quando em aberto,
+   * quitação quando pago) e com as variáveis substituídas.
+   */
+  mensagem: string | null;
   vendedor: string | null;
   observacao: string | null;
   rodape: string | null;
@@ -141,6 +149,17 @@ export function formatarDocumento(valor: string | null | undefined): string | nu
     return `CNPJ ${d.slice(0, 2)}.${d.slice(2, 5)}.${d.slice(5, 8)}/${d.slice(8, 12)}-${d.slice(12)}`;
   }
   return t;
+}
+
+/**
+ * Troca as variáveis do texto configurado pelos valores do pedido.
+ *
+ * Chave desconhecida fica como está, em vez de virar vazio: se alguém escreveu
+ * "{valorr}" por engano, ver "{valorr}" no papel mostra o erro; ver um buraco
+ * no meio da frase não mostra nada, e o recibo sai pro cliente sem o valor.
+ */
+export function aplicarVariaveis(texto: string, valores: Record<string, string>): string {
+  return texto.replace(/\{(\w+)\}/g, (original, chave: string) => valores[chave] ?? original);
 }
 
 // No fuso da empresa, e não no do servidor: o container roda em UTC, e sem
@@ -263,6 +282,21 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
         })
       : null;
 
+  // Corpo do recibo: cobrança enquanto está em aberto, quitação depois de
+  // pago. O valor acompanha a situação — em aberto é o que FALTA pagar, pago é
+  // o que entrou. Mandar o total nos dois casos faria a cobrança de um pedido
+  // parcialmente pago pedir o valor cheio de novo.
+  const modelo = pedido.pago ? empresa.reciboTextoPago : empresa.reciboTextoPendente;
+  const mensagem = texto(modelo)
+    ? aplicarVariaveis(texto(modelo)!, {
+        cliente: texto(cliente.nomeNoRecibo) ?? texto(cliente.nome) ?? "cliente",
+        valor: centsToBRL(pedido.pago ? pedido.totalCents : saldoAPagar),
+        mes: texto(pedido.mesReferencia) ?? "",
+        numero: String(pedido.numero),
+        data: formatar(quando, tz, false),
+      })
+    : null;
+
   const clienteLinhas: Linha[] = [];
   // Razão social digitada pro recibo ganha do nome que veio do WhatsApp — que
   // é apelido de agenda ("Paulo | PDUARTE"), não como a empresa se chama.
@@ -293,6 +327,7 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
     situacao: pedido.pago ? "PAGO" : "PENDENTE",
     pagamento,
     pixCopiaECola,
+    mensagem,
     vendedor: texto(pedido.vendedor),
     observacao: texto(pedido.observacao),
     rodape: texto(empresa.reciboRodape),

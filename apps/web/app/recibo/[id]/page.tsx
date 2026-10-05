@@ -69,6 +69,8 @@ export default async function ReciboPage({
         reciboTelefone: true,
         reciboRodape: true,
         reciboChavePix: true,
+        reciboTextoPendente: true,
+        reciboTextoPago: true,
         reciboOcultarTelefone: true,
         reciboLarguraMm: true,
       },
@@ -88,6 +90,7 @@ export default async function ReciboPage({
         descontoCents: true,
         totalCents: true,
         observacao: true,
+        mesReferencia: true,
         createdBy: { select: { name: true } },
         items: {
           select: { nomeProduto: true, precoTabelaCents: true, precoUnitCents: true, quantidade: true },

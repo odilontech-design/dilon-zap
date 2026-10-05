@@ -30,6 +30,8 @@ const SELECAO_TENANT = {
   reciboTelefone: true,
   reciboRodape: true,
   reciboChavePix: true,
+  reciboTextoPendente: true,
+  reciboTextoPago: true,
   reciboOcultarTelefone: true,
   reciboLarguraMm: true,
 } as const;
@@ -48,6 +50,7 @@ const SELECAO_PEDIDO = {
   descontoCents: true,
   totalCents: true,
   observacao: true,
+  mesReferencia: true,
   createdBy: { select: { name: true } },
   items: {
     select: { nomeProduto: true, precoTabelaCents: true, precoUnitCents: true, quantidade: true },

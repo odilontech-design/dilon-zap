@@ -33,6 +33,7 @@ export type Pedido = {
   descontoCents: number;
   totalCents: number;
   observacao: string | null;
+  mesReferencia?: string | null;
   createdAt: string;
   fechadoEm: string | null;
   createdBy: { name: string } | null;
@@ -115,6 +116,7 @@ export function OrderPanel({
   const { data: produtos } = useSWR<Produto[]>("/api/products", fetcher);
   const [itens, setItens] = useState<PedidoItem[]>(pedido.items);
   const [observacao, setObservacao] = useState(pedido.observacao ?? "");
+  const [mesReferencia, setMesReferencia] = useState(pedido.mesReferencia ?? "");
   const [desconto, setDesconto] = useState((pedido.descontoCents / 100).toFixed(2).replace(".", ","));
   const [pagamento, setPagamento] = useState<NonNullable<Pedido["paymentMethod"]>>(
     pedido.paymentMethod ?? "PIX"
@@ -240,6 +242,7 @@ export function OrderPanel({
       paymentMethod: pagamento,
       descontoCents,
       observacao,
+      mesReferencia,
     });
     if (r === null) return;
     if (r.jaEstavaFechado) setErro("Esse pedido já tinha sido fechado — nada foi baixado de novo.");
@@ -459,6 +462,22 @@ export function OrderPanel({
               className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 resize-y disabled:opacity-60"
             />
           </label>
+
+          {podeFechar && (
+            <label className="text-sm">
+              <span className="text-xs font-medium text-neutral-700">Mês de referência</span>
+              <input
+                value={mesReferencia}
+                onChange={(e) => setMesReferencia(e.target.value)}
+                maxLength={60}
+                placeholder="Setembro/2026"
+                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+              />
+              <span className="text-xs text-neutral-500">
+                Entra no texto do recibo onde você escrever {"{mes}"}. Pode deixar em branco.
+              </span>
+            </label>
+          )}
 
           {podeFechar && (
             <label className="text-sm">

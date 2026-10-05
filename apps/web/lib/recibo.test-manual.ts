@@ -1,7 +1,7 @@
 // Recibo impresso: contas, formato e o que some quando não está preenchido.
 // Puro, sem banco. Dados fictícios — nunca de cliente real.
 // Rodar com: npx tsx apps/web/lib/recibo.test-manual.ts
-import { montarRecibo, formatarDocumento, type ReciboEntrada } from "./recibo";
+import { montarRecibo, formatarDocumento, aplicarVariaveis, type ReciboEntrada } from "./recibo";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -29,6 +29,8 @@ function entrada(ajustes: {
       reciboTelefone: null,
       reciboRodape: null,
       reciboChavePix: null,
+      reciboTextoPendente: null,
+      reciboTextoPago: null,
       reciboOcultarTelefone: false,
       reciboLarguraMm: 80,
       timezone: "America/Sao_Paulo",
@@ -509,6 +511,85 @@ checa(
   ).pixCopiaECola,
   null
 );
+
+// Corpo do recibo: cobrança enquanto em aberto, quitação depois de pago. O
+// texto errado aqui manda pro cliente um papel dizendo que ele já pagou.
+const TEXTOS = {
+  reciboTextoPendente: "Olá {cliente}, os honorários em aberto de {mes} são de {valor}. Pague pelo PIX abaixo.",
+  reciboTextoPago: "Recebemos a importância de {valor} referente a {mes}, dando plena quitação.",
+};
+checa(
+  "em aberto usa o texto de cobrança, com o saldo",
+  n(
+    montarRecibo(
+      entrada({
+        empresa: TEXTOS,
+        pedido: { pago: false, pagoEm: null, totalCents: 55000, pagamentos: [], mesReferencia: "Setembro/2026" },
+        cliente: { nomeNoRecibo: "PRIME CLEAN LTDA" },
+      })
+    ).mensagem
+  ),
+  "Olá PRIME CLEAN LTDA, os honorários em aberto de Setembro/2026 são de R$ 550,00. Pague pelo PIX abaixo."
+);
+checa(
+  "pago usa o texto de quitação, com o total",
+  n(
+    montarRecibo(
+      entrada({
+        empresa: TEXTOS,
+        pedido: { pago: true, totalCents: 55000, mesReferencia: "Setembro/2026" },
+      })
+    ).mensagem
+  ),
+  "Recebemos a importância de R$ 550,00 referente a Setembro/2026, dando plena quitação."
+);
+// Pagamento parcial: a cobrança pede o que FALTA, não o valor cheio de novo.
+checa(
+  "cobrança parcial pede só o saldo",
+  n(
+    montarRecibo(
+      entrada({
+        empresa: TEXTOS,
+        pedido: {
+          pago: false,
+          pagoEm: null,
+          totalCents: 55000,
+          pagamentos: [{ valorCents: 20000 }],
+          mesReferencia: "Setembro/2026",
+        },
+      })
+    ).mensagem
+  )?.includes("R$ 350,00"),
+  true
+);
+checa(
+  "sem texto configurado não inventa mensagem",
+  montarRecibo(entrada({ pedido: { pago: false, pagoEm: null } })).mensagem,
+  null
+);
+checa(
+  "sem mês de referência a variável some em vez de imprimir chave",
+  n(montarRecibo(entrada({ empresa: TEXTOS, pedido: { pago: true, totalCents: 55000, mesReferencia: null } })).mensagem),
+  "Recebemos a importância de R$ 550,00 referente a , dando plena quitação."
+);
+checa(
+  "sem razão social a cobrança usa o nome do contato",
+  montarRecibo(
+    entrada({
+      empresa: TEXTOS,
+      pedido: { pago: false, pagoEm: null, totalCents: 55000, pagamentos: [] },
+      cliente: { nome: "Maria Fictícia", nomeNoRecibo: null },
+    })
+  ).mensagem?.startsWith("Olá Maria Fictícia,"),
+  true
+);
+// Variável escrita errada fica visível, em vez de virar um buraco na frase.
+checa(
+  "variável desconhecida fica literal pra denunciar o erro",
+  aplicarVariaveis("Valor: {valorr}", { valor: "R$ 10,00" }),
+  "Valor: {valorr}"
+);
+checa("variáveis repetidas são todas trocadas", aplicarVariaveis("{a} e {a}", { a: "x" }), "x e x");
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);

@@ -18,6 +18,8 @@ type Config = {
   reciboTelefone: string | null;
   reciboRodape: string | null;
   reciboChavePix: string | null;
+  reciboTextoPendente: string | null;
+  reciboTextoPago: string | null;
   reciboOcultarTelefone: boolean;
   reciboLarguraMm: number;
 };
@@ -61,6 +63,8 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
         reciboTelefone: config.reciboTelefone,
         reciboRodape: config.reciboRodape,
         reciboChavePix: config.reciboChavePix,
+        reciboTextoPendente: config.reciboTextoPendente,
+        reciboTextoPago: config.reciboTextoPago,
         reciboOcultarTelefone: config.reciboOcultarTelefone,
         reciboLarguraMm: config.reciboLarguraMm,
       }),
@@ -124,6 +128,46 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
                   Sai no recibo só quando o pedido fecha como “PIX — a pagar”.
                 </span>
               </label>
+
+              <fieldset className="rounded-md border border-neutral-200 p-3 flex flex-col gap-3">
+                <legend className="px-1 text-xs font-medium text-neutral-700">
+                  Texto do corpo do recibo
+                </legend>
+                <p className="text-xs text-neutral-500">
+                  Antes de pagar, o recibo é uma cobrança; depois de pago, é uma quitação. Use{" "}
+                  <code className="rounded bg-neutral-100 px-1">{"{cliente}"}</code>{" "}
+                  <code className="rounded bg-neutral-100 px-1">{"{valor}"}</code>{" "}
+                  <code className="rounded bg-neutral-100 px-1">{"{mes}"}</code>{" "}
+                  <code className="rounded bg-neutral-100 px-1">{"{numero}"}</code>{" "}
+                  <code className="rounded bg-neutral-100 px-1">{"{data}"}</code> — o sistema troca
+                  pelos dados do pedido. Em aberto, <code className="rounded bg-neutral-100 px-1">{"{valor}"}</code>{" "}
+                  é o que falta pagar.
+                </p>
+
+                <label>
+                  <span className="text-xs font-medium text-neutral-700">Enquanto está em aberto</span>
+                  <textarea
+                    value={config.reciboTextoPendente ?? ""}
+                    onChange={(e) => muda("reciboTextoPendente", e.target.value)}
+                    maxLength={600}
+                    rows={3}
+                    placeholder="Olá {cliente}, os honorários em aberto referentes aos serviços prestados em {mes} são de {valor}. Realize o pagamento pelo PIX abaixo."
+                    className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 resize-y"
+                  />
+                </label>
+
+                <label>
+                  <span className="text-xs font-medium text-neutral-700">Depois de pago</span>
+                  <textarea
+                    value={config.reciboTextoPago ?? ""}
+                    onChange={(e) => muda("reciboTextoPago", e.target.value)}
+                    maxLength={600}
+                    rows={3}
+                    placeholder="Recebemos a importância de {valor} referente aos serviços prestados em {mes}, dando plena e geral quitação."
+                    className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 resize-y"
+                  />
+                </label>
+              </fieldset>
 
               <label>
                 <span className="text-xs font-medium text-neutral-700">Mensagem no pé do recibo</span>

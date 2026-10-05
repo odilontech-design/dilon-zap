@@ -93,6 +93,16 @@ model Tenant {
   // Sem ela o cliente recebe o comprovante sabendo quanto deve e não pra onde
   // mandar — foi o pedido da Guttierres, que cobra honorário por PIX.
   reciboChavePix  String?
+  // Os dois textos do corpo do recibo, por situação de pagamento. Em aberto o
+  // comprovante é uma COBRANÇA ("os honorários em aberto são de X, pague no
+  // PIX abaixo"); quitado é uma QUITAÇÃO ("recebemos a importância de X").
+  // Antes existia só o rodapé, e ele saía igual nos dois casos — o cliente
+  // que ainda não tinha pagado recebia um papel dizendo que já havia pago.
+  //
+  // Aceitam {cliente}, {valor}, {mes}, {numero} e {data} — ver aplicarVariaveis
+  // em lib/recibo.ts.
+  reciboTextoPendente String?
+  reciboTextoPago     String?
   // Esconde o telefone do cliente no bloco do recibo. Desligado por padrão:
   // quem vende pra pessoa física usa o telefone pra identificar a cliente no
   // balcão. Quem emite pra empresa (contabilidade) identifica por CNPJ, e aí
@@ -884,6 +894,11 @@ model Order {
   totalCents    Int @default(0)
 
   observacao String?
+  // Competência do que está sendo cobrado ("Setembro/2026"), pro texto do
+  // recibo. Texto livre e não data: escritório cobra em outubro o serviço de
+  // setembro, às vezes cobra dois meses juntos, e uma data calculada erraria
+  // justamente na cobrança atrasada — que é a que mais precisa ficar clara.
+  mesReferencia String?
 
   enviadoAoFinanceiroEm DateTime?
   fechadoEm             DateTime?
