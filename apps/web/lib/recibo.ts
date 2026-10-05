@@ -14,6 +14,7 @@
  * preço, sem "acréscimo" nenhum. Ver precoImpresso() em montarRecibo.
  */
 import { centsToBRL } from "./billing";
+import { montarBrCode } from "./pix";
 
 export type MeioDePagamento = "PIX" | "PIX_PENDENTE" | "CARTAO" | "BOLETO" | "FIADO";
 
@@ -81,6 +82,12 @@ export type Recibo = {
   totais: (Linha & { destaque?: boolean })[];
   situacao: "PAGO" | "PENDENTE";
   pagamento: Linha[];
+  /**
+   * "Copia e cola" do PIX, já com o saldo devedor. Só existe quando o pedido
+   * fechou como PIX a pagar, ainda não foi quitado e a empresa cadastrou a
+   * chave. Quem renderiza transforma em QR Code.
+   */
+  pixCopiaECola: string | null;
   vendedor: string | null;
   observacao: string | null;
   rodape: string | null;
@@ -237,6 +244,25 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
     }
   }
 
+  // QR do PIX: pelo SALDO, não pelo total. Num pedido com pagamento parcial o
+  // cliente deve a diferença, e um QR com o valor cheio faria ele pagar duas
+  // vezes a parte já quitada.
+  const chavePix = texto(empresa.reciboChavePix);
+  const saldoAPagar =
+    pedido.totalCents - pedido.pagamentos.reduce((s, p) => s + p.valorCents, 0);
+  const pixCopiaECola =
+    !pedido.pago && pedido.paymentMethod === "PIX_PENDENTE" && chavePix && saldoAPagar > 0
+      ? montarBrCode({
+          chave: chavePix,
+          valorCents: saldoAPagar,
+          nomeRecebedor: texto(empresa.reciboNome) ?? empresa.nome,
+          // Não temos cidade cadastrada. O campo é obrigatório no padrão mas
+          // os bancos não o validam contra nada — ver sanitizar() em pix.ts.
+          cidade: "BRASIL",
+          identificador: `PEDIDO${pedido.numero}`,
+        })
+      : null;
+
   const clienteLinhas: Linha[] = [];
   // Razão social digitada pro recibo ganha do nome que veio do WhatsApp — que
   // é apelido de agenda ("Paulo | PDUARTE"), não como a empresa se chama.
@@ -266,6 +292,7 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
     totais,
     situacao: pedido.pago ? "PAGO" : "PENDENTE",
     pagamento,
+    pixCopiaECola,
     vendedor: texto(pedido.vendedor),
     observacao: texto(pedido.observacao),
     rodape: texto(empresa.reciboRodape),

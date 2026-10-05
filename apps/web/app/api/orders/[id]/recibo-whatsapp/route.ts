@@ -1,126 +1,36 @@
 import { NextResponse } from "next/server";
-import { ImageResponse } from "next/og";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@dilon-zap/db";
 import { uploadMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
-import { telefoneConhecido } from "@/lib/contact";
-import { montarRecibo } from "@/lib/recibo";
 import { wakeOutbox } from "@/lib/worker-client";
-import { ReciboImagemJSX } from "@/lib/recibo-imagem";
+import {
+  carregarPedidoDoRecibo,
+  desenharReciboPng,
+  montarReciboDoPedido,
+  resolverDadosDoCliente,
+  type AjustesDoCliente,
+} from "@/lib/recibo-render";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
 
-  // Documento vem da tela de confirmação do envio. null/ausente não apaga o
-  // que já está salvo — só um texto vazio explícito limpa.
-  const corpo = (await req.json().catch(() => ({}))) as {
-    documento?: string | null;
-    nomeNoRecibo?: string | null;
-  };
+  // Nome e documento vêm da tela de confirmação do envio. Campo ausente
+  // mantém o que já está salvo na ficha; texto vazio limpa.
+  const corpo = (await req.json().catch(() => ({}))) as AjustesDoCliente;
 
-  const [tenant, pedido] = await Promise.all([
-    prisma.tenant.findUniqueOrThrow({
-      where: { id: user.tenantId },
-      select: {
-        name: true,
-        timezone: true,
-        reciboNome: true,
-        reciboDocumento: true,
-        reciboEndereco: true,
-        reciboTelefone: true,
-        reciboRodape: true,
-        reciboChavePix: true,
-        reciboOcultarTelefone: true,
-        reciboLarguraMm: true,
-      },
-    }),
-    prisma.order.findFirst({
-      where: { id: params.id, tenantId: user.tenantId },
-      select: {
-        id: true,
-        numero: true,
-        status: true,
-        createdAt: true,
-        fechadoEm: true,
-        paymentMethod: true,
-        pago: true,
-        pagoEm: true,
-        vencimento: true,
-        subtotalCents: true,
-        descontoCents: true,
-        totalCents: true,
-        observacao: true,
-        createdBy: { select: { name: true } },
-        items: {
-          select: { nomeProduto: true, precoTabelaCents: true, precoUnitCents: true, quantidade: true },
-          orderBy: { id: "asc" },
-        },
-        pagamentos: { select: { valorCents: true } },
-        contact: {
-          select: {
-            id: true,
-            name: true,
-            waJid: true,
-            phoneNumber: true,
-            documento: true,
-            nomeNoRecibo: true,
-            endereco: true,
-          },
-        },
-        conversationId: true,
-      },
-    }),
-  ]);
-
-  if (!pedido) return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
-  if (pedido.status !== "FECHADO") {
-    return NextResponse.json({ error: "Só pode enviar recibo de pedido já fechado." }, { status: 400 });
+  const carregado = await carregarPedidoDoRecibo(user.tenantId, params.id);
+  if (!carregado) {
+    return NextResponse.json(
+      { error: "Pedido não encontrado ou ainda não fechado." },
+      { status: 404 }
+    );
   }
+  const { empresa, pedido } = carregado;
 
-  // Salva antes de montar o recibo: o comprovante que sai já leva o número
-  // que a pessoa acabou de digitar, e os próximos pedidos deste cliente vêm
-  // com ele preenchido.
-  const documento =
-    corpo.documento === undefined ? pedido.contact.documento : corpo.documento?.trim() || null;
-  const nomeNoRecibo =
-    corpo.nomeNoRecibo === undefined ? pedido.contact.nomeNoRecibo : corpo.nomeNoRecibo?.trim() || null;
-  if (documento !== pedido.contact.documento || nomeNoRecibo !== pedido.contact.nomeNoRecibo) {
-    await prisma.contact.update({
-      where: { id: pedido.contact.id },
-      data: { documento, nomeNoRecibo },
-    });
-  }
-
-  const recibo = montarRecibo({
-    empresa: { ...tenant, nome: tenant.name },
-    pedido: { ...pedido, vendedor: pedido.createdBy?.name ?? null, itens: pedido.items },
-    cliente: {
-      nome: pedido.contact.name,
-      nomeNoRecibo,
-      telefone: telefoneConhecido(pedido.contact),
-      documento,
-      endereco: pedido.contact.endereco,
-    },
-  });
-
-  // Gera a imagem do recibo via satori (next/og). A altura é auto-calculada
-  // com base no conteúdo — estimamos pela quantidade de itens.
-  const alturaEstimada = 480 + recibo.itens.length * 56 + recibo.cliente.length * 22
-    + recibo.pagamento.length * 22 + (recibo.vendedor ? 22 : 0) + (recibo.observacao ? 22 : 0);
-
-  const imgResponse = new ImageResponse(ReciboImagemJSX({ recibo }), {
-    width: 600,
-    height: alturaEstimada,
-  });
-
-  const pngBuffer = Buffer.from(await imgResponse.arrayBuffer());
-
-  // Upload para R2
-  const mediaKey = `${user.tenantId}/recibos/${pedido.id}-${randomUUID().slice(0, 8)}.png`;
-  await uploadMedia(mediaKey, pngBuffer, "image/png");
-
-  // Encontra ou cria a conversa com o contato
+  // Precisa existir um número conectado ANTES de gerar imagem e subir pro R2 —
+  // senão a gente gasta o trabalho todo pra descobrir no fim que não há por
+  // onde enviar, e deixa um arquivo órfão no bucket.
   const session = await prisma.whatsAppSession.findFirst({
     where: { tenantId: user.tenantId },
     orderBy: { createdAt: "desc" },
@@ -128,6 +38,22 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (!session) {
     return NextResponse.json({ error: "Nenhum número de WhatsApp conectado." }, { status: 400 });
   }
+
+  // Salva antes de desenhar: o comprovante que sai já leva o que a pessoa
+  // acabou de digitar, e os próximos pedidos deste cliente vêm preenchidos.
+  const cliente = resolverDadosDoCliente(pedido.contact, corpo);
+  if (
+    cliente.documento !== pedido.contact.documento ||
+    cliente.nomeNoRecibo !== pedido.contact.nomeNoRecibo
+  ) {
+    await prisma.contact.update({ where: { id: pedido.contact.id }, data: cliente });
+  }
+
+  const recibo = montarReciboDoPedido(empresa, pedido, cliente);
+  const png = await desenharReciboPng(recibo);
+
+  const mediaKey = `${user.tenantId}/recibos/${pedido.id}-${randomUUID().slice(0, 8)}.png`;
+  await uploadMedia(mediaKey, png, "image/png");
 
   let conversationId = pedido.conversationId;
   if (!conversationId) {
@@ -139,25 +65,24 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     conversationId = conv.id;
   }
 
-  const conv = await prisma.conversation.findUniqueOrThrow({
+  const conversa = await prisma.conversation.findUniqueOrThrow({
     where: { id: conversationId },
     select: { setorId: true },
   });
 
-  const legenda = `Comprovante do pedido #${pedido.numero}`;
   await prisma.message.create({
     data: {
       conversationId,
       sessionId: session.id,
       direction: "OUTBOUND",
       status: "PENDING",
-      body: legenda,
+      body: `Comprovante do pedido #${pedido.numero}`,
       senderUserId: user.id,
       mediaType: "IMAGE",
       mediaKey,
       mediaMimeType: "image/png",
       mediaFileName: `recibo-${pedido.numero}.png`,
-      setorId: conv.setorId,
+      setorId: conversa.setorId,
     },
   });
 

@@ -435,5 +435,80 @@ checa(
   ["Subtotal=R$ 700,00", "Desconto nos itens=- R$ 40,00", "TOTAL=R$ 660,00"]
 );
 
+// QR do PIX: existe só quando o cliente de fato precisa pagar por PIX.
+const pixPendente = {
+  empresa: { reciboChavePix: "67211588000101" },
+  pedido: { paymentMethod: "PIX_PENDENTE" as const, pago: false, pagoEm: null },
+};
+const valorDoQr = (r: ReturnType<typeof montarRecibo>) => {
+  const codigo = r.pixCopiaECola;
+  if (!codigo) return null;
+  // Lê o campo 54 (valor) percorrendo os campos, igual faria o app do banco.
+  let i = 0;
+  while (i < codigo.length) {
+    const id = codigo.slice(i, i + 2);
+    const tam = Number(codigo.slice(i + 2, i + 4));
+    if (id === "54") return codigo.slice(i + 4, i + 4 + tam);
+    i += 4 + tam;
+  }
+  return null;
+};
+
+// A fixture padrão já vem quitada, então o saldo precisa existir de verdade.
+const pixEmAberto = {
+  ...pixPendente,
+  pedido: { ...pixPendente.pedido, totalCents: 55000, pagamentos: [] },
+};
+checa(
+  "PIX a pagar em aberto gera o copia e cola",
+  typeof montarRecibo(entrada(pixEmAberto)).pixCopiaECola,
+  "string"
+);
+checa(
+  "o copia e cola gerado carrega a chave cadastrada",
+  montarRecibo(entrada(pixEmAberto)).pixCopiaECola?.includes("67211588000101"),
+  true
+);
+checa("PIX já pago não gera QR", montarRecibo(entrada({ pedido: { paymentMethod: "PIX", pago: true } })).pixCopiaECola, null);
+checa(
+  "boleto em aberto não gera QR",
+  montarRecibo(entrada({ ...pixPendente, pedido: { ...pixPendente.pedido, paymentMethod: "BOLETO" } })).pixCopiaECola,
+  null
+);
+checa(
+  "sem chave cadastrada não gera QR",
+  montarRecibo(entrada({ ...pixPendente, empresa: { reciboChavePix: null } })).pixCopiaECola,
+  null
+);
+// O valor do QR é o SALDO: pagamento parcial não pode fazer o cliente pagar
+// de novo a parte que já quitou.
+checa(
+  "QR usa o total quando nada foi pago",
+  valorDoQr(montarRecibo(entrada({ ...pixPendente, pedido: { ...pixPendente.pedido, totalCents: 55000, pagamentos: [] } }))),
+  "550.00"
+);
+checa(
+  "QR usa o saldo quando houve pagamento parcial",
+  valorDoQr(
+    montarRecibo(
+      entrada({
+        ...pixPendente,
+        pedido: { ...pixPendente.pedido, totalCents: 55000, pagamentos: [{ valorCents: 20000 }] },
+      })
+    )
+  ),
+  "350.00"
+);
+checa(
+  "saldo zerado não gera QR",
+  montarRecibo(
+    entrada({
+      ...pixPendente,
+      pedido: { ...pixPendente.pedido, totalCents: 55000, pagamentos: [{ valorCents: 55000 }] },
+    })
+  ).pixCopiaECola,
+  null
+);
+
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 
 /**
@@ -281,6 +281,7 @@ export function OrderPanel({
 
           {confirmandoRecibo && (
             <ConfirmarEnvioDoRecibo
+              pedidoId={pedido.id}
               nomeCliente={pedido.contact.name ?? pedido.contact.phoneNumber ?? "o cliente"}
               documento={documento}
               setDocumento={setDocumento}
@@ -561,6 +562,7 @@ export function OrderPanel({
 
       {confirmandoRecibo && (
         <ConfirmarEnvioDoRecibo
+          pedidoId={pedido.id}
           nomeCliente={pedido.contact.name ?? pedido.contact.phoneNumber ?? "o cliente"}
           documento={documento}
           setDocumento={setDocumento}
@@ -585,6 +587,7 @@ export function OrderPanel({
  * uma vez, fica salvo no contato e já vem preenchido nos próximos.
  */
 function ConfirmarEnvioDoRecibo({
+  pedidoId,
   nomeCliente,
   documento,
   setDocumento,
@@ -595,6 +598,7 @@ function ConfirmarEnvioDoRecibo({
   onEnviar,
   onCancelar,
 }: {
+  pedidoId: string;
   nomeCliente: string;
   documento: string;
   setDocumento: (v: string) => void;
@@ -605,16 +609,51 @@ function ConfirmarEnvioDoRecibo({
   onEnviar: () => void;
   onCancelar: () => void;
 }) {
+  // A prévia só é refeita quando a digitação para. Sem isso cada tecla pedia
+  // uma imagem nova ao servidor, que desenha o recibo inteiro a cada chamada.
+  const [consultaPrevia, setConsultaPrevia] = useState("");
+  const [carregandoPrevia, setCarregandoPrevia] = useState(true);
+
+  useEffect(() => {
+    const t = setTimeout(() => {
+      const p = new URLSearchParams({ documento, nomeNoRecibo });
+      setConsultaPrevia(p.toString());
+      setCarregandoPrevia(true);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [documento, nomeNoRecibo]);
+
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onCancelar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm p-5"
+        className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm max-h-[92vh] flex flex-col"
       >
-        <h3 className="font-semibold">Enviar recibo ao cliente</h3>
-        <p className="text-sm text-neutral-500 mt-0.5">
-          Vai como imagem pela conversa do WhatsApp com {nomeCliente}.
-        </p>
+        <div className="p-5 pb-0">
+          <h3 className="font-semibold">Enviar recibo ao cliente</h3>
+          <p className="text-sm text-neutral-500 mt-0.5">
+            É exatamente isto que {nomeCliente} vai receber no WhatsApp.
+          </p>
+        </div>
+
+        <div className="overflow-y-auto px-5 pb-5 flex flex-col">
+          <div className="mt-3 rounded-md border border-neutral-200 bg-neutral-100 p-2 relative">
+            {carregandoPrevia && (
+              <p className="absolute inset-0 grid place-items-center text-xs text-neutral-500">
+                Gerando prévia...
+              </p>
+            )}
+            {consultaPrevia && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={`/api/orders/${pedidoId}/recibo-whatsapp/previa?${consultaPrevia}`}
+                alt="Prévia do recibo"
+                onLoad={() => setCarregandoPrevia(false)}
+                onError={() => setCarregandoPrevia(false)}
+                className={`w-full rounded transition-opacity ${carregandoPrevia ? "opacity-30" : "opacity-100"}`}
+              />
+            )}
+          </div>
 
         <label className="block text-sm mt-4">
           <span className="text-xs font-medium text-neutral-700">Nome no recibo</span>
@@ -651,7 +690,9 @@ function ConfirmarEnvioDoRecibo({
           </p>
         )}
 
-        <div className="mt-5 flex justify-end gap-2 text-sm">
+        </div>
+
+        <div className="border-t border-neutral-200 p-4 flex justify-end gap-2 text-sm">
           <button onClick={onCancelar} className="px-4 py-2 text-neutral-600">
             Cancelar
           </button>
@@ -660,7 +701,7 @@ function ConfirmarEnvioDoRecibo({
             disabled={enviando}
             className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-50"
           >
-            {enviando ? "Enviando..." : "Enviar"}
+            {enviando ? "Enviando..." : "Enviar ao cliente"}
           </button>
         </div>
       </div>

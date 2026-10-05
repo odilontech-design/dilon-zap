@@ -6,7 +6,14 @@ import type { Recibo } from "./recibo";
  * Usa JSX compatível com satori/next-og (subset de CSS com inline styles).
  * Não tem hook nem estado — entrada pura, saída JSX.
  */
-export function ReciboImagemJSX({ recibo }: { recibo: Recibo }) {
+export function ReciboImagemJSX({
+  recibo,
+  qrPix,
+}: {
+  recibo: Recibo;
+  /** QR do PIX já rasterizado como data URI. Ver recibo-render.tsx. */
+  qrPix?: string | null;
+}) {
   const accentColor = "#0d9488";
   const bgColor = "#ffffff";
   const textColor = "#1e293b";
@@ -211,6 +218,24 @@ export function ReciboImagemJSX({ recibo }: { recibo: Recibo }) {
               <span style={{ fontWeight: 600, color: textColor }}>{l.valor}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* QR do PIX — o cliente aponta a câmera e o app já abre com o valor */}
+      {qrPix && (
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            padding: "8px 28px 16px",
+            gap: 6,
+          }}
+        >
+          <img src={qrPix} width={180} height={180} alt="" />
+          <span style={{ fontSize: 12, color: mutedColor, textAlign: "center" }}>
+            Aponte a câmera do seu banco para pagar
+          </span>
         </div>
       )}
 
