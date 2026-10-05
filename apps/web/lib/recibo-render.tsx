@@ -17,9 +17,18 @@ import { ReciboImagemJSX } from "@/lib/recibo-imagem";
 
 const LARGURA_PX = 600;
 
-export type AjustesDoCliente = {
+/**
+ * O que a tela de confirmação do envio deixa ajustar na hora.
+ *
+ * Tudo isto é dado que só aparece no recibo, e o recibo nasce DEPOIS do
+ * fechamento — preencher só na hora de fechar deixava o pedido já fechado sem
+ * como corrigir (foi o que aconteceu com o mês de referência).
+ * Campo ausente mantém o salvo; texto vazio limpa.
+ */
+export type AjustesDoRecibo = {
   documento?: string | null;
   nomeNoRecibo?: string | null;
+  mesReferencia?: string | null;
 };
 
 const SELECAO_TENANT = {
@@ -96,15 +105,25 @@ export async function carregarPedidoDoRecibo(tenantId: string, orderId: string) 
  * Aplica o que a pessoa digitou na tela de confirmação por cima do que está na
  * ficha. Campo ausente mantém o salvo; texto vazio limpa.
  */
+const resolver = (novo: string | null | undefined, salvo: string | null) =>
+  novo === undefined ? salvo : novo?.trim() || null;
+
 export function resolverDadosDoCliente(
   contato: { documento: string | null; nomeNoRecibo: string | null },
-  ajustes: AjustesDoCliente
+  ajustes: AjustesDoRecibo
 ) {
   return {
-    documento: ajustes.documento === undefined ? contato.documento : ajustes.documento?.trim() || null,
-    nomeNoRecibo:
-      ajustes.nomeNoRecibo === undefined ? contato.nomeNoRecibo : ajustes.nomeNoRecibo?.trim() || null,
+    documento: resolver(ajustes.documento, contato.documento),
+    nomeNoRecibo: resolver(ajustes.nomeNoRecibo, contato.nomeNoRecibo),
   };
+}
+
+/** Mês de referência fica no PEDIDO, não no contato — muda a cada cobrança. */
+export function resolverMesReferencia(
+  pedido: { mesReferencia: string | null },
+  ajustes: AjustesDoRecibo
+) {
+  return resolver(ajustes.mesReferencia, pedido.mesReferencia);
 }
 
 export function montarReciboDoPedido(

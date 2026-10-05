@@ -45,6 +45,7 @@ export async function GET(req: Request) {
       descontoCents: true,
       totalCents: true,
       observacao: true,
+      mesReferencia: true,
       createdAt: true,
       enviadoAoFinanceiroEm: true,
       fechadoEm: true,

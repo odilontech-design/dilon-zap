@@ -209,6 +209,7 @@ export function OrderPanel({
         body: JSON.stringify({
           documento: documento.trim() || null,
           nomeNoRecibo: nomeNoRecibo.trim() || null,
+          mesReferencia: mesReferencia.trim() || null,
         }),
       });
       const b = await res.json().catch(() => ({}));
@@ -290,6 +291,8 @@ export function OrderPanel({
               setDocumento={setDocumento}
               nomeNoRecibo={nomeNoRecibo}
               setNomeNoRecibo={setNomeNoRecibo}
+              mesReferencia={mesReferencia}
+              setMesReferencia={setMesReferencia}
               enviando={enviandoRecibo}
               erro={erroRecibo}
               onEnviar={enviarReciboWhatsApp}
@@ -587,6 +590,8 @@ export function OrderPanel({
           setDocumento={setDocumento}
           nomeNoRecibo={nomeNoRecibo}
           setNomeNoRecibo={setNomeNoRecibo}
+          mesReferencia={mesReferencia}
+          setMesReferencia={setMesReferencia}
           enviando={enviandoRecibo}
           erro={erroRecibo}
           onEnviar={enviarReciboWhatsApp}
@@ -612,6 +617,8 @@ function ConfirmarEnvioDoRecibo({
   setDocumento,
   nomeNoRecibo,
   setNomeNoRecibo,
+  mesReferencia,
+  setMesReferencia,
   enviando,
   erro,
   onEnviar,
@@ -623,6 +630,8 @@ function ConfirmarEnvioDoRecibo({
   setDocumento: (v: string) => void;
   nomeNoRecibo: string;
   setNomeNoRecibo: (v: string) => void;
+  mesReferencia: string;
+  setMesReferencia: (v: string) => void;
   enviando: boolean;
   erro: string | null;
   onEnviar: () => void;
@@ -635,12 +644,12 @@ function ConfirmarEnvioDoRecibo({
 
   useEffect(() => {
     const t = setTimeout(() => {
-      const p = new URLSearchParams({ documento, nomeNoRecibo });
+      const p = new URLSearchParams({ documento, nomeNoRecibo, mesReferencia });
       setConsultaPrevia(p.toString());
       setCarregandoPrevia(true);
     }, 500);
     return () => clearTimeout(t);
-  }, [documento, nomeNoRecibo]);
+  }, [documento, nomeNoRecibo, mesReferencia]);
 
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onCancelar}>
@@ -685,6 +694,20 @@ function ConfirmarEnvioDoRecibo({
           />
           <span className="text-xs text-neutral-500">
             Razão social da empresa. Em branco, sai o nome do contato.
+          </span>
+        </label>
+
+        <label className="block text-sm mt-3">
+          <span className="text-xs font-medium text-neutral-700">Mês de referência</span>
+          <input
+            value={mesReferencia}
+            onChange={(e) => setMesReferencia(e.target.value)}
+            maxLength={60}
+            placeholder="Setembro/2026"
+            className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+          />
+          <span className="text-xs text-neutral-500">
+            Entra no texto do recibo onde estiver {"{mes}"}.
           </span>
         </label>
 

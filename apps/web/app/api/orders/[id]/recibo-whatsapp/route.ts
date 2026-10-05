@@ -9,7 +9,8 @@ import {
   desenharReciboPng,
   montarReciboDoPedido,
   resolverDadosDoCliente,
-  type AjustesDoCliente,
+  resolverMesReferencia,
+  type AjustesDoRecibo,
 } from "@/lib/recibo-render";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -17,7 +18,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // Nome e documento vêm da tela de confirmação do envio. Campo ausente
   // mantém o que já está salvo na ficha; texto vazio limpa.
-  const corpo = (await req.json().catch(() => ({}))) as AjustesDoCliente;
+  const corpo = (await req.json().catch(() => ({}))) as AjustesDoRecibo;
 
   const carregado = await carregarPedidoDoRecibo(user.tenantId, params.id);
   if (!carregado) {
@@ -49,7 +50,12 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await prisma.contact.update({ where: { id: pedido.contact.id }, data: cliente });
   }
 
-  const recibo = montarReciboDoPedido(empresa, pedido, cliente);
+  const mesReferencia = resolverMesReferencia(pedido, corpo);
+  if (mesReferencia !== pedido.mesReferencia) {
+    await prisma.order.update({ where: { id: pedido.id }, data: { mesReferencia } });
+  }
+
+  const recibo = montarReciboDoPedido(empresa, { ...pedido, mesReferencia }, cliente);
   const png = await desenharReciboPng(recibo, empresa.reciboLogoKey);
 
   const mediaKey = `${user.tenantId}/recibos/${pedido.id}-${randomUUID().slice(0, 8)}.png`;

@@ -5,6 +5,7 @@ import {
   desenharReciboPng,
   montarReciboDoPedido,
   resolverDadosDoCliente,
+  resolverMesReferencia,
 } from "@/lib/recibo-render";
 
 /**
@@ -29,12 +30,19 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   // Os campos chegam pela query porque a tela ainda está com eles em
   // digitação — a prévia mostra o que a pessoa vê agora, não o que está salvo.
   const busca = new URL(req.url).searchParams;
-  const cliente = resolverDadosDoCliente(carregado.pedido.contact, {
+  const ajustes = {
     documento: busca.has("documento") ? busca.get("documento") : undefined,
     nomeNoRecibo: busca.has("nomeNoRecibo") ? busca.get("nomeNoRecibo") : undefined,
-  });
+    mesReferencia: busca.has("mesReferencia") ? busca.get("mesReferencia") : undefined,
+  };
+  const cliente = resolverDadosDoCliente(carregado.pedido.contact, ajustes);
+  const mesReferencia = resolverMesReferencia(carregado.pedido, ajustes);
 
-  const recibo = montarReciboDoPedido(carregado.empresa, carregado.pedido, cliente);
+  const recibo = montarReciboDoPedido(
+    carregado.empresa,
+    { ...carregado.pedido, mesReferencia },
+    cliente
+  );
   const png = await desenharReciboPng(recibo, carregado.empresa.reciboLogoKey);
 
   return new Response(new Uint8Array(png), {
