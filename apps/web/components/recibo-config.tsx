@@ -18,6 +18,7 @@ type Config = {
   reciboTelefone: string | null;
   reciboRodape: string | null;
   reciboChavePix: string | null;
+  reciboOcultarTelefone: boolean;
   reciboLarguraMm: number;
 };
 
@@ -60,6 +61,7 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
         reciboTelefone: config.reciboTelefone,
         reciboRodape: config.reciboRodape,
         reciboChavePix: config.reciboChavePix,
+        reciboOcultarTelefone: config.reciboOcultarTelefone,
         reciboLarguraMm: config.reciboLarguraMm,
       }),
     });
@@ -165,8 +167,27 @@ export function ReciboConfig({ onFechar }: { onFechar: () => void }) {
                 </p>
               </fieldset>
 
+              <label className="flex items-start gap-2">
+                <input
+                  type="checkbox"
+                  checked={config.reciboOcultarTelefone}
+                  onChange={(e) => muda("reciboOcultarTelefone", e.target.checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="text-xs font-medium text-neutral-700">
+                    Não imprimir o telefone do cliente
+                  </span>
+                  <span className="block text-xs text-neutral-500">
+                    Para quem emite pra empresa e identifica o cliente pelo CNPJ. Quem atende pessoa
+                    física costuma querer o telefone no papel.
+                  </span>
+                </span>
+              </label>
+
               <p className="text-xs text-neutral-500">
-                CPF e endereço do cliente saem no recibo quando estão preenchidos na ficha dele.
+                Nome no recibo, CPF/CNPJ e endereço do cliente saem quando estão preenchidos na ficha
+                dele — o nome e o CPF/CNPJ dá pra digitar na hora de enviar o recibo.
               </p>
             </>
           )}

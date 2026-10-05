@@ -14,7 +14,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // Documento vem da tela de confirmação do envio. null/ausente não apaga o
   // que já está salvo — só um texto vazio explícito limpa.
-  const corpo = (await req.json().catch(() => ({}))) as { documento?: string | null };
+  const corpo = (await req.json().catch(() => ({}))) as {
+    documento?: string | null;
+    nomeNoRecibo?: string | null;
+  };
 
   const [tenant, pedido] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
@@ -28,6 +31,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         reciboTelefone: true,
         reciboRodape: true,
         reciboChavePix: true,
+        reciboOcultarTelefone: true,
         reciboLarguraMm: true,
       },
     }),
@@ -60,6 +64,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             waJid: true,
             phoneNumber: true,
             documento: true,
+            nomeNoRecibo: true,
             endereco: true,
           },
         },
@@ -78,8 +83,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // com ele preenchido.
   const documento =
     corpo.documento === undefined ? pedido.contact.documento : corpo.documento?.trim() || null;
-  if (documento !== pedido.contact.documento) {
-    await prisma.contact.update({ where: { id: pedido.contact.id }, data: { documento } });
+  const nomeNoRecibo =
+    corpo.nomeNoRecibo === undefined ? pedido.contact.nomeNoRecibo : corpo.nomeNoRecibo?.trim() || null;
+  if (documento !== pedido.contact.documento || nomeNoRecibo !== pedido.contact.nomeNoRecibo) {
+    await prisma.contact.update({
+      where: { id: pedido.contact.id },
+      data: { documento, nomeNoRecibo },
+    });
   }
 
   const recibo = montarRecibo({
@@ -87,6 +97,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     pedido: { ...pedido, vendedor: pedido.createdBy?.name ?? null, itens: pedido.items },
     cliente: {
       nome: pedido.contact.name,
+      nomeNoRecibo,
       telefone: telefoneConhecido(pedido.contact),
       documento,
       endereco: pedido.contact.endereco,

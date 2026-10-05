@@ -23,6 +23,7 @@ export type ReciboEntrada = {
     reciboTelefone: string | null;
     reciboRodape: string | null;
     reciboChavePix: string | null;
+    reciboOcultarTelefone: boolean;
     reciboLarguraMm: number;
     timezone: string;
   };
@@ -44,6 +45,9 @@ export type ReciboEntrada = {
   };
   cliente: {
     nome: string | null;
+    // Razão social digitada pra este cliente. Vence o `nome` quando existe —
+    // ver Contact.nomeNoRecibo.
+    nomeNoRecibo?: string | null;
     // Já formatado por quem chama: o telefone sai do JID, e essa regra mora
     // em lib/contact.ts, não aqui.
     telefone: string | null;
@@ -225,11 +229,15 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
   }
 
   const clienteLinhas: Linha[] = [];
-  const nome = texto(cliente.nome);
+  // Razão social digitada pro recibo ganha do nome que veio do WhatsApp — que
+  // é apelido de agenda ("Paulo | PDUARTE"), não como a empresa se chama.
+  const nome = texto(cliente.nomeNoRecibo) ?? texto(cliente.nome);
   const documento = formatarDocumento(cliente.documento);
   const endereco = texto(cliente.endereco);
   if (nome) clienteLinhas.push({ rotulo: "Cliente", valor: nome });
-  if (cliente.telefone) clienteLinhas.push({ rotulo: "Telefone", valor: cliente.telefone });
+  if (cliente.telefone && !empresa.reciboOcultarTelefone) {
+    clienteLinhas.push({ rotulo: "Telefone", valor: cliente.telefone });
+  }
   if (documento) clienteLinhas.push({ rotulo: "CPF/CNPJ", valor: documento.replace(/^(CPF|CNPJ) /, "") });
   if (endereco) clienteLinhas.push({ rotulo: "Endereço", valor: endereco });
 

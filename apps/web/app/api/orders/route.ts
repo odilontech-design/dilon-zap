@@ -52,7 +52,7 @@ export async function GET(req: Request) {
       closedBy: { select: { name: true } },
       // documento entra por causa do recibo: o CPF/CNPJ é editado na hora de
       // enviar ao cliente e fica salvo na ficha pros próximos.
-      contact: { select: { id: true, name: true, waJid: true, phoneNumber: true, avatarUrl: true, documento: true } },
+      contact: { select: { id: true, name: true, waJid: true, phoneNumber: true, avatarUrl: true, documento: true, nomeNoRecibo: true } },
       conversation: { select: { id: true, ticketNumber: true } },
       items: {
         select: {

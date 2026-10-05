@@ -29,6 +29,7 @@ function entrada(ajustes: {
       reciboTelefone: null,
       reciboRodape: null,
       reciboChavePix: null,
+      reciboOcultarTelefone: false,
       reciboLarguraMm: 80,
       timezone: "America/Sao_Paulo",
       ...ajustes.empresa,
@@ -323,6 +324,45 @@ checa(
     entrada({ empresa: comChave, pedido: { paymentMethod: "PIX_PENDENTE", pago: false, pagoEm: null } })
   ).pagamento.find((l) => l.rotulo === "Forma de pagamento")?.valor,
   "PIX"
+);
+
+// Nome no recibo: o apelido da agenda do WhatsApp não pode virar o nome
+// impresso quando a empresa tem razão social cadastrada.
+checa(
+  "razão social vence o nome do WhatsApp",
+  montarRecibo(entrada({ cliente: { nome: "Paulo | PDUARTE", nomeNoRecibo: "Duarte Com. de Alimentos Ltda" } }))
+    .cliente[0],
+  { rotulo: "Cliente", valor: "Duarte Com. de Alimentos Ltda" }
+);
+checa(
+  "sem razão social, segue o nome do contato",
+  montarRecibo(entrada({ cliente: { nome: "Paulo | PDUARTE", nomeNoRecibo: null } })).cliente[0],
+  { rotulo: "Cliente", valor: "Paulo | PDUARTE" }
+);
+checa(
+  "razão social só com espaços não vence o nome do contato",
+  montarRecibo(entrada({ cliente: { nome: "Paulo", nomeNoRecibo: "   " } })).cliente[0],
+  { rotulo: "Cliente", valor: "Paulo" }
+);
+checa(
+  "telefone oculto some do bloco do cliente",
+  montarRecibo(entrada({ empresa: { reciboOcultarTelefone: true } })).cliente.some(
+    (l) => l.rotulo === "Telefone"
+  ),
+  false
+);
+checa(
+  "telefone oculto não derruba o resto do bloco",
+  montarRecibo(
+    entrada({
+      empresa: { reciboOcultarTelefone: true },
+      cliente: { nomeNoRecibo: "Empresa Exemplo Ltda", documento: "12345678000190" },
+    })
+  ).cliente,
+  [
+    { rotulo: "Cliente", valor: "Empresa Exemplo Ltda" },
+    { rotulo: "CPF/CNPJ", valor: "12.345.678/0001-90" },
+  ]
 );
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);

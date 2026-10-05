@@ -43,6 +43,7 @@ export type Pedido = {
     waJid: string;
     phoneNumber: string | null;
     documento?: string | null;
+    nomeNoRecibo?: string | null;
   };
   conversation: { id: string; ticketNumber: number } | null;
   items: PedidoItem[];
@@ -132,6 +133,10 @@ export function OrderPanel({
   // Vem da ficha do contato: no primeiro recibo chega vazio e a pessoa digita;
   // do segundo em diante já vem preenchido.
   const [documento, setDocumento] = useState(pedido.contact.documento ?? "");
+  // Começa vazio quando ninguém digitou ainda — de propósito. Preencher com o
+  // nome do WhatsApp faria o apelido da agenda ("Paulo | PDUARTE") virar o
+  // nome impresso só porque ninguém reparou no campo.
+  const [nomeNoRecibo, setNomeNoRecibo] = useState(pedido.contact.nomeNoRecibo ?? "");
 
   const editavel = pedido.status === "RASCUNHO" || pedido.status === "AGUARDANDO_FINANCEIRO";
   const podeFechar = ehFinanceiro && pedido.status === "AGUARDANDO_FINANCEIRO";
@@ -199,7 +204,10 @@ export function OrderPanel({
       const res = await fetch(`/api/orders/${pedido.id}/recibo-whatsapp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ documento: documento.trim() || null }),
+        body: JSON.stringify({
+          documento: documento.trim() || null,
+          nomeNoRecibo: nomeNoRecibo.trim() || null,
+        }),
       });
       const b = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -276,6 +284,8 @@ export function OrderPanel({
               nomeCliente={pedido.contact.name ?? pedido.contact.phoneNumber ?? "o cliente"}
               documento={documento}
               setDocumento={setDocumento}
+              nomeNoRecibo={nomeNoRecibo}
+              setNomeNoRecibo={setNomeNoRecibo}
               enviando={enviandoRecibo}
               erro={erroRecibo}
               onEnviar={enviarReciboWhatsApp}
@@ -554,6 +564,8 @@ export function OrderPanel({
           nomeCliente={pedido.contact.name ?? pedido.contact.phoneNumber ?? "o cliente"}
           documento={documento}
           setDocumento={setDocumento}
+          nomeNoRecibo={nomeNoRecibo}
+          setNomeNoRecibo={setNomeNoRecibo}
           enviando={enviandoRecibo}
           erro={erroRecibo}
           onEnviar={enviarReciboWhatsApp}
@@ -576,6 +588,8 @@ function ConfirmarEnvioDoRecibo({
   nomeCliente,
   documento,
   setDocumento,
+  nomeNoRecibo,
+  setNomeNoRecibo,
   enviando,
   erro,
   onEnviar,
@@ -584,6 +598,8 @@ function ConfirmarEnvioDoRecibo({
   nomeCliente: string;
   documento: string;
   setDocumento: (v: string) => void;
+  nomeNoRecibo: string;
+  setNomeNoRecibo: (v: string) => void;
   enviando: boolean;
   erro: string | null;
   onEnviar: () => void;
@@ -601,6 +617,20 @@ function ConfirmarEnvioDoRecibo({
         </p>
 
         <label className="block text-sm mt-4">
+          <span className="text-xs font-medium text-neutral-700">Nome no recibo</span>
+          <input
+            value={nomeNoRecibo}
+            onChange={(e) => setNomeNoRecibo(e.target.value)}
+            maxLength={120}
+            placeholder={nomeCliente}
+            className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+          />
+          <span className="text-xs text-neutral-500">
+            Razão social da empresa. Em branco, sai o nome do contato.
+          </span>
+        </label>
+
+        <label className="block text-sm mt-3">
           <span className="text-xs font-medium text-neutral-700">CPF / CNPJ do cliente</span>
           <input
             value={documento}

@@ -93,6 +93,11 @@ model Tenant {
   // Sem ela o cliente recebe o comprovante sabendo quanto deve e não pra onde
   // mandar — foi o pedido da Guttierres, que cobra honorário por PIX.
   reciboChavePix  String?
+  // Esconde o telefone do cliente no bloco do recibo. Desligado por padrão:
+  // quem vende pra pessoa física usa o telefone pra identificar a cliente no
+  // balcão. Quem emite pra empresa (contabilidade) identifica por CNPJ, e aí
+  // o telefone no papel é ruído.
+  reciboOcultarTelefone Boolean @default(false)
   // Largura do papel da impressora térmica, em mm. 80 é o padrão de balcão;
   // 58 é o das impressoras portáteis. Fica na empresa, e não escolhido a cada
   // impressão, porque a impressora não muda — e errar a largura corta o texto
@@ -500,6 +505,12 @@ model Contact {
   // endereço da empresa: é pra imprimir, não pra consultar.
   documento String?
   endereco  String?
+  // Como o cliente deve sair IMPRESSO, quando não é o nome que veio do
+  // WhatsApp. Numa contabilidade o cliente é uma empresa: o contato se chama
+  // "Paulo | PDUARTE" no celular, mas no comprovante precisa aparecer a razão
+  // social. Vazio cai no `name` de sempre — quem vende pra pessoa física não
+  // precisa preencher nada.
+  nomeNoRecibo String?
 
   // Se o número tem conta no WhatsApp. Nulo = ainda não checado — que é
   // diferente de "não tem", e a tela precisa saber a diferença pra não

@@ -69,6 +69,7 @@ export default async function ReciboPage({
         reciboTelefone: true,
         reciboRodape: true,
         reciboChavePix: true,
+        reciboOcultarTelefone: true,
         reciboLarguraMm: true,
       },
     }),
@@ -93,7 +94,16 @@ export default async function ReciboPage({
           orderBy: { id: "asc" },
         },
         pagamentos: { select: { valorCents: true } },
-        contact: { select: { name: true, waJid: true, phoneNumber: true, documento: true, endereco: true } },
+        contact: {
+          select: {
+            name: true,
+            nomeNoRecibo: true,
+            waJid: true,
+            phoneNumber: true,
+            documento: true,
+            endereco: true,
+          },
+        },
       },
     }),
   ]);
@@ -115,6 +125,7 @@ export default async function ReciboPage({
     },
     cliente: {
       nome: pedido.contact.name,
+      nomeNoRecibo: pedido.contact.nomeNoRecibo,
       telefone: telefoneConhecido(pedido.contact),
       documento: pedido.contact.documento,
       endereco: pedido.contact.endereco,
