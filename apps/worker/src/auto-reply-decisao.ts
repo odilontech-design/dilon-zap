@@ -71,7 +71,16 @@ export type Decisao = {
  * se o atendimento tinha acabado de ser fechado ou fazia tempo que ninguém
  * escrevia. Nulo = conversa nova, nunca existiu (mesmo caso de "sem dono").
  */
-export type EstadoAntesDaMensagem = { status: "OPEN" | "PENDING" | "RESOLVED"; lastMessageAt: Date } | null;
+export type EstadoAntesDaMensagem = {
+  status: "OPEN" | "PENDING" | "RESOLVED";
+  lastMessageAt: Date;
+  /**
+   * A última mensagem antes desta foi de uma PESSOA da equipe (não do robô).
+   * É o que distingue "ninguém está cuidando" de "alguém acabou de falar" —
+   * ver avaliarAutomacao.
+   */
+  equipeFalouPorUltimo: boolean;
+} | null;
 
 export type DecisaoDeRoteamento = {
   /** O robô pode responder esta mensagem. */
@@ -111,6 +120,28 @@ export function avaliarAutomacao(
   reinicioAposInatividadeMs: number,
   menuDeTriagemLigado: boolean
 ): DecisaoDeRoteamento {
+  const semInteracaoHaMuito =
+    !!antes && agora.getTime() - antes.lastMessageAt.getTime() >= reinicioAposInatividadeMs;
+
+  // Alguém da equipe acabou de falar: o robô não fala por cima.
+  //
+  // Esta é a primeira checagem porque vale mesmo sem dono — conversa que o
+  // atendente ABRIU (ele escreve antes de o cliente dizer qualquer coisa)
+  // nasce sem responsável em alguns caminhos, e a primeira resposta do cliente
+  // caía na regra "sem dono, o robô sempre pode falar". Também cobre a
+  // conversa fechada semanas atrás em que o atendente escreveu de novo hoje:
+  // o status diz RESOLVED, mas na prática o atendimento voltou, e reiniciar a
+  // triagem ali mandava o menu de boas-vindas por cima de uma conversa viva.
+  // Foi o que aconteceu com o Carlos (Guttierres), que recebeu o menu logo
+  // depois de o Financeiro cumprimentá-lo.
+  //
+  // A inatividade longa continua valendo: cliente que some por semanas e volta
+  // com outro assunto precisa da triagem de novo, tenha quem tiver falado por
+  // último antes de ele sumir.
+  if (antes?.equipeFalouPorUltimo && !semInteracaoHaMuito) {
+    return { podeFalar: false, reiniciarRoteamento: false };
+  }
+
   const semDono = !conversa.assignedToId && !conversa.setorId;
   if (semDono) return { podeFalar: true, reiniciarRoteamento: false };
 
@@ -121,7 +152,6 @@ export function avaliarAutomacao(
   if (!antes) return { podeFalar: true, reiniciarRoteamento: true };
 
   const atendenteFechou = antes.status === "RESOLVED";
-  const semInteracaoHaMuito = agora.getTime() - antes.lastMessageAt.getTime() >= reinicioAposInatividadeMs;
   const reinicia = atendenteFechou || semInteracaoHaMuito;
 
   return { podeFalar: reinicia, reiniciarRoteamento: reinicia };

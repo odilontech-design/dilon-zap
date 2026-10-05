@@ -983,11 +983,32 @@ async function recordMessage(params: {
   // upsert: uma leitura ligeiramente desatualizada aqui, num caso raro de
   // corrida, no máximo faz o menu reaparecer ou deixar de reaparecer uma vez
   // a mais — não é dado que precisa de atomicidade.
-  const estadoAntesDaMensagem = isInbound
+  const conversaAntes = isInbound
     ? await prisma.conversation.findUnique({
         where: { contactId_sessionId: { contactId: contact.id, sessionId: params.sessionId } },
-        select: { status: true, lastMessageAt: true },
+        select: { id: true, status: true, lastMessageAt: true },
       })
+    : null;
+
+  // Quem falou por último antes desta mensagem. senderUserId distingue a
+  // PESSOA do robô: a auto-resposta também grava OUTBOUND, mas sem usuário —
+  // sem esse filtro o próprio menu da URA contaria como "a equipe falou" e o
+  // robô se calaria sozinho pra sempre depois do primeiro menu.
+  const ultimaAntes = conversaAntes
+    ? await prisma.message.findFirst({
+        where: { conversationId: conversaAntes.id },
+        orderBy: { createdAt: "desc" },
+        select: { direction: true, senderUserId: true },
+      })
+    : null;
+
+  const estadoAntesDaMensagem = conversaAntes
+    ? {
+        status: conversaAntes.status,
+        lastMessageAt: conversaAntes.lastMessageAt,
+        equipeFalouPorUltimo:
+          ultimaAntes?.direction === "OUTBOUND" && ultimaAntes.senderUserId !== null,
+      }
     : null;
 
   // Mensagem OUTBOUND vinda do celular (fora do Inbox) só atualiza a data —

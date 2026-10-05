@@ -490,9 +490,14 @@ checa(
 
 const UMA_HORA_MS = 60 * 60 * 1000;
 const donoQualquer = { assignedToId: "user-fiscal", setorId: null };
-const estado = (status: "OPEN" | "PENDING" | "RESOLVED", minutosAtras: number): EstadoAntesDaMensagem => ({
+const estado = (
+  status: "OPEN" | "PENDING" | "RESOLVED",
+  minutosAtras: number,
+  equipeFalouPorUltimo = false
+): EstadoAntesDaMensagem => ({
   status,
   lastMessageAt: new Date(AGORA.getTime() - minutosAtras * 60_000),
+  equipeFalouPorUltimo,
 });
 
 checa(
@@ -565,6 +570,55 @@ checa(
   "estado anterior desconhecido, mas ja tem dono (nao deveria acontecer) — lado seguro: reinicia",
   avaliarAutomacao(donoQualquer, null, AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: true }
+);
+
+// ---------------------------------------------------------------------------
+// O robo nao fala por cima de quem acabou de atender.
+//
+// Caso real (Guttierres): conversa fechada semanas atras, o Financeiro escreve
+// "boa tarde Sr. Guttierres", o cliente responde "boa tarde" — e o menu de
+// triagem disparava por cima, porque o status ainda dizia RESOLVED.
+// ---------------------------------------------------------------------------
+
+checa(
+  "atendente escreveu numa conversa fechada e o cliente respondeu — o robo cala",
+  avaliarAutomacao(donoQualquer, estado("RESOLVED", 1, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "atendente ABRIU a conversa (ainda sem dono) e o cliente respondeu — o robo cala",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 1, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "sem URA ligada, atendente que abriu a conversa tambem cala a saudacao",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 1, true), AGORA, UMA_HORA_MS, false),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+// O reinicio por inatividade continua existindo: quem some por semanas e volta
+// com outro assunto precisa da triagem de novo, tenha quem tiver falado antes.
+checa(
+  "atendente falou por ultimo, mas faz tempo demais — reinicia do mesmo jeito",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 999, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "conversa sem dono, inativa ha muito, atendente falou por ultimo — volta a falar",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 999, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: false }
+);
+
+// O menu da URA e OUTBOUND tambem, mas sem usuario: se contasse como "a equipe
+// falou", o robo se calaria sozinho logo depois de mandar o primeiro menu e o
+// cliente nunca seria roteado.
+checa(
+  "robo falou por ultimo (nao conta como equipe) — segue a regra de sempre",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 1, false), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: false }
 );
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
