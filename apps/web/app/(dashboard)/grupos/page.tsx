@@ -15,5 +15,5 @@ export default async function GruposPage() {
     );
   }
 
-  return <GruposView ehFinanceiro={user.role === "OWNER" || user.role === "FINANCEIRO"} />;
+  return <GruposView ehFinanceiro={user.role === "OWNER" || user.role === "FINANCEIRO"} meuId={user.id} />;
 }

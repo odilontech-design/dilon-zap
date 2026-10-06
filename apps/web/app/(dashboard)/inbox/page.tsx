@@ -6,5 +6,12 @@ import { InboxView } from "./inbox-view";
 // pode depender de uma requisição que ainda não voltou.
 export default async function InboxPage() {
   const user = await requireUser();
-  return <InboxView ehFinanceiro={user.role === "OWNER" || user.role === "FINANCEIRO"} />;
+  return (
+    <InboxView
+      ehFinanceiro={user.role === "OWNER" || user.role === "FINANCEIRO"}
+      // Pra distinguir "passei a conversa pra outra pessoa" (que pede motivo)
+      // de "puxei pra mim" (que não pede) — ver MotivoTransferencia.
+      meuId={user.id}
+    />
+  );
 }

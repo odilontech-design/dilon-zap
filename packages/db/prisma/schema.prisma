@@ -1515,6 +1515,10 @@ model TransferenciaSetor {
   deSetorNome   String?
   paraSetorId   String?
   paraSetorNome String?
+  /// Quem recebeu, quando a conversa foi passada a uma PESSOA e não a uma
+  /// fila. Nome em foto, igual aos de setor: o registro precisa continuar
+  /// legível se o usuário for desativado depois.
+  paraPessoaNome String?
 
   /// O que o setor que recebe precisa saber. Obrigatório na transferência
   /// feita à mão; quando o setor muda junto com a atribuição a uma pessoa, o

@@ -48,7 +48,7 @@ function previa(m: GrupoResumo["messages"][number] | undefined) {
   return m.autorNome ? `${m.autorNome}: ${texto}` : texto;
 }
 
-export function GruposView({ ehFinanceiro }: { ehFinanceiro: boolean }) {
+export function GruposView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuId: string }) {
   const [selecionado, setSelecionado] = useState<string | null>(null);
   const [gerenciando, setGerenciando] = useState(false);
   const { data: grupos, error, mutate } = useSWR<GrupoResumo[]>("/api/grupos", fetcher, {
@@ -136,6 +136,7 @@ export function GruposView({ ehFinanceiro }: { ehFinanceiro: boolean }) {
           <ConversationThread
             conversationId={selecionado}
             ehFinanceiro={ehFinanceiro}
+            meuId={meuId}
             modoGrupo
             onChanged={() => mutate()}
             onBack={() => setSelecionado(null)}

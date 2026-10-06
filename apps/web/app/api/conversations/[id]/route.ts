@@ -79,12 +79,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const mudouSetorExplicitamente =
     parsed.data.setorId !== undefined && parsed.data.setorId !== conversation.setorId;
 
-  // Encaminhar sem dizer do que se trata joga o cliente numa fila muda: o
-  // setor que recebe não vê o histórico do setor anterior (ver
+  // Passar a conversa pra OUTRA pessoa. Puxar pra si não conta: quem assumiu
+  // a conversa pra si não precisa escrever um motivo pra si mesmo.
+  const passouPraOutraPessoa =
+    !!parsed.data.assignedToId &&
+    parsed.data.assignedToId !== conversation.assignedToId &&
+    parsed.data.assignedToId !== user.id;
+
+  // Encaminhar sem dizer do que se trata joga o cliente numa fila muda: quem
+  // recebe pode não ver o histórico do setor anterior (ver
   // Tenant.isolarHistoricoPorSetor) e, sem o motivo, a única saída é pedir
   // pro cliente contar tudo de novo. Por isso é barrado aqui no servidor, e
   // não só no formulário.
-  if (mudouSetorExplicitamente && !parsed.data.motivoTransferencia) {
+  //
+  // Vale para os dois destinos. Antes só o setor pedia motivo, e passar pra
+  // uma pessoa ia calado — mas quem recebe chega sem contexto do mesmo jeito,
+  // e foi o que a Guttierres estranhou.
+  if ((mudouSetorExplicitamente || passouPraOutraPessoa) && !parsed.data.motivoTransferencia) {
     return NextResponse.json({ error: "informe o motivo da transferência" }, { status: 400 });
   }
 
@@ -133,6 +144,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     deSetorNome: string | null;
     paraSetorId: string | null;
     paraSetorNome: string | null;
+    paraPessoaNome: string | null;
     motivo: string;
     porNome: string;
   } | null = null;
@@ -150,7 +162,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       deSetorNome: conversation.setorId ? (nomes.get(conversation.setorId) ?? null) : null,
       paraSetorId: setorNovo,
       paraSetorNome: setorNovo ? (nomes.get(setorNovo) ?? null) : null,
+      // Quando o setor mudou PORQUE a conversa foi pra uma pessoa, o marcador
+      // precisa dizer o nome dela — "foi pro Fiscal" esconde quem está com o
+      // cliente agora.
+      paraPessoaNome: passouPraOutraPessoa ? (agente?.name ?? null) : null,
       motivo: motivoTransferencia ?? `Assumida por ${agente?.name ?? user.name}`,
+      porNome: user.name,
+    };
+  } else if (passouPraOutraPessoa) {
+    // Pessoa de dentro do MESMO setor: o setor não mudou, então o bloco acima
+    // não grava nada — e o motivo que acabamos de exigir se perderia, que é o
+    // pior dos mundos (pedir um texto e jogar fora).
+    transferenciaParaGravar = {
+      deSetorNome: null,
+      paraSetorId: null,
+      paraSetorNome: null,
+      paraPessoaNome: agente?.name ?? null,
+      motivo: motivoTransferencia ?? `Passada por ${user.name}`,
       porNome: user.name,
     };
   }

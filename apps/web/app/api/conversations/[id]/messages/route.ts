@@ -55,6 +55,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       criadoEm: true,
       deSetorNome: true,
       paraSetorNome: true,
+      paraPessoaNome: true,
       motivo: true,
       porNome: true,
     },

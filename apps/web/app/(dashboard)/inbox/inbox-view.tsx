@@ -91,6 +91,7 @@ type MarcadorSetor = {
   criadoEm: string;
   deSetorNome: string | null;
   paraSetorNome: string | null;
+  paraPessoaNome: string | null;
   motivo: string;
   porNome: string | null;
 };
@@ -223,7 +224,7 @@ function playNotificationSound() {
   }
 }
 
-export function InboxView({ ehFinanceiro }: { ehFinanceiro: boolean }) {
+export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<ConversationStatus>("OPEN");
@@ -504,6 +505,7 @@ export function InboxView({ ehFinanceiro }: { ehFinanceiro: boolean }) {
           <ConversationThread
             conversationId={selectedId}
             ehFinanceiro={ehFinanceiro}
+            meuId={meuId}
             onChanged={() => mutateList()}
             onBack={() => setSelectedId(null)}
           />
@@ -699,12 +701,15 @@ function NewConversationModal({
 export function ConversationThread({
   conversationId,
   ehFinanceiro,
+  meuId,
   onChanged,
   onBack,
   modoGrupo = false,
 }: {
   conversationId: string;
   ehFinanceiro: boolean;
+  /** Quem está logado — ver o seletor de responsável. */
+  meuId: string;
   onChanged: () => void;
   onBack: () => void;
   modoGrupo?: boolean;
@@ -717,7 +722,14 @@ export function ConversationThread({
   const [pedindoBloqueio, setPedindoBloqueio] = useState(false);
   // Setor escolhido no seletor, esperando o motivo. Só vira transferência
   // depois que o atendente escreve do que se trata.
-  const [transferindoPara, setTransferindoPara] = useState<{ id: string | null; nome: string } | null>(null);
+  // Encaminhamento esperando o motivo. `tipo` diz se o destino é um setor (vira
+  // fila, sem responsável) ou uma pessoa — os dois pedem motivo, mas gravam
+  // campos diferentes.
+  const [transferindoPara, setTransferindoPara] = useState<{
+    tipo: "setor" | "pessoa";
+    id: string | null;
+    nome: string;
+  } | null>(null);
   const [vendoParticipantes, setVendoParticipantes] = useState(false);
   const [agendando, setAgendando] = useState(false);
   const [pedidoAberto, setPedidoAberto] = useState<Pedido | null>(null);
@@ -1272,7 +1284,23 @@ export function ConversationThread({
               ))}
               <select
                 value={conversation.assignedTo?.id ?? ""}
-                onChange={(e) => patchConversation({ assignedToId: e.target.value || null })}
+                // Passar pra OUTRA pessoa pede o motivo, igual ao encaminhamento
+                // por setor: quem recebe chega sem contexto do mesmo jeito, e
+                // antes só o setor perguntava. Puxar pra si e tirar o
+                // responsável vão direto — pedir motivo a quem assumiu a
+                // conversa pra si é atrito sem ganho.
+                onChange={(e) => {
+                  const id = e.target.value || null;
+                  if (!id || id === meuId) {
+                    patchConversation({ assignedToId: id });
+                    return;
+                  }
+                  setTransferindoPara({
+                    tipo: "pessoa",
+                    id,
+                    nome: e.target.selectedOptions[0]?.text ?? "outro atendente",
+                  });
+                }}
                 className="text-xs rounded-md border border-neutral-300 px-2 py-1.5"
               >
                 <option value="">Atribuir a...</option>
@@ -1290,6 +1318,7 @@ export function ConversationThread({
                   // já devolve ele pro setor atual sozinho.
                   onChange={(e) =>
                     setTransferindoPara({
+                      tipo: "setor",
                       id: e.target.value || null,
                       nome: e.target.selectedOptions[0]?.text ?? "fila geral",
                     })
@@ -1887,11 +1916,16 @@ export function ConversationThread({
       {transferindoPara && (
         <MotivoTransferencia
           destino={transferindoPara.nome}
+          tipo={transferindoPara.tipo}
           onFechar={() => setTransferindoPara(null)}
           onConfirmar={async (motivo) => {
             const destino = transferindoPara;
             setTransferindoPara(null);
-            await patchConversation({ setorId: destino.id, motivoTransferencia: motivo });
+            await patchConversation(
+              destino.tipo === "setor"
+                ? { setorId: destino.id, motivoTransferencia: motivo }
+                : { assignedToId: destino.id, motivoTransferencia: motivo }
+            );
             // As mensagens mudam junto: o marcador novo vem da mesma rota, e
             // quem encaminhou pode perder a vista do trecho que era do setor
             // dele.
@@ -2866,16 +2900,24 @@ function mesmoDia(isoA: string, isoB: string) {
  * setor novo recebe sobre o que já foi conversado.
  */
 function MarcaTransferenciaSetor({ marcador }: { marcador: MarcadorSetor }) {
-  const destino = marcador.paraSetorNome ?? "fila geral";
-  const origem = marcador.deSetorNome;
   const hora = new Date(marcador.criadoEm).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+  // Passada a uma PESSOA é uma frase diferente de encaminhada a um SETOR: no
+  // setor vira fila (qualquer um pega), na pessoa alguém ficou responsável.
+  // Dizer "encaminhada para o Fiscal" quando foi pro Gabriel esconde quem está
+  // com o cliente agora.
+  const texto = marcador.paraPessoaNome
+    ? `→ Passada para ${marcador.paraPessoaNome}`
+    : marcador.deSetorNome
+      ? `→ Encaminhada do ${marcador.deSetorNome} para ${marcador.paraSetorNome ?? "fila geral"}`
+      : `→ Encaminhada para ${marcador.paraSetorNome ?? "fila geral"}`;
 
   return (
     <div className="self-center my-3 w-full max-w-md">
       <div className="flex items-center gap-2">
         <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
         <span className="rounded-md px-2.5 py-1 text-[11px] font-medium bg-amber-100 text-amber-900 dark:bg-amber-900/30 dark:text-amber-300">
-          {origem ? `→ Encaminhada do ${origem} para ${destino}` : `→ Encaminhada para ${destino}`} · {hora}
+          {texto} · {hora}
         </span>
         <span className="h-px min-w-[16px] flex-1 bg-neutral-200 dark:bg-neutral-700" />
       </div>
@@ -3170,10 +3212,13 @@ function ParticipantesDoGrupo({
 
 function MotivoTransferencia({
   destino,
+  tipo,
   onFechar,
   onConfirmar,
 }: {
   destino: string;
+  /** Setor vira fila; pessoa fica responsável. Só muda a frase. */
+  tipo: "setor" | "pessoa";
   onFechar: () => void;
   onConfirmar: (motivo: string) => void;
 }) {
@@ -3186,9 +3231,13 @@ function MotivoTransferencia({
         onClick={(e) => e.stopPropagation()}
         className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
       >
-        <h2 className="text-base font-semibold mb-1">Encaminhar para {destino}</h2>
+        <h2 className="text-base font-semibold mb-1">
+          {tipo === "pessoa" ? `Passar para ${destino}` : `Encaminhar para ${destino}`}
+        </h2>
         <p className="text-xs text-neutral-500 mb-4">
-          Quem receber não vê o que foi conversado até aqui. Escreva do que se trata.
+          {tipo === "pessoa"
+            ? `${destino} pode não ver o que foi conversado até aqui. Escreva do que se trata.`
+            : "Quem receber não vê o que foi conversado até aqui. Escreva do que se trata."}
         </p>
         <textarea
           autoFocus
