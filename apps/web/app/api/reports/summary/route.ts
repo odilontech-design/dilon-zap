@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { numeroGeral } from "@/lib/whatsapp-sessions";
 
 const FIRST_RESPONSE_SAMPLE_SIZE = 50; // últimas conversas usadas pra calcular a média — evita varrer o histórico inteiro a cada carregamento
 
@@ -126,11 +127,9 @@ export async function GET() {
         assignedConversations: { select: { status: true } },
       },
     }),
-    prisma.whatsAppSession.findFirst({
-      where: { tenantId: user.tenantId },
-      orderBy: { createdAt: "desc" },
-      select: { status: true, phoneNumber: true },
-    }),
+    // Painel mostra a linha geral. Pegar "a mais recente" faria o painel
+    // trocar de número sozinho no dia em que a empresa conectasse a segunda.
+    numeroGeral(user.tenantId),
     mensagensPorDia(user.tenantId, tenant.timezone),
   ]);
 

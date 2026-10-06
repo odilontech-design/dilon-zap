@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { exigirRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
 
@@ -33,11 +34,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   if (!grupo) return NextResponse.json({ error: "grupo não encontrado" }, { status: 404 });
 
   if (parsed.data.ativo) {
-    const sessao = await prisma.whatsAppSession.findFirst({
-      where: { tenantId: user.tenantId },
-      orderBy: { createdAt: "desc" },
-      select: { id: true },
-    });
+    // Grupo não pertence a setor: vai pela linha geral da empresa.
+    const sessao = await numeroGeral(user.tenantId);
     if (!sessao) {
       return NextResponse.json({ error: "conecte o número antes de ativar grupos" }, { status: 400 });
     }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { numeroParaEnviar } from "@/lib/whatsapp-sessions";
 
 // Fase 0/1: um número por tenant, então "iniciar conversa" sempre usa a
 // sessão mais recente do tenant. Quando existir mais de um número, isso
@@ -14,10 +15,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   });
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const session = await prisma.whatsAppSession.findFirst({
-    where: { tenantId: user.tenantId },
-    orderBy: { createdAt: "desc" },
-  });
+  // Pela linha de QUEM está abrindo: numa empresa com número próprio por setor,
+  // o financeiro fala pelo número do financeiro. Ver lib/whatsapp-sessions.
+  const session = await numeroParaEnviar(user);
   if (!session) {
     return NextResponse.json({ error: "Nenhum número de WhatsApp conectado ainda." }, { status: 400 });
   }

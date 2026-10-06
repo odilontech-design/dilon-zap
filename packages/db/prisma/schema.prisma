@@ -178,6 +178,7 @@ model Setor {
   conversas    Conversation[]
   mensagens    Message[]
   teamMessages TeamMessage[]
+  numeros      WhatsAppSession[]
 
   @@unique([tenantId, nome])
   @@index([tenantId, ativo])
@@ -402,6 +403,18 @@ model WhatsAppSession {
   tenantId        String
   tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   label           String        @default("Principal")
+  // Setor dono deste número, quando a empresa separa o atendimento por linha.
+  // Nulo = número geral, que é o comportamento de sempre.
+  //
+  // Conversa que chega aqui já nasce desse setor, e o robô não fala: quem
+  // liga pro número do financeiro já sabe com quem quer falar, menu de
+  // triagem e boas-vindas ali só atrapalham (decidido com a Guttierres, que
+  // separou uma linha só pro financeiro).
+  //
+  // SetNull e não Cascade: apagar um setor não pode levar junto o número e,
+  // com ele, o histórico inteiro das conversas presas a esta sessão.
+  setorId         String?
+  setor           Setor?        @relation(fields: [setorId], references: [id], onDelete: SetNull)
   phoneNumber     String? // preenchido depois de conectar, formato E.164
   status          SessionStatus @default(PENDING_QR)
   qrCode          String? // QR atual em base64 (Fase 0: worker escreve, web lê via polling)

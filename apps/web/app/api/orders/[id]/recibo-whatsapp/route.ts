@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { uploadMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
 import { wakeOutbox } from "@/lib/worker-client";
+import { numeroParaEnviar } from "@/lib/whatsapp-sessions";
 import {
   carregarPedidoDoRecibo,
   desenharReciboPng,
@@ -32,10 +33,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   // Precisa existir um número conectado ANTES de gerar imagem e subir pro R2 —
   // senão a gente gasta o trabalho todo pra descobrir no fim que não há por
   // onde enviar, e deixa um arquivo órfão no bucket.
-  const session = await prisma.whatsAppSession.findFirst({
-    where: { tenantId: user.tenantId },
-    orderBy: { createdAt: "desc" },
-  });
+  // Recibo sai pela linha de quem está enviando — na Guttierres, a do
+  // financeiro. Ver lib/whatsapp-sessions.
+  const session = await numeroParaEnviar(user);
   if (!session) {
     return NextResponse.json({ error: "Nenhum número de WhatsApp conectado." }, { status: 400 });
   }

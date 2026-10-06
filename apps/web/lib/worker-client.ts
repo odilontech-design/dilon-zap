@@ -123,7 +123,10 @@ export async function wakeOutbox(tenantId: string): Promise<void> {
   }
 }
 
-export async function disconnectWhatsApp(tenantId: string): Promise<{ ok: boolean; reason?: string }> {
+export async function disconnectWhatsApp(
+  tenantId: string,
+  sessionId?: string
+): Promise<{ ok: boolean; reason?: string }> {
   const baseUrl = process.env.WORKER_INTERNAL_URL;
   const secret = process.env.WORKER_INTERNAL_SECRET;
   if (!baseUrl || !secret) return { ok: false, reason: "worker não configurado" };
@@ -132,7 +135,7 @@ export async function disconnectWhatsApp(tenantId: string): Promise<{ ok: boolea
     const res = await fetch(`${baseUrl}/internal/disconnect`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ tenantId }),
+      body: JSON.stringify({ tenantId, sessionId }),
       signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) return { ok: false, reason: "falha ao falar com o worker" };

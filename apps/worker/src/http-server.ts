@@ -1,6 +1,7 @@
 import http from "node:http";
 import {
   getSocketForTenant,
+  getSocketForSession,
   editOutboundMessage,
   deleteOutboundMessage,
   reactToMessage,
@@ -108,13 +109,16 @@ function handleDisconnect(req: http.IncomingMessage, res: http.ServerResponse) {
   req.on("data", (chunk) => (body += chunk));
   req.on("end", async () => {
     try {
-      const { tenantId } = JSON.parse(body) as { tenantId?: string };
+      const { tenantId, sessionId } = JSON.parse(body) as { tenantId?: string; sessionId?: string };
       if (!tenantId) {
         res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "tenantId é obrigatório" }));
         return;
       }
 
-      const socket = getSocketForTenant(tenantId);
+      // Com sessionId, derruba A linha pedida. Sem ele (empresa de um número
+      // só), cai no comportamento antigo — mas numa empresa com duas linhas
+      // "qualquer socket" derrubaria a errada.
+      const socket = sessionId ? getSocketForSession(sessionId) : getSocketForTenant(tenantId);
       if (!socket) {
         res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ ok: false, reason: "sem conexão ativa" }));
         return;

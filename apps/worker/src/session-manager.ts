@@ -89,6 +89,18 @@ export function getSocketForTenant(tenantId: string) {
   return null;
 }
 
+/**
+ * O socket de UM número específico.
+ *
+ * Existe porque getSocketForTenant devolve "qualquer socket da empresa", e
+ * numa empresa com mais de uma linha isso é um sorteio. Pra desconectar, o
+ * sorteio derrubaria a linha errada — o atendimento inteiro no lugar do
+ * financeiro.
+ */
+export function getSocketForSession(sessionId: string) {
+  return activeSessions.get(sessionId)?.socket ?? null;
+}
+
 /** Edita o texto de uma mensagem já enviada — WhatsApp só deixa editar mensagem própria (fromMe). */
 /**
  * Como o texto sai no WhatsApp do cliente. Vários atendentes dividem o mesmo
@@ -939,7 +951,7 @@ async function recordMessage(params: {
 
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
     where: { id: params.sessionId },
-    select: { tenantId: true },
+    select: { tenantId: true, setorId: true },
   });
   const resolvedPhone = params.waJid.endsWith("@lid")
     ? phoneDigitsFromJid(params.remoteJidAlt)
@@ -1024,6 +1036,11 @@ async function recordMessage(params: {
       lastMessageAt: new Date(),
       // Grupo não tem ciclo de atendimento: fica sempre aberto.
       status: isInbound || params.grupo ? "OPEN" : "RESOLVED",
+      // Número com setor dono entrega a conversa já na fila dele — quem
+      // escreve pro número do financeiro quer o financeiro, e não precisa
+      // passar por triagem pra dizer isso. Grupo fica de fora: ele é da
+      // equipe inteira, não de um setor.
+      ...(session.setorId && !params.grupo ? { setorId: session.setorId } : {}),
     },
   });
 
@@ -1109,7 +1126,15 @@ async function recordMessage(params: {
   // teste — ver avaliarAutomacao. Em grupo o robô nunca fala: saudação,
   // aviso de ausência e menu de triagem mandados pra dezenas de pessoas são
   // spam, e é o tipo de coisa que faz o WhatsApp derrubar o número.
-  if (isInbound && !params.grupo) {
+  // Número com setor dono não tem robô: nem menu de triagem, nem saudação.
+  // Quem escreve pro número do financeiro já sabe com quem quer falar, e
+  // responder com "escolha uma opção" ali é atrito puro (pedido da Guttierres,
+  // que separou uma linha só pro financeiro).
+  //
+  // Checado aqui, e não deduzido do "a conversa já tem setor, então o robô
+  // cala": aquilo é efeito colateral de outra regra e pararia de valer no dia
+  // em que a conversa perdesse o setor por qualquer motivo.
+  if (isInbound && !params.grupo && !session.setorId) {
     const atendimento = await carregarAtendimento(session.tenantId);
     const menuLigado = atendimento.uraAtiva && atendimento.uraOpcoes.length > 0;
     const decisao = avaliarAutomacao(

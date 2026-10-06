@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { autenticarPorChave } from "@/lib/api-key";
+import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { recursosDoTenant } from "@/lib/plano";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { wakeOutbox } from "@/lib/worker-client";
@@ -70,11 +71,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "telefone inválido" }, { status: 400 });
   }
 
-  const sessao = await prisma.whatsAppSession.findFirst({
-    where: { tenantId: auth.tenantId },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, status: true },
-  });
+  // Sistema de fora não sabe de setor: envia pela linha geral da empresa.
+  const sessao = await numeroGeral(auth.tenantId);
   if (!sessao) {
     return NextResponse.json({ error: "nenhum número conectado nesta empresa" }, { status: 409 });
   }
