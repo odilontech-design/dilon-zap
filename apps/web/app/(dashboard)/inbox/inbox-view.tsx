@@ -874,10 +874,23 @@ export function ConversationThread({
   // Estado da conexão do número. Reusa o endpoint que a tela de Conectar
   // número já usa, com intervalo próprio: aqui é aviso de fundo, não alguém
   // parado esperando o QR aparecer.
-  const { data: sessao } = useSWR<SessaoWhatsApp>("/api/whatsapp/status", fetcher, {
+  const { data: numeros } = useSWR<NumeroDaEmpresa[]>("/api/whatsapp/status", fetcher, {
     refreshInterval: SESSION_HEALTH_INTERVAL,
   });
-  const aviso = avisoDaSessao(sessao ?? null);
+
+  // A rota devolve TODOS os números da empresa (ver WhatsAppSession.setorId).
+  // Havendo um conectado, não há o que avisar: a conversa sai por algum deles.
+  // Nenhum conectado, o primeiro serve de amostra pro texto do aviso.
+  //
+  // Array.isArray e não só `?? null`: esta rota já devolveu um objeto só, e
+  // quando virou lista o `.status` passou a ser undefined — o que caía no
+  // ramo "desconectado" e BLOQUEAVA o envio no Inbox inteiro. Se um dia ela
+  // mudar de forma de novo, que apareça como "sem aviso", não como "ninguém
+  // consegue mandar mensagem".
+  const sessao: SessaoWhatsApp = Array.isArray(numeros)
+    ? (numeros.find((n) => n.status === "CONNECTED") ?? numeros[0] ?? null)
+    : null;
+  const aviso = avisoDaSessao(sessao);
 
   // Ao trocar de conversa, sempre volta a acompanhar o final (igual WhatsApp).
   useEffect(() => {
@@ -3370,7 +3383,9 @@ function SeparadorDeData({ iso }: { iso: string }) {
   );
 }
 
-type SessaoWhatsApp = { status: "PENDING_QR" | "CONNECTED" | "DISCONNECTED" | "LOGGED_OUT" } | null;
+type StatusDaSessao = "PENDING_QR" | "CONNECTED" | "DISCONNECTED" | "LOGGED_OUT";
+type NumeroDaEmpresa = { status: StatusDaSessao };
+type SessaoWhatsApp = { status: StatusDaSessao } | null;
 
 /**
  * O que a atendente precisa saber quando o número não está conectado.
