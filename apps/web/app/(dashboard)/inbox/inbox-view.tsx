@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import { Avatar } from "@/components/avatar";
+import { VisualizadorDeImagens } from "@/components/visualizador-de-imagens";
 import {
   contactLabel,
   formatListTimestamp,
@@ -730,6 +731,10 @@ export function ConversationThread({
   );
   const [legendaAnexo, setLegendaAnexo] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  // Imagem aberta no visualizador, por id da mensagem. Guarda o id e não o
+  // índice: chega mensagem nova o tempo todo, e índice apontaria pra outra
+  // imagem no meio da conferência.
+  const [imagemAberta, setImagemAberta] = useState<string | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
   const [forwardBatch, setForwardBatch] = useState<Message[] | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
@@ -786,6 +791,22 @@ export function ConversationThread({
     historicoOculto: boolean;
   }>(`/api/conversations/${conversationId}/messages`, fetcher, { refreshInterval: MESSAGES_INTERVAL });
   const messages = messagesData?.mensagens;
+  // As imagens desta conversa, em ordem, pra navegar entre elas no
+  // visualizador. Apagada fica de fora: o conteúdo já não existe mais.
+  const imagensDaConversa = useMemo(
+    () =>
+      (messages ?? [])
+        .filter((m) => m.mediaType === "IMAGE" && !m.isDeleted)
+        .map((m) => ({
+          id: m.id,
+          body: m.body,
+          createdAt: m.createdAt,
+          // Em grupo, autorNome é quem mandou; no 1:1 de saída, quem atendeu.
+          autor:
+            m.direction === "OUTBOUND" ? (m.sender?.name ?? "Enviada pela empresa") : m.autorNome,
+        })),
+    [messages]
+  );
   const marcadoresSetor = messagesData?.marcadores ?? [];
   // Parte da conversa pertence a outro setor e nem veio da API. Sem o aviso, o
   // atendimento pareceria começar do nada no meio do assunto.
@@ -1460,7 +1481,13 @@ export function ConversationThread({
                         </p>
                       </div>
                     )}
-                    {m.mediaType && <MessageMedia message={m} onLoad={() => scrollToBottom()} />}
+                    {m.mediaType && (
+                      <MessageMedia
+                        message={m}
+                        onLoad={() => scrollToBottom()}
+                        onAmpliar={() => setImagemAberta(m.id)}
+                      />
+                    )}
                     {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
                   </>
                 )}
@@ -1786,6 +1813,14 @@ export function ConversationThread({
           onMudou={mutatePedidos}
         />
       )}
+      {imagemAberta && (
+        <VisualizadorDeImagens
+          imagens={imagensDaConversa}
+          abertaId={imagemAberta}
+          onTrocar={setImagemAberta}
+          onFechar={() => setImagemAberta(null)}
+        />
+      )}
       {anexoPendente && (
         <PreviaDeAnexo
           anexo={anexoPendente}
@@ -2034,7 +2069,16 @@ function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onC
   );
 }
 
-function MessageMedia({ message, onLoad }: { message: Message; onLoad?: () => void }) {
+function MessageMedia({
+  message,
+  onLoad,
+  onAmpliar,
+}: {
+  message: Message;
+  onLoad?: () => void;
+  /** Abre a imagem no visualizador da conversa. Só vale pra IMAGE. */
+  onAmpliar?: () => void;
+}) {
   const src = `/api/messages/${message.id}/media`;
 
   if (message.mediaType === "AUDIO") {
@@ -2047,8 +2091,17 @@ function MessageMedia({ message, onLoad }: { message: Message; onLoad?: () => vo
 
   if (message.mediaType === "IMAGE") {
     return (
-      // eslint-disable-next-line @next/next/no-img-element -- vem via redirect assinado do R2, sem domínio fixo
-      <img src={src} alt={message.body || "imagem"} className="max-w-full rounded-md mb-1" onLoad={onLoad} />
+      // Botão e não só um onClick na img: dá foco pelo teclado e é lido como
+      // "ampliar" por leitor de tela, em vez de uma figura clicável muda.
+      <button
+        type="button"
+        onClick={onAmpliar}
+        className="block mb-1 cursor-zoom-in"
+        aria-label="Ampliar imagem"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- vem via redirect assinado do R2, sem domínio fixo */}
+        <img src={src} alt={message.body || "imagem"} className="max-w-full rounded-md" onLoad={onLoad} />
+      </button>
     );
   }
 

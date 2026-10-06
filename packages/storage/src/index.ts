@@ -47,10 +47,35 @@ export async function downloadMedia(key: string): Promise<Buffer> {
   return Buffer.from(bytes);
 }
 
-export async function getMediaReadUrl(key: string, expiresInSeconds = 3600): Promise<string> {
-  return getSignedUrl(client(), new GetObjectCommand({ Bucket: bucketName(), Key: key }), {
-    expiresIn: expiresInSeconds,
-  });
+/**
+ * URL assinada de leitura.
+ *
+ * `baixarComoNome` faz o navegador BAIXAR em vez de abrir, com o nome dado. Vai
+ * assinado junto (ResponseContentDisposition), e não como atributo `download`
+ * no link, porque o arquivo vem de outro domínio — e `download` entre domínios
+ * é ignorado pelo navegador, que abriria a imagem numa aba em vez de salvar.
+ */
+export async function getMediaReadUrl(
+  key: string,
+  expiresInSeconds = 3600,
+  baixarComoNome?: string
+): Promise<string> {
+  // Nome de arquivo entra em UM cabeçalho HTTP: aspas e quebra de linha o
+  // partiriam ao meio. O filename* em UTF-8 preserva acento nos navegadores
+  // atuais; o filename simples, sem acento, é o que os antigos leem.
+  const disposition = baixarComoNome
+    ? `attachment; filename="${baixarComoNome.replace(/[^\w.\- ]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(baixarComoNome)}`
+    : undefined;
+
+  return getSignedUrl(
+    client(),
+    new GetObjectCommand({
+      Bucket: bucketName(),
+      Key: key,
+      ...(disposition ? { ResponseContentDisposition: disposition } : {}),
+    }),
+    { expiresIn: expiresInSeconds }
+  );
 }
 
 export async function deleteMedia(key: string) {
