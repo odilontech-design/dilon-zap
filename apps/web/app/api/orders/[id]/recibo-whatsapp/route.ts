@@ -82,12 +82,17 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       sessionId: session.id,
       direction: "OUTBOUND",
       status: "PENDING",
-      body: `Comprovante do pedido #${pedido.numero}`,
+      // Pago é RECIBO; em aberto ainda é cobrança. O mesmo botão serve às duas
+      // coisas (a Guttierres usa assim), e chamar de "comprovante do pedido" um
+      // papel que o cliente ainda não pagou confunde quem recebe.
+      body: pedido.pago ? `Recibo #${pedido.numero}` : `Cobrança do pedido #${pedido.numero}`,
       senderUserId: user.id,
       mediaType: "IMAGE",
       mediaKey,
       mediaMimeType: "image/png",
-      mediaFileName: `recibo-${pedido.numero}.png`,
+      // Acompanha a legenda: o cliente que salva o arquivo acha "recibo-56"
+      // quando pagou e "cobranca-56" quando ainda deve.
+      mediaFileName: `${pedido.pago ? "recibo" : "cobranca"}-${pedido.numero}.png`,
       setorId: conversa.setorId,
     },
   });
