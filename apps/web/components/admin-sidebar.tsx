@@ -55,8 +55,13 @@ export function AdminSidebar({ name }: { name: string }) {
         <div className="fixed inset-0 bg-black/60 z-40 md:hidden" onClick={() => setOpen(false)} aria-hidden />
       )}
 
+      {/* md:sticky + h-screen: antes era md:static, e o menu rolava junto com
+          a página — numa lista longa de empresas ele sumia de vista e era
+          preciso voltar ao topo pra trocar de tela. Com sticky ele fica parado
+          e só o conteúdo rola; o overflow interno segura um menu mais alto que
+          a janela. */}
       <aside
-        className={`fixed md:static inset-y-0 left-0 z-50 w-64 md:w-56 shrink-0 border-r border-neutral-800 bg-neutral-950 text-neutral-100 p-4 flex flex-col transition-transform duration-200 ease-out ${
+        className={`fixed md:sticky md:top-0 md:h-screen md:overflow-y-auto inset-y-0 left-0 z-50 w-64 md:w-56 shrink-0 border-r border-neutral-800 bg-neutral-950 text-neutral-100 p-4 flex flex-col transition-transform duration-200 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >

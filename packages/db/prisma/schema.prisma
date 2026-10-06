@@ -1341,6 +1341,11 @@ enum Recurso {
   // Também libera o catálogo de Produtos sem precisar do fluxo de Pedidos —
   // a Hemoderi usa o catálogo pra mandar material, não pra vender pelo chat.
   MATERIAIS
+  // Mais de um número de WhatsApp na mesma empresa, com setor dono por linha.
+  // Não entra em plano nenhum nem na regra antiga (ver RECURSOS_SOB_DEMANDA em
+  // lib/plano-regras): cada número a mais é um chip, um socket e mais
+  // superfície de bloqueio no WhatsApp, então é liberado caso a caso.
+  MULTI_NUMERO
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem

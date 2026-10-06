@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { exigirRecurso } from "@/lib/plano";
 
 const bodySchema = z
   .object({
@@ -37,6 +38,12 @@ export async function POST(req: Request) {
   const corpo = parsed.data ?? {};
 
   if (corpo.novo) {
+    // Portão no servidor, não só na tela: esconder o botão não bloqueia nada,
+    // e cada número a mais é um chip e um socket. Liberado empresa a empresa
+    // pela Dilon Tech — ver RECURSOS_SOB_DEMANDA em lib/plano-regras.
+    const bloqueio = await exigirRecurso(user, "MULTI_NUMERO");
+    if (bloqueio) return bloqueio;
+
     if (user.role !== "OWNER" && user.role !== "SUPERADMIN") {
       return NextResponse.json({ error: "só o responsável conecta outro número" }, { status: 403 });
     }

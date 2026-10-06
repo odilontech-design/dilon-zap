@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PLANOS, ROTULO_RECURSO, TODOS_RECURSOS, recursosEfetivos, type Plano, type Recurso } from "@/lib/plano-regras";
+import { PLANOS, ROTULO_RECURSO, RECURSOS_GERENCIAVEIS, TODOS_RECURSOS, recursosEfetivos, type Plano, type Recurso } from "@/lib/plano-regras";
 
 /**
  * Plano, recursos e ciclo de vida de uma empresa, na ficha do admin.
@@ -41,7 +41,7 @@ export function PlanoPanel({
   // Sem assinatura = empresa antiga = regra antiga. O padrão reflete isso.
   const [completa, setCompleta] = useState(assinatura ? assinatura.plataformaCompleta : true);
   const [ex, setEx] = useState<Record<Recurso, boolean | null>>(() => {
-    const base = Object.fromEntries(TODOS_RECURSOS.map((r) => [r, null])) as Record<Recurso, boolean | null>;
+    const base = Object.fromEntries(RECURSOS_GERENCIAVEIS.map((r) => [r, null])) as Record<Recurso, boolean | null>;
     for (const e of excecoes) base[e.recurso] = e.ativo;
     return base;
   });
@@ -52,7 +52,7 @@ export function PlanoPanel({
   // O que valeria com a configuração que está na tela, antes de salvar.
   const efetivos = recursosEfetivos(
     { plano, plataformaCompleta: completa },
-    TODOS_RECURSOS.filter((r) => ex[r] !== null).map((r) => ({ recurso: r, ativo: ex[r] as boolean }))
+    RECURSOS_GERENCIAVEIS.filter((r) => ex[r] !== null).map((r) => ({ recurso: r, ativo: ex[r] as boolean }))
   );
   const doPlano = new Set(completa ? TODOS_RECURSOS : PLANOS[plano].recursos);
 
@@ -73,7 +73,7 @@ export function PlanoPanel({
       body: JSON.stringify({
         plano,
         plataformaCompleta: completa,
-        excecoes: TODOS_RECURSOS.map((r) => ({ recurso: r, ativo: ex[r] })),
+        excecoes: RECURSOS_GERENCIAVEIS.map((r) => ({ recurso: r, ativo: ex[r] })),
       }),
     });
     setSalvando(false);
@@ -129,7 +129,7 @@ export function PlanoPanel({
           Recursos — clique para ciclar entre seguir o plano, forçar ligado e forçar desligado.
         </p>
         <ul className="mb-4 flex flex-col gap-1.5">
-          {TODOS_RECURSOS.map((r) => {
+          {RECURSOS_GERENCIAVEIS.map((r) => {
             const vale = efetivos.has(r);
             const estado = ex[r] === null ? "segue o plano" : ex[r] ? "ligado por exceção" : "desligado por exceção";
             return (

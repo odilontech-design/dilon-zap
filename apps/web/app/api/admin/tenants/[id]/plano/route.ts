@@ -4,7 +4,13 @@ import { prisma } from "@dilon-zap/db";
 import type { Prisma } from "@prisma/client";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import { recursosEfetivos, TODOS_RECURSOS, type Assinatura } from "@/lib/plano-regras";
+import {
+  recursosEfetivos,
+  TODOS_RECURSOS,
+  RECURSOS_GERENCIAVEIS,
+  type Assinatura,
+  type Recurso,
+} from "@/lib/plano-regras";
 
 /**
  * Plano, ciclo de vida e exceções de recurso de uma empresa.
@@ -14,7 +20,11 @@ import { recursosEfetivos, TODOS_RECURSOS, type Assinatura } from "@/lib/plano-r
  * plano pode estar rodando agora mesmo — o menu de triagem, por exemplo.
  */
 
-const recursoEnum = z.enum(["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API"]);
+// Derivado da lista, nunca escrito à mão de novo. Escrito à mão, ficou sem
+// MATERIAIS quando aquele recurso nasceu — e como o painel manda a lista
+// inteira, o zod recusava o pedido todo e salvar o plano parava de funcionar
+// pra qualquer empresa, sem ninguém relacionar uma coisa com a outra.
+const recursoEnum = z.enum(RECURSOS_GERENCIAVEIS as [Recurso, ...Recurso[]]);
 
 const corpoSchema = z.object({
   plano: z.enum(["ESSENCIAL", "PROFISSIONAL", "ESCALA"]).optional(),
@@ -121,7 +131,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       uraDesligada = true;
     }
 
-    return { efetivos: TODOS_RECURSOS.filter((r) => efetivos.has(r)), uraDesligada };
+    return { efetivos: RECURSOS_GERENCIAVEIS.filter((r) => efetivos.has(r)), uraDesligada };
   });
 
   await logAudit({

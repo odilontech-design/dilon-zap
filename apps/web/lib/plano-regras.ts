@@ -14,9 +14,33 @@
  */
 
 export type Plano = "ESSENCIAL" | "PROFISSIONAL" | "ESCALA";
-export type Recurso = "URA" | "SETORES" | "GRUPOS" | "PEDIDOS" | "CONTAS_RECEBER" | "INTEGRACAO_API" | "MATERIAIS";
+export type Recurso =
+  | "URA"
+  | "SETORES"
+  | "GRUPOS"
+  | "PEDIDOS"
+  | "CONTAS_RECEBER"
+  | "INTEGRACAO_API"
+  | "MATERIAIS"
+  | "MULTI_NUMERO";
 
+/** O que a escada dos planos distribui — e o que a regra antiga entrega inteiro. */
 export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API", "MATERIAIS"];
+
+/**
+ * Recursos que NÃO entram em plano nenhum, nem na regra antiga: só existem se
+ * a Dilon Tech ligar para uma empresa específica.
+ *
+ * Mais de um número é o primeiro. Fica fora de `TODOS_RECURSOS` de propósito:
+ * aquela lista é o que `plataformaCompleta` entrega inteiro, e pôr o
+ * multi-número ali daria uma segunda linha de graça à Believe, à Hemoderi e à
+ * Vai Viajar sem ninguém pedir. Cada número a mais é um chip, um socket e
+ * mais superfície de bloqueio no WhatsApp — tem que ser decisão explícita.
+ */
+export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO"];
+
+/** Tudo que o painel do superadmin deixa ligar ou desligar por empresa. */
+export const RECURSOS_GERENCIAVEIS: Recurso[] = [...TODOS_RECURSOS, ...RECURSOS_SOB_DEMANDA];
 
 export const PLANOS: Record<
   Plano,
@@ -57,6 +81,7 @@ export const ROTULO_RECURSO: Record<Recurso, string> = {
   CONTAS_RECEBER: "Contas a receber",
   INTEGRACAO_API: "Integração com outros sistemas",
   MATERIAIS: "Biblioteca de materiais dos produtos",
+  MULTI_NUMERO: "Mais de um número de WhatsApp",
 };
 
 export type Assinatura = {
