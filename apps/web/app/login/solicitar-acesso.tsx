@@ -96,9 +96,12 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-surface p-5 text-center">
         <p className="text-sm font-semibold">Cadastro enviado</p>
+        {/* Não promete e-mail: o sistema não envia, e quem repassa os dados de
+            entrada é a Dilon Tech. Prometer "você recebe no e-mail" gerava a
+            pergunta "cadê meu e-mail?" assim que o tráfego pago chegasse. */}
         <p className="text-xs text-neutral-600">
-          Vamos revisar e liberar seu acesso. Você recebe os dados de entrada no e-mail{" "}
-          <span className="font-medium">{email.trim()}</span>.
+          Recebemos seu pedido. Vamos revisar e entrar em contato pelo telefone ou WhatsApp que você
+          informou para liberar seu acesso.
         </p>
         <a
           href={linkComMensagem(numero, texto)}
