@@ -137,6 +137,7 @@ model Tenant {
   autoReplies       AutoReply[]
   subscription      Subscription?
   invoices          Invoice[]
+  solicitacoes      SolicitacaoDeAcesso[]
   tags              Tag[]
   stages            Stage[]
   uraOpcoes         UraOpcao[]
@@ -374,6 +375,7 @@ model User {
   transfersMade          Conversation[]     @relation("AssignedBy")
   uraOpcoes              UraOpcao[]         @relation("UraDestino")
   setores                SetorMembro[]
+  solicitacoesDecididas  SolicitacaoDeAcesso[] @relation("SolicitacaoDecididaPor")
   sentMessages           Message[]          @relation("MessageSender")
   messageReactions       MessageReaction[]
   scheduledMessages      ScheduledMessage[] @relation("ScheduledBy")
@@ -1617,4 +1619,46 @@ model ProdutoMaterial {
 
   @@index([productId])
   @@index([tenantId])
+}
+
+/// Pedido de cadastro vindo da página de login, antes de virar empresa.
+///
+/// Nasceu do tráfego pago: o interessado se cadastra sozinho e a Dilon Tech
+/// aprova. Fica numa tabela PRÓPRIA, e não como um Tenant "inativo", porque
+/// não é empresa nenhuma ainda — Tenant pendurado sem usuário nem assinatura
+/// apareceria em toda listagem, contagem e cobrança do painel, e alguém ia
+/// tratar como cliente de verdade.
+model SolicitacaoDeAcesso {
+  id String @id @default(cuid())
+
+  nome     String
+  empresa  String
+  email    String
+  telefone String
+  /// Só os dígitos. Guardar formatado faria "67.211.588/0001-01" e
+  /// "67211588000101" serem dois cadastros do mesmo CNPJ.
+  documento String
+
+  status       StatusSolicitacao @default(PENDENTE)
+  /// Por que foi recusada — pra Dilon Tech lembrar quando a pessoa insistir.
+  motivo       String?
+  decididoEm   DateTime?
+  decididoById String?
+  decididoPor  User?             @relation("SolicitacaoDecididaPor", fields: [decididoById], references: [id], onDelete: SetNull)
+
+  /// A empresa criada na aprovação. SetNull: apagar a empresa não pode levar
+  /// junto o registro de que alguém pediu acesso e foi aprovado.
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  criadoEm DateTime @default(now())
+
+  @@index([status, criadoEm])
+  @@index([email])
+}
+
+enum StatusSolicitacao {
+  PENDENTE
+  APROVADA
+  RECUSADA
 }

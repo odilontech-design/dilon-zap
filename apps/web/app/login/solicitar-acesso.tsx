@@ -2,22 +2,22 @@
 
 import { useState } from "react";
 import { linkComMensagem } from "@/lib/suporte";
+import { documentoValido, formatarDocumentoBR } from "@/lib/documento";
 
 /**
- * Pedido de acesso, abaixo do formulário de entrada.
+ * Autocadastro, abaixo do formulário de entrada.
  *
- * Não grava nada e não manda e-mail: monta uma mensagem de WhatsApp já
- * preenchida e abre a conversa. A pessoa revisa e envia — quem dispara é ela,
- * não a página. Menos peça pra manter, e a conversa começa no canal que o
- * produto usa.
+ * Antes isto só montava uma mensagem de WhatsApp e abria a conversa — nada era
+ * guardado. Com tráfego pago apontando pra cá, quem chega fora do horário ou
+ * desiste no meio do caminho se perdia. Agora o pedido fica registrado e entra
+ * numa fila de aprovação no painel da Dilon Tech.
  *
- * Fica recolhido por padrão. Quem trabalha aqui todo dia não pode ter um
+ * Continua recolhido por padrão: quem trabalha aqui todo dia não pode ter um
  * formulário de vendas empurrando o campo de senha pra baixo.
  *
- * Todos os campos são obrigatórios porque a mensagem existe pra virar cadastro
- * do outro lado: faltando um dado, alguém tem que voltar e perguntar, e cada
- * ida e volta é uma chance de o interessado esfriar. O e-mail em especial é o
- * que vira o login — sem ele não há conta pra criar.
+ * O WhatsApp não sumiu — virou o passo DEPOIS do envio, pra quem quer falar na
+ * hora. Antes era o único caminho, e dependia de a pessoa ter WhatsApp no
+ * computador em que estava.
  */
 export function SolicitarAcesso({ numero }: { numero: string }) {
   const [aberto, setAberto] = useState(false);
@@ -25,36 +25,58 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
   const [empresa, setEmpresa] = useState("");
   const [email, setEmail] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [equipe, setEquipe] = useState("");
+  const [documento, setDocumento] = useState("");
+  // Campo-armadilha: fica escondido e nenhum humano preenche. Ver /api/cadastro.
+  const [website, setWebsite] = useState("");
 
-  // Validação frouxa de propósito: o navegador já barra o formato pelo
-  // type="email", e o que importa aqui é não deixar passar um campo vazio.
-  // Regra de e-mail rigorosa demais rejeita endereço válido e trava a venda.
-  const emailParecePreenchido = /.+@.+\..+/.test(email.trim());
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [enviado, setEnviado] = useState(false);
+
+  // Validação frouxa de propósito no e-mail: o navegador já barra o formato, e
+  // regra rigorosa demais rejeita endereço válido e trava a venda. O documento
+  // é a exceção — ali o dígito verificador é conferido de verdade, senão o
+  // cadastro chega inaproveitável do outro lado.
+  const emailOk = /.+@.+\..+/.test(email.trim());
+  const documentoOk = documentoValido(documento);
   const podeEnviar =
     nome.trim().length > 1 &&
     empresa.trim().length > 1 &&
-    emailParecePreenchido &&
+    emailOk &&
     telefone.trim().length >= 8 &&
-    equipe.trim().length > 0;
+    documentoOk &&
+    !enviando;
 
-  function abrirWhatsApp(e: React.FormEvent) {
+  async function enviar(e: React.FormEvent) {
     e.preventDefault();
     if (!podeEnviar) return;
 
-    // Texto em primeira pessoa: quem envia é a pessoa, e a mensagem tem que
-    // soar como ela escreveu. A ordem segue o que o cadastro precisa.
-    const texto = [
-      "Olá! Quero conhecer o Dilon Zap.",
-      "",
-      `Nome: ${nome.trim()}`,
-      `Empresa: ${empresa.trim()}`,
-      `E-mail para acesso: ${email.trim()}`,
-      `Telefone: ${telefone.trim()}`,
-      `Pessoas no atendimento: ${equipe.trim()}`,
-    ].join("\n");
-
-    window.open(linkComMensagem(numero, texto), "_blank", "noopener,noreferrer");
+    setEnviando(true);
+    setErro(null);
+    try {
+      const res = await fetch("/api/cadastro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          nome: nome.trim(),
+          empresa: empresa.trim(),
+          email: email.trim(),
+          telefone: telefone.trim(),
+          documento,
+          website,
+        }),
+      });
+      const b = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setErro(typeof b.error === "string" ? b.error : "não deu pra enviar. Tente de novo.");
+        return;
+      }
+      setEnviado(true);
+    } catch {
+      setErro("não deu pra enviar — confira sua conexão e tente de novo.");
+    } finally {
+      setEnviando(false);
+    }
   }
 
   if (!aberto) {
@@ -69,15 +91,36 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
     );
   }
 
+  if (enviado) {
+    const texto = `Olá! Acabei de me cadastrar no Dilon Zap como ${empresa.trim()} e gostaria de falar com vocês.`;
+    return (
+      <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-surface p-5 text-center">
+        <p className="text-sm font-semibold">Cadastro enviado</p>
+        <p className="text-xs text-neutral-600">
+          Vamos revisar e liberar seu acesso. Você recebe os dados de entrada no e-mail{" "}
+          <span className="font-medium">{email.trim()}</span>.
+        </p>
+        <a
+          href={linkComMensagem(numero, texto)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+        >
+          Falar agora no WhatsApp
+        </a>
+      </div>
+    );
+  }
+
   const campo =
     "w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent";
 
   return (
-    <form onSubmit={abrirWhatsApp} className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-surface p-5">
+    <form onSubmit={enviar} className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-surface p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold">Solicitar acesso</p>
-          <p className="text-xs text-neutral-500">Abrimos o WhatsApp com seus dados já preenchidos.</p>
+          <p className="text-sm font-semibold">Criar minha conta</p>
+          <p className="text-xs text-neutral-500">Revisamos e liberamos seu acesso.</p>
         </div>
         <button
           type="button"
@@ -87,6 +130,19 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
           Fechar
         </button>
       </div>
+
+      {/* Armadilha pra robô: invisível e fora da ordem de tabulação. Humano
+          nunca vê nem alcança; robô que preenche tudo cai aqui. */}
+      <input
+        type="text"
+        name="website"
+        value={website}
+        onChange={(e) => setWebsite(e.target.value)}
+        tabIndex={-1}
+        autoComplete="off"
+        aria-hidden="true"
+        className="absolute h-0 w-0 opacity-0"
+      />
 
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium text-neutral-700">Seu nome</span>
@@ -126,28 +182,35 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
       </label>
 
       <label className="flex flex-col gap-1 text-sm">
-        <span className="font-medium text-neutral-700">Quantas pessoas atendem</span>
+        <span className="font-medium text-neutral-700">CPF ou CNPJ</span>
         <input
           required
-          value={equipe}
-          onChange={(e) => setEquipe(e.target.value)}
+          value={documento}
+          onChange={(e) => setDocumento(e.target.value)}
+          onBlur={() => documentoOk && setDocumento(formatarDocumentoBR(documento))}
           inputMode="numeric"
-          placeholder="3"
+          placeholder="Só os números"
           className={campo}
         />
+        {/* Só reclama depois de a pessoa ter digitado o suficiente: acusar
+            "inválido" no segundo dígito é o formulário brigando com quem está
+            tentando preencher. */}
+        {documento.replace(/\D/g, "").length >= 11 && !documentoOk && (
+          <span className="text-xs text-red-600">Confira o número digitado.</span>
+        )}
       </label>
+
+      {erro && (
+        <p className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-700">{erro}</p>
+      )}
 
       <button
         type="submit"
         disabled={!podeEnviar}
         className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white transition hover:opacity-90 disabled:opacity-40"
       >
-        Abrir no WhatsApp
+        {enviando ? "Enviando..." : "Enviar cadastro"}
       </button>
-
-      <p className="text-[11px] leading-relaxed text-neutral-500">
-        Nada é gravado aqui. A mensagem abre no seu WhatsApp e só sai quando você enviar.
-      </p>
     </form>
   );
 }
