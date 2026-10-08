@@ -82,6 +82,28 @@ export type EstadoAntesDaMensagem = {
   equipeFalouPorUltimo: boolean;
 } | null;
 
+/**
+ * A última mensagem da conversa foi de uma PESSOA da equipe?
+ *
+ * Três origens contam como pessoa, e uma não:
+ *  - enviada pelo Inbox (tem senderUserId);
+ *  - escrita direto no celular (deCelular) — não tem usuário logado, mas
+ *    tampouco é o robô. Foi o caso da Dilon Tech: a conversa abriu por um link
+ *    de outro app, a mensagem saiu do celular, e o menu de triagem disparou
+ *    por cima como se fosse o primeiro contato;
+ *  - NÃO conta a resposta do próprio robô (menu, saudação, aviso de
+ *    ausência): sem usuário e sem a marca de celular. Contar o robô faria a
+ *    triagem se calar sozinha logo depois do primeiro menu.
+ *
+ * Mensagem recebida do cliente nunca é "a equipe".
+ */
+export function equipeFalou(
+  ultima: { direction: "INBOUND" | "OUTBOUND"; senderUserId: string | null; deCelular: boolean } | null | undefined
+): boolean {
+  if (!ultima || ultima.direction !== "OUTBOUND") return false;
+  return ultima.senderUserId !== null || ultima.deCelular;
+}
+
 export type DecisaoDeRoteamento = {
   /** O robô pode responder esta mensagem. */
   podeFalar: boolean;

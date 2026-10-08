@@ -1197,6 +1197,13 @@ model Message {
   // isso pra prefixar o nome na mensagem de verdade mandada ao WhatsApp.
   senderUserId String?
   sender       User?   @relation("MessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  /// Mensagem de saída escrita direto no celular, fora do sistema. Não tem
+  /// senderUserId (ninguém logado a enviou) mas TAMBÉM não é do robô — e sem
+  /// esta marca eram indistinguíveis. O robô de triagem usa isto pra não
+  /// falar por cima de quem acabou de escrever pelo celular: o cliente abria a
+  /// conversa pelo celular, respondia, e recebia o menu como se fosse o
+  /// primeiro contato.
+  deCelular    Boolean @default(false)
 
   // Quem mandou, numa mensagem de GRUPO. Num chat 1:1 o autor é o próprio
   // contato e isto fica nulo; no grupo o contato é o grupo, e sem o autor

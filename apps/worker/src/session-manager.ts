@@ -22,7 +22,7 @@ import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/stor
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
-import { decidirAutoResposta, avaliarAutomacao, type OpcaoUra } from "./auto-reply-decisao";
+import { decidirAutoResposta, avaliarAutomacao, equipeFalou, type OpcaoUra } from "./auto-reply-decisao";
 import {
   ehGrupo,
   nomeDoAutor,
@@ -1010,7 +1010,7 @@ async function recordMessage(params: {
     ? await prisma.message.findFirst({
         where: { conversationId: conversaAntes.id },
         orderBy: { createdAt: "desc" },
-        select: { direction: true, senderUserId: true },
+        select: { direction: true, senderUserId: true, deCelular: true },
       })
     : null;
 
@@ -1018,8 +1018,7 @@ async function recordMessage(params: {
     ? {
         status: conversaAntes.status,
         lastMessageAt: conversaAntes.lastMessageAt,
-        equipeFalouPorUltimo:
-          ultimaAntes?.direction === "OUTBOUND" && ultimaAntes.senderUserId !== null,
+        equipeFalouPorUltimo: equipeFalou(ultimaAntes),
       }
     : null;
 
@@ -1104,6 +1103,10 @@ async function recordMessage(params: {
     // Foto do setor da conversa neste instante — ver o comentário de
     // Message.setorId no schema.
     setorId: conversation.setorId,
+    // Saída que chega por aqui é do celular: o eco do que o próprio sistema
+    // enviou já foi descartado pela pré-checagem de waMessageId acima. Grupo
+    // fica de fora — lá o robô nunca fala, então a marca não serviria a nada.
+    deCelular: !isInbound && !params.grupo,
     ...mediaFields,
   };
 

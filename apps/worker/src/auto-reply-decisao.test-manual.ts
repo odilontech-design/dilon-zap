@@ -2,6 +2,7 @@
 // Rodar com: npx tsx apps/worker/src/auto-reply-decisao.test-manual.ts
 import {
   avaliarAutomacao,
+  equipeFalou,
   decidirAutoResposta,
   type EntradaDecisao,
   type EstadoAntesDaMensagem,
@@ -618,6 +619,56 @@ checa(
 checa(
   "robo falou por ultimo (nao conta como equipe) — segue a regra de sempre",
   avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 1, false), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: false }
+);
+
+// ---------------------------------------------------------------------------
+// Quem conta como "a equipe falou": Inbox e celular sim, robô não.
+//
+// Caso real (Dilon Tech): a conversa abriu por um link de outro app e a
+// primeira mensagem saiu do CELULAR — sem usuário logado, então a regra
+// antiga (só senderUserId) não a reconheceu e o menu disparou por cima. A outra
+// ponta também era um robô, e os dois ficaram conversando entre si.
+// ---------------------------------------------------------------------------
+
+checa("enviada pelo Inbox conta", equipeFalou({ direction: "OUTBOUND", senderUserId: "u1", deCelular: false }), true);
+checa("escrita no celular conta", equipeFalou({ direction: "OUTBOUND", senderUserId: null, deCelular: true }), true);
+checa(
+  "resposta do robô NÃO conta — senão a triagem se calaria sozinha depois do primeiro menu",
+  equipeFalou({ direction: "OUTBOUND", senderUserId: null, deCelular: false }),
+  false
+);
+checa("mensagem do cliente nunca é a equipe", equipeFalou({ direction: "INBOUND", senderUserId: null, deCelular: false }), false);
+checa(
+  "recebida com a marca de celular por engano ainda não é a equipe",
+  equipeFalou({ direction: "INBOUND", senderUserId: null, deCelular: true }),
+  false
+);
+checa("conversa sem mensagem anterior", equipeFalou(null), false);
+checa("indefinido", equipeFalou(undefined), false);
+
+// O cenário completo, ponta a ponta na decisão: a pessoa escreveu pelo celular
+// e o cliente respondeu logo depois, numa conversa ainda sem dono.
+const semDono = { assignedToId: null, setorId: null };
+const veioDoCelular = (min: number): EstadoAntesDaMensagem => ({
+  status: "RESOLVED", // conversa nascida de mensagem de saída começa assim
+  lastMessageAt: new Date(AGORA.getTime() - min * 60_000),
+  equipeFalouPorUltimo: equipeFalou({ direction: "OUTBOUND", senderUserId: null, deCelular: true }),
+});
+checa(
+  "conversa aberta pelo celular, cliente responde: o robô cala",
+  avaliarAutomacao(semDono, veioDoCelular(0), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+checa(
+  "o mesmo, sem URA ligada: continua calado (nada de saudação por cima)",
+  avaliarAutomacao(semDono, veioDoCelular(0), AGORA, UMA_HORA_MS, false),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+// Quem escreveu pelo celular e o cliente só voltou dias depois: é outro assunto.
+checa(
+  "celular falou, mas o cliente só voltou muito depois: triagem de novo",
+  avaliarAutomacao(semDono, veioDoCelular(999), AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: false }
 );
 
