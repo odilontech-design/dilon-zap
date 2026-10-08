@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
+import { casaComBusca } from "@/lib/busca";
 import { contactLabel, formatListTimestamp, type ContactRef } from "@/lib/contact";
 import { CONVERSATION_LIST_INTERVAL } from "@/lib/polling";
 import { ConversationThread } from "../inbox/inbox-view";
@@ -51,9 +52,21 @@ function previa(m: GrupoResumo["messages"][number] | undefined) {
 export function GruposView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuId: string }) {
   const [selecionado, setSelecionado] = useState<string | null>(null);
   const [gerenciando, setGerenciando] = useState(false);
+  const [busca, setBusca] = useState("");
   const { data: grupos, error, mutate } = useSWR<GrupoResumo[]>("/api/grupos", fetcher, {
     refreshInterval: CONVERSATION_LIST_INTERVAL,
   });
+
+  // Filtra pelo NOME do grupo, na própria tela: a lista já vem inteira do
+  // servidor, então não há ida e volta a cada letra. Não busca no texto das
+  // mensagens porque aqui só a última de cada grupo está carregada — uma busca
+  // por conteúdo acharia só o que por acaso é a última mensagem, e pareceria
+  // quebrada o resto do tempo.
+  const visiveis = useMemo(
+    () => (grupos ?? []).filter((g) => casaComBusca(contactLabel(g.contact), busca)),
+    [grupos, busca]
+  );
+  const buscando = busca.trim().length > 0;
 
   function abrir(id: string) {
     setSelecionado(id);
@@ -77,6 +90,32 @@ export function GruposView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meu
           </button>
         </div>
 
+        {/* Só aparece com grupos na lista: pesquisar numa lista vazia não tem
+            o que fazer, e o espaço é melhor aproveitado pela orientação de
+            "ative grupos" abaixo. */}
+        {grupos && grupos.length > 0 && (
+          <div className="relative px-3 py-2 border-b border-neutral-200">
+            <input
+              type="search"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Pesquisar grupo..."
+              aria-label="Pesquisar grupo"
+              className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-1.5 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            {buscando && (
+              <button
+                type="button"
+                onClick={() => setBusca("")}
+                aria-label="Limpar pesquisa"
+                className="absolute right-5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 text-lg leading-none"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="flex-1 overflow-y-auto">
           {error && <p className="text-sm text-red-600 px-4 py-6">{String(error.message ?? error)}</p>}
           {!grupos && !error && <p className="text-sm text-neutral-400 px-4 py-6">Carregando...</p>}
@@ -93,7 +132,15 @@ export function GruposView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meu
             </div>
           )}
 
-          {grupos?.map((g) => (
+          {/* Busca sem resultado é um caso à parte do "nenhum grupo ativo":
+              ali falta ativar, aqui o grupo existe mas o texto não bate. */}
+          {grupos && grupos.length > 0 && visiveis.length === 0 && (
+            <p className="text-sm text-neutral-500 px-4 py-6">
+              Nenhum grupo com “{busca.trim()}”.
+            </p>
+          )}
+
+          {visiveis.map((g) => (
             <button
               key={g.id}
               onClick={() => abrir(g.id)}
