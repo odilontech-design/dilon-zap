@@ -72,6 +72,77 @@ export function aplicarMarca(texto: string, inicio: number, fim: number, marca: 
   };
 }
 
+export type TipoDeLinha = "numerada" | "marcadores" | "citacao";
+
+/**
+ * Qualquer prefixo de lista ou citação que já esteja na linha. O espaço depois
+ * é obrigatório: `*texto*` (negrito) começa com asterisco e NÃO é marcador, e
+ * sem exigir o espaço a conversão comeria o negrito da primeira palavra.
+ */
+const PREFIXO_QUALQUER = /^([ \t]*)(?:\d+\.|[-•*]|>)[ \t]+/;
+
+const PREFIXO_DO_TIPO: Record<TipoDeLinha, RegExp> = {
+  numerada: /^[ \t]*\d+\.[ \t]+/,
+  marcadores: /^[ \t]*[-•*][ \t]+/,
+  citacao: /^[ \t]*>[ \t]+/,
+};
+
+/**
+ * Lista numerada, lista com marcadores ou citação.
+ *
+ * Diferente de negrito e itálico, essas três valem POR LINHA: o WhatsApp só as
+ * reconhece no começo da linha (`1. `, `- `, `> `). Por isso a seleção cresce
+ * até as linhas inteiras que ela toca; sem seleção, vale a linha do cursor.
+ *
+ * Apertar de novo desfaz — mas só se TODAS as linhas já forem daquele tipo.
+ * Numa seleção mista (duas linhas numeradas e uma solta), o clique completa a
+ * lista em vez de apagar o que a pessoa já tinha feito.
+ *
+ * Linha em branco fica de fora e não gasta número: a lista numerada continua
+ * 1, 2, 3 mesmo com um parágrafo vazio no meio da seleção.
+ *
+ * Trocar de tipo (de marcadores pra numerada) tira o prefixo antigo antes de
+ * pôr o novo, senão sairia "1. - item".
+ */
+export function aplicarLinhas(texto: string, inicio: number, fim: number, tipo: TipoDeLinha): Edicao {
+  const a = Math.min(inicio, fim);
+  const b = Math.max(inicio, fim);
+
+  // Cresce até o começo da primeira linha e o fim da última. Se a seleção
+  // termina exatamente no começo de uma linha (arrastou até o início da
+  // próxima), essa próxima linha não entra — a pessoa não selecionou nada nela.
+  const comeco = texto.lastIndexOf("\n", a - 1) + 1;
+  const fimDaSelecao = b > a && texto[b - 1] === "\n" ? b - 1 : b;
+  const proximaQuebra = texto.indexOf("\n", fimDaSelecao);
+  const termino = proximaQuebra === -1 ? texto.length : proximaQuebra;
+
+  const linhas = texto.slice(comeco, termino).split("\n");
+  const comConteudo = linhas.filter((l) => l.trim() !== "");
+  if (comConteudo.length === 0) return { texto, inicio: a, fim: b };
+
+  const jaTodas = comConteudo.every((l) => PREFIXO_DO_TIPO[tipo].test(l));
+
+  let n = 0;
+  const novas = linhas.map((linha) => {
+    if (linha.trim() === "") return linha;
+    const limpa = linha.replace(PREFIXO_QUALQUER, "$1");
+    if (jaTodas) return limpa.replace(/^[ \t]+/, "");
+
+    n++;
+    const recuo = limpa.match(/^[ \t]*/)?.[0] ?? "";
+    const corpo = limpa.slice(recuo.length);
+    const prefixo = tipo === "numerada" ? `${n}. ` : tipo === "marcadores" ? "- " : "> ";
+    return recuo + prefixo + corpo;
+  });
+
+  const bloco = novas.join("\n");
+  return {
+    texto: texto.slice(0, comeco) + bloco + texto.slice(termino),
+    inicio: comeco,
+    fim: comeco + bloco.length,
+  };
+}
+
 /**
  * Arruma o texto colado de outro lugar — ferramenta de IA, e-mail, planilha.
  *

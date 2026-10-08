@@ -5,7 +5,14 @@ import { useRecurso } from "@/components/recursos-context";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
-import { aplicarMarca, organizarTexto, precisaOrganizar, type Marca } from "@/lib/formatar-texto";
+import {
+  aplicarMarca,
+  aplicarLinhas,
+  organizarTexto,
+  precisaOrganizar,
+  type Marca,
+  type TipoDeLinha,
+} from "@/lib/formatar-texto";
 import { Avatar } from "@/components/avatar";
 import { VisualizadorDeImagens } from "@/components/visualizador-de-imagens";
 import {
@@ -964,6 +971,19 @@ export function ConversationThread({
     });
   }
 
+  // Lista e citação valem por linha, não pela seleção — ver aplicarLinhas.
+  function formatarLinhas(tipo: TipoDeLinha) {
+    const campo = draftInputRef.current;
+    const inicio = campo?.selectionStart ?? draft.length;
+    const fim = campo?.selectionEnd ?? draft.length;
+    const edicao = aplicarLinhas(draft, inicio, fim, tipo);
+    setDraft(edicao.texto);
+    requestAnimationFrame(() => {
+      campo?.focus();
+      campo?.setSelectionRange(edicao.inicio, edicao.fim);
+    });
+  }
+
   // Arruma o texto colado de IA, e-mail ou planilha. Só a pedido: algumas
   // trocas seriam erradas num texto escrito de propósito, então a decisão é da
   // pessoa — e ela vê o resultado no campo antes de enviar.
@@ -1822,6 +1842,32 @@ export function ConversationThread({
                     formatarSelecao(b.marca);
                   }}
                   className={`h-7 min-w-7 rounded border border-neutral-300 px-1.5 text-neutral-700 hover:bg-neutral-100 ${b.classe}`}
+                >
+                  {b.rotulo}
+                </button>
+              ))}
+
+              <span className="mx-0.5 h-5 w-px bg-neutral-300" aria-hidden />
+
+              {/* Lista e citação, como no WhatsApp Web. Saem como `1. `, `- ` e
+                  `> ` no começo da linha, que é o que o WhatsApp reconhece. */}
+              {(
+                [
+                  { tipo: "numerada", rotulo: "1.", titulo: "Lista numerada (1. item)" },
+                  { tipo: "marcadores", rotulo: "•", titulo: "Lista com marcadores (- item)" },
+                  { tipo: "citacao", rotulo: "❝", titulo: "Citação (> texto)" },
+                ] as const
+              ).map((b) => (
+                <button
+                  key={b.tipo}
+                  type="button"
+                  title={b.titulo}
+                  aria-label={b.titulo}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    formatarLinhas(b.tipo);
+                  }}
+                  className="h-7 min-w-7 rounded border border-neutral-300 px-1.5 text-neutral-700 hover:bg-neutral-100"
                 >
                   {b.rotulo}
                 </button>

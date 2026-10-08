@@ -1,6 +1,6 @@
 // Formatação pro WhatsApp: marcas e limpeza de texto colado. Puro, sem banco.
 // Rodar com: npx tsx apps/web/lib/formatar-texto.test-manual.ts
-import { aplicarMarca, organizarTexto, precisaOrganizar } from "./formatar-texto";
+import { aplicarMarca, aplicarLinhas, organizarTexto, precisaOrganizar } from "./formatar-texto";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -35,6 +35,69 @@ checa("sem seleção, par vazio com o cursor no meio", aplicarMarca("ab", 1, 1, 
 checa("tira a marca quando ela está dentro da seleção", aplicarMarca("Olá *mundo* cruel", 4, 11, "*").texto, "Olá mundo cruel");
 checa("tira a marca quando ela está logo fora da seleção", aplicarMarca("Olá *mundo* cruel", 5, 10, "*").texto, "Olá mundo cruel");
 checa("seleção invertida (arrastou pra trás) funciona igual", aplicarMarca(t, 9, 4, "*").texto, "Olá *mundo* cruel");
+
+// ---------------------------------------------------------------- listas e citação
+const tres = "um\ndois\ntres";
+
+checa("lista numerada nas três linhas", aplicarLinhas(tres, 0, tres.length, "numerada").texto, "1. um\n2. dois\n3. tres");
+checa("lista com marcadores", aplicarLinhas(tres, 0, tres.length, "marcadores").texto, "- um\n- dois\n- tres");
+checa("citação", aplicarLinhas(tres, 0, tres.length, "citacao").texto, "> um\n> dois\n> tres");
+
+// Sem seleção vale a linha do cursor, e só ela.
+checa("sem seleção, só a linha do cursor", aplicarLinhas(tres, 5, 5, "marcadores").texto, "um\n- dois\ntres");
+// Seleção que começa no meio de uma palavra pega a linha inteira.
+checa("seleção parcial cresce até a linha inteira", aplicarLinhas(tres, 1, 6, "marcadores").texto, "- um\n- dois\ntres");
+
+// Apertar de novo desfaz — mas só se TODAS já forem daquele tipo.
+const numerada = "1. um\n2. dois\n3. tres";
+checa("apertar de novo tira a numeração", aplicarLinhas(numerada, 0, numerada.length, "numerada").texto, "um\ndois\ntres");
+checa(
+  "seleção mista completa a lista em vez de apagar",
+  aplicarLinhas("1. um\n2. dois\ntres", 0, 17, "numerada").texto,
+  "1. um\n2. dois\n3. tres"
+);
+checa(
+  "seleção mista renumera do começo",
+  aplicarLinhas("5. um\ndois\n9. tres", 0, 17, "numerada").texto,
+  "1. um\n2. dois\n3. tres"
+);
+
+// Linha em branco fica de fora e não gasta número.
+const comBranco = "um\n\ndois";
+checa("linha em branco não gasta número", aplicarLinhas(comBranco, 0, comBranco.length, "numerada").texto, "1. um\n\n2. dois");
+checa("linha em branco fica em branco", aplicarLinhas(comBranco, 0, comBranco.length, "marcadores").texto, "- um\n\n- dois");
+checa("só linhas em branco não muda nada", aplicarLinhas("\n\n", 0, 2, "numerada").texto, "\n\n");
+
+// Trocar de tipo tira o prefixo antigo, senão sairia "1. - item".
+checa("de marcadores pra numerada", aplicarLinhas("- um\n- dois", 0, 11, "numerada").texto, "1. um\n2. dois");
+checa("de numerada pra marcadores", aplicarLinhas("1. um\n2. dois", 0, 13, "marcadores").texto, "- um\n- dois");
+checa("de numerada pra citação", aplicarLinhas("1. um", 0, 5, "citacao").texto, "> um");
+checa("de • (colado) pra numerada", aplicarLinhas("• um\n• dois", 0, 11, "numerada").texto, "1. um\n2. dois");
+
+// O negrito começa com asterisco e NÃO é marcador: sem o espaço depois, a
+// conversão comeria o negrito da primeira palavra.
+checa("negrito no começo da linha não é marcador", aplicarLinhas("*atenção* ao prazo", 0, 18, "marcadores").texto, "- *atenção* ao prazo");
+checa("apertar de novo mantém o negrito", aplicarLinhas("- *atenção* ao prazo", 0, 20, "marcadores").texto, "*atenção* ao prazo");
+
+// Não pega a linha seguinte quando a seleção termina no começo dela.
+checa(
+  "seleção que termina no começo da próxima linha não a inclui",
+  aplicarLinhas("um\ndois", 0, 3, "marcadores").texto,
+  "- um\ndois"
+);
+// Já com uma letra da linha seguinte dentro da seleção, ela entra.
+checa(
+  "com uma letra da próxima linha selecionada, ela entra",
+  aplicarLinhas("um\ndois", 0, 4, "marcadores").texto,
+  "- um\n- dois"
+);
+
+checa("seleção devolvida cobre o bloco alterado", aplicarLinhas(tres, 0, tres.length, "marcadores"), {
+  texto: "- um\n- dois\n- tres",
+  inicio: 0,
+  fim: 18,
+});
+checa("recuo da linha é preservado", aplicarLinhas("  um", 0, 4, "marcadores").texto, "  - um");
 
 // ---------------------------------------------------------------- organizar
 // O texto exato do print: a IA entregou "\n" escrito, em vez de quebra de linha.
