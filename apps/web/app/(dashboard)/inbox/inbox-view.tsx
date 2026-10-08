@@ -751,6 +751,8 @@ export function ConversationThread({
   );
   const [legendaAnexo, setLegendaAnexo] = useState("");
   const [replyTo, setReplyTo] = useState<Message | null>(null);
+  // Só vale no celular: no computador a linha de ações aparece sempre.
+  const [acoesAbertas, setAcoesAbertas] = useState(false);
   // Imagem aberta no visualizador, por id da mensagem. Guarda o id e não o
   // índice: chega mensagem nova o tempo todo, e índice apontaria pra outra
   // imagem no meio da conferência.
@@ -1346,7 +1348,36 @@ export function ConversationThread({
                 </div>
               </button>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
+            {/* No celular as ações ficam recolhidas atrás deste botão. Nove
+                botões e dois seletores quebravam em três linhas e tomavam mais
+                de um terço da tela, deixando duas ou três mensagens à vista.
+                No computador o botão some e a linha aparece inteira. */}
+            <button
+              type="button"
+              onClick={() => setAcoesAbertas((v) => !v)}
+              aria-expanded={acoesAbertas}
+              className="md:hidden flex items-center gap-1 rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700"
+            >
+              Ações
+              <svg
+                width="12"
+                height="12"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className={`transition-transform ${acoesAbertas ? "rotate-180" : ""}`}
+                aria-hidden
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+
+            <div
+              className={`${acoesAbertas ? "flex" : "hidden"} md:flex w-full md:w-auto items-center gap-2 flex-wrap`}
+            >
               {/* Status, responsável e ficha são do fluxo de atendimento; grupo não tem nenhum dos três. */}
               {!modoGrupo && (
               <>
@@ -1891,7 +1922,15 @@ export function ConversationThread({
               )}
             </div>
           )}
-          <form onSubmit={handleSend} className="relative p-2.5 md:p-4 flex gap-1.5 md:gap-2 items-end">
+          {/* No celular a caixa de texto ganha uma linha só pra ela e os ícones
+              descem pra outra (flex-wrap + order-first no textarea). Cinco
+              ícones, a caixa e o Enviar numa linha só deixavam ~100px pro
+              texto — o placeholder aparecia cortado e escrever era
+              incômodo. No computador continua tudo na mesma linha. */}
+          <form
+            onSubmit={handleSend}
+            className="relative p-2.5 md:p-4 flex flex-wrap md:flex-nowrap gap-1.5 md:gap-2 items-end"
+          >
             {showEmoji && (
               <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
             )}
@@ -1977,12 +2016,12 @@ export function ConversationThread({
                       : "Escreva uma mensagem..."
               }
               disabled={uploading || recording || aviso?.bloqueiaEnvio}
-              className="flex-1 resize-none self-end rounded-md border border-neutral-300 px-3 py-2 text-sm leading-snug focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
+              className="order-first md:order-none flex-[1_1_100%] md:flex-1 min-w-0 resize-none self-end rounded-md border border-neutral-300 px-3 py-2 text-base md:text-sm leading-snug focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
             />
             <button
               type="submit"
               disabled={uploading || recording}
-              className="rounded-md bg-accent px-3 md:px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="ml-auto md:ml-0 rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
             >
               {editingMessage ? "Salvar" : "Enviar"}
             </button>
