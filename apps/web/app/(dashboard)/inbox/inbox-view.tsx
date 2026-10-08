@@ -1,10 +1,11 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRecurso } from "@/components/recursos-context";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
+import { aplicarMarca, organizarTexto, precisaOrganizar, type Marca } from "@/lib/formatar-texto";
 import { Avatar } from "@/components/avatar";
 import { VisualizadorDeImagens } from "@/components/visualizador-de-imagens";
 import {
@@ -754,7 +755,7 @@ export function ConversationThread({
   const [reactionBarFor, setReactionBarFor] = useState<string | null>(null);
   const [fullReactionPickerFor, setFullReactionPickerFor] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const draftInputRef = useRef<HTMLInputElement>(null);
+  const draftInputRef = useRef<HTMLTextAreaElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -936,6 +937,52 @@ export function ConversationThread({
     });
     mutateConversation();
     onChanged();
+  }
+
+  // O campo cresce com o texto, até um teto. useLayoutEffect e não useEffect:
+  // medir depois de o navegador pintar faria o campo piscar do tamanho antigo
+  // pro novo a cada letra. O teto existe porque um texto colado de 40 linhas
+  // empurraria a conversa inteira pra fora da tela; passando dele o campo rola.
+  useLayoutEffect(() => {
+    const campo = draftInputRef.current;
+    if (!campo) return;
+    campo.style.height = "auto";
+    campo.style.height = `${Math.min(campo.scrollHeight, 200)}px`;
+  }, [draft]);
+
+  // Aplica uma marca (negrito, itálico...) na seleção do campo e devolve a
+  // seleção ajustada, pra a pessoa poder apertar de novo e desfazer.
+  function formatarSelecao(marca: Marca) {
+    const campo = draftInputRef.current;
+    const inicio = campo?.selectionStart ?? draft.length;
+    const fim = campo?.selectionEnd ?? draft.length;
+    const edicao = aplicarMarca(draft, inicio, fim, marca);
+    setDraft(edicao.texto);
+    requestAnimationFrame(() => {
+      campo?.focus();
+      campo?.setSelectionRange(edicao.inicio, edicao.fim);
+    });
+  }
+
+  // Arruma o texto colado de IA, e-mail ou planilha. Só a pedido: algumas
+  // trocas seriam erradas num texto escrito de propósito, então a decisão é da
+  // pessoa — e ela vê o resultado no campo antes de enviar.
+  function organizarRascunho() {
+    setDraft(organizarTexto(draft));
+    requestAnimationFrame(() => draftInputRef.current?.focus());
+  }
+
+  // Enter envia, Shift+Enter quebra a linha — igual ao WhatsApp Web. No
+  // celular é o contrário: o teclado virtual não tem Shift, e sem isso a
+  // atendente de celular não teria como escrever em mais de uma linha.
+  function aoTeclarNoCampo(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    // Enter que confirma uma palavra do teclado japonês/chinês/coreano não é envio.
+    if (e.nativeEvent.isComposing) return;
+    if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) return;
+
+    e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
   }
 
   function insertEmoji(emoji: string) {
@@ -1164,7 +1211,7 @@ export function ConversationThread({
   // que salvar a imagem num arquivo antes, só pra poder clicar em 📎 e achar
   // esse arquivo de novo. Ctrl+V já é o gesto natural de quem acabou de tirar
   // um print (Windows/Mac colam a imagem, não um caminho de arquivo).
-  function handlePasteImage(e: React.ClipboardEvent<HTMLInputElement>) {
+  function handlePasteImage(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
     if (!item) return; // colar texto normal continua colando texto normal
 
@@ -1751,7 +1798,54 @@ export function ConversationThread({
               ))}
             </div>
           )}
-          <form onSubmit={handleSend} className="relative p-2.5 md:p-4 flex gap-1.5 md:gap-2 items-center">
+          {/* Barra de formatação. Só aparece com texto no campo: vazia, seria
+              ruído em cima de quem só quer responder "ok". Os botões usam
+              onMouseDown com preventDefault pra NÃO tirar o foco do campo — um
+              onClick comum desmarcaria o texto antes de a marca ser aplicada. */}
+          {draft.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1 px-2.5 md:px-4 pt-2 text-xs">
+              {(
+                [
+                  { marca: "*", rotulo: "B", titulo: "Negrito (*texto*)", classe: "font-bold" },
+                  { marca: "_", rotulo: "I", titulo: "Itálico (_texto_)", classe: "italic" },
+                  { marca: "~", rotulo: "S", titulo: "Tachado (~texto~)", classe: "line-through" },
+                  { marca: "```", rotulo: "</>", titulo: "Código (```texto```)", classe: "font-mono" },
+                ] as const
+              ).map((b) => (
+                <button
+                  key={b.marca}
+                  type="button"
+                  title={b.titulo}
+                  aria-label={b.titulo}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    formatarSelecao(b.marca);
+                  }}
+                  className={`h-7 min-w-7 rounded border border-neutral-300 px-1.5 text-neutral-700 hover:bg-neutral-100 ${b.classe}`}
+                >
+                  {b.rotulo}
+                </button>
+              ))}
+
+              {/* Só quando há o que arrumar: \n escrito, Markdown ou marcador
+                  de lista de outra origem. Num texto limpo o botão sumiria no
+                  meio da barra sem fazer nada. */}
+              {precisaOrganizar(draft) && (
+                <button
+                  type="button"
+                  title="Arruma quebras de linha, negrito e listas de textos copiados de outro lugar"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    organizarRascunho();
+                  }}
+                  className="ml-1 h-7 rounded border border-accent/40 bg-accent/5 px-2 text-accent hover:bg-accent/10"
+                >
+                  Organizar texto colado
+                </button>
+              )}
+            </div>
+          )}
+          <form onSubmit={handleSend} className="relative p-2.5 md:p-4 flex gap-1.5 md:gap-2 items-end">
             {showEmoji && (
               <EmojiPicker onPick={insertEmoji} onClose={() => setShowEmoji(false)} />
             )}
@@ -1817,10 +1911,15 @@ export function ConversationThread({
             >
               {recording ? "⏹" : "🎤"}
             </button>
-            <input
+            {/* textarea, e não input: input de linha única descarta toda quebra
+                de linha colada, e um texto de vários parágrafos chegava no
+                cliente como um bloco só, sem formatação nenhuma. */}
+            <textarea
               ref={draftInputRef}
+              rows={1}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={aoTeclarNoCampo}
               onPaste={handlePasteImage}
               placeholder={
                 aviso?.bloqueiaEnvio
@@ -1832,7 +1931,7 @@ export function ConversationThread({
                       : "Escreva uma mensagem..."
               }
               disabled={uploading || recording || aviso?.bloqueiaEnvio}
-              className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
+              className="flex-1 resize-none self-end rounded-md border border-neutral-300 px-3 py-2 text-sm leading-snug focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
             />
             <button
               type="submit"
