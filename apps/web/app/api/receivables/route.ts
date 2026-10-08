@@ -3,6 +3,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { listarRecebiveis, listarHistoricoRecebido, recebidoNoMes } from "@/lib/receivables";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * O que a empresa tem a receber.
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
   const user = await requireUser();
   const bloqueio = await exigirRecurso(user, "CONTAS_RECEBER");
   if (bloqueio) return bloqueio;
-  if (user.role !== "OWNER" && user.role !== "FINANCEIRO") {
+  if (!ehGerencia(user.role)) {
     return NextResponse.json(
       { error: "só o responsável e o financeiro veem as contas a receber" },
       { status: 403 }

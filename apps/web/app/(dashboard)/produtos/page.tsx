@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { recursosDoTenant } from "@/lib/plano";
 import { ProductsPanel } from "./products-panel";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * Responsável e Financeiro fazem tudo aqui: cadastram produto, mudam preço e
@@ -19,7 +20,7 @@ import { ProductsPanel } from "./products-panel";
  */
 export default async function ProdutosPage() {
   const user = await requireUser();
-  const gerencia = user.role === "OWNER" || user.role === "FINANCEIRO";
+  const gerencia = ehGerencia(user.role);
   const recursos = await recursosDoTenant(user.tenantId);
   return (
     <ProductsPanel

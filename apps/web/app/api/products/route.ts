@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirAlgumRecurso } from "@/lib/plano";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * Atendente lê o catálogo (vai precisar pra montar pedido). Cadastrar e
@@ -14,7 +15,7 @@ import { exigirAlgumRecurso } from "@/lib/plano";
  * atendente puder editar deixa de existir tabela.
  */
 function podeEditarCatalogo(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO";
+  return ehGerencia(role);
 }
 export async function GET(req: Request) {
   const user = await requireUser();

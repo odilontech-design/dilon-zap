@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * Lista pedidos. Dois usos:
@@ -20,7 +21,7 @@ export async function GET(req: Request) {
 
   // A fila é do financeiro e do responsável: a consultora não precisa ver o
   // que as outras mandaram fechar, e mostrar isso viraria ruído.
-  if (!conversationId && user.role !== "OWNER" && user.role !== "FINANCEIRO") {
+  if (!conversationId && !ehGerencia(user.role)) {
     return NextResponse.json({ error: "sem permissão" }, { status: 403 });
   }
 

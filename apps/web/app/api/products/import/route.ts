@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirAlgumRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
+import { ehGerencia } from "@/lib/papeis";
 
 // Mesmo desenho da importação de contatos: o CSV é lido no navegador (onde
 // dá pra mostrar erro de formatação na hora) e aqui chegam linhas já
@@ -26,7 +27,7 @@ export async function POST(req: Request) {
   const bloqueio = await exigirAlgumRecurso(user, ["PEDIDOS", "MATERIAIS"]);
   if (bloqueio) return bloqueio;
   // Mesma permissão do cadastro manual: Responsável e Financeiro.
-  if (user.role !== "OWNER" && user.role !== "FINANCEIRO") {
+  if (!ehGerencia(user.role)) {
     return NextResponse.json({ error: "sem permissão" }, { status: 403 });
   }
 

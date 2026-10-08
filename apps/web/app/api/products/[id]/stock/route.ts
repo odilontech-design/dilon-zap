@@ -5,11 +5,12 @@ import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { registrarMovimento } from "@/lib/stock";
 import { logAudit } from "@/lib/audit";
+import { ehGerencia } from "@/lib/papeis";
 
 // Quem mexe no estoque: Responsável e Financeiro. A consultora consulta o
 // saldo (vai precisar ao montar pedido) mas não lança entrada nem ajuste.
 function podeMexer(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO";
+  return ehGerencia(role);
 }
 
 /** Extrato do produto: as últimas movimentações, da mais recente pra trás. */

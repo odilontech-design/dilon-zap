@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * DELETE /api/products/[id]/materiais/[materialId] — tira da biblioteca.
@@ -14,7 +15,7 @@ export async function DELETE(_req: Request, { params }: { params: { id: string; 
   const user = await requireUser();
   const bloqueio = await exigirRecurso(user, "MATERIAIS");
   if (bloqueio) return bloqueio;
-  if (user.role !== "OWNER" && user.role !== "FINANCEIRO") {
+  if (!ehGerencia(user.role)) {
     return NextResponse.json({ error: "sem permissão" }, { status: 403 });
   }
 

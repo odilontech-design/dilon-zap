@@ -5,12 +5,13 @@ import { uploadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { classificarMaterial, validarMaterial } from "@/lib/materiais";
+import { ehGerencia } from "@/lib/papeis";
 
 // Mesma regra de quem edita o catálogo (ver ../route.ts): a biblioteca é
 // parte do cadastro do produto, e a reunião de 21/09 restringiu isso aos
 // responsáveis. Enviar material na conversa, qualquer um pode.
 function podeEditar(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO";
+  return ehGerencia(role);
 }
 
 async function produtoDoTenant(id: string, tenantId: string) {

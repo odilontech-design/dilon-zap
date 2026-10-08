@@ -1,5 +1,6 @@
 import { requireUser } from "@/lib/session";
 import { InboxView } from "./inbox-view";
+import { ehGerencia } from "@/lib/papeis";
 
 // O papel vem do servidor, não de uma consulta no cliente: é ele que decide
 // se o campo de preço do pedido fica editável, e essa é uma decisão que não
@@ -8,7 +9,7 @@ export default async function InboxPage() {
   const user = await requireUser();
   return (
     <InboxView
-      ehFinanceiro={user.role === "OWNER" || user.role === "FINANCEIRO"}
+      ehFinanceiro={ehGerencia(user.role)}
       // Pra distinguir "passei a conversa pra outra pessoa" (que pede motivo)
       // de "puxei pra mim" (que não pede) — ver MotivoTransferencia.
       meuId={user.id}

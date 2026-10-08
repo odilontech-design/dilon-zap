@@ -5,6 +5,7 @@ import { uploadMedia, deleteMedia, getMediaReadUrl, isStorageConfigured } from "
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * Logo da empresa no recibo.
@@ -21,7 +22,7 @@ const TAMANHO_MAXIMO = 2 * 1024 * 1024;
 const TIPOS = ["image/png", "image/jpeg", "image/webp"];
 
 function podeEditar(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO" || role === "SUPERADMIN";
+  return ehGerencia(role);
 }
 
 export async function GET() {

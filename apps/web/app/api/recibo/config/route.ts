@@ -4,12 +4,13 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
+import { ehGerencia } from "@/lib/papeis";
 
 // Cabeçalho e rodapé do recibo impresso. Quem mexe é quem fecha pedido: o
 // financeiro é quem está no balcão com a impressora e percebe primeiro que o
 // telefone do papel está velho.
 function podeEditar(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO" || role === "SUPERADMIN";
+  return ehGerencia(role);
 }
 
 const campo = (max: number) => z.string().max(max).nullable();

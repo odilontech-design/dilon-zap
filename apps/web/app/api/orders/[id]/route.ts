@@ -5,9 +5,10 @@ import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { fecharPedido } from "@/lib/orders";
 import { logAudit } from "@/lib/audit";
+import { ehGerencia } from "@/lib/papeis";
 
 function ehFinanceiro(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO";
+  return ehGerencia(role);
 }
 
 const itemSchema = z.object({

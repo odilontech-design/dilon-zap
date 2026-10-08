@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirAlgumRecurso } from "@/lib/plano";
 import { logAudit } from "@/lib/audit";
+import { ehGerencia } from "@/lib/papeis";
 
 const patchSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
@@ -20,7 +21,7 @@ const patchSchema = z.object({
 // Responsável e Financeiro editam o catálogo, inclusive preço. Ver o
 // comentário em ../route.ts.
 function podeEditarCatalogo(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO";
+  return ehGerencia(role);
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {

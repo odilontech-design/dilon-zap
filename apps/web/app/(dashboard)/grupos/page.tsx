@@ -1,6 +1,7 @@
 import { requireUser } from "@/lib/session";
 import { recursosDoTenant } from "@/lib/plano";
 import { GruposView } from "./grupos-view";
+import { ehGerencia } from "@/lib/papeis";
 
 export default async function GruposPage() {
   const user = await requireUser();
@@ -15,5 +16,5 @@ export default async function GruposPage() {
     );
   }
 
-  return <GruposView ehFinanceiro={user.role === "OWNER" || user.role === "FINANCEIRO"} meuId={user.id} />;
+  return <GruposView ehFinanceiro={ehGerencia(user.role)} meuId={user.id} />;
 }

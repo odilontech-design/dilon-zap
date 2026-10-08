@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { registrarPagamento } from "@/lib/receivables";
 import { logAudit } from "@/lib/audit";
+import { ehGerencia } from "@/lib/papeis";
 
 const corpoSchema = z.object({
   // Em centavos. Negativo é estorno — permitido de propósito, e é o único
@@ -17,7 +18,7 @@ const corpoSchema = z.object({
 });
 
 function ehFinanceiro(role: string) {
-  return role === "OWNER" || role === "FINANCEIRO";
+  return ehGerencia(role);
 }
 
 /** Extrato de recebimentos do pedido. */

@@ -138,6 +138,10 @@ const NAV_ITEMS = [
     label: "Usuários",
     icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></>),
     somenteResponsavel: true,
+    // A página e as rotas de usuários barram o superadmin DE PROPÓSITO (ver
+    // requireOwner em lib/session): gestão de usuários é da própria empresa.
+    // Mostrar o item pra ele levava a um redirecionamento sem explicação.
+    somenteDonoDaConta: true,
   },
 ];
 
@@ -296,7 +300,9 @@ export function Sidebar({
               // Superadmin conta como responsável da PRÓPRIA empresa (a Dilon
               // Tech interna): sem isto ele entrava no dashboard e não via
               // Conectar número, Usuários nem Setores.
-              (!item.somenteResponsavel || role === "OWNER" || role === "SUPERADMIN") &&
+              (!item.somenteResponsavel ||
+                role === "OWNER" ||
+                (role === "SUPERADMIN" && !item.somenteDonoDaConta)) &&
               // Item de recurso fora do plano some do menu. Não é a barreira —
               // essa é a rota — mas evita a pessoa clicar e dar de cara com
               // uma recusa.
