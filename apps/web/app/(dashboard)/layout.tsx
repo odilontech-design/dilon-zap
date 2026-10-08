@@ -7,7 +7,11 @@ import { RecursosProvider } from "@/components/recursos-context";
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
-  if (user.role === "SUPERADMIN") redirect("/admin");
+  // O superadmin ENTRA aqui. Antes era mandado de volta pra /admin, e como a
+  // Dilon Tech passou a usar a própria ferramenta (empresa "Dilon Tech
+  // (interno)", com WhatsApp e Inbox), um único login precisa alcançar os dois
+  // lados — o painel de administração e o atendimento da própria empresa.
+  // O atalho de ida e volta está nos dois menus.
 
   // Senha provisória não abre o painel. Consulta o banco, e não o JWT, pra
   // valer na hora: a redefinição feita pelo responsável precisa pegar também

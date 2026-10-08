@@ -29,6 +29,12 @@ const NAV_ITEMS = [
     icon: icon(<><path d="M3 21h18M5 21V7l7-4 7 4v14" /><path d="M9 21v-5h6v5" /></>),
   },
   {
+    // O atendimento da própria Dilon Tech. Mesmo login, outro lado do sistema.
+    href: "/inbox",
+    label: "Meu WhatsApp",
+    icon: icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />),
+  },
+  {
     href: "/admin/solicitacoes",
     label: "Cadastros",
     icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></>),

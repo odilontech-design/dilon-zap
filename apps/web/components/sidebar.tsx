@@ -293,7 +293,10 @@ export function Sidebar({
         <nav className="flex-1 min-h-0 flex flex-col gap-1 text-sm overflow-y-auto">
           {NAV_ITEMS.filter(
             (item) =>
-              (!item.somenteResponsavel || role === "OWNER") &&
+              // Superadmin conta como responsável da PRÓPRIA empresa (a Dilon
+              // Tech interna): sem isto ele entrava no dashboard e não via
+              // Conectar número, Usuários nem Setores.
+              (!item.somenteResponsavel || role === "OWNER" || role === "SUPERADMIN") &&
               // Item de recurso fora do plano some do menu. Não é a barreira —
               // essa é a rota — mas evita a pessoa clicar e dar de cara com
               // uma recusa.
@@ -323,6 +326,23 @@ export function Sidebar({
               </Link>
             );
           })}
+
+          {/* Volta pro painel da Dilon Tech. Só o superadmin vê: pra qualquer
+              outra pessoa /admin nem abre. Separado por uma linha pra não
+              parecer mais uma tela do atendimento. */}
+          {role === "SUPERADMIN" && (
+            <Link
+              href="/admin"
+              onClick={() => setOpen(false)}
+              title={collapsed ? "Painel Dilon Tech" : undefined}
+              className={`mt-2 flex items-center gap-3 rounded-md border-t border-neutral-200 py-2 pt-3 text-neutral-700 hover:bg-neutral-100 ${
+                collapsed ? "md:justify-center md:px-0 px-3" : "px-3"
+              }`}
+            >
+              {icon(<><path d="M3 21h18M5 21V7l7-4 7 4v14" /><path d="M9 21v-5h6v5" /></>)}
+              <span className={collapsed ? "md:hidden" : ""}>Painel Dilon Tech</span>
+            </Link>
+          )}
         </nav>
 
         <div
