@@ -9,6 +9,7 @@ import {
   moverNegociacao,
   perderNegociacao,
   reabrirNegociacao,
+  recalcularValores,
 } from "@/lib/negociacoes";
 
 async function daEmpresa(id: string, tenantId: string) {
@@ -25,6 +26,9 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       responsavel: { select: { id: true, name: true } },
       motivoPerda: { select: { id: true, nome: true } },
       eventos: { orderBy: { em: "desc" } },
+      _count: { select: { itens: true } },
+      // Pedidos nascidos desta negociação: a ponte de volta com Pedidos.
+      pedidos: { orderBy: { numero: "desc" }, select: { id: true, numero: true, status: true, totalCents: true, pago: true } },
     },
   });
   if (!n) return NextResponse.json({ error: "negociação não encontrada" }, { status: 404 });
@@ -79,6 +83,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     };
     if (Object.keys(campos).length > 0) {
       await prisma.negociacao.update({ where: { id: n.id }, data: campos });
+      // Com itens o valor é derivado deles; sem, o mensal acompanha o valor.
+      await recalcularValores(n.id);
     }
 
     switch (d.acao) {

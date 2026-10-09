@@ -5,6 +5,9 @@ import { requireUser } from "@/lib/session";
 
 const schema = z.object({
   concluida: z.boolean().optional(),
+  // Só para ligações concluídas: o que aconteceu.
+  resultado: z.enum(["ATENDEU", "NAO_ATENDEU", "RECADO", "NUMERO_INVALIDO"]).nullable().optional(),
+  anotacao: z.string().trim().max(500).nullable().optional(),
   tipo: z.enum(["LIGACAO", "WHATSAPP", "REUNIAO", "EMAIL", "TAREFA"]).optional(),
   titulo: z.string().trim().min(1).max(160).optional(),
   venceEm: z.string().refine((v) => !Number.isNaN(new Date(v).getTime()), "data inválida").optional(),
@@ -35,7 +38,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       // Concluir é carimbar a data; reabrir limpa. Concluir uma já concluída
       // não troca a data original.
       ...(d.concluida === true && !tarefa.concluidaEm ? { concluidaEm: new Date() } : {}),
-      ...(d.concluida === false ? { concluidaEm: null } : {}),
+      // Reabrir limpa também o resultado: uma tarefa pendente com "atendeu"
+      // contaria uma ligação que ainda não foi feita.
+      ...(d.concluida === false ? { concluidaEm: null, resultado: null, anotacao: null } : {}),
+      ...(d.concluida !== false && d.resultado !== undefined ? { resultado: d.resultado } : {}),
+      ...(d.concluida !== false && d.anotacao !== undefined ? { anotacao: d.anotacao || null } : {}),
     },
   });
   return NextResponse.json({ ok: true });

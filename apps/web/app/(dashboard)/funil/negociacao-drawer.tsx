@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { ItensNegociacao } from "./itens-negociacao";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
@@ -16,7 +17,12 @@ type Evento = {
   em: string;
 };
 
-type Detalhe = { eventos: Evento[]; detalhePerda: string | null };
+type Detalhe = {
+  eventos: Evento[];
+  detalhePerda: string | null;
+  pedidos: { id: string; numero: number; status: string; totalCents: number; pago: boolean }[];
+  _count: { itens: number };
+};
 
 function descreverEvento(e: Evento): string {
   switch (e.tipo) {
@@ -78,6 +84,16 @@ export function NegociacaoDrawer({
 
   const aberta = negociacao.status === "ABERTA";
   const motivosAtivos = motivos.filter((m) => m.ativo);
+  const comItens = (detalhe?._count.itens ?? 0) > 0;
+
+  // Com itens, valor e cobrança vêm deles: quando o quadro recarrega com o
+  // total novo, os campos acompanham, em vez de mostrar o valor antigo.
+  useEffect(() => {
+    if (comItens) {
+      setValor((negociacao.valorCents / 100).toFixed(2).replace(".", ","));
+      setRecorrencia(negociacao.recorrencia);
+    }
+  }, [comItens, negociacao.valorCents, negociacao.recorrencia]);
 
   async function enviar(corpo: Record<string, unknown>, fecharDepois = false): Promise<boolean> {
     setErro(null);
@@ -285,11 +301,23 @@ export function NegociacaoDrawer({
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-medium text-neutral-700 mb-1">Valor (R$)</label>
-              <input value={valor} onChange={(e) => setValor(e.target.value)} inputMode="decimal" className={campo} />
+              <input
+                value={valor}
+                onChange={(e) => setValor(e.target.value)}
+                disabled={comItens}
+                title={comItens ? "O valor vem dos itens abaixo" : undefined}
+                inputMode="decimal"
+                className={campo}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-neutral-700 mb-1">Cobrança</label>
-              <select value={recorrencia} onChange={(e) => setRecorrencia(e.target.value as "UNICA" | "MENSAL")} className={campo}>
+              <select
+                value={recorrencia}
+                onChange={(e) => setRecorrencia(e.target.value as "UNICA" | "MENSAL")}
+                disabled={comItens}
+                className={campo}
+              >
                 <option value="UNICA">Única</option>
                 <option value="MENSAL">Mensal (recorrente)</option>
               </select>
@@ -336,6 +364,16 @@ export function NegociacaoDrawer({
             Salvar
           </button>
         </div>
+
+        <ItensNegociacao
+          negociacaoId={negociacao.id}
+          editavel={aberta}
+          pedidos={detalhe?.pedidos ?? []}
+          onMudou={() => {
+            onMudou();
+            recarregar();
+          }}
+        />
 
         <TarefasNegociacao
           negociacaoId={negociacao.id}

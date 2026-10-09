@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { readableTextColor } from "@/lib/tags";
 
 type Stage = { id: string; name: string; color: string; position: number; probabilidade: number };
-type Funil = { id: string; nome: string; padrao: boolean; etapas: number; abertas: number };
+type Funil = { id: string; nome: string; padrao: boolean; tarefaLigarAuto: boolean; etapas: number; abertas: number };
 type Motivo = { id: string; nome: string };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -60,6 +60,16 @@ export function StagesPanel({ podeGerir, funilInicial }: { podeGerir: boolean; f
   async function tornarPadrao() {
     if (!funil) return;
     await chamar(`/api/funis/${funil.id}`, { method: "PATCH", headers: json, body: JSON.stringify({ padrao: true }) }, "não deu pra alterar");
+    recarregarFunis();
+  }
+
+  async function alternarLigarAuto() {
+    if (!funil) return;
+    await chamar(
+      `/api/funis/${funil.id}`,
+      { method: "PATCH", headers: json, body: JSON.stringify({ tarefaLigarAuto: !funil.tarefaLigarAuto }) },
+      "não deu pra alterar"
+    );
     recarregarFunis();
   }
 
@@ -121,6 +131,16 @@ export function StagesPanel({ podeGerir, funilInicial }: { podeGerir: boolean; f
           </button>
         )}
       </div>
+
+      {podeGerir && (
+        <label className="flex items-start gap-2 text-sm mb-4">
+          <input type="checkbox" checked={funil.tarefaLigarAuto} onChange={alternarLigarAuto} className="mt-1" />
+          <span>
+            Criar a tarefa <span className="font-medium">Ligar para o cliente</span> automaticamente em toda negociação nova deste
+            funil (para o dia seguinte, às 9h, com o responsável da negociação).
+          </span>
+        </label>
+      )}
 
       {aviso && <p className="text-sm text-red-600 mb-3">{aviso}</p>}
       {!podeGerir && (

@@ -15,6 +15,7 @@ type Product = {
   // uma consultoria parecer esgotada.
   stockQty: number;
   tipo: "PRODUTO" | "SERVICO";
+  cobranca?: "UNICA" | "MENSAL";
   duracaoMinutos: number | null;
   descricao: string | null;
   _count?: { materiais: number; orderItems: number };
@@ -550,6 +551,9 @@ function EditorProduto({
   const [tipo, setTipo] = useState<"PRODUTO" | "SERVICO">(
     existente ? ((inicial as Product).tipo ?? "PRODUTO") : "PRODUTO"
   );
+  const [cobranca, setCobranca] = useState<"UNICA" | "MENSAL">(
+    existente ? ((inicial as Product).cobranca ?? "UNICA") : "UNICA"
+  );
   const [duracao, setDuracao] = useState(
     existente && (inicial as Product).duracaoMinutos
       ? String((inicial as Product).duracaoMinutos)
@@ -592,6 +596,7 @@ function EditorProduto({
         categoria,
         priceCents,
         tipo,
+        cobranca,
         // Duração só acompanha serviço. Em produto vai null de propósito:
         // se alguém trocar o tipo depois de digitar, o número não fica
         // pendurado num cadastro onde não quer dizer nada.
@@ -706,6 +711,21 @@ function EditorProduto({
             clique no número de estoque na lista.
           </p>
         )}
+
+        <label className="block text-sm mb-3">
+          <span className="text-neutral-700">Cobrança</span>
+          <select
+            value={cobranca}
+            onChange={(e) => setCobranca(e.target.value as "UNICA" | "MENSAL")}
+            className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+          >
+            <option value="UNICA">Única (venda avulsa)</option>
+            <option value="MENSAL">Mensal (assinatura)</option>
+          </select>
+          <span className="block mt-1 text-xs text-neutral-500">
+            Itens mensais, quando entram numa negociação do CRM, contam no MRR.
+          </span>
+        </label>
 
         <div className="grid grid-cols-2 gap-3 mb-5">
           <label className="block text-sm">

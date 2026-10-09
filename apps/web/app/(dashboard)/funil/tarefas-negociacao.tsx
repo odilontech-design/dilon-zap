@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { ConcluirTarefa, ROTULO_RESULTADO, type ResultadoLigacao } from "./concluir-tarefa";
 import { fetcher, ROTULO_TAREFA, type TipoTarefa, type Usuario } from "./tipos";
 
 type Tarefa = {
@@ -10,6 +11,8 @@ type Tarefa = {
   titulo: string;
   venceEm: string;
   concluidaEm: string | null;
+  resultado: ResultadoLigacao | null;
+  anotacao: string | null;
   responsavel: { id: string; name: string } | null;
 };
 
@@ -47,6 +50,7 @@ export function TarefasNegociacao({
   const [venceEm, setVenceEm] = useState(amanhaDeManha);
   const [responsavelId, setResponsavelId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
+  const [concluindo, setConcluindo] = useState<Tarefa | null>(null);
 
   async function criar(e: React.FormEvent) {
     e.preventDefault();
@@ -73,10 +77,13 @@ export function TarefasNegociacao({
   }
 
   async function alternar(t: Tarefa) {
+    // Concluir pergunta o resultado (ligação) e oferece nova tentativa; só
+    // reabrir é direto.
+    if (!t.concluidaEm) return setConcluindo(t);
     await fetch(`/api/tarefas/${t.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ concluida: !t.concluidaEm }),
+      body: JSON.stringify({ concluida: false }),
     });
     mutate();
     onMudou();
@@ -152,7 +159,9 @@ export function TarefasNegociacao({
                     {ROTULO_TAREFA[t.tipo]} · {quando(t.venceEm)}
                     {atrasada && " · atrasada"}
                     {t.responsavel && ` · ${t.responsavel.name}`}
+                    {t.concluidaEm && t.resultado && ` · ${ROTULO_RESULTADO[t.resultado]}`}
                   </p>
+                  {t.anotacao && <p className="text-[11px] text-neutral-500">“{t.anotacao}”</p>}
                 </div>
                 {!somenteLeitura && (
                   <button onClick={() => apagar(t)} className="text-neutral-300 hover:text-red-600 text-sm" aria-label="Apagar tarefa">
@@ -163,6 +172,24 @@ export function TarefasNegociacao({
             );
           })}
         </ul>
+      )}
+
+      {concluindo && (
+        <ConcluirTarefa
+          tarefa={{
+            id: concluindo.id,
+            tipo: concluindo.tipo,
+            titulo: concluindo.titulo,
+            negociacaoId,
+            responsavelId: concluindo.responsavel?.id ?? null,
+          }}
+          onFechar={() => setConcluindo(null)}
+          onConcluida={() => {
+            setConcluindo(null);
+            mutate();
+            onMudou();
+          }}
+        />
       )}
     </div>
   );

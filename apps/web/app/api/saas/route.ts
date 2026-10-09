@@ -58,6 +58,7 @@ export async function GET(req: Request) {
     status: n.status,
     valorCents: n.valorCents,
     recorrencia: n.recorrencia,
+    valorMensalCents: n.valorMensalCents,
     responsavelId: n.responsavelId,
     origem: n.origem,
     motivoPerdaId: n.motivoPerdaId,

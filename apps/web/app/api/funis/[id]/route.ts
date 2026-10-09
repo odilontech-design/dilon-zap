@@ -8,6 +8,8 @@ const schema = z.object({
   nome: z.string().trim().min(1).max(60).optional(),
   /** Torna este o funil que abre primeiro. */
   padrao: z.literal(true).optional(),
+  /** Toda negociação nova ganha a tarefa de ligar para o dia seguinte. */
+  tarefaLigarAuto: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -33,7 +35,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       : []),
     prisma.funil.update({
       where: { id: funil.id },
-      data: { nome: parsed.data.nome, ...(parsed.data.padrao ? { padrao: true } : {}) },
+      data: {
+        nome: parsed.data.nome,
+        ...(parsed.data.padrao ? { padrao: true } : {}),
+        ...(parsed.data.tarefaLigarAuto !== undefined ? { tarefaLigarAuto: parsed.data.tarefaLigarAuto } : {}),
+      },
     }),
   ]);
 

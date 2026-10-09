@@ -41,6 +41,7 @@ const criarSchema = z.object({
   // lugar só, e a API nunca vê número quebrado.
   priceCents: z.number().int().min(0),
   tipo: z.enum(["PRODUTO", "SERVICO"]).default("PRODUTO"),
+  cobranca: z.enum(["UNICA", "MENSAL"]).default("UNICA"),
   // Só faz sentido em serviço. Recusar duração em produto seria rigor sem
   // ganho — mas gravar a duração de um produto criaria um dado que nada lê e
   // que confundiria quem abrisse o cadastro depois.
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
   const parsed = criarSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { name, sku, categoria, priceCents } = parsed.data;
+  const { name, sku, categoria, priceCents, tipo, cobranca, duracaoMinutos } = parsed.data;
 
   try {
     const criado = await prisma.product.create({
@@ -68,6 +69,10 @@ export async function POST(req: Request) {
         sku: sku || null,
         categoria: categoria || null,
         priceCents,
+        tipo,
+        cobranca,
+        // Duração só acompanha serviço (ver o schema acima).
+        duracaoMinutos: tipo === "SERVICO" ? (duracaoMinutos ?? null) : null,
       },
     });
     return NextResponse.json(criado, { status: 201 });

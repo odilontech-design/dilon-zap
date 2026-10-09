@@ -150,14 +150,16 @@ export function calcularSaas(args: {
 
     const criadas = negociacoes.filter((n) => chaveDoMes(n.createdAt) === mes);
     const ganhasNoMes = negociacoes.filter((n) => n.status === "GANHA" && n.fechadaEm && chaveDoMes(n.fechadaEm) === mes);
-    const mensais = ganhasNoMes.filter((n) => n.recorrencia === "MENSAL");
+    // Cliente mensal é o que trouxe MRR, mesmo que também tenha pago uma taxa
+    // única de implantação: só a parte mensal entra no MRR.
+    const mensais = ganhasNoMes.filter((n) => n.valorMensalCents > 0);
 
     const visitantes = info?.visitantes ?? 0;
     const investimentoCents = info?.investimentoCents ?? 0;
     const leads = criadas.length;
     const sqls = criadas.filter((n) => passouPelaSql.has(n.id)).length;
     const clientes = ganhasNoMes.length;
-    const novoMrrCents = mensais.reduce((s, n) => s + n.valorCents, 0);
+    const novoMrrCents = mensais.reduce((s, n) => s + n.valorMensalCents, 0);
     const mrrCanceladoCents = info?.mrrCanceladoCents ?? 0;
 
     const mrrInicioCents = mrrCorrente;

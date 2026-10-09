@@ -13,6 +13,7 @@ const patchSchema = z.object({
   priceCents: z.number().int().min(0).optional(),
   isActive: z.boolean().optional(),
   tipo: z.enum(["PRODUTO", "SERVICO"]).optional(),
+  cobranca: z.enum(["UNICA", "MENSAL"]).optional(),
   duracaoMinutos: z.number().int().min(1).max(24 * 60).nullable().optional(),
   // Texto longo de referência (protocolo, indicação, cuidados). Vazio limpa.
   descricao: z.string().trim().max(4000).optional(),

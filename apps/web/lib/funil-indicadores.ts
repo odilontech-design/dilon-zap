@@ -32,6 +32,8 @@ export type NegociacaoIn = {
   status: StatusNegociacao;
   valorCents: number;
   recorrencia: Recorrencia;
+  /** O quanto do valor se repete todo mês — é o que conta como MRR. */
+  valorMensalCents: number;
   responsavelId: string | null;
   origem: string | null;
   motivoPerdaId: string | null;
@@ -119,7 +121,7 @@ export type Indicadores = {
   cicloMedioDias: number | null;
   /** Soma dos valores abertos × probabilidade da etapa. */
   previsaoPonderadaCents: number;
-  /** MRR novo: valor das ganhas MENSAL. */
+  /** MRR novo: a parte mensal do valor das ganhas. */
   novoMrrCents: number;
   /** Abertas há mais de `diasParada` dias na mesma etapa. */
   paradas: number;
@@ -198,7 +200,7 @@ export function calcularIndicadores(args: {
     previsaoPonderadaCents: Math.round(
       abertas.reduce((s, n) => s + (n.valorCents * (probabilidadeDe.get(n.stageId) ?? 0)) / 100, 0)
     ),
-    novoMrrCents: soma(ganhas.filter((n) => n.recorrencia === "MENSAL")),
+    novoMrrCents: ganhas.reduce((s, n) => s + n.valorMensalCents, 0),
     paradas: abertas.filter((n) => diasEntre(n.etapaDesde, agora) > diasParada).length,
     porEtapa,
     perdasPorMotivo: [...perdasMap.entries()]

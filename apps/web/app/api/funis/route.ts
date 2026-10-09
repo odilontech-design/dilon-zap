@@ -28,6 +28,7 @@ export async function GET() {
       id: f.id,
       nome: f.nome,
       padrao: f.padrao,
+      tarefaLigarAuto: f.tarefaLigarAuto,
       etapas: f._count.etapas,
       abertas: abertasPorFunil.get(f.id) ?? 0,
     }))

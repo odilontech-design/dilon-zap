@@ -32,7 +32,7 @@ const ETAPAS: EtapaIn[] = [
 let seq = 0;
 function neg(p: Partial<NegociacaoIn> = {}): NegociacaoIn {
   seq++;
-  return {
+  const n: NegociacaoIn = {
     id: `n${seq}`,
     funilId: "f1",
     stageId: "lead",
@@ -46,8 +46,12 @@ function neg(p: Partial<NegociacaoIn> = {}): NegociacaoIn {
     etapaDesde: dia(1),
     createdAt: dia(10),
     fechadaEm: null,
+    valorMensalCents: 0,
     ...p,
   };
+  // O valor mensal acompanha a recorrência, como no servidor, salvo quando o
+  // teste o define de propósito (negociação com itens mistos).
+  return { ...n, valorMensalCents: p.valorMensalCents ?? (n.recorrencia === "MENSAL" ? n.valorCents : 0) };
 }
 
 /** Eventos de uma negociação que passou pelas etapas dadas, em ordem. */
@@ -130,6 +134,17 @@ const mrr = calcularIndicadores({
 // mensal ainda aberta não é receita nenhuma.
 checa("novo MRR soma só ganhas mensais", mrr.novoMrrCents, 700_00);
 checa("valor ganho soma recorrente e única", mrr.valorGanhoCents, 5700_00);
+
+// Negociação com itens mistos: taxa de implantação única + plano mensal. A
+// taxa não pode inflar o MRR.
+const misto = calcularIndicadores({
+  negociacoes: [neg({ status: "GANHA", valorCents: 1500_00, valorMensalCents: 500_00, recorrencia: "MENSAL", fechadaEm: dia(1) })],
+  eventos: [],
+  etapas: ETAPAS,
+  agora: AGORA,
+});
+checa("MRR de negociação mista é só a parte mensal", misto.novoMrrCents, 500_00);
+checa("o valor ganho é o total (taxa + plano)", misto.valorGanhoCents, 1500_00);
 
 // ----------------------------------------------------------- previsão ponderada
 const prev = calcularIndicadores({

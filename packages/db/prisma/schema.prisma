@@ -507,6 +507,8 @@ model Funil {
   position Int    @default(0)
   /// O funil que abre por padrão e recebe a negociação criada sem escolha.
   padrao   Boolean @default(false)
+  /// Toda negociação nova ganha a tarefa "Ligar" para o dia seguinte.
+  tarefaLigarAuto Boolean @default(false)
   /// Arquivar em vez de apagar: negociações ganhas e perdidas continuam
   /// apontando pra ele, e o histórico de conversão não pode sumir junto.
   arquivadoEm DateTime?
@@ -561,6 +563,11 @@ model Negociacao {
   titulo      String
   valorCents  Int                   @default(0)
   recorrencia RecorrenciaNegociacao @default(UNICA)
+  /// Quanto do valor se repete todo mês. É o que alimenta o MRR. Com itens, é a
+  /// soma dos itens mensais (assim uma negociação com taxa de implantação única
+  /// mais plano mensal não conta a taxa como MRR); sem itens, é o valor inteiro
+  /// quando a cobrança é mensal e zero quando é única.
+  valorMensalCents Int @default(0)
 
   responsavelId String?
   responsavel   User?   @relation("NegociacaoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
@@ -587,6 +594,8 @@ model Negociacao {
 
   eventos HistoricoDeEtapa[]
   tarefas TarefaNegociacao[]
+  itens   NegociacaoItem[]
+  pedidos Order[]
 
   @@index([tenantId, funilId, status])
   @@index([tenantId, stageId])
@@ -980,6 +989,10 @@ model Product {
   sku            String?
   categoria      String?
   priceCents     Int
+  /// Como se cobra: uma vez ou todo mês. É o que faz uma assinatura entrar no
+  /// MRR quando vai para uma negociação.
+  cobranca       RecorrenciaNegociacao @default(UNICA)
+  negociacaoItens NegociacaoItem[]
 
   // Descrição detalhada do serviço, pra equipe usar no atendimento (o
   // atendente copia pra conversa e ajusta). Separada do nome porque é texto
@@ -1113,6 +1126,11 @@ model Order {
 
   items OrderItem[]
 
+  /// De qual negociação do CRM nasceu, quando nasceu de uma.
+  negociacaoId String?
+  negociacao   Negociacao? @relation(fields: [negociacaoId], references: [id], onDelete: SetNull)
+
+  @@index([negociacaoId])
   @@index([tenantId, status, createdAt])
   @@index([contactId])
   @@index([conversationId])
@@ -1869,6 +1887,9 @@ model TarefaNegociacao {
   responsavel   User?   @relation("TarefaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
 
   concluidaEm DateTime?
+  /// Só para ligações: o que aconteceu. Fica na própria tarefa concluída.
+  resultado   ResultadoTarefa?
+  anotacao    String?
   createdAt   DateTime  @default(now())
 
   @@index([tenantId, concluidaEm, venceEm])
@@ -1901,4 +1922,32 @@ model MetricaMensal {
   updatedAt DateTime @updatedAt
 
   @@unique([tenantId, mes])
+}
+
+enum ResultadoTarefa {
+  ATENDEU
+  NAO_ATENDEU
+  RECADO
+  NUMERO_INVALIDO
+}
+
+/// O que se está negociando: itens do catálogo (produto ou serviço) com
+/// quantidade, preço e desconto. Copia o nome e o preço de tabela na hora, como
+/// OrderItem, pelo mesmo motivo: renomear ou reprecificar o catálogo depois não
+/// pode reescrever uma proposta que já foi combinada.
+model NegociacaoItem {
+  id           String     @id @default(cuid())
+  negociacaoId String
+  negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
+
+  productId String?
+  product   Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+
+  nomeProduto      String
+  precoTabelaCents Int
+  precoUnitCents   Int
+  quantidade       Int
+  cobranca         RecorrenciaNegociacao @default(UNICA)
+
+  @@index([negociacaoId])
 }

@@ -21,6 +21,7 @@ export type Negociacao = {
   status: "ABERTA" | "GANHA" | "PERDIDA";
   valorCents: number;
   recorrencia: "UNICA" | "MENSAL";
+  valorMensalCents: number;
   origem: string | null;
   previsaoFechamento: string | null;
   etapaDesde: string;

@@ -63,8 +63,28 @@ export async function criarNegociacao(args: {
         responsavelId: args.responsavelId,
         origem: args.origem,
         previsaoFechamento: args.previsaoFechamento,
+        valorMensalCents: valorMensalSemItens(args.valorCents, args.recorrencia),
       },
     });
+    // Funil com "ligar automaticamente": toda negociação nova ganha a tarefa
+    // de ligar para amanhã às 9h (horário de Brasília), de quem é responsável
+    // — ou de quem criou, se ninguém foi indicado.
+    const funil = await tx.funil.findUnique({ where: { id: args.funilId }, select: { tarefaLigarAuto: true } });
+    if (funil?.tarefaLigarAuto) {
+      const amanha = new Date();
+      amanha.setUTCDate(amanha.getUTCDate() + 1);
+      amanha.setUTCHours(12, 0, 0, 0); // 09:00 em Brasília
+      await tx.tarefaNegociacao.create({
+        data: {
+          tenantId: args.tenantId,
+          negociacaoId: negociacao.id,
+          tipo: "LIGACAO",
+          titulo: "Ligar para o cliente",
+          venceEm: amanha,
+          responsavelId: args.responsavelId ?? args.quem.id,
+        },
+      });
+    }
     await tx.historicoDeEtapa.create({
       data: {
         negociacaoId: negociacao.id,
@@ -287,6 +307,135 @@ export async function aplicarEtapaEValorDoContato(args: {
     });
     if (aberta) {
       await prisma.negociacao.update({ where: { id: aberta.id }, data: { valorCents: args.dealValueCents } });
+      await recalcularValores(aberta.id);
     }
   }
+}
+
+/* ------------------------------------------------------------------------ *
+ * Valor, itens e pedido
+ * ------------------------------------------------------------------------ */
+
+/** Sem itens, o mensal é o valor inteiro quando a cobrança é mensal. */
+export function valorMensalSemItens(valorCents: number, recorrencia: "UNICA" | "MENSAL"): number {
+  return recorrencia === "MENSAL" ? valorCents : 0;
+}
+
+/**
+ * Reconcilia valor, valor mensal e recorrência de uma negociação.
+ *
+ * Com itens, o valor é DERIVADO deles (quantidade × preço) e o mensal é só a
+ * soma dos itens de cobrança mensal — assim uma taxa de implantação única
+ * somada ao plano não infla o MRR. Sem itens, vale o que foi digitado.
+ *
+ * Chamar depois de QUALQUER escrita em valor, recorrência ou itens: é o único
+ * lugar que mantém os três campos coerentes entre si.
+ */
+export async function recalcularValores(negociacaoId: string) {
+  const n = await prisma.negociacao.findUnique({
+    where: { id: negociacaoId },
+    select: { valorCents: true, recorrencia: true, itens: { select: { precoUnitCents: true, quantidade: true, cobranca: true } } },
+  });
+  if (!n) return;
+
+  if (n.itens.length > 0) {
+    const total = n.itens.reduce((s, i) => s + i.precoUnitCents * i.quantidade, 0);
+    const mensal = n.itens.filter((i) => i.cobranca === "MENSAL").reduce((s, i) => s + i.precoUnitCents * i.quantidade, 0);
+    await prisma.negociacao.update({
+      where: { id: negociacaoId },
+      data: { valorCents: total, valorMensalCents: mensal, recorrencia: mensal > 0 ? "MENSAL" : "UNICA" },
+    });
+    return;
+  }
+
+  await prisma.negociacao.update({
+    where: { id: negociacaoId },
+    data: { valorMensalCents: valorMensalSemItens(n.valorCents, n.recorrencia) },
+  });
+}
+
+export type ItemIn = {
+  productId?: string | null;
+  nomeProduto: string;
+  precoTabelaCents: number;
+  precoUnitCents: number;
+  quantidade: number;
+  cobranca: "UNICA" | "MENSAL";
+};
+
+/** Troca a lista de itens inteira (a tela edita como um bloco) e recalcula o valor. */
+export async function salvarItens(negociacaoId: string, tenantId: string, itens: ItemIn[]) {
+  // O produto, quando informado, precisa ser da empresa — senão dava para
+  // pendurar o catálogo de outra empresa numa proposta.
+  const ids = [...new Set(itens.map((i) => i.productId).filter((x): x is string => !!x))];
+  if (ids.length) {
+    const validos = await prisma.product.count({ where: { id: { in: ids }, tenantId } });
+    if (validos !== ids.length) throw new ErroDeNegocio("produto inválido", 400);
+  }
+
+  await prisma.$transaction([
+    prisma.negociacaoItem.deleteMany({ where: { negociacaoId } }),
+    ...(itens.length
+      ? [
+          prisma.negociacaoItem.createMany({
+            data: itens.map((i) => ({
+              negociacaoId,
+              productId: i.productId ?? null,
+              nomeProduto: i.nomeProduto,
+              precoTabelaCents: i.precoTabelaCents,
+              precoUnitCents: i.precoUnitCents,
+              quantidade: i.quantidade,
+              cobranca: i.cobranca,
+            })),
+          }),
+        ]
+      : []),
+  ]);
+  await recalcularValores(negociacaoId);
+}
+
+/**
+ * Cria o RASCUNHO de pedido com os itens da negociação. O resto do fluxo
+ * (enviar ao financeiro, fechar, receber) é o de sempre, em Pedidos.
+ *
+ * Um pedido ativo por negociação: clicar duas vezes não pode gerar dois
+ * pedidos iguais — o segundo, fechado, baixaria o estoque em dobro.
+ */
+export async function gerarPedido(n: { id: string; contactId: string }, tenantId: string, quem: Quem) {
+  const itens = await prisma.negociacaoItem.findMany({ where: { negociacaoId: n.id } });
+  if (itens.length === 0) throw new ErroDeNegocio("adicione itens à negociação antes de gerar o pedido", 400);
+
+  const existente = await prisma.order.findFirst({
+    where: { negociacaoId: n.id, status: { not: "CANCELADO" } },
+    select: { id: true, numero: true },
+  });
+  if (existente) throw new ErroDeNegocio(`já existe o pedido #${existente.numero} para esta negociação`, 409);
+
+  // A conversa mais recente do contato, para o pedido aparecer no Inbox junto
+  // do atendimento. Sem conversa, o pedido nasce solto — o modelo já permite.
+  const conversa = await prisma.conversation.findFirst({
+    where: { tenantId, contactId: n.contactId },
+    orderBy: { lastMessageAt: "desc" },
+    select: { id: true },
+  });
+
+  return prisma.order.create({
+    data: {
+      tenantId,
+      contactId: n.contactId,
+      conversationId: conversa?.id ?? null,
+      createdById: quem.id,
+      negociacaoId: n.id,
+      items: {
+        create: itens.map((i) => ({
+          productId: i.productId,
+          nomeProduto: i.nomeProduto,
+          precoTabelaCents: i.precoTabelaCents,
+          precoUnitCents: i.precoUnitCents,
+          quantidade: i.quantidade,
+        })),
+      },
+    },
+    select: { id: true, numero: true },
+  });
 }

@@ -56,6 +56,11 @@ const NAV_ITEMS = [
     icon: icon(<><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="11" rx="1" /><rect x="17" y="4" width="4" height="7" rx="1" /></>),
   },
   {
+    href: "/tarefas",
+    label: "Tarefas",
+    icon: icon(<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m8.5 9.5 1.5 1.5 3-3.5" /><path d="M8.5 16h7" /></>),
+  },
+  {
     href: "/saas",
     recurso: "FUNIL_SAAS" as Recurso,
     label: "Indicadores SaaS",

@@ -16,7 +16,7 @@ function checa(nome: string, obtido: unknown, esperado: unknown) {
 let seq = 0;
 function neg(p: Partial<NegociacaoIn> = {}): NegociacaoIn {
   seq++;
-  return {
+  const n: NegociacaoIn = {
     id: `n${seq}`,
     funilId: "f1",
     stageId: "lead",
@@ -30,8 +30,12 @@ function neg(p: Partial<NegociacaoIn> = {}): NegociacaoIn {
     etapaDesde: new Date("2026-09-01T12:00:00Z"),
     createdAt: new Date("2026-09-10T12:00:00Z"),
     fechadaEm: null,
+    valorMensalCents: 0,
     ...p,
   };
+  // O valor mensal acompanha a recorrência, como no servidor, salvo quando o
+  // teste o define de propósito (negociação com itens mistos).
+  return { ...n, valorMensalCents: p.valorMensalCents ?? (n.recorrencia === "MENSAL" ? n.valorCents : 0) };
 }
 
 const info = (mes: string, p: Partial<MesInformado> = {}): MesInformado => ({
@@ -124,6 +128,21 @@ checa("ultimosMeses cruza o ano", ultimosMeses("2026-02", 4), ["2025-11", "2025-
     etapaSqlId: null,
   });
   checa("venda das 22h30 do dia 30 fica em setembro", [r.porMes[0].clientes, r.porMes[1].clientes], [1, 0]);
+}
+
+// ------------------------------------------- taxa de implantação não é MRR
+{
+  const r = calcularSaas({
+    meses: ["2026-10"],
+    informados: [],
+    negociacoes: [
+      neg({ status: "GANHA", valorCents: 1500_00, valorMensalCents: 500_00, recorrencia: "MENSAL", fechadaEm: new Date("2026-10-10T12:00:00Z") }),
+    ],
+    eventos: [],
+    etapaSqlId: null,
+  });
+  checa("só a parte mensal entra no MRR novo", r.porMes[0].novoMrrCents, 500_00);
+  checa("o ticket de MRR é a parte mensal", r.porMes[0].ticketMrrCents, 500_00);
 }
 
 // -------------------------------------------------------------- MRR acumulado

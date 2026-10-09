@@ -529,7 +529,11 @@ function Cartao({
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold tabular-nums">
           {centsToBRL(n.valorCents)}
-          {n.recorrencia === "MENSAL" && <span className="font-normal text-neutral-400">/mês</span>}
+          {n.valorMensalCents > 0 && n.valorMensalCents < n.valorCents ? (
+            <span className="font-normal text-neutral-400"> · {centsToBRL(n.valorMensalCents)}/mês</span>
+          ) : (
+            n.recorrencia === "MENSAL" && <span className="font-normal text-neutral-400">/mês</span>
+          )}
         </p>
         {n.responsavel && (
           <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 truncate max-w-[110px]">
