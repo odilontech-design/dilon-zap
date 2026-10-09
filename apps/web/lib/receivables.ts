@@ -2,6 +2,7 @@ import { prisma } from "@dilon-zap/db";
 import type { PaymentMethod } from "@prisma/client";
 import { saldoDoPedido, faixaDeVencimento, diasDeAtraso, precisaLembrarHoje } from "@dilon-zap/receivables";
 import type { Faixa } from "@dilon-zap/receivables";
+import { estornarNaConta, garantirContaDoPedido, receberNaConta, ErroDeConta } from "@/lib/contas-receber";
 
 // Reexportados pra quem já importa daqui (rotas de API, a tela, o teste
 // manual) não precisar saber que a matemática pura mudou de endereço.
@@ -61,29 +62,27 @@ export async function registrarPagamento(entrada: PagamentoInput) {
       );
     }
 
-    await tx.pagamento.create({
-      data: {
-        orderId: pedido.id,
-        valorCents: entrada.valorCents,
-        meio: entrada.meio,
-        recebidoEm: entrada.recebidoEm ?? new Date(),
-        observacao: entrada.observacao?.trim() || null,
-        createdById: entrada.userId,
-      },
-    });
+    // Pedido com valor tem conta a receber (parcelas): é ela que reparte o
+    // recebimento entre as parcelas e refaz o cache do pedido. Pedido antigo,
+    // fechado antes de existir parcela, ganha a conta aqui mesmo, de uma
+    // parcela só, e os recebimentos que já tinha passam a ser dela.
+    if (pedido.totalCents > 0) {
+      try {
+        const conta = await garantirContaDoPedido(tx, pedido.id, entrada.userId);
+        const base = { tenantId: entrada.tenantId, contaId: conta.id, observacao: entrada.observacao, userId: entrada.userId, recebidoEm: entrada.recebidoEm };
+        const r =
+          entrada.valorCents > 0
+            ? await receberNaConta(tx, { ...base, valorCents: entrada.valorCents, meio: entrada.meio })
+            : await estornarNaConta(tx, { ...base, valorCents: -entrada.valorCents });
+        return { saldoDepois: r.saldoDepois, quitado: r.saldoDepois <= 0 };
+      } catch (e) {
+        // As recusas da conta são de negócio e a pessoa precisa lê-las.
+        if (e instanceof ErroDeConta) throw new Error(e.message);
+        throw e;
+      }
+    }
 
-    const saldoDepois = saldoAntes - entrada.valorCents;
-    const quitado = saldoDepois <= 0;
-
-    // O cache anda junto, na mesma transação. pagoEm só existe enquanto está
-    // quitado: um estorno que reabre a dívida tem que limpar a data também,
-    // senão o pedido fica "pago em 12/09" devendo 60 reais.
-    await tx.order.update({
-      where: { id: pedido.id },
-      data: { pago: quitado, pagoEm: quitado ? (entrada.recebidoEm ?? new Date()) : null },
-    });
-
-    return { saldoDepois, quitado };
+    throw new Error("pedido sem valor não recebe pagamento");
   });
 }
 
@@ -116,7 +115,8 @@ function inicioDoMesNoFuso(agora: Date, tz: string): Date {
 /** Quanto entrou no caixa no mês corrente, no fuso da empresa. */
 export async function recebidoNoMes(tenantId: string, timezone: string, agora = new Date()) {
   const soma = await prisma.pagamento.aggregate({
-    where: { order: { tenantId }, recebidoEm: { gte: inicioDoMesNoFuso(agora, timezone) } },
+    // Recebimento de pedido OU de conta avulsa: o caixa da empresa é um só.
+    where: { OR: [{ order: { tenantId } }, { conta: { tenantId } }], recebidoEm: { gte: inicioDoMesNoFuso(agora, timezone) } },
     _sum: { valorCents: true },
   });
   // Estorno entra como valor negativo e abate — é o número do caixa, não o
@@ -133,6 +133,7 @@ export async function recebidoNoMes(tenantId: string, timezone: string, agora = 
  */
 export async function listarHistoricoRecebido(tenantId: string, desde: Date, limite = 300) {
   const pagamentos = await prisma.pagamento.findMany({
+    // Só os de pedido: este histórico é o do A receber antigo, por pedido.
     where: { order: { tenantId }, recebidoEm: { gte: desde } },
     orderBy: { recebidoEm: "desc" },
     take: limite,
@@ -155,7 +156,7 @@ export async function listarHistoricoRecebido(tenantId: string, desde: Date, lim
     },
   });
 
-  return pagamentos.map((p) => ({
+  return pagamentos.flatMap((p) => (p.order ? [p as typeof p & { order: NonNullable<typeof p.order> }] : [])).map((p) => ({
     id: p.id,
     valorCents: p.valorCents,
     recebidoEm: p.recebidoEm,

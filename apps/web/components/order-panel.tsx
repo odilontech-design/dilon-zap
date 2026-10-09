@@ -27,7 +27,7 @@ export type Pedido = {
   id: string;
   numero: number;
   status: "RASCUNHO" | "AGUARDANDO_FINANCEIRO" | "FECHADO" | "CANCELADO";
-  paymentMethod: "PIX" | "PIX_PENDENTE" | "CARTAO" | "BOLETO" | "FIADO" | null;
+  paymentMethod: "PIX" | "PIX_PENDENTE" | "CARTAO" | "DINHEIRO" | "BOLETO" | "FIADO" | null;
   pago: boolean;
   subtotalCents: number;
   descontoCents: number;
@@ -98,6 +98,7 @@ const PAGAMENTO_LABEL: Record<NonNullable<Pedido["paymentMethod"]>, string> = {
   PIX: "PIX",
   PIX_PENDENTE: "PIX",
   CARTAO: "Cartão",
+  DINHEIRO: "Dinheiro",
   BOLETO: "Boleto",
   FIADO: "Fiado",
 };
@@ -260,7 +261,7 @@ export function OrderPanel({
           <p className="text-sm text-neutral-500">Pedido #{pedido.numero} fechado</p>
           <p className="text-2xl font-semibold tabular-nums mt-1">{centsToBRL(fechadoAgora)}</p>
           <p className="text-sm text-neutral-600 mt-1">
-            {PAGAMENTO_LABEL[pagamento]} · {pagamento === "PIX" || pagamento === "CARTAO" ? "pago" : "a receber"}
+            {PAGAMENTO_LABEL[pagamento]} · {pagamento === "PIX" || pagamento === "CARTAO" || pagamento === "DINHEIRO" ? "pago" : "a receber"}
           </p>
           <div className="mt-5 flex flex-col gap-2 text-sm">
             <a
@@ -493,6 +494,7 @@ export function OrderPanel({
                 <option value="PIX">PIX — já pago</option>
                 <option value="PIX_PENDENTE">PIX — a pagar (manda a chave no recibo)</option>
                 <option value="CARTAO">Cartão na maquininha — já pago</option>
+                <option value="DINHEIRO">Dinheiro — já pago</option>
                 <option value="BOLETO">Boleto — a receber</option>
                 <option value="FIADO">Fiado — a receber</option>
               </select>

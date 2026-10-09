@@ -143,6 +143,10 @@ model Tenant {
   motivosDePerda    MotivoDePerda[]
   tarefasNegociacao TarefaNegociacao[]
   metricasMensais   MetricaMensal[]
+  contasReceber     ContaReceber[]
+  parcelas          Parcela[]
+  caixas            Caixa[]
+  movimentosCaixa   MovimentoCaixa[]
   tags              Tag[]
   stages            Stage[]
   uraOpcoes         UraOpcao[]
@@ -383,6 +387,9 @@ model User {
   solicitacoesDecididas  SolicitacaoDeAcesso[] @relation("SolicitacaoDecididaPor")
   negociacoesSobResponsabilidade Negociacao[] @relation("NegociacaoResponsavel")
   tarefasSobResponsabilidade     TarefaNegociacao[] @relation("TarefaResponsavel")
+  caixasAbertos                  Caixa[]            @relation("CaixaAbertoPor")
+  caixasFechados                 Caixa[]            @relation("CaixaFechadoPor")
+  movimentosDeCaixa              MovimentoCaixa[]
   sentMessages           Message[]          @relation("MessageSender")
   messageReactions       MessageReaction[]
   scheduledMessages      ScheduledMessage[] @relation("ScheduledBy")
@@ -767,6 +774,7 @@ model Contact {
   @@index([tenantId])
   @@index([tenantId, stageId])
   @@index([tenantId, grupo])
+  contasReceber ContaReceber[]
 }
 
 enum ConversationStatus {
@@ -1042,6 +1050,7 @@ enum PaymentMethod {
   // receber e faz o recibo imprimir a chave pra o cliente pagar.
   PIX_PENDENTE
   CARTAO // maquininha, presencial ou por link — o Dilon Zap só registra
+  DINHEIRO // espécie: é o único meio que o controle de caixa confere na gaveta
   BOLETO
   FIADO
 }
@@ -1125,6 +1134,8 @@ model Order {
   ultimoLembreteInternoEm DateTime?
 
   items OrderItem[]
+  /// A conta a receber (com as parcelas) criada quando o pedido fechou devendo.
+  conta ContaReceber?
 
   /// De qual negociação do CRM nasceu, quando nasceu de uma.
   negociacaoId String?
@@ -1150,8 +1161,17 @@ model Order {
 // serventia.
 model Pagamento {
   id      String @id @default(cuid())
-  orderId String
-  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  /// Nulo quando o recebimento é de uma conta avulsa (sem pedido).
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// A conta a receber e a parcela que este recebimento quitou (ou, se negativo,
+  /// devolveu). Em conta com parcelas, TODO recebimento aponta para uma parcela:
+  /// é isso que dispensa recalcular "qual parcela foi paga" a cada leitura.
+  contaId   String?
+  conta     ContaReceber? @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  parcelaId String?
+  parcela   Parcela?      @relation(fields: [parcelaId], references: [id], onDelete: SetNull)
 
   // Em centavos. Negativo e estorno — o unico caso em que a soma diminui.
   valorCents Int
@@ -1169,6 +1189,9 @@ model Pagamento {
   createdAt DateTime @default(now())
 
   @@index([orderId])
+  @@index([contaId])
+  @@index([parcelaId])
+  @@index([createdAt])
 }
 
 model OrderItem {
@@ -1950,4 +1973,136 @@ model NegociacaoItem {
   cobranca         RecorrenciaNegociacao @default(UNICA)
 
   @@index([negociacaoId])
+}
+
+enum OrigemConta {
+  MANUAL
+  PEDIDO
+}
+
+/// Como a parcela se encaixa no plano: a entrada, a parcela única ou uma das
+/// periodicidades. É o "Tipo de pagamento" da tela de contas a receber.
+enum TipoParcela {
+  ENTRADA
+  UNICA
+  SEMANAL
+  QUINZENAL
+  MENSAL
+}
+
+/// Uma dívida de um cliente, dividida em parcelas. Nasce de duas formas: de um
+/// pedido que fechou devendo (origem PEDIDO, uma por pedido) ou digitada à mão
+/// (origem MANUAL). A situação de cada parcela (paga, pendente) NÃO é guardada:
+/// sai da soma dos recebimentos dela, como o saldo do pedido sempre saiu.
+model ContaReceber {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  orderId String? @unique
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  origem    OrigemConta @default(MANUAL)
+  descricao String?
+
+  createdById String?
+  createdAt   DateTime  @default(now())
+  canceladaEm DateTime?
+
+  parcelas   Parcela[]
+  pagamentos Pagamento[]
+
+  @@index([tenantId, createdAt])
+  @@index([contactId])
+}
+
+model Parcela {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contaId String
+  conta   ContaReceber @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  /// "3 de 6": número e total de parcelas da conta (a entrada não entra na contagem).
+  numero        Int
+  totalParcelas Int
+  tipo          TipoParcela @default(UNICA)
+
+  /// Dia do vencimento, guardado ao meio-dia UTC para o fuso não empurrar o dia.
+  /// Nulo = sem prazo combinado.
+  vencimento DateTime?
+  valorCents Int
+
+  canceladaEm   DateTime?
+  reembolsadaEm DateTime?
+  observacao    String?
+
+  /// Último dia em que o acompanhamento interno avisou sobre esta parcela.
+  ultimoLembreteInternoEm DateTime?
+
+  pagamentos Pagamento[]
+
+  @@index([tenantId, vencimento])
+  @@index([contaId])
+}
+
+/// Uma sessão de caixa: abre com um valor, fecha com a conferência do dinheiro
+/// contado. O que entrou NÃO é copiado para cá — sai dos recebimentos lançados
+/// durante a sessão (Pagamento.createdAt entre abertura e fechamento), então o
+/// caixa nunca discorda do extrato. Aqui moram só os movimentos que não são
+/// recebimento (suprimento, sangria, despesa) e o resultado do fechamento.
+model Caixa {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  abertoPorId String?
+  abertoPor   User?   @relation("CaixaAbertoPor", fields: [abertoPorId], references: [id], onDelete: SetNull)
+  abertoEm    DateTime @default(now())
+  valorInicialCents Int @default(0)
+
+  fechadoPorId String?
+  fechadoPor   User?   @relation("CaixaFechadoPor", fields: [fechadoPorId], references: [id], onDelete: SetNull)
+  fechadoEm    DateTime?
+  /// Congelados no fechamento: o que o sistema esperava em dinheiro, o que foi
+  /// contado e a diferença. Congelar é o que mantém o histórico fiel mesmo se um
+  /// recebimento for corrigido depois.
+  esperadoDinheiroCents Int?
+  contadoDinheiroCents  Int?
+  diferencaCents        Int?
+  observacao            String?
+
+  movimentos MovimentoCaixa[]
+
+  @@index([tenantId, abertoEm])
+}
+
+enum TipoMovimentoCaixa {
+  SUPRIMENTO // entrou dinheiro no caixa que não é venda (troco, reforço)
+  SANGRIA // saiu dinheiro do caixa para o cofre ou banco
+  DESPESA // saiu dinheiro para pagar algo
+}
+
+model MovimentoCaixa {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  caixaId String
+  caixa   Caixa  @relation(fields: [caixaId], references: [id], onDelete: Cascade)
+
+  tipo       TipoMovimentoCaixa
+  /// Sempre positivo: o tipo diz se soma ou subtrai.
+  valorCents Int
+  descricao  String
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([caixaId])
 }

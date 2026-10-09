@@ -1,7 +1,7 @@
 import pino from "pino";
 import { prisma } from "@dilon-zap/db";
 import { avisarNoCelular } from "@dilon-zap/push";
-import { precisaLembrarHoje, mesmoDiaCalendario, faixaDeVencimento, saldoDoPedido } from "@dilon-zap/receivables";
+import { precisaLembrarHoje, mesmoDiaCalendario, faixaDeVencimento, saldoDoPedido, situacaoDaParcela } from "@dilon-zap/receivables";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
@@ -45,6 +45,7 @@ export function startReceivablesFollowupLoop() {
 }
 
 export async function processarAcompanhamentoFinanceiro() {
+  await processarParcelasAvulsas();
   const agora = new Date();
 
   // Só pedido com prazo combinado entra na régua — "sem prazo" não tem data
@@ -110,6 +111,74 @@ export async function processarAcompanhamentoFinanceiro() {
       // Um pedido com dado estranho não pode travar o ciclo inteiro — os
       // outros continuam sendo avisados.
       logger.error({ err, orderId: pedido.id }, "falha ao avisar pedido no acompanhamento de contas a receber");
+    }
+  }
+}
+
+/**
+ * Parcelas de contas AVULSAS (sem pedido). As de pedido seguem pela regra de
+ * cima: o pedido guarda o vencimento da próxima parcela em aberto. As avulsas
+ * não têm pedido, então a régua olha a parcela direto — mesma régua, mesmo
+ * destinatário (responsável e financeiro), mesmo "uma vez por dia".
+ */
+async function processarParcelasAvulsas() {
+  const agora = new Date();
+
+  const candidatas = await prisma.parcela.findMany({
+    where: {
+      canceladaEm: null,
+      reembolsadaEm: null,
+      vencimento: { not: null },
+      conta: { origem: "MANUAL", canceladaEm: null },
+    },
+    select: {
+      id: true,
+      tenantId: true,
+      numero: true,
+      totalParcelas: true,
+      tipo: true,
+      vencimento: true,
+      valorCents: true,
+      canceladaEm: true,
+      reembolsadaEm: true,
+      ultimoLembreteInternoEm: true,
+      pagamentos: { select: { valorCents: true, recebidoEm: true, meio: true } },
+      conta: { select: { contact: { select: { name: true, phoneNumber: true } } } },
+    },
+    take: TETO_POR_CICLO,
+    orderBy: { vencimento: "asc" },
+  });
+
+  for (const p of candidatas) {
+    if (!p.vencimento || !precisaLembrarHoje(p.vencimento, agora)) continue;
+    if (p.ultimoLembreteInternoEm && mesmoDiaCalendario(p.ultimoLembreteInternoEm, agora)) continue;
+
+    const sit = situacaoDaParcela(
+      { id: p.id, numero: p.numero, tipo: p.tipo, vencimento: p.vencimento, valorCents: p.valorCents, canceladaEm: p.canceladaEm, reembolsadaEm: p.reembolsadaEm },
+      p.pagamentos
+    );
+    if (sit.status !== "PENDENTE") continue;
+
+    try {
+      const destinatarios = await prisma.user.findMany({
+        where: { tenantId: p.tenantId, role: { in: ["OWNER", "FINANCEIRO"] }, deactivatedAt: null },
+        select: { id: true },
+      });
+      if (destinatarios.length === 0) continue;
+
+      const nome = p.conta.contact.name ?? p.conta.contact.phoneNumber ?? "cliente sem nome";
+      const valor = (sit.saldoCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const vencido = faixaDeVencimento(p.vencimento, agora) === "vencido";
+      const corpo = vencido
+        ? `${nome} está devendo ${valor} — parcela ${p.numero} de ${p.totalParcelas}`
+        : `${nome} vence hoje: ${valor} — parcela ${p.numero} de ${p.totalParcelas}`;
+
+      await Promise.all(
+        destinatarios.map((u) => avisarNoCelular(u.id, { titulo: "Conta a receber", corpo, url: "/receber", tag: `receber-parcela-${p.id}` }))
+      );
+      await prisma.parcela.update({ where: { id: p.id }, data: { ultimoLembreteInternoEm: agora } });
+    } catch (err) {
+      logger.error({ err, parcelaId: p.id }, "falha ao avisar parcela avulsa no acompanhamento de contas a receber");
     }
   }
 }

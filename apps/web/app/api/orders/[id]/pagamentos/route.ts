@@ -11,7 +11,7 @@ const corpoSchema = z.object({
   // Em centavos. Negativo é estorno — permitido de propósito, e é o único
   // jeito de desfazer um recebimento sem apagar o histórico.
   valorCents: z.number().int().refine((v) => v !== 0, "valor não pode ser zero"),
-  meio: z.enum(["PIX", "CARTAO", "BOLETO", "FIADO"]).optional(),
+  meio: z.enum(["PIX", "CARTAO", "DINHEIRO", "BOLETO", "FIADO"]).optional(),
   // Quando o dinheiro entrou, que nem sempre é quando foi lançado.
   recebidoEm: z.string().datetime().optional(),
   observacao: z.string().trim().max(300).optional(),

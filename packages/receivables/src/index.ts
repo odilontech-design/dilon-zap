@@ -59,3 +59,5 @@ export function precisaLembrarHoje(vencimento: Date, agora = new Date()): boolea
 export function mesmoDiaCalendario(a: Date, b: Date): boolean {
   return diaUTC(a) === diaUTC(b);
 }
+
+export * from "./parcelas";

@@ -108,7 +108,15 @@ const NAV_ITEMS = [
     recurso: "CONTAS_RECEBER" as Recurso,
     label: "A receber",
     icon: icon(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>),
-    somenteResponsavel: true,
+    // Responsável e financeiro: é quem opera o dinheiro (a página e as rotas já eram assim).
+    somenteGestao: true,
+  },
+  {
+    href: "/caixa",
+    recurso: "CONTAS_RECEBER" as Recurso,
+    label: "Caixa",
+    icon: icon(<><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M3 11h18" /><path d="M12 15h.01" /><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" /></>),
+    somenteGestao: true,
   },
   {
     href: "/produtos",
@@ -316,6 +324,7 @@ export function Sidebar({
               (!item.somenteResponsavel ||
                 role === "OWNER" ||
                 (role === "SUPERADMIN" && !item.somenteDonoDaConta)) &&
+              (!item.somenteGestao || role === "OWNER" || role === "FINANCEIRO" || role === "SUPERADMIN") &&
               // Item de recurso fora do plano some do menu. Não é a barreira —
               // essa é a rota — mas evita a pessoa clicar e dar de cara com
               // uma recusa.

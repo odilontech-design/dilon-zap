@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { fecharPedido } from "@/lib/orders";
+import { registrarPagamento } from "@/lib/receivables";
 import { logAudit } from "@/lib/audit";
 import { ehGerencia } from "@/lib/papeis";
 
@@ -25,7 +26,7 @@ const patchSchema = z.object({
   mesReferencia: z.string().max(60).optional(),
   observacao: z.string().trim().max(500).optional(),
   descontoCents: z.number().int().min(0).optional(),
-  paymentMethod: z.enum(["PIX", "PIX_PENDENTE", "CARTAO", "BOLETO", "FIADO"]).optional(),
+  paymentMethod: z.enum(["PIX", "PIX_PENDENTE", "CARTAO", "DINHEIRO", "BOLETO", "FIADO"]).optional(),
   // Prazo combinado com o cliente. So vale em pedido que fecha devendo.
   vencimento: z.string().datetime().nullable().optional(),
 });
@@ -98,10 +99,36 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   if (acao === "marcarPago") {
-    await prisma.order.update({
-      where: { id: pedido.id },
-      data: { pago: true, pagoEm: new Date() },
-    });
+    // Pedido fechado: o que falta entra como RECEBIMENTO, e não só como a flag.
+    // Marcar a flag sem lançar o dinheiro deixava o pedido "pago" sem nada no
+    // extrato — e a parcela dele, que é calculada do extrato, continuaria em aberto.
+    if (pedido.status === "FECHADO") {
+      const completo = await prisma.order.findUniqueOrThrow({
+        where: { id: pedido.id },
+        select: { totalCents: true, paymentMethod: true, pagamentos: { select: { valorCents: true } } },
+      });
+      const falta = completo.totalCents - completo.pagamentos.reduce((s, x) => s + x.valorCents, 0);
+      if (falta > 0) {
+        try {
+          await registrarPagamento({
+            orderId: pedido.id,
+            tenantId: user.tenantId,
+            valorCents: falta,
+            meio: completo.paymentMethod ?? undefined,
+            userId: user.id,
+          });
+        } catch (e) {
+          return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+        }
+      } else {
+        await prisma.order.update({ where: { id: pedido.id }, data: { pago: true, pagoEm: new Date() } });
+      }
+    } else {
+      await prisma.order.update({
+        where: { id: pedido.id },
+        data: { pago: true, pagoEm: new Date() },
+      });
+    }
     await logAudit({ actor: user, action: "order.paid", metadata: { numero: pedido.numero } });
     return NextResponse.json({ ok: true });
   }
@@ -111,9 +138,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "escolha a forma de pagamento" }, { status: 400 });
   }
 
-  // PIX e cartão saem pagos na hora. PIX_PENDENTE, boleto e fiado ficam a
+  // PIX, cartão e dinheiro saem pagos na hora. PIX_PENDENTE, boleto e fiado ficam a
   // receber — é o que faz o saldo devedor do cliente existir.
-  const pagoNaHora = parsed.data.paymentMethod === "PIX" || parsed.data.paymentMethod === "CARTAO";
+  const pagoNaHora =
+    parsed.data.paymentMethod === "PIX" || parsed.data.paymentMethod === "CARTAO" || parsed.data.paymentMethod === "DINHEIRO";
 
   try {
     const r = await fecharPedido({

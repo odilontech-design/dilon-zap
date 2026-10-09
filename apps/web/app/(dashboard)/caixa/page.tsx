@@ -2,13 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { ehGerencia } from "@/lib/papeis";
-import { ContasPanel } from "./contas-panel";
+import { CaixaPanel } from "./caixa-panel";
 
-export default async function ReceberPage() {
+export default async function CaixaPage() {
   const user = await requireUser();
-
-  // Atendente não tem o que fazer aqui: a lista é de gestão, e mostrar quanto
-  // cada cliente deve pra quem só atende é informação sem uso e com peso.
+  // O caixa é o dinheiro da empresa: leitura e operação da gestão.
   if (!ehGerencia(user.role)) redirect("/painel");
 
   return (
@@ -16,13 +14,13 @@ export default async function ReceberPage() {
       <div className="flex items-center gap-4 mb-6">
         <h1 className="text-lg font-semibold">Contas a receber</h1>
         <nav className="flex gap-1 text-sm">
-          <span className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">A receber</span>
-          <Link href="/caixa" className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
-            Caixa
+          <Link href="/receber" className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
+            A receber
           </Link>
+          <span className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">Caixa</span>
         </nav>
       </div>
-      <ContasPanel />
+      <CaixaPanel />
     </div>
   );
 }

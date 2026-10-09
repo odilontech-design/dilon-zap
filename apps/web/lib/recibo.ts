@@ -16,7 +16,7 @@
 import { centsToBRL } from "./billing";
 import { montarBrCode } from "./pix";
 
-export type MeioDePagamento = "PIX" | "PIX_PENDENTE" | "CARTAO" | "BOLETO" | "FIADO";
+export type MeioDePagamento = "PIX" | "PIX_PENDENTE" | "CARTAO" | "DINHEIRO" | "BOLETO" | "FIADO";
 
 export type ReciboEntrada = {
   empresa: {
@@ -111,6 +111,7 @@ const ROTULO_MEIO: Record<MeioDePagamento, string> = {
   // selo PAGO/PENDENTE, e "PIX pendente" no papel soaria como cobrança dobrada.
   PIX_PENDENTE: "PIX",
   CARTAO: "Cartão",
+  DINHEIRO: "Dinheiro",
   BOLETO: "Boleto",
   FIADO: "Fiado",
 };

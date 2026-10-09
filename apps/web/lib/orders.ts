@@ -1,5 +1,6 @@
 import { prisma } from "@dilon-zap/db";
 import type { PaymentMethod } from "@prisma/client";
+import { garantirContaDoPedido } from "@/lib/contas-receber";
 
 /**
  * Regras do pedido que não podem morar numa rota.
@@ -137,6 +138,12 @@ export async function fecharPedido(input: FecharInput) {
       },
       include: { items: true },
     });
+
+    // Pedido que fecha devendo vira uma conta a receber (uma parcela, com o
+    // vencimento combinado). É dela que o A receber lê e que se reparcela.
+    if (!input.pago && totais.totalCents > 0) {
+      await garantirContaDoPedido(tx, pedido.id, input.userId);
+    }
 
     return { jaEstavaFechado: false, pedido: atualizado };
   });
