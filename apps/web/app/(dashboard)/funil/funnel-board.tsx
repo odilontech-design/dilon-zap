@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
@@ -62,6 +62,46 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
   const [criando, setCriando] = useState<{ etapaId?: string } | null>(null);
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
+
+  // Colunas recolhidas e faixa de indicadores oculta ficam lembradas neste
+  // navegador: quem recolhe "Financeiro" não quer recolher de novo a cada visita.
+  const [recolhidas, setRecolhidas] = useState<string[]>([]);
+  const [semIndicadores, setSemIndicadores] = useState(false);
+  useEffect(() => {
+    try {
+      setRecolhidas(JSON.parse(localStorage.getItem("crm:recolhidas") ?? "[]"));
+      setSemIndicadores(localStorage.getItem("crm:sem-indicadores") === "1");
+    } catch {
+      /* sem armazenamento: tudo expandido, sem prejuízo */
+    }
+  }, []);
+  function guardarRecolhidas(novo: string[]) {
+    try {
+      localStorage.setItem("crm:recolhidas", JSON.stringify(novo));
+    } catch {
+      /* idem */
+    }
+  }
+  function alternarColuna(id: string) {
+    const novo = recolhidas.includes(id) ? recolhidas.filter((x) => x !== id) : [...recolhidas, id];
+    setRecolhidas(novo);
+    guardarRecolhidas(novo);
+  }
+  function recolherTodas(ids: string[], recolher: boolean) {
+    const resto = recolhidas.filter((x) => !ids.includes(x));
+    const novo = recolher ? [...resto, ...ids] : resto;
+    setRecolhidas(novo);
+    guardarRecolhidas(novo);
+  }
+  function alternarIndicadores() {
+    const novo = !semIndicadores;
+    setSemIndicadores(novo);
+    try {
+      localStorage.setItem("crm:sem-indicadores", novo ? "1" : "0");
+    } catch {
+      /* idem */
+    }
+  }
 
   const { data: funis } = useSWR<FunilResumo[]>("/api/funis", fetcher);
 
@@ -259,7 +299,7 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
         )}
       </div>
 
-      <IndicadoresFunil ind={quadro.indicadores} motivos={quadro.motivos} />
+      {!semIndicadores && <IndicadoresFunil ind={quadro.indicadores} motivos={quadro.motivos} />}
 
       <div className="flex gap-1 mb-3 border-b border-neutral-200">
         {(
@@ -279,6 +319,22 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
             {rotulo} <span className="text-xs tabular-nums text-neutral-400">{porAba[id].length}</span>
           </button>
         ))}
+        <div className="flex-1" />
+        <div className="flex items-center gap-3 text-xs text-neutral-500 pb-2">
+          {aba === "ABERTA" && quadro.etapas.length > 0 && (
+            <>
+              <button onClick={() => recolherTodas(quadro.etapas.map((e) => e.id), true)} className="hover:text-accent">
+                Recolher colunas
+              </button>
+              <button onClick={() => recolherTodas(quadro.etapas.map((e) => e.id), false)} className="hover:text-accent">
+                Expandir colunas
+              </button>
+            </>
+          )}
+          <button onClick={alternarIndicadores} className="hover:text-accent">
+            {semIndicadores ? "Mostrar indicadores" : "Ocultar indicadores"}
+          </button>
+        </div>
       </div>
 
       {quadro.etapas.length === 0 && (
@@ -295,28 +351,56 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
       )}
 
       {aba === "ABERTA" ? (
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        // Altura presa à janela: a rolagem é de cada coluna, e a página não
+        // cresce com o número de negociações. O desconto é o espaço do que fica
+        // acima do quadro (filtros, abas e, se visível, os indicadores).
+        <div
+          className="flex gap-4 overflow-x-auto pb-2 items-stretch"
+          style={{ height: semIndicadores ? "calc(100vh - 17rem)" : "calc(100vh - 25rem)", minHeight: "20rem" }}
+        >
           {quadro.etapas.map((et) => {
             const cartoes = porAba.ABERTA.filter((n) => n.stageId === et.id);
             const total = cartoes.reduce((s, n) => s + n.valorCents, 0);
+            const alvo = {
+              onDragOver: (e: React.DragEvent) => {
+                e.preventDefault();
+                setSobre(et.id);
+              },
+              onDragLeave: () => setSobre((s) => (s === et.id ? null : s)),
+              onDrop: (e: React.DragEvent) => {
+                e.preventDefault();
+                setSobre(null);
+                if (arrastando) mover(arrastando, et.id);
+                setArrastando(null);
+              },
+            };
+
+            // Coluna recolhida: tira estreita com a contagem e o nome na
+            // vertical. Continua sendo alvo de arrastar.
+            if (recolhidas.includes(et.id)) {
+              return (
+                <button
+                  key={et.id}
+                  onClick={() => alternarColuna(et.id)}
+                  title={`Expandir ${et.nome}`}
+                  {...alvo}
+                  className={`w-11 shrink-0 h-full rounded-md border border-neutral-200 bg-neutral-50 flex flex-col items-center gap-3 py-3 hover:border-accent/60 ${sobre === et.id ? "outline outline-1 outline-dashed outline-accent" : ""}`}
+                >
+                  <span className="w-5 h-1.5 rounded-full" style={{ backgroundColor: et.cor }} />
+                  <span className="text-[10px] font-semibold rounded-full px-1.5 py-0.5 text-white" style={{ backgroundColor: et.cor }}>
+                    {cartoes.length}
+                  </span>
+                  <span className="text-xs font-semibold text-neutral-700 whitespace-nowrap" style={{ writingMode: "vertical-rl" }}>
+                    {et.nome}
+                  </span>
+                </button>
+              );
+            }
+
             return (
-              <div
-                key={et.id}
-                className="w-72 shrink-0"
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  setSobre(et.id);
-                }}
-                onDragLeave={() => setSobre((s) => (s === et.id ? null : s))}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setSobre(null);
-                  if (arrastando) mover(arrastando, et.id);
-                  setArrastando(null);
-                }}
-              >
-                <div className="rounded-t-md h-1.5" style={{ backgroundColor: et.cor }} />
-                <div className="border border-t-0 border-neutral-200 rounded-b-md bg-neutral-50 px-3 py-2.5 flex items-center justify-between gap-2 mb-2">
+              <div key={et.id} className="w-72 shrink-0 h-full flex flex-col min-h-0" {...alvo}>
+                <div className="rounded-t-md h-1.5 shrink-0" style={{ backgroundColor: et.cor }} />
+                <div className="border border-t-0 border-neutral-200 rounded-b-md bg-neutral-50 px-3 py-2.5 flex items-center justify-between gap-2 mb-2 shrink-0">
                   <div className="min-w-0">
                     <h3 className="text-sm font-semibold text-neutral-800 truncate">{et.nome}</h3>
                     <p className="text-[10px] text-neutral-400 tabular-nums">{et.probabilidade}% de chance</p>
@@ -328,9 +412,19 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
                     <span className="text-[10px] rounded-full border border-neutral-300 px-1.5 py-0.5 text-neutral-500 tabular-nums">
                       {centsToBRL(total)}
                     </span>
+                    <button
+                      onClick={() => alternarColuna(et.id)}
+                      title="Recolher coluna"
+                      aria-label={`Recolher ${et.nome}`}
+                      className="text-neutral-400 hover:text-accent text-sm leading-none px-0.5"
+                    >
+                      «
+                    </button>
                   </div>
                 </div>
-                <div className={`flex flex-col gap-2 min-h-[80px] rounded-md ${sobre === et.id ? "bg-accent/5 outline outline-1 outline-dashed outline-accent" : ""}`}>
+                <div
+                  className={`flex flex-col gap-2 flex-1 min-h-0 overflow-y-auto pr-1 rounded-md ${sobre === et.id ? "bg-accent/5 outline outline-1 outline-dashed outline-accent" : ""}`}
+                >
                   {cartoes.map((n) => (
                     <Cartao
                       key={n.id}
@@ -345,7 +439,7 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
                   ))}
                   <button
                     onClick={() => setCriando({ etapaId: et.id })}
-                    className="text-xs text-neutral-400 hover:text-accent rounded-md border border-dashed border-neutral-300 py-1.5"
+                    className="text-xs text-neutral-400 hover:text-accent rounded-md border border-dashed border-neutral-300 py-1.5 shrink-0"
                   >
                     + Adicionar
                   </button>

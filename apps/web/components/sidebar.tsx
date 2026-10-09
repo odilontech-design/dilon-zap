@@ -52,7 +52,7 @@ const NAV_ITEMS = [
   },
   {
     href: "/funil",
-    label: "Funil",
+    label: "CRM",
     icon: icon(<><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="11" rx="1" /><rect x="17" y="4" width="4" height="7" rx="1" /></>),
   },
   {
