@@ -56,6 +56,14 @@ const NAV_ITEMS = [
     icon: icon(<><rect x="3" y="4" width="5" height="16" rx="1" /><rect x="10" y="4" width="5" height="11" rx="1" /><rect x="17" y="4" width="4" height="7" rx="1" /></>),
   },
   {
+    href: "/saas",
+    recurso: "FUNIL_SAAS" as Recurso,
+    label: "Indicadores SaaS",
+    icon: icon(<><path d="M3 3v18h18" /><path d="M7 14l3-3 3 2 5-6" /><path d="M15 7h3v3" /></>),
+    // MRR e CAC são números do negócio, não do atendimento.
+    somenteResponsavel: true,
+  },
+  {
     href: "/relatorios",
     label: "Relatórios",
     icon: icon(<><path d="M3 3v18h18" /><path d="M7 15l4-5 3 3 5-7" /></>),

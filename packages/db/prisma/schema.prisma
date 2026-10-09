@@ -1893,6 +1893,10 @@ model MetricaMensal {
   /// Clientes que cancelaram no mês, e quanto de MRR saiu com eles.
   cancelamentos     Int @default(0)
   mrrCanceladoCents Int @default(0)
+  /// MRR que a empresa já tinha no INÍCIO deste mês, quando informado. O funil
+  /// só enxerga o que foi vendido por ele; isto é o ponto de partida de quem já
+  /// tinha clientes antes. Vale dali em diante, até o próximo valor informado.
+  mrrInicialCents   Int?
 
   updatedAt DateTime @updatedAt
 
