@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
 import { centsToBRL } from "@/lib/billing";
 import { LISTING_INTERVAL } from "@/lib/polling";
+import { intervaloDoPeriodo, type Periodo } from "@/lib/periodo";
 import { IndicadoresFunil } from "./indicadores-funil";
 import { NegociacaoDrawer } from "./negociacao-drawer";
 import { NovaNegociacao } from "./nova-negociacao";
@@ -13,39 +14,7 @@ import { diasParada, fetcher, ROTULO_TAREFA, type FunilResumo, type Negociacao, 
 
 type Aba = "ABERTA" | "GANHA" | "PERDIDA";
 type Foco = "" | "atrasadas" | "sem-passo" | "paradas";
-type Periodo = "todos" | "mes" | "mes-passado" | "30d" | "90d" | "custom";
-
 const DIAS_PARADA = 14;
-
-/** Período → [desde, ate] em ISO. Mês é o calendário, não "últimos 30 dias". */
-function intervalo(p: Periodo, de: string, ate: string): { desde?: string; ate?: string } {
-  const agora = new Date();
-  const dia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  switch (p) {
-    case "mes":
-      return { desde: new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString() };
-    case "mes-passado":
-      return {
-        desde: new Date(agora.getFullYear(), agora.getMonth() - 1, 1).toISOString(),
-        ate: new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0, -1).toISOString(),
-      };
-    case "30d":
-    case "90d": {
-      const d = dia(agora);
-      d.setDate(d.getDate() - (p === "30d" ? 30 : 90));
-      return { desde: d.toISOString() };
-    }
-    case "custom": {
-      const r: { desde?: string; ate?: string } = {};
-      if (de) r.desde = new Date(`${de}T00:00:00`).toISOString();
-      // Fim do dia escolhido: a pessoa que escolhe "até 30/09" quer incluir o dia 30.
-      if (ate) r.ate = new Date(`${ate}T23:59:59.999`).toISOString();
-      return r;
-    }
-    default:
-      return {};
-  }
-}
 
 export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
   const [funilId, setFuniId] = useState("");
@@ -111,7 +80,7 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
     if (responsavel) q.set("responsavelId", responsavel);
     if (origem) q.set("origem", origem);
     if (busca.trim()) q.set("busca", busca.trim());
-    const { desde, ate: fim } = intervalo(periodo, de, ate);
+    const { desde, ate: fim } = intervaloDoPeriodo(periodo, de, ate);
     if (desde) q.set("desde", desde);
     if (fim) q.set("ate", fim);
     return `/api/negociacoes?${q.toString()}`;
