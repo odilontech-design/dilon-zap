@@ -107,7 +107,7 @@ export function ContaDrawer({
 
   async function abrirConversa() {
     if (!data) return;
-    const res = await fetch(`/api/contacts/${data.contato.id}/start-conversation`, { method: "POST" });
+    const res = await fetch(`/api/contacts/${data.contato.id}/start-conversation?assumir=0`, { method: "POST" });
     const corpo = await res.json().catch(() => ({}));
     if (!res.ok) return setAviso(typeof corpo.error === "string" ? corpo.error : "não deu pra abrir a conversa");
     router.push(`/inbox?open=${corpo.id}`);

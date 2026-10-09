@@ -159,7 +159,7 @@ export function NegociacaoDrawer({
   }
 
   async function abrirConversa() {
-    const res = await fetch(`/api/contacts/${negociacao.contato.id}/start-conversation`, { method: "POST" });
+    const res = await fetch(`/api/contacts/${negociacao.contato.id}/start-conversation?assumir=0`, { method: "POST" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       return setErro(typeof body.error === "string" ? body.error : "não deu pra abrir a conversa");

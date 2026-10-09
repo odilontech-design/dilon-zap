@@ -63,7 +63,7 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
 
   async function abrirConversa(t: Tarefa) {
     setErro(null);
-    const res = await fetch(`/api/contacts/${t.contato.id}/start-conversation`, { method: "POST" });
+    const res = await fetch(`/api/contacts/${t.contato.id}/start-conversation?assumir=0`, { method: "POST" });
     const body = await res.json().catch(() => ({}));
     if (!res.ok) return setErro(typeof body.error === "string" ? body.error : "não deu pra abrir a conversa");
     router.push(`/inbox?open=${body.id}`);

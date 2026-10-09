@@ -85,7 +85,7 @@ export function ContasPanel() {
 
   async function abrirConversa(l: LinhaParcela) {
     setErro(null);
-    const res = await fetch(`/api/contacts/${l.contato.id}/start-conversation`, { method: "POST" });
+    const res = await fetch(`/api/contacts/${l.contato.id}/start-conversation?assumir=0`, { method: "POST" });
     const corpo = await res.json().catch(() => ({}));
     if (!res.ok) return setErro(typeof corpo.error === "string" ? corpo.error : "não deu pra abrir a conversa");
     router.push(`/inbox?open=${corpo.id}`);

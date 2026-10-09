@@ -7,8 +7,12 @@ import { numeroParaEnviar } from "@/lib/whatsapp-sessions";
 // Fase 0/1: um número por tenant, então "iniciar conversa" sempre usa a
 // sessão mais recente do tenant. Quando existir mais de um número, isso
 // precisa virar uma escolha explícita na tela.
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  // ?assumir=0: só ABRIR a conversa que o contato já tem, sem mexer em dono nem
+  // setor. É o que as telas de apoio (A receber, Tarefas, CRM) usam: quem clica
+  // ali quer falar com o cliente, não ficar dono do atendimento dele.
+  const soAbrir = new URL(req.url).searchParams.get("assumir") === "0";
 
   const contact = await prisma.contact.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
@@ -47,6 +51,31 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     // aviso de "conversa transferida pra você" pra quem acabou de puxá-la.
     assignmentSeenAt: agora,
   };
+
+  if (soAbrir) {
+    const existente = await prisma.conversation.findUnique({
+      where: { contactId_sessionId: { contactId: contact.id, sessionId: session.id } },
+      include: { assignedTo: { select: { name: true } }, setor: { select: { nome: true } } },
+    });
+    if (existente) {
+      // Antes isto caía no caminho "assume": numa conversa sem dono (a triagem
+      // da URA apaga o dono ao reiniciar) ou encerrada, quem só queria abrir —
+      // o financeiro cobrando, por exemplo — virava o dono e levava o setor
+      // dele junto, sem registro. Foi assim que atendimentos do Administrativo
+      // apareceram na fila do Financeiro.
+      const visivelParaQuemAbre = await prisma.conversation.findFirst({
+        where: { id: existente.id, ...(await conversationVisibilityWhere(user)) },
+        select: { id: true },
+      });
+      if (visivelParaQuemAbre) return NextResponse.json(existente);
+
+      const com = [existente.assignedTo?.name, existente.setor?.nome && `setor ${existente.setor.nome}`].filter(Boolean).join(" · ");
+      return NextResponse.json(
+        { error: `A conversa deste cliente é de outra pessoa ou setor${com ? ` (${com})` : ""}. Peça a quem está com ela para transferir, ou use "Nova conversa" no Inbox para assumir.` },
+        { status: 409 }
+      );
+    }
+  }
 
   // upsert em vez de find-then-create: dois cliques rápidos em "iniciar
   // conversa" (ou um clique concorrente com uma mensagem chegando ao mesmo
