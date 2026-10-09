@@ -6,6 +6,8 @@ import { centsToBRL } from "@/lib/billing";
 import { reaisParaCentavos } from "../funil/tipos";
 import { chamar, dataHoraBR, fetcher, ROTULO_MEIO } from "../receber/formatos";
 
+const ROTULO_FORMA: Record<string, string> = { BOLETO: "Boleto", PIX: "PIX", TRANSFERENCIA: "Transferência", CARTAO: "Cartão", DINHEIRO: "Dinheiro", CHEQUE: "Cheque", OUTRO: "Outro" };
+
 type Resumo = {
   porMeio: Record<string, number>;
   totalRecebidoCents: number;
@@ -13,6 +15,7 @@ type Resumo = {
   suprimentosCents: number;
   sangriasCents: number;
   despesasCents: number;
+  pagamentosAFornecedoresCents: number;
   esperadoDinheiroCents: number;
 };
 
@@ -31,6 +34,7 @@ type Dados = {
   };
   resumo: Resumo;
   recebimentos: { id: string; valorCents: number; meio: string | null; lancadoEm: string; cliente: string; referencia: string; parcela: string | null; observacao: string | null; por: string | null }[];
+  pagamentosAFornecedores: { id: string; valorCents: number; meio: string | null; lancadoEm: string; fornecedor: string; referencia: string; parcela: string | null; observacao: string | null; por: string | null }[];
   movimentos: { id: string; tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; valorCents: number; descricao: string; createdAt: string; createdBy: { name: string } | null }[];
 };
 
@@ -242,7 +246,7 @@ function DetalheDoCaixa({
       <div className="flex gap-2 overflow-x-auto pb-1">
         <Cartao titulo="Valor inicial" valor={centsToBRL(dados.caixa.valorInicialCents)} />
         <Cartao titulo="Recebido na sessão" valor={centsToBRL(r.totalRecebidoCents)} nota="todas as formas" />
-        <Cartao titulo="Dinheiro esperado na gaveta" valor={centsToBRL(r.esperadoDinheiroCents)} nota="inicial + dinheiro + suprimentos − sangrias − despesas" destaque />
+        <Cartao titulo="Dinheiro esperado na gaveta" valor={centsToBRL(r.esperadoDinheiroCents)} nota="inicial + dinheiro + suprimentos − sangrias − despesas − pagamentos em dinheiro" destaque />
         {dados.caixa.fechadoEm && (
           <>
             <Cartao titulo="Contado" valor={dados.caixa.contadoDinheiroCents === null ? "—" : centsToBRL(dados.caixa.contadoDinheiroCents)} />
@@ -330,6 +334,39 @@ function DetalheDoCaixa({
           </tbody>
         </table>
       </div>
+
+      {dados.pagamentosAFornecedores.length > 0 && (
+        <div className="rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
+          <h3 className="text-sm font-semibold px-4 pt-3">Pagamentos a fornecedores na sessão</h3>
+          <table className="w-full text-sm tabular-nums">
+            <thead className="text-xs text-neutral-500">
+              <tr>
+                <th className="text-left px-4 py-2 font-medium">Lançado em</th>
+                <th className="text-left px-3 py-2 font-medium">Fornecedor</th>
+                <th className="text-left px-3 py-2 font-medium">Referência</th>
+                <th className="text-left px-3 py-2 font-medium">Forma</th>
+                <th className="text-right px-3 py-2 font-medium">Valor</th>
+              </tr>
+            </thead>
+            <tbody>
+              {dados.pagamentosAFornecedores.map((x) => (
+                <tr key={x.id} className="border-t border-neutral-100">
+                  <td className="px-4 py-2.5">{dataHoraBR(x.lancadoEm)}</td>
+                  <td className="px-3 py-2.5">{x.fornecedor}</td>
+                  <td className="px-3 py-2.5">
+                    {x.referencia}
+                    {x.parcela && <span className="text-neutral-400"> · parcela {x.parcela}</span>}
+                    {x.valorCents < 0 && <span className="text-red-600"> · estorno</span>}
+                  </td>
+                  <td className="px-3 py-2.5">{x.meio ? (ROTULO_FORMA[x.meio] ?? x.meio) : "—"}</td>
+                  <td className={`px-3 py-2.5 text-right ${x.valorCents < 0 ? "text-green-700" : "text-red-600"}`}>{centsToBRL(x.valorCents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-[11px] text-neutral-400 px-4 pb-3">Só os pagamentos em dinheiro saem da gaveta.</p>
+        </div>
+      )}
     </div>
   );
 }

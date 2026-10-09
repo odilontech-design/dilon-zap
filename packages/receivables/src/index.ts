@@ -281,7 +281,9 @@ export type ResumoDoCaixa = {
   suprimentosCents: number;
   sangriasCents: number;
   despesasCents: number;
-  /** O que deve haver em dinheiro na gaveta: inicial + dinheiro recebido + suprimentos − sangrias − despesas. */
+  /** Pagamentos a fornecedores feitos em dinheiro (líquidos de estorno): saem da gaveta. */
+  pagamentosAFornecedoresCents: number;
+  /** O que deve haver em dinheiro na gaveta: inicial + dinheiro recebido + suprimentos − sangrias − despesas − pagamentos a fornecedores em dinheiro. */
   esperadoDinheiroCents: number;
 };
 
@@ -294,6 +296,8 @@ export function resumoDoCaixa(args: {
   valorInicialCents: number;
   recebimentos: { valorCents: number; meio: string | null }[];
   movimentos: { tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; valorCents: number }[];
+  /** Pagamentos a fornecedores feitos em DINHEIRO na sessão (estorno entra negativo). */
+  saidasDinheiroCents?: number;
 }): ResumoDoCaixa {
   const porMeio: Partial<Record<MeioDoCaixa, number>> = {};
   for (const r of args.recebimentos) {
@@ -313,6 +317,8 @@ export function resumoDoCaixa(args: {
     suprimentosCents,
     sangriasCents,
     despesasCents,
-    esperadoDinheiroCents: args.valorInicialCents + recebidoDinheiroCents + suprimentosCents - sangriasCents - despesasCents,
+    pagamentosAFornecedoresCents: args.saidasDinheiroCents ?? 0,
+    esperadoDinheiroCents:
+      args.valorInicialCents + recebidoDinheiroCents + suprimentosCents - sangriasCents - despesasCents - (args.saidasDinheiroCents ?? 0),
   };
 }

@@ -2,11 +2,11 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { ehGerencia } from "@/lib/papeis";
-import { CaixaPanel } from "./caixa-panel";
+import { PagarPanel } from "./pagar-panel";
 
-export default async function CaixaPage() {
+export default async function PagarPage() {
   const user = await requireUser();
-  // O caixa é o dinheiro da empresa: leitura e operação da gestão.
+  // Quanto a empresa deve a quem: informação de gestão.
   if (!ehGerencia(user.role)) redirect("/painel");
 
   return (
@@ -17,13 +17,13 @@ export default async function CaixaPage() {
           <Link href="/receber" className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
             A receber
           </Link>
-          <Link href="/pagar" className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
-            A pagar
+          <span className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">A pagar</span>
+          <Link href="/caixa" className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
+            Caixa
           </Link>
-          <span className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">Caixa</span>
         </nav>
       </div>
-      <CaixaPanel />
+      <PagarPanel />
     </div>
   );
 }

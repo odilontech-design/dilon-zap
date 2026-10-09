@@ -112,6 +112,13 @@ const NAV_ITEMS = [
     somenteGestao: true,
   },
   {
+    href: "/pagar",
+    recurso: "CONTAS_RECEBER" as Recurso,
+    label: "A pagar",
+    icon: icon(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M14 15h4" /></>),
+    somenteGestao: true,
+  },
+  {
     href: "/caixa",
     recurso: "CONTAS_RECEBER" as Recurso,
     label: "Caixa",

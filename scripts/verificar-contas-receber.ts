@@ -21,6 +21,7 @@ import {
   reparcelarConta,
 } from "../apps/web/lib/contas-receber";
 import { fecharPedido } from "../apps/web/lib/orders";
+import { criarContaPagar, estornarPagamento, listarParcelasPagar, pagarNaConta } from "../apps/web/lib/contas-pagar";
 import { registrarPagamento } from "../apps/web/lib/receivables";
 
 function confere(nome: string, obtido: unknown, esperado: unknown) {
@@ -48,6 +49,7 @@ async function main() {
   const marca = `Teste Fumaça ${Date.now()}`;
   const contato = await prisma.contact.create({ data: { tenantId: tenant.id, waJid: `fumaca-${Date.now()}@s.whatsapp.net`, name: marca } });
   let caixaId: string | null = null;
+  let fornecedorId: string | null = null;
 
   try {
     caixaId = (await abrirCaixa(tenant.id, usuario.id, 5000)).id;
@@ -134,16 +136,44 @@ async function main() {
     const idempotente = await prisma.$transaction((tx) => garantirContaDoPedido(tx, pedido.id));
     confere("garantir a conta duas vezes devolve a mesma", idempotente.id, contaPedido!.id);
 
+    /* ---------------------------------------- contas a pagar ---------------------------------------- */
+    const contaPagar = await prisma.$transaction((tx) =>
+      criarContaPagar(tx, {
+        tenantId: tenant.id,
+        fornecedorNome: marca,
+        descricao: "fumaça",
+        forma: "BOLETO",
+        userId: usuario.id,
+        plano: { totalCents: 300_00, numParcelas: 3, periodicidade: "MENSAL", primeiroVencimento: dia(10) },
+      })
+    );
+    fornecedorId = (await prisma.contaPagar.findUniqueOrThrow({ where: { id: contaPagar.id }, select: { fornecedorId: true } })).fornecedorId;
+    let aPagar = await listarParcelasPagar(tenant.id, { tipoData: "vencimento", status: ["PENDENTE"], fornecedor: marca });
+    confere("conta a pagar: 3 parcelas de 100 em boleto", aPagar.map((p) => [p.numero, p.totalParcelas, p.valorCents, p.forma]), [[1, 3, 100_00, "BOLETO"], [2, 3, 100_00, "BOLETO"], [3, 3, 100_00, "BOLETO"]]);
+
+    await prisma.$transaction((tx) => pagarNaConta(tx, { tenantId: tenant.id, contaId: contaPagar.id, parcelaId: aPagar[1].id, valorCents: 100_00, meio: "DINHEIRO", userId: usuario.id }));
+    aPagar = await listarParcelasPagar(tenant.id, { tipoData: "vencimento", status: ["PENDENTE", "PAGA"], fornecedor: marca });
+    confere("pagar a 2ª parcela (fora de ordem) quita só ela", aPagar.map((p) => p.status), ["PENDENTE", "PAGA", "PENDENTE"]);
+
+    await prisma.$transaction((tx) => estornarPagamento(tx, { tenantId: tenant.id, contaId: contaPagar.id, valorCents: 20_00, userId: usuario.id }));
+    aPagar = await listarParcelasPagar(tenant.id, { tipoData: "vencimento", status: ["PENDENTE", "PAGA"], fornecedor: marca });
+    confere("estorno devolve parte do pagamento", aPagar.map((p) => p.saldoCents), [100_00, 20_00, 100_00]);
+
     /* ------------------------------------------- caixa ------------------------------------------- */
     await registrarMovimento(tenant.id, usuario.id, caixaId, { tipo: "SANGRIA", valorCents: 20_00, descricao: "fumaça" });
     const dados = await dadosDoCaixa(tenant.id, caixaId);
-    // Dinheiro: +100 (entrada) −100 (reembolso) +120 (quitação do pedido) −50 (estorno) = +70; sangria −20.
-    confere("esperado em dinheiro na gaveta", dados!.resumo.esperadoDinheiroCents, 5000 + 70_00 - 20_00);
-    const fechamento = await fecharCaixa(tenant.id, usuario.id, caixaId, 5000 + 70_00 - 20_00, "fumaça");
+    // Dinheiro: +100 (entrada) −100 (reembolso) +120 (quitação do pedido) −50 (estorno) = +70;
+    // sangria −20; pagamento a fornecedor em dinheiro: −100 +20 (estorno) = −80.
+    confere("esperado em dinheiro na gaveta", dados!.resumo.esperadoDinheiroCents, 5000 + 70_00 - 20_00 - 80_00);
+    const fechamento = await fecharCaixa(tenant.id, usuario.id, caixaId, 5000 + 70_00 - 20_00 - 80_00, "fumaça");
     confere("caixa confere ao contar o esperado", fechamento.diferencaCents, 0);
   } finally {
     // O contato leva junto conta, parcelas, pedidos, itens e recebimentos.
     await prisma.contact.delete({ where: { id: contato.id } }).catch((e) => console.error("limpeza do contato:", e.message));
+    if (fornecedorId) {
+      await prisma.contaPagar.deleteMany({ where: { fornecedorId } }).catch((e) => console.error("limpeza das contas a pagar:", e.message));
+      await prisma.fornecedor.delete({ where: { id: fornecedorId } }).catch((e) => console.error("limpeza do fornecedor:", e.message));
+    }
     if (caixaId) await prisma.caixa.delete({ where: { id: caixaId } }).catch((e) => console.error("limpeza do caixa:", e.message));
   }
   console.log("\nTudo certo — e a limpeza foi feita.");

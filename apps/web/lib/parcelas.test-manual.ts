@@ -170,6 +170,10 @@ const parcela = (p: Partial<ParcelaEntrada> = {}): ParcelaEntrada => ({
   const r = resumoDoCaixa({ valorInicialCents: 0, recebimentos: [], movimentos: [] });
   checa("caixa vazio espera zero", r.esperadoDinheiroCents, 0);
 }
+{
+  const r = resumoDoCaixa({ valorInicialCents: 100_00, recebimentos: [{ valorCents: 50_00, meio: "DINHEIRO" }], movimentos: [], saidasDinheiroCents: 30_00 });
+  checa("pagamento a fornecedor em dinheiro sai da gaveta", [r.esperadoDinheiroCents, r.pagamentosAFornecedoresCents], [120_00, 30_00]);
+}
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
 if (falhas > 0) process.exit(1);

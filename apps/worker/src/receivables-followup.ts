@@ -46,6 +46,7 @@ export function startReceivablesFollowupLoop() {
 
 export async function processarAcompanhamentoFinanceiro() {
   await processarParcelasAvulsas();
+  await processarContasAPagar();
   const agora = new Date();
 
   // Só pedido com prazo combinado entra na régua — "sem prazo" não tem data
@@ -179,6 +180,64 @@ async function processarParcelasAvulsas() {
       await prisma.parcela.update({ where: { id: p.id }, data: { ultimoLembreteInternoEm: agora } });
     } catch (err) {
       logger.error({ err, parcelaId: p.id }, "falha ao avisar parcela avulsa no acompanhamento de contas a receber");
+    }
+  }
+}
+
+/**
+ * Contas a PAGAR: a mesma régua, no sentido contrário — avisa a casa que há
+ * uma conta de fornecedor vencendo (2 dias antes, no dia, e a cada 7 dias de
+ * atraso). Boleto esquecido vira multa e juros; este aviso é o que impede.
+ */
+async function processarContasAPagar() {
+  const agora = new Date();
+
+  const candidatas = await prisma.parcelaPagar.findMany({
+    where: { canceladaEm: null, reembolsadaEm: null, vencimento: { not: null }, conta: { canceladaEm: null } },
+    select: {
+      id: true,
+      tenantId: true,
+      numero: true,
+      totalParcelas: true,
+      vencimento: true,
+      valorCents: true,
+      canceladaEm: true,
+      reembolsadaEm: true,
+      ultimoLembreteInternoEm: true,
+      pagamentos: { select: { valorCents: true, pagoEm: true, meio: true } },
+      conta: { select: { fornecedor: { select: { nome: true } } } },
+    },
+    take: TETO_POR_CICLO,
+    orderBy: { vencimento: "asc" },
+  });
+
+  for (const p of candidatas) {
+    if (!p.vencimento || !precisaLembrarHoje(p.vencimento, agora)) continue;
+    if (p.ultimoLembreteInternoEm && mesmoDiaCalendario(p.ultimoLembreteInternoEm, agora)) continue;
+
+    const sit = situacaoDaParcela(
+      { id: p.id, numero: p.numero, tipo: "UNICA", vencimento: p.vencimento, valorCents: p.valorCents, canceladaEm: p.canceladaEm, reembolsadaEm: p.reembolsadaEm },
+      p.pagamentos.map((x) => ({ valorCents: x.valorCents, recebidoEm: x.pagoEm, meio: x.meio }))
+    );
+    if (sit.status !== "PENDENTE") continue;
+
+    try {
+      const destinatarios = await prisma.user.findMany({
+        where: { tenantId: p.tenantId, role: { in: ["OWNER", "FINANCEIRO"] }, deactivatedAt: null },
+        select: { id: true },
+      });
+      if (destinatarios.length === 0) continue;
+
+      const valor = (sit.saldoCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+      const vencida = faixaDeVencimento(p.vencimento, agora) === "vencido";
+      const corpo = vencida
+        ? `Conta vencida: ${p.conta.fornecedor.nome} — ${valor} (parcela ${p.numero} de ${p.totalParcelas})`
+        : `Vence hoje: ${p.conta.fornecedor.nome} — ${valor} (parcela ${p.numero} de ${p.totalParcelas})`;
+
+      await Promise.all(destinatarios.map((u) => avisarNoCelular(u.id, { titulo: "Conta a pagar", corpo, url: "/pagar", tag: `pagar-${p.id}` })));
+      await prisma.parcelaPagar.update({ where: { id: p.id }, data: { ultimoLembreteInternoEm: agora } });
+    } catch (err) {
+      logger.error({ err, parcelaId: p.id }, "falha ao avisar conta a pagar no acompanhamento financeiro");
     }
   }
 }

@@ -61,6 +61,27 @@ async function recebimentosDaSessao(tenantId: string, caixa: Pick<Cx, "abertoEm"
   });
 }
 
+/** Pagamentos a fornecedores lançados na sessão (mesma janela dos recebimentos). */
+async function saidasDaSessao(tenantId: string, caixa: Pick<Cx, "abertoEm" | "fechadoEm">) {
+  return prisma.saidaPagamento.findMany({
+    where: { tenantId, createdAt: { gte: caixa.abertoEm, ...(caixa.fechadoEm ? { lte: caixa.fechadoEm } : {}) } },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      valorCents: true,
+      meio: true,
+      createdAt: true,
+      observacao: true,
+      createdBy: { select: { name: true } },
+      conta: { select: { descricao: true, fornecedor: { select: { nome: true } } } },
+      parcela: { select: { numero: true, totalParcelas: true } },
+    },
+  });
+}
+
+const saidasEmDinheiro = (saidas: { valorCents: number; meio: string | null }[]) =>
+  saidas.filter((x) => x.meio === "DINHEIRO").reduce((s, x) => s + x.valorCents, 0);
+
 /** Tudo de uma sessão de caixa: dados, lançamentos e o resumo para conferir. */
 export async function dadosDoCaixa(tenantId: string, caixaId: string) {
   const caixa = await prisma.caixa.findFirst({
@@ -69,8 +90,9 @@ export async function dadosDoCaixa(tenantId: string, caixaId: string) {
   });
   if (!caixa) return null;
 
-  const [pagamentos, movimentos] = await Promise.all([
+  const [pagamentos, saidas, movimentos] = await Promise.all([
     recebimentosDaSessao(tenantId, caixa),
+    saidasDaSessao(tenantId, caixa),
     prisma.movimentoCaixa.findMany({
       where: { caixaId: caixa.id },
       orderBy: { createdAt: "asc" },
@@ -82,6 +104,7 @@ export async function dadosDoCaixa(tenantId: string, caixaId: string) {
     valorInicialCents: caixa.valorInicialCents,
     recebimentos: pagamentos.map((p) => ({ valorCents: p.valorCents, meio: p.meio })),
     movimentos: movimentos.map((m) => ({ tipo: m.tipo, valorCents: m.valorCents })),
+    saidasDinheiroCents: saidasEmDinheiro(saidas),
   });
 
   return {
@@ -113,6 +136,17 @@ export async function dadosDoCaixa(tenantId: string, caixaId: string) {
         por: p.createdBy?.name ?? null,
       };
     }),
+    pagamentosAFornecedores: saidas.map((x) => ({
+      id: x.id,
+      valorCents: x.valorCents,
+      meio: x.meio,
+      lancadoEm: x.createdAt,
+      fornecedor: x.conta.fornecedor.nome,
+      referencia: x.conta.descricao ?? "Conta a pagar",
+      parcela: x.parcela ? `${x.parcela.numero} de ${x.parcela.totalParcelas}` : null,
+      observacao: x.observacao,
+      por: x.createdBy?.name ?? null,
+    })),
     movimentos,
   };
 }
@@ -175,8 +209,10 @@ export async function fecharCaixa(
 
 async function dadosDoCaixaAte(tenantId: string, caixaId: string, ate: Date) {
   const caixa = await prisma.caixa.findFirstOrThrow({ where: { id: caixaId, tenantId } });
-  const [pagamentos, movimentos] = await Promise.all([
-    recebimentosDaSessao(tenantId, { abertoEm: caixa.abertoEm, fechadoEm: ate }),
+  const janela = { abertoEm: caixa.abertoEm, fechadoEm: ate };
+  const [pagamentos, saidas, movimentos] = await Promise.all([
+    recebimentosDaSessao(tenantId, janela),
+    saidasDaSessao(tenantId, janela),
     prisma.movimentoCaixa.findMany({ where: { caixaId }, select: { tipo: true, valorCents: true } }),
   ]);
   return {
@@ -184,6 +220,7 @@ async function dadosDoCaixaAte(tenantId: string, caixaId: string, ate: Date) {
       valorInicialCents: caixa.valorInicialCents,
       recebimentos: pagamentos.map((p) => ({ valorCents: p.valorCents, meio: p.meio })),
       movimentos,
+      saidasDinheiroCents: saidasEmDinheiro(saidas),
     }),
   };
 }

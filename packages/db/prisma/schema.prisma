@@ -146,6 +146,10 @@ model Tenant {
   contasReceber     ContaReceber[]
   parcelas          Parcela[]
   caixas            Caixa[]
+  fornecedores      Fornecedor[]
+  contasPagar       ContaPagar[]
+  parcelasPagar     ParcelaPagar[]
+  saidasPagamento   SaidaPagamento[]
   movimentosCaixa   MovimentoCaixa[]
   tags              Tag[]
   stages            Stage[]
@@ -390,6 +394,7 @@ model User {
   caixasAbertos                  Caixa[]            @relation("CaixaAbertoPor")
   caixasFechados                 Caixa[]            @relation("CaixaFechadoPor")
   movimentosDeCaixa              MovimentoCaixa[]
+  saidasLancadas                 SaidaPagamento[]
   sentMessages           Message[]          @relation("MessageSender")
   messageReactions       MessageReaction[]
   scheduledMessages      ScheduledMessage[] @relation("ScheduledBy")
@@ -2105,4 +2110,115 @@ model MovimentoCaixa {
   createdAt   DateTime @default(now())
 
   @@index([caixaId])
+}
+
+/// Como a parcela de uma conta a pagar é (ou será) quitada. Separado de
+/// PaymentMethod de propósito: aquele descreve o que o CLIENTE faz ao pagar a
+/// empresa (inclui "fiado" e "PIX a pagar"), e aqui é o que a EMPRESA faz ao
+/// pagar um fornecedor.
+enum FormaPagamentoConta {
+  BOLETO
+  PIX
+  TRANSFERENCIA
+  CARTAO
+  DINHEIRO
+  CHEQUE
+  OUTRO
+}
+
+model Fornecedor {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nome      String
+  documento String?
+  telefone  String?
+  observacao String?
+  ativo     Boolean @default(true)
+  createdAt DateTime @default(now())
+
+  contas ContaPagar[]
+
+  @@unique([tenantId, nome])
+}
+
+/// O que a empresa deve a um fornecedor, dividido em parcelas. Espelho de
+/// ContaReceber: a situação de cada parcela (paga, pendente, quanto falta) é
+/// calculada dos pagamentos feitos — nunca guardada.
+model ContaPagar {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  fornecedorId String
+  fornecedor   Fornecedor @relation(fields: [fornecedorId], references: [id], onDelete: Restrict)
+
+  descricao   String?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  canceladaEm DateTime?
+
+  parcelas   ParcelaPagar[]
+  pagamentos SaidaPagamento[]
+
+  @@index([tenantId, createdAt])
+  @@index([fornecedorId])
+}
+
+model ParcelaPagar {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contaId String
+  conta   ContaPagar @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  /// "2 de 3".
+  numero        Int
+  totalParcelas Int
+  /// Como será paga: é o "Tipo de pagamento" da lista.
+  forma         FormaPagamentoConta @default(BOLETO)
+
+  /// Dia do vencimento, guardado ao meio-dia UTC (o fuso não empurra o dia).
+  vencimento DateTime?
+  valorCents Int
+
+  canceladaEm   DateTime?
+  reembolsadaEm DateTime?
+  observacao    String?
+  ultimoLembreteInternoEm DateTime?
+
+  pagamentos SaidaPagamento[]
+
+  @@index([tenantId, vencimento])
+  @@index([contaId])
+}
+
+/// Um pagamento feito a um fornecedor. Negativo é estorno (ou devolução do
+/// fornecedor): o extrato nunca é reescrito. Entra no caixa, quando em dinheiro,
+/// pela data do LANÇAMENTO (createdAt), como os recebimentos.
+model SaidaPagamento {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contaId String
+  conta   ContaPagar @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  parcelaId String?
+  parcela   ParcelaPagar? @relation(fields: [parcelaId], references: [id], onDelete: SetNull)
+
+  valorCents Int
+  meio       FormaPagamentoConta?
+  /// Quando o dinheiro saiu (pode ser anterior ao lançamento).
+  pagoEm     DateTime @default(now())
+  observacao String?
+
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([contaId])
+  @@index([parcelaId])
+  @@index([tenantId, createdAt])
 }
