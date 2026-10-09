@@ -339,6 +339,13 @@ export function decidirAutoResposta(e: EntradaDecisao): Decisao | null {
       };
     }
 
+    // Áudio, foto ou documento, sem texto: não há o que casar com uma opção, e
+    // responder "Não entendi, responda com o número" a quem mandou um áudio é
+    // pedir pra pessoa fazer o que ela acabou de fazer de outro jeito. Cala,
+    // sem gastar o reenvio: o cliente que mandar o número depois ainda é
+    // encaminhado, e a conversa fica na fila pra equipe ouvir o áudio.
+    if (!e.textoRecebido.trim()) return null;
+
     if (e.uraReenvios < URA_MAX_REENVIOS) {
       return {
         texto: montarMenuUra(

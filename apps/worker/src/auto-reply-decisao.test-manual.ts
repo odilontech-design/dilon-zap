@@ -360,6 +360,23 @@ checa(
 );
 
 checa(
+  "áudio/foto/documento (sem texto) depois do menu: silêncio, não 'Não entendi'",
+  decidirAutoResposta(comMenu({ textoRecebido: "" })),
+  calado
+);
+
+checa(
+  "mídia sem texto não gasta o reenvio: o número que vier depois ainda encaminha",
+  decidirAutoResposta(comMenu({ textoRecebido: "1", uraReenvios: 0 })),
+  {
+    texto: "Certo! Encaminhando para Fiscal. Já já alguém te responde por aqui.",
+    marcarAusencia: false,
+    marcarSaudacao: false,
+    atribuirPara: "user-fiscal",
+  }
+);
+
+checa(
   "mesmo depois de desistir de insistir, a escolha certa ainda encaminha",
   decidirAutoResposta(comMenu({ textoRecebido: "1", uraReenvios: 1 })),
   {
