@@ -138,6 +138,9 @@ model Tenant {
   subscription      Subscription?
   invoices          Invoice[]
   solicitacoes      SolicitacaoDeAcesso[]
+  funis             Funil[]
+  negociacoes       Negociacao[]
+  motivosDePerda    MotivoDePerda[]
   tags              Tag[]
   stages            Stage[]
   uraOpcoes         UraOpcao[]
@@ -376,6 +379,7 @@ model User {
   uraOpcoes              UraOpcao[]         @relation("UraDestino")
   setores                SetorMembro[]
   solicitacoesDecididas  SolicitacaoDeAcesso[] @relation("SolicitacaoDecididaPor")
+  negociacoesSobResponsabilidade Negociacao[] @relation("NegociacaoResponsavel")
   sentMessages           Message[]          @relation("MessageSender")
   messageReactions       MessageReaction[]
   scheduledMessages      ScheduledMessage[] @relation("ScheduledBy")
@@ -467,10 +471,163 @@ model Stage {
   position  Int      @default(0)
   createdAt DateTime @default(now())
 
-  contacts Contact[]
+  // A que funil a etapa pertence. Nulo só durante a migração: antes existia um
+  // funil por empresa e as etapas eram da empresa; o script de migração cria o
+  // funil padrão de cada uma e preenche isto. O código trata como sempre
+  // preenchido.
+  funilId String?
+  funil   Funil?  @relation(fields: [funilId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, name])
+  /// Chance de fechar, de 0 a 100, de uma negociação que está nesta etapa.
+  /// Base da previsão ponderada: R$ 10.000 na etapa de 20% vale R$ 2.000 no
+  /// forecast, não R$ 10.000.
+  probabilidade Int @default(0)
+
+  // Mantido enquanto o funil antigo (um contato, uma etapa) é desativado.
+  contacts Contact[]
+  negociacoes Negociacao[]
+
+  // Por funil, e não por empresa: "Qualificação" existe em mais de um funil.
+  @@unique([funilId, name])
   @@index([tenantId, position])
+  @@index([funilId, position])
+}
+
+/// Um funil de vendas. A empresa pode ter vários — um por produto, por canal,
+/// por tipo de cliente — cada um com as próprias etapas.
+model Funil {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nome     String
+  position Int    @default(0)
+  /// O funil que abre por padrão e recebe a negociação criada sem escolha.
+  padrao   Boolean @default(false)
+  /// Arquivar em vez de apagar: negociações ganhas e perdidas continuam
+  /// apontando pra ele, e o histórico de conversão não pode sumir junto.
+  arquivadoEm DateTime?
+  createdAt DateTime @default(now())
+
+  etapas      Stage[]
+  negociacoes Negociacao[]
+
+  @@unique([tenantId, nome])
+  @@index([tenantId, position])
+}
+
+enum StatusNegociacao {
+  ABERTA
+  GANHA
+  PERDIDA
+}
+
+/// Como o valor se repete. MENSAL entra no MRR; UNICA não.
+enum RecorrenciaNegociacao {
+  UNICA
+  MENSAL
+}
+
+enum TipoEventoNegociacao {
+  CRIADA
+  ETAPA
+  GANHA
+  PERDIDA
+  REABERTA
+}
+
+/// Uma oportunidade de venda com um contato.
+///
+/// Entidade própria, e não um campo do contato, porque o mesmo cliente compra
+/// mais de uma vez — o plano Essencial hoje, o upgrade daqui a seis meses — e
+/// com a etapa dentro do contato a segunda venda sobrescrevia a primeira. Sem
+/// negociação também não há ganha/perdida, e portanto nenhuma taxa de conversão.
+model Negociacao {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  funilId String
+  funil   Funil  @relation(fields: [funilId], references: [id])
+  stageId String
+  stage   Stage  @relation(fields: [stageId], references: [id])
+
+  titulo      String
+  valorCents  Int                   @default(0)
+  recorrencia RecorrenciaNegociacao @default(UNICA)
+
+  responsavelId String?
+  responsavel   User?   @relation("NegociacaoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  /// De onde veio: "Instagram", "Indicação", "Anúncio". Texto livre, mas a
+  /// tela sugere o que já foi usado pra não nascerem "instagram" e "Insta".
+  origem String?
+
+  previsaoFechamento DateTime?
+
+  status StatusNegociacao @default(ABERTA)
+  motivoPerdaId String?
+  motivoPerda   MotivoDePerda? @relation(fields: [motivoPerdaId], references: [id], onDelete: SetNull)
+  /// Detalhe da perda, em texto livre, além do motivo da lista.
+  detalhePerda  String?
+  fechadaEm     DateTime?
+
+  /// Quando entrou na etapa atual. É o que diz há quantos dias a negociação
+  /// está parada — o sinal mais barato de que um negócio está esfriando.
+  etapaDesde DateTime @default(now())
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventos HistoricoDeEtapa[]
+
+  @@index([tenantId, funilId, status])
+  @@index([tenantId, stageId])
+  @@index([tenantId, status, fechadaEm])
+  @@index([contactId])
+  @@index([responsavelId])
+}
+
+/// Cada passo de uma negociação. É a base de toda taxa de conversão: sem o
+/// histórico só se sabe em que etapa a negociação ESTÁ, nunca por quais
+/// passou — e "quantas chegaram à proposta" depende justamente disso.
+model HistoricoDeEtapa {
+  id           String     @id @default(cuid())
+  negociacaoId String
+  negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
+
+  tipo TipoEventoNegociacao
+  /// Nulos quando a etapa foi apagada depois — o nome em foto abaixo preserva
+  /// o registro legível, igual ao de TransferenciaSetor.
+  deStageId    String?
+  paraStageId  String?
+  deEtapaNome  String?
+  paraEtapaNome String?
+
+  porUserId String?
+  porNome   String?
+  em        DateTime @default(now())
+
+  @@index([negociacaoId, em])
+  @@index([paraStageId])
+}
+
+/// Por que uma negociação foi perdida. Lista da empresa, e não texto livre:
+/// "preço", "Preço" e "caro" somariam três barras no relatório de perdas.
+model MotivoDePerda {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nome  String
+  ativo Boolean @default(true)
+
+  negociacoes Negociacao[]
+
+  @@unique([tenantId, nome])
 }
 
 // Um contato de WhatsApp dentro de um tenant (o mesmo número em tenants
@@ -535,6 +692,7 @@ model Contact {
   stageId         String?
   stage           Stage?    @relation(fields: [stageId], references: [id], onDelete: SetNull)
   dealValueCents  Int       @default(0) // valor do negócio — soma no total de cada coluna do funil
+  negociacoes     Negociacao[]
 
   // Anotação livre sobre o cliente. Fica no CONTATO e não na conversa: o
   // que vale saber ("prefere ser chamada de Lili", "só compra no fim do
