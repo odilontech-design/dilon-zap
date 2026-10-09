@@ -22,7 +22,7 @@ import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/stor
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
-import { decidirAutoResposta, avaliarAutomacao, equipeFalou, type OpcaoUra } from "./auto-reply-decisao";
+import { decidirAutoResposta, avaliarAutomacao, equipeFalou, numeroTemRobo, type OpcaoUra } from "./auto-reply-decisao";
 import {
   ehGrupo,
   nomeDoAutor,
@@ -951,7 +951,7 @@ async function recordMessage(params: {
 
   const session = await prisma.whatsAppSession.findUniqueOrThrow({
     where: { id: params.sessionId },
-    select: { tenantId: true, setorId: true },
+    select: { tenantId: true, setorId: true, semAutomacoes: true },
   });
   const resolvedPhone = params.waJid.endsWith("@lid")
     ? phoneDigitsFromJid(params.remoteJidAlt)
@@ -1137,7 +1137,10 @@ async function recordMessage(params: {
   // Checado aqui, e não deduzido do "a conversa já tem setor, então o robô
   // cala": aquilo é efeito colateral de outra regra e pararia de valer no dia
   // em que a conversa perdesse o setor por qualquer motivo.
-  if (isInbound && !params.grupo && !session.setorId) {
+  //
+  // Número marcado "sem automações" (o pessoal) também cala tudo — menu,
+  // saudação, ausência e palavra-chave. Ver numeroTemRobo.
+  if (isInbound && !params.grupo && numeroTemRobo(session)) {
     const atendimento = await carregarAtendimento(session.tenantId);
     const menuLigado = atendimento.uraAtiva && atendimento.uraOpcoes.length > 0;
     const decisao = avaliarAutomacao(

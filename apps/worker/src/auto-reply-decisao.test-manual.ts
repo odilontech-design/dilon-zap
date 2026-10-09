@@ -3,6 +3,7 @@
 import {
   avaliarAutomacao,
   equipeFalou,
+  numeroTemRobo,
   decidirAutoResposta,
   type EntradaDecisao,
   type EstadoAntesDaMensagem,
@@ -646,6 +647,26 @@ checa(
 );
 checa("conversa sem mensagem anterior", equipeFalou(null), false);
 checa("indefinido", equipeFalou(undefined), false);
+
+// Número que pode ter robô. Dois motivos independentes calam o número, e um
+// não implica o outro: setor dono (linha do financeiro) e sem automações (o
+// número pessoal ligado à empresa).
+checa("número comum tem robô", numeroTemRobo({ setorId: null, semAutomacoes: false }), true);
+checa("número de setor não tem robô", numeroTemRobo({ setorId: "setor-fin", semAutomacoes: false }), false);
+checa("número pessoal (sem automações) não tem robô", numeroTemRobo({ setorId: null, semAutomacoes: true }), false);
+checa(
+  "os dois motivos juntos continuam sem robô",
+  numeroTemRobo({ setorId: "setor-fin", semAutomacoes: true }),
+  false
+);
+// Desligar o interruptor num número de setor NÃO devolve o robô: o setor cala
+// por conta própria. Quem vê um número de setor com o interruptor desligado e
+// espera o menu voltar se enganou — por isso a tela explica.
+checa(
+  "interruptor desligado num número de setor não devolve o robô",
+  numeroTemRobo({ setorId: "setor-fin", semAutomacoes: false }),
+  false
+);
 
 // O cenário completo, ponta a ponta na decisão: a pessoa escreveu pelo celular
 // e o cliente respondeu logo depois, numa conversa ainda sem dono.

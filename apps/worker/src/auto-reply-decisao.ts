@@ -83,6 +83,22 @@ export type EstadoAntesDaMensagem = {
 } | null;
 
 /**
+ * Este NÚMERO pode ter robô? É a primeira pergunta, antes de qualquer regra de
+ * conversa: se o número não tem robô, nada abaixo se aplica.
+ *
+ * Dois motivos independentes calam o número, e nenhum implica o outro:
+ *  - setor dono (a linha do financeiro): quem escreve já sabe com quem quer
+ *    falar, e a conversa já nasce na fila daquele setor;
+ *  - sem automações (o número pessoal ligado à empresa): quem escreve é amigo
+ *    ou família, e a triagem da empresa não responde por eles.
+ *
+ * Grupo nunca tem robô, por outro motivo: ver o chamador.
+ */
+export function numeroTemRobo(numero: { setorId: string | null; semAutomacoes: boolean }): boolean {
+  return !numero.setorId && !numero.semAutomacoes;
+}
+
+/**
  * A última mensagem da conversa foi de uma PESSOA da equipe?
  *
  * Três origens contam como pessoa, e uma não:

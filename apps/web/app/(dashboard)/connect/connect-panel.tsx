@@ -12,6 +12,7 @@ type Numero = {
   qrCode: string | null;
   phoneNumber: string | null;
   lastError: string | null;
+  semAutomacoes: boolean;
   setor: { id: string; nome: string; cor: string } | null;
 };
 
@@ -26,7 +27,14 @@ const STATUS_LABEL: Record<Numero["status"], string> = {
   LOGGED_OUT: "Desconectado — conecte de novo",
 };
 
-export function ConnectPanel({ podeAdicionar }: { podeAdicionar: boolean }) {
+export function ConnectPanel({
+  podeAdicionar,
+  podeAjustar,
+}: {
+  podeAdicionar: boolean;
+  /** Responsável: pode ligar e desligar as respostas automáticas de cada número. */
+  podeAjustar: boolean;
+}) {
   // Ritmo rápido só enquanto a tela espera algo mudar (QR aparecer, pareamento
   // concluir, reconexão voltar). Com tudo conectado, cai pro ritmo lento.
   const { data: numeros, mutate } = useSWR<Numero[]>("/api/whatsapp/status", fetcher, {
@@ -53,6 +61,23 @@ export function ConnectPanel({ podeAdicionar }: { podeAdicionar: boolean }) {
     }
     mutate();
     return true;
+  }
+
+  async function alternarAutomacoes(numero: Numero) {
+    setErro(null);
+    setOcupado(true);
+    const res = await fetch(`/api/whatsapp/numero/${numero.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ semAutomacoes: !numero.semAutomacoes }),
+    });
+    setOcupado(false);
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      setErro(typeof b.error === "string" ? b.error : "não deu pra alterar");
+      return;
+    }
+    mutate();
   }
 
   async function desconectar(numero: Numero) {
@@ -153,6 +178,32 @@ export function ConnectPanel({ podeAdicionar }: { podeAdicionar: boolean }) {
                 )}
               </div>
             </div>
+
+            {/* Interruptor "sem respostas automáticas". Só o responsável muda
+                (a rota confere), então a tela nem oferece pra quem atende. Num
+                número de setor o robô já é calado por outro motivo — o
+                interruptor fica travado e explica, em vez de parecer quebrado. */}
+            <label
+                className={`mt-3 flex items-start gap-2.5 border-t border-neutral-100 pt-3 text-sm ${
+                  podeAjustar && !n.setor ? "cursor-pointer" : "cursor-default"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={n.semAutomacoes || !!n.setor}
+                  disabled={!podeAjustar || !!n.setor || ocupado}
+                  onChange={() => alternarAutomacoes(n)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium text-neutral-800">Sem respostas automáticas</span>
+                  <span className="block text-xs text-neutral-500">
+                    {n.setor
+                      ? `Número do setor ${n.setor.nome}: o menu e a saudação já não são enviados aqui.`
+                      : "Este número nunca responde sozinho: sem menu de triagem, saudação, aviso de ausência nem palavras-chave. Indicado para o número pessoal."}
+                  </span>
+                </span>
+            </label>
 
             {n.status === "PENDING_QR" && (
               <div className="mt-3">

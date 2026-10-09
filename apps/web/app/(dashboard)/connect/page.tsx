@@ -16,10 +16,16 @@ export default async function ConnectPage() {
     (user.role === "OWNER" || user.role === "SUPERADMIN") &&
     (recursos.has("MULTI_NUMERO") || user.role === "SUPERADMIN");
 
+  // Ligar e desligar as respostas automáticas de um número é do responsável.
+  // Separado de podeAdicionar: o recurso de mais de um número é liberado por
+  // empresa, mas o número pessoal de uma empresa de um número só também
+  // precisa do interruptor.
+  const podeAjustar = user.role === "OWNER" || user.role === "SUPERADMIN";
+
   return (
     <div className="p-4 md:p-8">
       <h1 className="text-lg font-semibold mb-6">Conectar número</h1>
-      <ConnectPanel podeAdicionar={podeAdicionar} />
+      <ConnectPanel podeAdicionar={podeAdicionar} podeAjustar={podeAjustar} />
     </div>
   );
 }

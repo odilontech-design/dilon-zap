@@ -24,6 +24,7 @@ export async function GET() {
       phoneNumber: true,
       lastError: true,
       lastConnectedAt: true,
+      semAutomacoes: true,
       setor: { select: { id: true, nome: true, cor: true } },
     },
   });

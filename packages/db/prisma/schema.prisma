@@ -417,6 +417,12 @@ model WhatsAppSession {
   // com ele, o histórico inteiro das conversas presas a esta sessão.
   setorId         String?
   setor           Setor?        @relation(fields: [setorId], references: [id], onDelete: SetNull)
+  // Número que NUNCA responde sozinho: sem menu de triagem, sem saudação, sem
+  // aviso de ausência e sem palavra-chave. Existe pro número pessoal ligado à
+  // empresa — quem escreve pra ele é amigo e família, e o menu de triagem da
+  // empresa não pode responder por eles. Diferente de setorId, que também
+  // cala o robô mas muda pra quem a conversa vai.
+  semAutomacoes   Boolean       @default(false)
   phoneNumber     String? // preenchido depois de conectar, formato E.164
   status          SessionStatus @default(PENDING_QR)
   qrCode          String? // QR atual em base64 (Fase 0: worker escreve, web lê via polling)
