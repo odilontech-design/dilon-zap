@@ -1,241 +1,485 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
-import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { centsToBRL } from "@/lib/billing";
-import { corDoMotivo } from "@/lib/close-reasons";
 import { LISTING_INTERVAL } from "@/lib/polling";
-import { ContactCard } from "@/components/contact-card";
+import { IndicadoresFunil } from "./indicadores-funil";
+import { NegociacaoDrawer } from "./negociacao-drawer";
+import { NovaNegociacao } from "./nova-negociacao";
+import { diasParada, fetcher, type FunilResumo, type Negociacao, type Quadro } from "./tipos";
 
-type StageDef = { id: string; name: string; color: string; position: number };
-type TenantUser = { id: string; name: string };
+type Aba = "ABERTA" | "GANHA" | "PERDIDA";
+type Periodo = "todos" | "mes" | "mes-passado" | "30d" | "90d" | "custom";
 
-type Contact = ContactRef & {
-  stageId: string | null;
-  stage: StageDef | null;
-  dealValueCents: number;
-  latestConversation: { id: string; assignedToId: string | null } | null;
-  ultimoMotivo: string | null;
-};
+const DIAS_PARADA = 14;
 
-const fetcher = (url: string) => fetch(url).then((r) => r.json());
-const UNSTAGED = "__unstaged__";
-
-export function FunnelBoard() {
-  const router = useRouter();
-  const { data: contacts, mutate } = useSWR<Contact[]>("/api/contacts", fetcher, {
-    refreshInterval: LISTING_INTERVAL,
-  });
-  const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
-  const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
-  const [userFilter, setUserFilter] = useState("");
-  const [editingValueId, setEditingValueId] = useState<string | null>(null);
-  const [fichaDe, setFichaDe] = useState<string | null>(null);
-
-  const visible = useMemo(() => {
-    if (!contacts) return undefined;
-    if (!userFilter) return contacts;
-    return contacts.filter((c) => c.latestConversation?.assignedToId === userFilter);
-  }, [contacts, userFilter]);
-
-  const columns = useMemo(() => {
-    const list = [...(stages ?? [])].sort((a, b) => a.position - b.position);
-    return [{ id: UNSTAGED, name: "Sem etapa", color: "#9CA3AF" }, ...list];
-  }, [stages]);
-
-  async function moveStage(contactId: string, stageId: string) {
-    await fetch(`/api/contacts/${contactId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ stageId: stageId === UNSTAGED ? null : stageId }),
-    });
-    mutate();
-  }
-
-  async function saveDealValue(contactId: string, value: string) {
-    const cents = Math.round(parseFloat(value.replace(",", ".")) * 100);
-    await fetch(`/api/contacts/${contactId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dealValueCents: Number.isFinite(cents) && cents >= 0 ? cents : 0 }),
-    });
-    setEditingValueId(null);
-    mutate();
-  }
-
-  async function handleOpenConversation(contact: Contact) {
-    if (contact.latestConversation) {
-      router.push(`/inbox?open=${contact.latestConversation.id}`);
-      return;
+/** Período → [desde, ate] em ISO. Mês é o calendário, não "últimos 30 dias". */
+function intervalo(p: Periodo, de: string, ate: string): { desde?: string; ate?: string } {
+  const agora = new Date();
+  const dia = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  switch (p) {
+    case "mes":
+      return { desde: new Date(agora.getFullYear(), agora.getMonth(), 1).toISOString() };
+    case "mes-passado":
+      return {
+        desde: new Date(agora.getFullYear(), agora.getMonth() - 1, 1).toISOString(),
+        ate: new Date(agora.getFullYear(), agora.getMonth(), 1, 0, 0, 0, -1).toISOString(),
+      };
+    case "30d":
+    case "90d": {
+      const d = dia(agora);
+      d.setDate(d.getDate() - (p === "30d" ? 30 : 90));
+      return { desde: d.toISOString() };
     }
-    const res = await fetch(`/api/contacts/${contact.id}/start-conversation`, { method: "POST" });
+    case "custom": {
+      const r: { desde?: string; ate?: string } = {};
+      if (de) r.desde = new Date(`${de}T00:00:00`).toISOString();
+      // Fim do dia escolhido: a pessoa que escolhe "até 30/09" quer incluir o dia 30.
+      if (ate) r.ate = new Date(`${ate}T23:59:59.999`).toISOString();
+      return r;
+    }
+    default:
+      return {};
+  }
+}
+
+export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
+  const [funilId, setFuniId] = useState("");
+  const [aba, setAba] = useState<Aba>("ABERTA");
+  const [responsavel, setResponsavel] = useState("");
+  const [origem, setOrigem] = useState("");
+  const [busca, setBusca] = useState("");
+  const [periodo, setPeriodo] = useState<Periodo>("todos");
+  const [de, setDe] = useState("");
+  const [ate, setAte] = useState("");
+
+  const [selecionada, setSelecionada] = useState<string | null>(null);
+  const [criando, setCriando] = useState<{ etapaId?: string } | null>(null);
+  const [arrastando, setArrastando] = useState<string | null>(null);
+  const [sobre, setSobre] = useState<string | null>(null);
+
+  const { data: funis } = useSWR<FunilResumo[]>("/api/funis", fetcher);
+
+  const url = useMemo(() => {
+    const q = new URLSearchParams();
+    if (funilId) q.set("funilId", funilId);
+    if (responsavel) q.set("responsavelId", responsavel);
+    if (origem) q.set("origem", origem);
+    if (busca.trim()) q.set("busca", busca.trim());
+    const { desde, ate: fim } = intervalo(periodo, de, ate);
+    if (desde) q.set("desde", desde);
+    if (fim) q.set("ate", fim);
+    return `/api/negociacoes?${q.toString()}`;
+  }, [funilId, responsavel, origem, busca, periodo, de, ate]);
+
+  const { data: quadro, mutate, error } = useSWR<Quadro>(url, fetcher, {
+    refreshInterval: LISTING_INTERVAL,
+    keepPreviousData: true,
+  });
+
+  const filtrosAtivos = !!(responsavel || origem || busca.trim() || periodo !== "todos");
+
+  const porAba = useMemo(() => {
+    const todas = quadro?.negociacoes ?? [];
+    return {
+      ABERTA: todas.filter((n) => n.status === "ABERTA"),
+      GANHA: todas.filter((n) => n.status === "GANHA"),
+      PERDIDA: todas.filter((n) => n.status === "PERDIDA"),
+    };
+  }, [quadro]);
+
+  async function mover(id: string, stageId: string) {
+    const atual = quadro?.negociacoes.find((n) => n.id === id);
+    if (!atual || atual.stageId === stageId || atual.status !== "ABERTA") return;
+
+    // Otimista: o cartão muda de coluna na hora. Sem isso ele "volta" por um
+    // instante até o servidor responder, e parece que o arrasto não pegou.
+    await mutate(
+      (q) =>
+        q && {
+          ...q,
+          negociacoes: q.negociacoes.map((n) =>
+            n.id === id ? { ...n, stageId, etapaDesde: new Date().toISOString() } : n
+          ),
+        },
+      { revalidate: false }
+    );
+
+    const res = await fetch(`/api/negociacoes/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao: "mover", stageId }),
+    });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      alert(typeof body.error === "string" ? body.error : "não deu pra iniciar a conversa");
-      return;
+      alert(typeof body.error === "string" ? body.error : "não deu pra mover a negociação");
     }
-    const conversation = await res.json();
-    router.push(`/inbox?open=${conversation.id}`);
+    mutate();
   }
 
-  if (!visible || !stages) return <p className="text-sm text-neutral-400">Carregando...</p>;
+  async function novoFunil() {
+    const nome = prompt("Nome do novo funil (ex: Parcerias, Pós-venda):")?.trim();
+    if (!nome) return;
+    const modelo = confirm("Começar com etapas prontas de vendas SaaS?\n\nOK = etapas prontas · Cancelar = funil vazio")
+      ? "saas"
+      : "vazio";
+    const res = await fetch("/api/funis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome, modelo }),
+    });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) return alert(typeof body.error === "string" ? body.error : "não deu pra criar o funil");
+    setFuniId(body.id);
+    setAba("ABERTA");
+  }
+
+  if (error) return <p className="text-sm text-red-600">Não deu pra carregar o funil.</p>;
+  if (!quadro || !funis) return <p className="text-sm text-neutral-400">Carregando...</p>;
+
+  const funilAtual = quadro.funil.id;
+  const selecionadaObj = quadro.negociacoes.find((n) => n.id === selecionada) ?? null;
+  const campo = "text-sm rounded-md border border-neutral-300 px-2 py-1.5 bg-surface";
 
   return (
     <div>
-      <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="flex items-center gap-2">
-          <h1 className="text-lg font-semibold">Gestão de Leads</h1>
-          <span className="text-xs font-mono rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-500">
-            {visible.length} contatos
-          </span>
-        </div>
-        <select
-          value={userFilter}
-          onChange={(e) => setUserFilter(e.target.value)}
-          className="text-sm rounded-md border border-neutral-300 px-2 py-1.5"
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <select value={funilAtual} onChange={(e) => setFuniId(e.target.value)} className={`${campo} font-medium`}>
+          {funis.map((f) => (
+            <option key={f.id} value={f.id}>
+              {f.nome} ({f.abertas})
+            </option>
+          ))}
+        </select>
+        {podeGerir && (
+          <button onClick={novoFunil} className="text-xs text-accent hover:underline">
+            + Novo funil
+          </button>
+        )}
+        {podeGerir && (
+          <Link href={`/etapas?funil=${funilAtual}`} className="text-xs text-neutral-500 hover:text-accent">
+            Configurar etapas
+          </Link>
+        )}
+        <div className="flex-1" />
+        <button
+          onClick={() => setCriando({})}
+          disabled={quadro.etapas.length === 0}
+          className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
-          <option value="">Usuário: todos</option>
-          {users?.map((u) => (
+          + Nova negociação
+        </button>
+      </div>
+
+      <div className="flex items-center gap-2 mb-4 flex-wrap">
+        <input
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Buscar cliente ou título"
+          className={`${campo} w-52`}
+        />
+        <select value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className={campo}>
+          <option value="">Responsável: todos</option>
+          <option value="sem">Sem responsável</option>
+          {quadro.usuarios.map((u) => (
             <option key={u.id} value={u.id}>
               {u.name}
             </option>
           ))}
         </select>
+        <select value={origem} onChange={(e) => setOrigem(e.target.value)} className={campo}>
+          <option value="">Origem: todas</option>
+          {quadro.origens.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <select value={periodo} onChange={(e) => setPeriodo(e.target.value as Periodo)} className={campo} title="Período de criação da negociação">
+          <option value="todos">Criadas: todo o período</option>
+          <option value="mes">Este mês</option>
+          <option value="mes-passado">Mês passado</option>
+          <option value="30d">Últimos 30 dias</option>
+          <option value="90d">Últimos 90 dias</option>
+          <option value="custom">Personalizado…</option>
+        </select>
+        {periodo === "custom" && (
+          <>
+            <input type="date" value={de} onChange={(e) => setDe(e.target.value)} className={campo} aria-label="De" />
+            <input type="date" value={ate} onChange={(e) => setAte(e.target.value)} className={campo} aria-label="Até" />
+          </>
+        )}
+        {filtrosAtivos && (
+          <button
+            onClick={() => {
+              setResponsavel("");
+              setOrigem("");
+              setBusca("");
+              setPeriodo("todos");
+              setDe("");
+              setAte("");
+            }}
+            className="text-xs text-accent hover:underline"
+          >
+            Limpar filtros
+          </button>
+        )}
       </div>
 
-      {stages.length === 0 && (
+      <IndicadoresFunil ind={quadro.indicadores} motivos={quadro.motivos} />
+
+      <div className="flex gap-1 mb-3 border-b border-neutral-200">
+        {(
+          [
+            ["ABERTA", "Em andamento"],
+            ["GANHA", "Ganhas"],
+            ["PERDIDA", "Perdidas"],
+          ] as [Aba, string][]
+        ).map(([id, rotulo]) => (
+          <button
+            key={id}
+            onClick={() => setAba(id)}
+            className={`px-3 py-2 text-sm -mb-px border-b-2 ${
+              aba === id ? "border-accent text-accent font-medium" : "border-transparent text-neutral-500 hover:text-neutral-800"
+            }`}
+          >
+            {rotulo} <span className="text-xs tabular-nums text-neutral-400">{porAba[id].length}</span>
+          </button>
+        ))}
+      </div>
+
+      {quadro.etapas.length === 0 && (
         <p className="text-sm text-neutral-500 rounded-lg border border-dashed border-neutral-300 px-4 py-6 mb-4">
-          Nenhuma etapa cadastrada ainda — configure as etapas do seu processo em{" "}
-          <a href="/etapas" className="text-accent hover:underline">
-            Etapas do funil
-          </a>{" "}
-          pra elas aparecerem aqui como colunas.
+          Este funil ainda não tem etapas.{" "}
+          {podeGerir ? (
+            <Link href={`/etapas?funil=${funilAtual}`} className="text-accent hover:underline">
+              Configure as etapas
+            </Link>
+          ) : (
+            "Peça ao responsável da conta para configurar."
+          )}
         </p>
       )}
 
-      <div className="flex gap-4 overflow-x-auto pb-4">
-        {columns.map((col) => {
-          const colContacts = visible.filter((c) => (c.stageId ?? UNSTAGED) === col.id);
-          const totalCents = colContacts.reduce((sum, c) => sum + c.dealValueCents, 0);
-          return (
-            <div key={col.id} className="w-72 shrink-0">
-              <div className="rounded-t-md h-1.5" style={{ backgroundColor: col.color }} />
-              <div className="border border-t-0 border-neutral-200 rounded-b-md bg-neutral-50 px-3 py-2.5 flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-semibold text-neutral-800 truncate">{col.name}</h3>
-                <div className="flex items-center gap-1.5 shrink-0">
-                  <span
-                    className="text-[10px] font-semibold rounded-full px-1.5 py-0.5 text-white"
-                    style={{ backgroundColor: col.color }}
+      {aba === "ABERTA" ? (
+        <div className="flex gap-4 overflow-x-auto pb-4">
+          {quadro.etapas.map((et) => {
+            const cartoes = porAba.ABERTA.filter((n) => n.stageId === et.id);
+            const total = cartoes.reduce((s, n) => s + n.valorCents, 0);
+            return (
+              <div
+                key={et.id}
+                className="w-72 shrink-0"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setSobre(et.id);
+                }}
+                onDragLeave={() => setSobre((s) => (s === et.id ? null : s))}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setSobre(null);
+                  if (arrastando) mover(arrastando, et.id);
+                  setArrastando(null);
+                }}
+              >
+                <div className="rounded-t-md h-1.5" style={{ backgroundColor: et.cor }} />
+                <div className="border border-t-0 border-neutral-200 rounded-b-md bg-neutral-50 px-3 py-2.5 flex items-center justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-neutral-800 truncate">{et.nome}</h3>
+                    <p className="text-[10px] text-neutral-400 tabular-nums">{et.probabilidade}% de chance</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] font-semibold rounded-full px-1.5 py-0.5 text-white" style={{ backgroundColor: et.cor }}>
+                      {cartoes.length}
+                    </span>
+                    <span className="text-[10px] rounded-full border border-neutral-300 px-1.5 py-0.5 text-neutral-500 tabular-nums">
+                      {centsToBRL(total)}
+                    </span>
+                  </div>
+                </div>
+                <div className={`flex flex-col gap-2 min-h-[80px] rounded-md ${sobre === et.id ? "bg-accent/5 outline outline-1 outline-dashed outline-accent" : ""}`}>
+                  {cartoes.map((n) => (
+                    <Cartao
+                      key={n.id}
+                      n={n}
+                      onAbrir={() => setSelecionada(n.id)}
+                      onArrastar={() => setArrastando(n.id)}
+                      onSoltar={() => {
+                        setArrastando(null);
+                        setSobre(null);
+                      }}
+                    />
+                  ))}
+                  <button
+                    onClick={() => setCriando({ etapaId: et.id })}
+                    className="text-xs text-neutral-400 hover:text-accent rounded-md border border-dashed border-neutral-300 py-1.5"
                   >
-                    {colContacts.length}
-                  </span>
-                  <span className="text-[10px] rounded-full border border-neutral-300 px-1.5 py-0.5 text-neutral-500">
-                    {centsToBRL(totalCents)}
-                  </span>
+                    + Adicionar
+                  </button>
                 </div>
               </div>
-              <div className="flex flex-col gap-2 min-h-[80px]">
-                {colContacts.length === 0 && <p className="text-xs text-neutral-400 px-1">Sem contatos</p>}
-                {colContacts.map((contact) => {
-                  const assignedUser = users?.find((u) => u.id === contact.latestConversation?.assignedToId);
-                  return (
-                    <div key={contact.id} className="rounded-lg border border-neutral-200 bg-surface p-3">
-                      {/* O cabeçalho do card abre a ficha. O resto do card
-                          (etapa, valor, conversa) continua clicável direto —
-                          quem só quer mover de coluna não precisa abrir nada. */}
-                      <button
-                        onClick={() => setFichaDe(contact.id)}
-                        className="flex items-center gap-2 mb-2 w-full text-left group"
-                      >
-                        <Avatar contact={contact} size={28} />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium truncate group-hover:text-accent">
-                            {contactLabel(contact)}
-                          </p>
-                          <p className="text-[10px] text-neutral-400 truncate">{formatPhoneDisplay(contact)}</p>
-                        </div>
-                      </button>
-                      {editingValueId === contact.id ? (
-                        <input
-                          autoFocus
-                          defaultValue={(contact.dealValueCents / 100).toFixed(2)}
-                          onBlur={(e) => saveDealValue(contact.id, e.target.value)}
-                          onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-                          className="w-full text-xs rounded-md border border-accent px-2 py-1 mb-2 focus:outline-none"
-                        />
-                      ) : (
-                        <button
-                          onClick={() => setEditingValueId(contact.id)}
-                          className="block w-full text-left text-xs text-neutral-600 hover:text-accent mb-2"
-                          title="Editar valor do negócio"
-                        >
-                          {centsToBRL(contact.dealValueCents)}
-                        </button>
-                      )}
-                      <div className="flex flex-wrap items-center gap-1.5 mb-2 empty:mb-0">
-                        {assignedUser && (
-                          <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
-                            {assignedUser.name}
-                          </span>
-                        )}
-                        {/* Desfecho do último atendimento. É o que responde
-                            "por que esse cliente parou aqui?" sem precisar
-                            abrir a conversa — a pergunta que o funil existe
-                            pra responder. */}
-                        {contact.ultimoMotivo && (
-                          <span
-                            className={`text-[10px] rounded-full px-2 py-0.5 ${corDoMotivo(contact.ultimoMotivo)}`}
-                            title={`Último atendimento fechado como: ${contact.ultimoMotivo}`}
-                          >
-                            {contact.ultimoMotivo}
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <select
-                          value={contact.stageId ?? UNSTAGED}
-                          onChange={(e) => moveStage(contact.id, e.target.value)}
-                          className="flex-1 text-xs rounded-md border border-neutral-300 px-2 py-1"
-                        >
-                          <option value={UNSTAGED}>Sem etapa</option>
-                          {stages.map((s) => (
-                            <option key={s.id} value={s.id}>
-                              {s.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          onClick={() => handleOpenConversation(contact)}
-                          title="Abrir conversa"
-                          className="shrink-0 text-xs rounded-md border border-neutral-300 px-2 py-1 hover:bg-neutral-50"
-                        >
-                          💬
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      ) : (
+        <ListaEncerradas
+          itens={porAba[aba]}
+          aba={aba}
+          etapas={quadro.etapas}
+          motivos={quadro.motivos}
+          onAbrir={(id) => setSelecionada(id)}
+        />
+      )}
 
-      {fichaDe && (
-        <ContactCard
-          contactId={fichaDe}
-          onFechar={() => {
-            setFichaDe(null);
-            // A ficha edita etapa e valor — sem isso o funil ficaria
-            // mostrando o card na coluna antiga até o próximo ciclo de
-            // polling, e pareceria que a mudança não pegou.
+      {selecionadaObj && (
+        <NegociacaoDrawer
+          key={selecionadaObj.id}
+          negociacao={selecionadaObj}
+          etapas={quadro.etapas}
+          usuarios={quadro.usuarios}
+          motivos={quadro.motivos}
+          origens={quadro.origens}
+          onFechar={() => setSelecionada(null)}
+          onMudou={() => mutate()}
+        />
+      )}
+
+      {criando && (
+        <NovaNegociacao
+          funilId={funilAtual}
+          etapas={quadro.etapas}
+          usuarios={quadro.usuarios}
+          origens={quadro.origens}
+          etapaInicial={criando.etapaId}
+          onFechar={() => setCriando(null)}
+          onCriada={() => {
+            setCriando(null);
+            setAba("ABERTA");
             mutate();
           }}
         />
       )}
+    </div>
+  );
+}
+
+function Cartao({
+  n,
+  onAbrir,
+  onArrastar,
+  onSoltar,
+}: {
+  n: Negociacao;
+  onAbrir: () => void;
+  onArrastar: () => void;
+  onSoltar: () => void;
+}) {
+  const parada = diasParada(n);
+  const atrasada = n.previsaoFechamento && new Date(n.previsaoFechamento).getTime() < Date.now();
+  return (
+    <div
+      draggable
+      onDragStart={onArrastar}
+      onDragEnd={onSoltar}
+      onClick={onAbrir}
+      className="rounded-lg border border-neutral-200 bg-surface p-3 cursor-pointer hover:border-accent/60"
+    >
+      <p className="text-sm font-medium break-words mb-1.5">{n.titulo}</p>
+      <div className="flex items-center gap-2 mb-2">
+        <Avatar
+          contact={{
+            id: n.contato.id,
+            name: n.contato.nome ?? n.contato.telefone,
+            waJid: "",
+            phoneNumber: n.contato.telefone,
+            avatarUrl: n.contato.avatarUrl,
+            lastStatusAt: null,
+          }}
+          size={20}
+        />
+        <p className="text-xs text-neutral-500 truncate">{n.contato.nome || n.contato.telefone || "Sem nome"}</p>
+      </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs font-semibold tabular-nums">
+          {centsToBRL(n.valorCents)}
+          {n.recorrencia === "MENSAL" && <span className="font-normal text-neutral-400">/mês</span>}
+        </p>
+        {n.responsavel && (
+          <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600 truncate max-w-[110px]">
+            {n.responsavel.name}
+          </span>
+        )}
+      </div>
+      {(parada > DIAS_PARADA || atrasada) && (
+        <div className="flex flex-wrap gap-1 mt-2">
+          {parada > DIAS_PARADA && (
+            <span className="text-[10px] rounded-full px-2 py-0.5 bg-amber-100 text-amber-700">parada há {parada} dias</span>
+          )}
+          {atrasada && <span className="text-[10px] rounded-full px-2 py-0.5 bg-red-100 text-red-700">previsão vencida</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ListaEncerradas({
+  itens,
+  aba,
+  etapas,
+  motivos,
+  onAbrir,
+}: {
+  itens: Negociacao[];
+  aba: Aba;
+  etapas: Quadro["etapas"];
+  motivos: Quadro["motivos"];
+  onAbrir: (id: string) => void;
+}) {
+  if (itens.length === 0) {
+    return (
+      <p className="text-sm text-neutral-400 py-8 text-center">
+        {aba === "GANHA" ? "Nenhuma negociação ganha neste filtro." : "Nenhuma negociação perdida neste filtro."}
+      </p>
+    );
+  }
+  const nomeEtapa = new Map(etapas.map((e) => [e.id, e.nome]));
+  const nomeMotivo = new Map(motivos.map((m) => [m.id, m.nome]));
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead className="bg-neutral-50 text-xs text-neutral-500">
+          <tr>
+            <th className="text-left px-4 py-2 font-medium">Negociação</th>
+            <th className="text-left px-4 py-2 font-medium">Cliente</th>
+            <th className="text-right px-4 py-2 font-medium">Valor</th>
+            <th className="text-left px-4 py-2 font-medium">{aba === "PERDIDA" ? "Motivo" : "Etapa final"}</th>
+            <th className="text-left px-4 py-2 font-medium">Responsável</th>
+            <th className="text-left px-4 py-2 font-medium">Fechada em</th>
+          </tr>
+        </thead>
+        <tbody>
+          {itens.map((n) => (
+            <tr key={n.id} onClick={() => onAbrir(n.id)} className="border-t border-neutral-100 cursor-pointer hover:bg-neutral-50">
+              <td className="px-4 py-2.5 font-medium">{n.titulo}</td>
+              <td className="px-4 py-2.5 text-neutral-600">{n.contato.nome || n.contato.telefone || "—"}</td>
+              <td className="px-4 py-2.5 text-right tabular-nums">
+                {centsToBRL(n.valorCents)}
+                {n.recorrencia === "MENSAL" && <span className="text-neutral-400">/mês</span>}
+              </td>
+              <td className="px-4 py-2.5 text-neutral-600">
+                {aba === "PERDIDA" ? (n.motivoPerdaId && nomeMotivo.get(n.motivoPerdaId)) || "—" : nomeEtapa.get(n.stageId) ?? "—"}
+              </td>
+              <td className="px-4 py-2.5 text-neutral-600">{n.responsavel?.name ?? "—"}</td>
+              <td className="px-4 py-2.5 text-neutral-600 tabular-nums">
+                {n.fechadaEm ? new Date(n.fechadaEm).toLocaleDateString("pt-BR") : "—"}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

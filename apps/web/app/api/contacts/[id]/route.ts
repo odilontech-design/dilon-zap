@@ -3,6 +3,12 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import {
+  aplicarEtapaEValorDoContato,
+  camposDoContato,
+  ErroDeNegocio,
+  NEGOCIACAO_ABERTA_DO_CONTATO,
+} from "@/lib/negociacoes";
 
 const bodySchema = z.object({
   stageId: z.string().nullable().optional(),
@@ -33,15 +39,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       phoneNumber: true,
       avatarUrl: true,
       lastStatusAt: true,
-      stageId: true,
-      dealValueCents: true,
       notes: true,
       notesUpdatedAt: true,
       documento: true,
       endereco: true,
       hasWhatsapp: true,
       createdAt: true,
-      stage: { select: { id: true, name: true, color: true } },
+      negociacoes: NEGOCIACAO_ABERTA_DO_CONTATO,
       conversations: {
         orderBy: { lastMessageAt: "desc" },
         select: {
@@ -68,7 +72,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   });
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  return NextResponse.json(contact);
+  const { negociacoes, ...resto } = contact;
+  return NextResponse.json({ ...resto, ...camposDoContato(negociacoes) });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -81,14 +86,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   });
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  // Confere que a etapa é do mesmo tenant — senão dá pra mover contato da
-  // Believe pra uma etapa cadastrada por outro negócio.
-  if (parsed.data.stageId) {
-    const stage = await prisma.stage.findFirst({ where: { id: parsed.data.stageId, tenantId: user.tenantId } });
-    if (!stage) return NextResponse.json({ error: "etapa inválida" }, { status: 400 });
+  const { notes, documento, endereco, stageId, dealValueCents, ...resto } = parsed.data;
+
+  // Etapa e valor são da negociação, não do contato (ver lib/negociacoes). A
+  // etapa é conferida contra o tenant lá dentro — senão dava pra mover contato
+  // da Believe pra uma etapa cadastrada por outro negócio.
+  try {
+    if (stageId !== undefined || dealValueCents !== undefined) {
+      await aplicarEtapaEValorDoContato({ tenantId: user.tenantId, quem: user, contato: contact, stageId, dealValueCents });
+    }
+  } catch (e) {
+    if (e instanceof ErroDeNegocio) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
   }
 
-  const { notes, documento, endereco, ...resto } = parsed.data;
   // Mesma regra da anotação: campo apagado vira null, não string vazia, pra
   // o recibo só ter um caso a checar na hora de omitir a linha.
   const limpo = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
@@ -113,7 +124,13 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     },
   });
 
-  return NextResponse.json(updated);
+  const abertas = await prisma.negociacao.findMany({
+    where: { contactId: contact.id, ...NEGOCIACAO_ABERTA_DO_CONTATO.where },
+    orderBy: NEGOCIACAO_ABERTA_DO_CONTATO.orderBy,
+    take: 1,
+    select: NEGOCIACAO_ABERTA_DO_CONTATO.select,
+  });
+  return NextResponse.json({ ...updated, ...camposDoContato(abertas) });
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
@@ -123,6 +140,16 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
     where: { id: params.id, tenantId: user.tenantId },
   });
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  // Apagar o contato levaria junto as negociações dele — inclusive as ganhas,
+  // que são a receita nos indicadores. Melhor barrar e dizer o que fazer.
+  const negociacoes = await prisma.negociacao.count({ where: { contactId: contact.id } });
+  if (negociacoes > 0) {
+    return NextResponse.json(
+      { error: `Este contato tem ${negociacoes} negociação(ões) no funil. Apague-as no Funil antes, se quiser mesmo remover o contato.` },
+      { status: 409 }
+    );
+  }
 
   // onDelete: Cascade no schema cuida de apagar junto as conversas e mensagens desse contato.
   await prisma.contact.delete({ where: { id: contact.id } });

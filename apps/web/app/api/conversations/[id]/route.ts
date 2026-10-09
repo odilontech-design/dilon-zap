@@ -7,6 +7,7 @@ import { encerrarCiclo } from "@/lib/atendimentos";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
 import { avisarNoCelular } from "@/lib/push";
 import { contactLabel } from "@/lib/contact";
+import { camposDoContato, NEGOCIACAO_ABERTA_DO_CONTATO } from "@/lib/negociacoes";
 
 const bodySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED"]).optional(),
@@ -27,14 +28,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const conversation = await prisma.conversation.findFirst({
     where: { id: params.id, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
     include: {
-      contact: true,
+      contact: { include: { negociacoes: NEGOCIACAO_ABERTA_DO_CONTATO } },
       assignedTo: { select: { id: true, name: true } },
       setor: { select: { id: true, nome: true } },
     },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  return NextResponse.json(conversation);
+  // A etapa do contato que o painel do Inbox mostra é a da negociação aberta;
+  // as colunas antigas do contato não são mais atualizadas.
+  const { negociacoes, ...contato } = conversation.contact;
+  return NextResponse.json({ ...conversation, contact: { ...contato, ...camposDoContato(negociacoes) } });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {

@@ -114,6 +114,9 @@ async function mesclar(vive: Candidato, morre: Candidato) {
 
     // Apagar o duplicado antes de reescrever o waJid do sobrevivente: quando o
     // JID ativo é o @lid, os dois disputariam o unique [tenantId, waJid].
+    // As negociações do duplicado passam para o sobrevivente: o contato tem
+    // cascade, e apagá-lo sem isso levaria o funil e o histórico junto.
+    await tx.negociacao.updateMany({ where: { contactId: morre.id }, data: { contactId: vive.id } });
     await tx.contact.delete({ where: { id: morre.id } });
     await tx.contact.update({
       where: { id: vive.id },

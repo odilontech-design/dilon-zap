@@ -192,3 +192,101 @@ export async function reabrirNegociacao(n: NegociacaoAtual, quem: Quem, stageId?
     }),
   ]);
 }
+
+/* ------------------------------------------------------------------------ *
+ * Ponte com a ficha do contato
+ *
+ * Contatos, Inbox e a ficha do cliente ainda mostram e editam "etapa" e
+ * "valor" no contato. No modelo novo isso é a NEGOCIAÇÃO ABERTA dele. Em vez
+ * de reescrever essas telas, a leitura deriva os dois campos da negociação
+ * aberta mais recente e a escrita passa pelas mesmas funções que gravam o
+ * histórico — assim mexer na etapa pela ficha e pelo quadro dá no mesmo, e
+ * os indicadores enxergam as duas.
+ * ------------------------------------------------------------------------ */
+
+/** Seleção Prisma da negociação aberta mais recente, para embutir em select de Contact. */
+export const NEGOCIACAO_ABERTA_DO_CONTATO = {
+  where: { status: "ABERTA" as const },
+  orderBy: { updatedAt: "desc" as const },
+  take: 1,
+  select: {
+    stageId: true,
+    valorCents: true,
+    stage: { select: { id: true, name: true, color: true, position: true } },
+  },
+};
+
+type AbertaDoContato = {
+  stageId: string;
+  valorCents: number;
+  stage: { id: string; name: string; color: string; position: number };
+};
+
+/** Os campos que as telas antigas esperam no contato, vindos da negociação aberta. */
+export function camposDoContato(negociacoes: AbertaDoContato[]) {
+  const n = negociacoes[0];
+  return {
+    stageId: n?.stageId ?? null,
+    dealValueCents: n?.valorCents ?? 0,
+    stage: n?.stage ?? null,
+  };
+}
+
+/**
+ * Aplica "etapa" e/ou "valor" digitados na ficha do contato.
+ *
+ * - Etapa: move a negociação aberta daquele funil, ou abre uma se o contato
+ *   ainda não tinha. "Sem etapa" (null) não encerra nada: tirar alguém do
+ *   funil é ganhar ou perder a negociação, com motivo.
+ * - Valor: vai para a negociação aberta mais recente.
+ */
+export async function aplicarEtapaEValorDoContato(args: {
+  tenantId: string;
+  quem: Quem;
+  contato: { id: string; name: string | null; phoneNumber: string | null; waJid: string };
+  stageId?: string | null;
+  dealValueCents?: number;
+}) {
+  const { tenantId, quem, contato } = args;
+
+  if (args.stageId) {
+    const etapa = await prisma.stage.findFirst({
+      where: { id: args.stageId, tenantId, funilId: { not: null } },
+      select: { id: true, funilId: true },
+    });
+    if (!etapa?.funilId) throw new ErroDeNegocio("etapa inválida", 400);
+
+    const aberta = await prisma.negociacao.findFirst({
+      where: { contactId: contato.id, funilId: etapa.funilId, status: "ABERTA" },
+      orderBy: { updatedAt: "desc" },
+    });
+    if (aberta) {
+      await moverNegociacao(aberta, etapa.id, quem);
+    } else {
+      await criarNegociacao({
+        tenantId,
+        quem,
+        contactId: contato.id,
+        funilId: etapa.funilId,
+        stageId: etapa.id,
+        titulo: contato.name?.trim() || contato.phoneNumber || contato.waJid.split("@")[0],
+        valorCents: args.dealValueCents ?? 0,
+        recorrencia: "UNICA",
+        responsavelId: null,
+        origem: null,
+        previsaoFechamento: null,
+      });
+    }
+  }
+
+  if (args.dealValueCents !== undefined) {
+    const aberta = await prisma.negociacao.findFirst({
+      where: { contactId: contato.id, status: "ABERTA" },
+      orderBy: { updatedAt: "desc" },
+      select: { id: true },
+    });
+    if (aberta) {
+      await prisma.negociacao.update({ where: { id: aberta.id }, data: { valorCents: args.dealValueCents } });
+    }
+  }
+}

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { ehGerencia } from "@/lib/papeis";
 
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 
@@ -14,6 +15,7 @@ const bodySchema = z.object({
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  if (!ehGerencia(user.role)) return NextResponse.json({ error: "só a gestão altera as etapas" }, { status: 403 });
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
@@ -57,6 +59,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  if (!ehGerencia(user.role)) return NextResponse.json({ error: "só a gestão altera as etapas" }, { status: 403 });
 
   const stage = await prisma.stage.findFirst({ where: { id: params.id, tenantId: user.tenantId } });
   if (!stage) return NextResponse.json({ error: "not found" }, { status: 404 });

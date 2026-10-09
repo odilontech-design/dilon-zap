@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { upsertContactByPhone } from "@/lib/contact-server";
+import { camposDoContato, NEGOCIACAO_ABERTA_DO_CONTATO } from "@/lib/negociacoes";
 
 export async function GET() {
   const user = await requireUser();
@@ -22,8 +23,6 @@ export async function GET() {
       phoneNumber: true,
       avatarUrl: true,
       lastStatusAt: true,
-      stageId: true,
-      dealValueCents: true,
       createdAt: true,
       // Só o booleano, não a data: a tela precisa saber "tem / não tem /
       // não checado", e a data só interessa quando alguém for investigar
@@ -34,15 +33,17 @@ export async function GET() {
         orderBy: { lastMessageAt: "desc" },
         take: 1,
       },
-      stage: { select: { id: true, name: true, color: true, position: true } },
+      // Etapa e valor que a tela mostra vêm da negociação aberta (lib/negociacoes).
+      negociacoes: NEGOCIACAO_ABERTA_DO_CONTATO,
     },
   });
 
   // Contato não tem tag própria — usa as tags da conversa mais recente, que
   // é onde elas realmente vivem (ver /inbox). Também expõe essa conversa
   // (id + atendente) pro Funil linkar direto pro Inbox.
-  const withTags = contacts.map(({ conversations, ...contact }) => ({
+  const withTags = contacts.map(({ conversations, negociacoes, ...contact }) => ({
     ...contact,
+    ...camposDoContato(negociacoes),
     tags: conversations[0]?.tags ?? [],
     latestConversation: conversations[0] ? { id: conversations[0].id, assignedToId: conversations[0].assignedToId } : null,
     // Só quando a conversa está de fato fechada: o motivo sobrevive a uma

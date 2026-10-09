@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { funilDaEmpresa } from "@/lib/funis";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * Etapas de um funil. Sem ?funilId, é o funil padrão da empresa.
@@ -31,6 +32,7 @@ const bodySchema = z.object({
 
 export async function POST(req: Request) {
   const user = await requireUser();
+  if (!ehGerencia(user.role)) return NextResponse.json({ error: "só a gestão altera as etapas" }, { status: 403 });
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
