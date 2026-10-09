@@ -101,6 +101,24 @@ export async function GET(req: Request) {
     );
   });
 
+  // Próxima tarefa pendente de cada negociação aberta do quadro: é o que o
+  // cartão mostra, e o que separa "negócio andando" de "negócio esquecido".
+  const idsAbertas = doQuadro.filter((n) => n.status === "ABERTA").map((n) => n.id);
+  const pendentes = idsAbertas.length
+    ? await prisma.tarefaNegociacao.findMany({
+        where: { tenantId: user.tenantId, negociacaoId: { in: idsAbertas }, concluidaEm: null },
+        orderBy: { venceEm: "asc" },
+        select: { negociacaoId: true, titulo: true, tipo: true, venceEm: true },
+      })
+    : [];
+  const proximaDe = new Map<string, { titulo: string; tipo: string; venceEm: Date }>();
+  const agora = new Date();
+  const atrasadasDe = new Map<string, number>();
+  for (const t of pendentes) {
+    if (!proximaDe.has(t.negociacaoId)) proximaDe.set(t.negociacaoId, t);
+    if (t.venceEm < agora) atrasadasDe.set(t.negociacaoId, (atrasadasDe.get(t.negociacaoId) ?? 0) + 1);
+  }
+
   // Sugestões de origem: o que a empresa já usou, pra não nascerem "insta" e "Instagram".
   const origens = [...new Set(brutas.map((n) => n.origem).filter((o): o is string => !!o))].sort();
 
@@ -126,6 +144,8 @@ export async function GET(req: Request) {
       createdAt: n.createdAt,
       fechadaEm: n.fechadaEm,
       motivoPerdaId: n.motivoPerdaId,
+      proximaTarefa: proximaDe.get(n.id) ?? null,
+      tarefasAtrasadas: atrasadasDe.get(n.id) ?? 0,
       contato: {
         id: n.contact.id,
         nome: n.contact.name,

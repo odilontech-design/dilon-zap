@@ -22,7 +22,8 @@ export type Recurso =
   | "CONTAS_RECEBER"
   | "INTEGRACAO_API"
   | "MATERIAIS"
-  | "MULTI_NUMERO";
+  | "MULTI_NUMERO"
+  | "FUNIL_SAAS";
 
 /** O que a escada dos planos distribui — e o que a regra antiga entrega inteiro. */
 export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API", "MATERIAIS"];
@@ -37,7 +38,7 @@ export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS",
  * Vai Viajar sem ninguém pedir. Cada número a mais é um chip, um socket e
  * mais superfície de bloqueio no WhatsApp — tem que ser decisão explícita.
  */
-export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO"];
+export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS"];
 
 /** Tudo que o painel do superadmin deixa ligar ou desligar por empresa. */
 export const RECURSOS_GERENCIAVEIS: Recurso[] = [...TODOS_RECURSOS, ...RECURSOS_SOB_DEMANDA];
@@ -82,6 +83,7 @@ export const ROTULO_RECURSO: Record<Recurso, string> = {
   INTEGRACAO_API: "Integração com outros sistemas",
   MATERIAIS: "Biblioteca de materiais dos produtos",
   MULTI_NUMERO: "Mais de um número de WhatsApp",
+  FUNIL_SAAS: "Indicadores de SaaS no funil",
 };
 
 export type Assinatura = {

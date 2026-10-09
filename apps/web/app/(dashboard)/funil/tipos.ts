@@ -1,5 +1,15 @@
 import type { Indicadores } from "@/lib/funil-indicadores";
 
+export type TipoTarefa = "LIGACAO" | "WHATSAPP" | "REUNIAO" | "EMAIL" | "TAREFA";
+
+export const ROTULO_TAREFA: Record<TipoTarefa, string> = {
+  LIGACAO: "Ligação",
+  WHATSAPP: "WhatsApp",
+  REUNIAO: "Reunião",
+  EMAIL: "E-mail",
+  TAREFA: "Tarefa",
+};
+
 export type Etapa = { id: string; nome: string; cor: string; position: number; probabilidade: number };
 export type Usuario = { id: string; name: string };
 export type Motivo = { id: string; nome: string; ativo: boolean };
@@ -17,6 +27,8 @@ export type Negociacao = {
   createdAt: string;
   fechadaEm: string | null;
   motivoPerdaId: string | null;
+  proximaTarefa: { titulo: string; tipo: TipoTarefa; venceEm: string } | null;
+  tarefasAtrasadas: number;
   contato: { id: string; nome: string | null; telefone: string | null; avatarUrl: string | null };
   responsavel: { id: string; name: string } | null;
 };

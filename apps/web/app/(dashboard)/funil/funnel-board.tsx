@@ -9,9 +9,10 @@ import { LISTING_INTERVAL } from "@/lib/polling";
 import { IndicadoresFunil } from "./indicadores-funil";
 import { NegociacaoDrawer } from "./negociacao-drawer";
 import { NovaNegociacao } from "./nova-negociacao";
-import { diasParada, fetcher, type FunilResumo, type Negociacao, type Quadro } from "./tipos";
+import { diasParada, fetcher, ROTULO_TAREFA, type FunilResumo, type Negociacao, type Quadro } from "./tipos";
 
 type Aba = "ABERTA" | "GANHA" | "PERDIDA";
+type Foco = "" | "atrasadas" | "sem-passo" | "paradas";
 type Periodo = "todos" | "mes" | "mes-passado" | "30d" | "90d" | "custom";
 
 const DIAS_PARADA = 14;
@@ -53,6 +54,7 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
   const [origem, setOrigem] = useState("");
   const [busca, setBusca] = useState("");
   const [periodo, setPeriodo] = useState<Periodo>("todos");
+  const [foco, setFoco] = useState<Foco>("");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
 
@@ -80,16 +82,29 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
     keepPreviousData: true,
   });
 
+  const abertasTodas = (quadro?.negociacoes ?? []).filter((n) => n.status === "ABERTA");
+  const contFoco = {
+    atrasadas: abertasTodas.filter((n) => n.tarefasAtrasadas > 0).length,
+    semPasso: abertasTodas.filter((n) => !n.proximaTarefa).length,
+    paradas: abertasTodas.filter((n) => diasParada(n) > DIAS_PARADA).length,
+  };
+
   const filtrosAtivos = !!(responsavel || origem || busca.trim() || periodo !== "todos");
 
   const porAba = useMemo(() => {
     const todas = quadro?.negociacoes ?? [];
+    // O foco só recorta o que está em andamento: é onde dá pra agir.
+    const doFoco = (n: Negociacao) =>
+      foco === "atrasadas" ? n.tarefasAtrasadas > 0
+      : foco === "sem-passo" ? !n.proximaTarefa
+      : foco === "paradas" ? diasParada(n) > DIAS_PARADA
+      : true;
     return {
-      ABERTA: todas.filter((n) => n.status === "ABERTA"),
+      ABERTA: todas.filter((n) => n.status === "ABERTA" && doFoco(n)),
       GANHA: todas.filter((n) => n.status === "GANHA"),
       PERDIDA: todas.filter((n) => n.status === "PERDIDA"),
     };
-  }, [quadro]);
+  }, [quadro, foco]);
 
   async function mover(id: string, stageId: string) {
     const atual = quadro?.negociacoes.find((n) => n.id === id);
@@ -212,13 +227,28 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
             <input type="date" value={ate} onChange={(e) => setAte(e.target.value)} className={campo} aria-label="Até" />
           </>
         )}
-        {filtrosAtivos && (
+        <select
+          value={foco}
+          onChange={(e) => {
+            setFoco(e.target.value as Foco);
+            if (e.target.value) setAba("ABERTA");
+          }}
+          className={campo}
+          title="Recorta as negociações em andamento que precisam de atenção"
+        >
+          <option value="">Foco: tudo</option>
+          <option value="atrasadas">Tarefa atrasada ({contFoco.atrasadas})</option>
+          <option value="sem-passo">Sem próximo passo ({contFoco.semPasso})</option>
+          <option value="paradas">Paradas há +{DIAS_PARADA} dias ({contFoco.paradas})</option>
+        </select>
+        {(filtrosAtivos || foco) && (
           <button
             onClick={() => {
               setResponsavel("");
               setOrigem("");
               setBusca("");
               setPeriodo("todos");
+              setFoco("");
               setDe("");
               setAte("");
             }}
@@ -413,6 +443,17 @@ function Cartao({
           </span>
         )}
       </div>
+      {n.proximaTarefa ? (
+        <p
+          className={`text-[11px] mt-2 truncate ${n.tarefasAtrasadas > 0 ? "text-red-600 font-medium" : "text-neutral-500"}`}
+          title={n.proximaTarefa.titulo}
+        >
+          {ROTULO_TAREFA[n.proximaTarefa.tipo]} · {new Date(n.proximaTarefa.venceEm).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}{" "}
+          · {n.proximaTarefa.titulo}
+        </p>
+      ) : (
+        <p className="text-[11px] mt-2 text-amber-600">Sem próximo passo</p>
+      )}
       {(parada > DIAS_PARADA || atrasada) && (
         <div className="flex flex-wrap gap-1 mt-2">
           {parada > DIAS_PARADA && (

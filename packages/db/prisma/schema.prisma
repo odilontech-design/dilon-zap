@@ -141,6 +141,8 @@ model Tenant {
   funis             Funil[]
   negociacoes       Negociacao[]
   motivosDePerda    MotivoDePerda[]
+  tarefasNegociacao TarefaNegociacao[]
+  metricasMensais   MetricaMensal[]
   tags              Tag[]
   stages            Stage[]
   uraOpcoes         UraOpcao[]
@@ -380,6 +382,7 @@ model User {
   setores                SetorMembro[]
   solicitacoesDecididas  SolicitacaoDeAcesso[] @relation("SolicitacaoDecididaPor")
   negociacoesSobResponsabilidade Negociacao[] @relation("NegociacaoResponsavel")
+  tarefasSobResponsabilidade     TarefaNegociacao[] @relation("TarefaResponsavel")
   sentMessages           Message[]          @relation("MessageSender")
   messageReactions       MessageReaction[]
   scheduledMessages      ScheduledMessage[] @relation("ScheduledBy")
@@ -583,6 +586,7 @@ model Negociacao {
   updatedAt DateTime @updatedAt
 
   eventos HistoricoDeEtapa[]
+  tarefas TarefaNegociacao[]
 
   @@index([tenantId, funilId, status])
   @@index([tenantId, stageId])
@@ -1519,6 +1523,10 @@ enum Recurso {
   // lib/plano-regras): cada número a mais é um chip, um socket e mais
   // superfície de bloqueio no WhatsApp, então é liberado caso a caso.
   MULTI_NUMERO
+  // Indicadores de SaaS no funil: MRR, CAC, LTV, churn e o funil de ponta a
+  // ponta (visitantes → clientes). Sob demanda, como o multi-número: é a
+  // régua de negócio da Dilon Tech, não algo que toda empresa precise.
+  FUNIL_SAAS
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -1832,4 +1840,61 @@ enum StatusSolicitacao {
   PENDENTE
   APROVADA
   RECUSADA
+}
+
+enum TipoTarefa {
+  LIGACAO
+  WHATSAPP
+  REUNIAO
+  EMAIL
+  TAREFA
+}
+
+/// Próximo passo combinado de uma negociação: "ligar sexta", "mandar proposta".
+/// Negociação sem tarefa pendente é a que esfria sem ninguém perceber, então o
+/// quadro sinaliza tanto a tarefa atrasada quanto a ausência de tarefa.
+model TarefaNegociacao {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  negociacaoId String
+  negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
+
+  tipo    TipoTarefa @default(TAREFA)
+  titulo  String
+  venceEm DateTime
+
+  responsavelId String?
+  responsavel   User?   @relation("TarefaResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
+
+  concluidaEm DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId, concluidaEm, venceEm])
+  @@index([negociacaoId, concluidaEm])
+  @@index([responsavelId])
+}
+
+/// O que não nasce dentro do sistema e alguém informa à mão, mês a mês: quanto
+/// tráfego o site recebeu, quanto se investiu em anúncio e quanto cancelou. O
+/// resto do funil de SaaS (leads, clientes, MRR) sai das negociações.
+model MetricaMensal {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// "2026-10". Texto e não data: é um mês, e fuso horário não deve poder
+  /// empurrar o registro para o mês vizinho.
+  mes String
+
+  visitantes        Int @default(0)
+  investimentoCents Int @default(0)
+  /// Clientes que cancelaram no mês, e quanto de MRR saiu com eles.
+  cancelamentos     Int @default(0)
+  mrrCanceladoCents Int @default(0)
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, mes])
 }

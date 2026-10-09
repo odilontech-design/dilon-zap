@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
+import { TarefasNegociacao } from "./tarefas-negociacao";
 import { diasParada, fetcher, reaisParaCentavos, type Etapa, type Motivo, type Negociacao, type Usuario } from "./tipos";
 
 type Evento = {
@@ -335,6 +336,13 @@ export function NegociacaoDrawer({
             Salvar
           </button>
         </div>
+
+        <TarefasNegociacao
+          negociacaoId={negociacao.id}
+          usuarios={usuarios}
+          somenteLeitura={!aberta}
+          onMudou={onMudou}
+        />
 
         <div>
           <h3 className="text-sm font-semibold mb-2">Histórico</h3>
