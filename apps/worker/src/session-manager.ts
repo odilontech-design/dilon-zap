@@ -728,14 +728,55 @@ type InboundMedia = {
 // contextInfo (onde mora a citação, quando a mensagem é uma resposta a outra)
 // vem aninhado dentro do tipo específico da mensagem, não solto no nível de
 // cima — cada branch tem seu próprio campo.
-function getQuotedWaMessageId(m: proto.IMessage): string | undefined {
-  const contextInfo =
+function contextInfoDe(m: proto.IMessage): proto.IContextInfo | null | undefined {
+  return (
     m.extendedTextMessage?.contextInfo ??
     m.imageMessage?.contextInfo ??
     m.videoMessage?.contextInfo ??
     m.audioMessage?.contextInfo ??
-    m.documentMessage?.contextInfo;
-  return contextInfo?.stanzaId ?? undefined;
+    m.documentMessage?.contextInfo ??
+    m.stickerMessage?.contextInfo
+  );
+}
+
+function getQuotedWaMessageId(m: proto.IMessage): string | undefined {
+  return contextInfoDe(m)?.stanzaId ?? undefined;
+}
+
+/**
+ * Se a mensagem é uma RESPOSTA a um Status que a empresa postou, devolve a
+ * linha que vai na frente do texto ("↩️ Respondeu ao seu Status: ...").
+ *
+ * Sem isto, a resposta chegava solta — um "quanto custa?" ou um "😍" sem
+ * contexto nenhum, porque o Status citado não existe no nosso histórico (o
+ * Status não é conversa, ver o tratamento de status@broadcast). Para quem
+ * atende, era como se a resposta não tivesse aparecido: não dava pra saber a
+ * que o cliente estava reagindo. Pedido da Believe.
+ */
+export function prefixoRespostaDeStatus(m: proto.IMessage): string | null {
+  const ctx = contextInfoDe(m);
+  if (!ctx || ctx.remoteJid !== "status@broadcast") return null;
+
+  const q = ctx.quotedMessage ? normalizeMessageContent(ctx.quotedMessage) : null;
+  const trecho =
+    q?.conversation ??
+    q?.extendedTextMessage?.text ??
+    q?.imageMessage?.caption ??
+    q?.videoMessage?.caption ??
+    null;
+  const tipo = q?.imageMessage ? "foto" : q?.videoMessage ? "vídeo" : q?.audioMessage ? "áudio" : null;
+
+  if (trecho?.trim()) {
+    const curto = trecho.trim().replace(/\s+/g, " ");
+    return `↩️ Respondeu ao seu Status: "${curto.length > 80 ? curto.slice(0, 80) + "…" : curto}"`;
+  }
+  return tipo ? `↩️ Respondeu ao seu Status (${tipo})` : "↩️ Respondeu ao seu Status";
+}
+
+function comPrefixoDeStatus(m: proto.IMessage, texto: string): string {
+  const prefixo = prefixoRespostaDeStatus(m);
+  if (!prefixo) return texto;
+  return texto ? `${prefixo}\n${texto}` : prefixo;
 }
 
 // Detecta o tipo de conteúdo da mensagem e baixa a mídia (já descriptografada
@@ -763,7 +804,7 @@ async function extractInboundContent(
   if (m.audioMessage) {
     const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
     return {
-      text: plainText,
+      text: comPrefixoDeStatus(m, plainText),
       quotedWaMessageId,
       media: {
         type: "AUDIO",
@@ -777,7 +818,7 @@ async function extractInboundContent(
   if (m.imageMessage) {
     const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
     return {
-      text: m.imageMessage.caption ?? plainText,
+      text: comPrefixoDeStatus(m, m.imageMessage.caption ?? plainText),
       quotedWaMessageId,
       media: { type: "IMAGE", buffer, mimeType: m.imageMessage.mimetype ?? "image/jpeg" },
     };
@@ -786,7 +827,7 @@ async function extractInboundContent(
   if (m.videoMessage) {
     const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
     return {
-      text: m.videoMessage.caption ?? plainText,
+      text: comPrefixoDeStatus(m, m.videoMessage.caption ?? plainText),
       quotedWaMessageId,
       media: {
         type: "VIDEO",
@@ -800,7 +841,7 @@ async function extractInboundContent(
   if (m.documentMessage) {
     const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
     return {
-      text: m.documentMessage.caption ?? plainText,
+      text: comPrefixoDeStatus(m, m.documentMessage.caption ?? plainText),
       quotedWaMessageId,
       media: {
         type: "DOCUMENT",
@@ -811,8 +852,27 @@ async function extractInboundContent(
     };
   }
 
-  if (!plainText) return null;
-  return { text: plainText, quotedWaMessageId };
+  // Figurinha: até aqui caía no "sem texto e sem mídia" e era descartada em
+  // silêncio — a Believe reclamou que figurinha "não chega". Vai como imagem
+  // (webp), com o nome "figurinha.webp", que é o que a tela usa para mostrá-la
+  // pequena, como no WhatsApp, em vez de uma foto em tamanho cheio.
+  if (m.stickerMessage) {
+    const buffer = (await downloadMediaMessage(msg, "buffer", {}, downloadOpts)) as Buffer;
+    return {
+      text: comPrefixoDeStatus(m, ""),
+      quotedWaMessageId,
+      media: { type: "IMAGE", buffer, mimeType: m.stickerMessage.mimetype ?? "image/webp", fileName: "figurinha.webp" },
+    };
+  }
+
+  const texto = comPrefixoDeStatus(m, plainText);
+  if (!texto) {
+    // Tipo que ainda não tratamos (localização, contato, enquete...). Fica no
+    // log com o tipo, para a próxima reclamação de "não chegou" ter resposta.
+    logger.warn({ tipos: Object.keys(m).filter((k) => k !== "messageContextInfo"), waMessageId: msg.key.id }, "mensagem recebida ignorada: tipo sem suporte");
+    return null;
+  }
+  return { text: texto, quotedWaMessageId };
 }
 
 function extensionFromMime(mimeType: string): string {

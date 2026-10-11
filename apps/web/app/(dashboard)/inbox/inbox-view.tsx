@@ -2320,6 +2320,15 @@ function MessageMedia({
     );
   }
 
+  // Figurinha: pequena e sem ampliar, como no WhatsApp. O worker grava a
+  // figurinha como imagem com este nome de arquivo (ver extractInboundContent).
+  if (message.mediaType === "IMAGE" && message.mediaFileName === "figurinha.webp") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- vem via redirect assinado do R2
+      <img src={src} alt="figurinha" className="mb-1" style={{ width: 128, height: 128, objectFit: "contain" }} onLoad={onLoad} />
+    );
+  }
+
   if (message.mediaType === "IMAGE") {
     return (
       // Botão e não só um onClick na img: dá foco pelo teclado e é lido como
