@@ -30,7 +30,13 @@ export type Negociacao = {
   motivoPerdaId: string | null;
   proximaTarefa: { titulo: string; tipo: TipoTarefa; venceEm: string } | null;
   tarefasAtrasadas: number;
-  contato: { id: string; nome: string | null; telefone: string | null; avatarUrl: string | null };
+  contato: {
+    id: string;
+    nome: string | null;
+    telefone: string | null;
+    avatarUrl: string | null;
+    pendencia: { saldoCents: number; parcelas: number; vencidas: number; vencidoCents: number } | null;
+  };
   responsavel: { id: string; name: string } | null;
 };
 

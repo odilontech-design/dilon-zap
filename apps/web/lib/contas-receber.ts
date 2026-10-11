@@ -598,3 +598,73 @@ export async function detalheDaConta(tenantId: string, contaId: string) {
     parcelas,
   };
 }
+
+/* ------------------------------------------------------- pendências por cliente */
+
+export type Pendencia = {
+  /** Quanto o cliente ainda deve, somando todas as parcelas em aberto. */
+  saldoCents: number;
+  /** Parcelas em aberto. */
+  parcelas: number;
+  /** Das em aberto, quantas já venceram e quanto somam. */
+  vencidas: number;
+  vencidoCents: number;
+};
+
+const SEM_PENDENCIA: Pendencia = { saldoCents: 0, parcelas: 0, vencidas: 0, vencidoCents: 0 };
+
+/**
+ * O que cada cliente da empresa deve, calculado das parcelas (e dos
+ * recebimentos delas) — a mesma conta do A receber, num formato que dá para
+ * pendurar em qualquer tela: ficha, Inbox, CRM, lista de contatos.
+ *
+ * Duas consultas para a empresa inteira (parcelas vivas + soma recebida por
+ * parcela), em vez de uma por contato: a lista de contatos tem centenas.
+ */
+export async function pendenciasPorContato(
+  tenantId: string,
+  opcoes: { contactIds?: string[]; excluirOrderId?: string } = {},
+  agora = new Date()
+): Promise<Map<string, Pendencia>> {
+  const parcelas = await prisma.parcela.findMany({
+    where: {
+      tenantId,
+      canceladaEm: null,
+      reembolsadaEm: null,
+      conta: {
+        canceladaEm: null,
+        ...(opcoes.contactIds ? { contactId: { in: opcoes.contactIds } } : {}),
+        ...(opcoes.excluirOrderId ? { OR: [{ orderId: null }, { orderId: { not: opcoes.excluirOrderId } }] } : {}),
+      },
+    },
+    select: { id: true, valorCents: true, vencimento: true, conta: { select: { contactId: true } } },
+  });
+  if (parcelas.length === 0) return new Map();
+
+  const pagos = await prisma.pagamento.groupBy({
+    by: ["parcelaId"],
+    where: { parcelaId: { in: parcelas.map((p) => p.id) } },
+    _sum: { valorCents: true },
+  });
+  const pagoDe = new Map(pagos.map((p) => [p.parcelaId, p._sum.valorCents ?? 0]));
+
+  const resultado = new Map<string, Pendencia>();
+  for (const p of parcelas) {
+    const saldo = Math.max(0, p.valorCents - (pagoDe.get(p.id) ?? 0));
+    if (saldo <= 0) continue;
+    const atual = resultado.get(p.conta.contactId) ?? { ...SEM_PENDENCIA };
+    atual.saldoCents += saldo;
+    atual.parcelas += 1;
+    if (p.vencimento && faixaDeVencimento(p.vencimento, agora) === "vencido") {
+      atual.vencidas += 1;
+      atual.vencidoCents += saldo;
+    }
+    resultado.set(p.conta.contactId, atual);
+  }
+  return resultado;
+}
+
+export async function pendenciaDoContato(tenantId: string, contactId: string, excluirOrderId?: string): Promise<Pendencia> {
+  const mapa = await pendenciasPorContato(tenantId, { contactIds: [contactId], excluirOrderId });
+  return mapa.get(contactId) ?? { ...SEM_PENDENCIA };
+}

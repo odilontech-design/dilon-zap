@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
 import { TarefasNegociacao } from "./tarefas-negociacao";
+import { SeloPendencia } from "@/components/selo-pendencia";
 import { diasParada, fetcher, reaisParaCentavos, type Etapa, type Motivo, type Negociacao, type Usuario } from "./tipos";
 
 type Evento = {
@@ -205,6 +206,7 @@ export function NegociacaoDrawer({
               >
                 {negociacao.status === "GANHA" ? "Ganha" : negociacao.status === "PERDIDA" ? "Perdida" : "Em andamento"}
               </span>
+              <SeloPendencia pendencia={negociacao.contato.pendencia} />
               {parada > 14 && (
                 <span className="text-[10px] rounded-full px-2 py-0.5 bg-amber-100 text-amber-700">
                   parada há {parada} dias

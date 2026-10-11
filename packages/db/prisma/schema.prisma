@@ -733,6 +733,21 @@ model Contact {
   // endereço da empresa: é pra imprimir, não pra consultar.
   documento String?
   endereco  String?
+
+  // Cadastro completo do cliente (pedido da Believe, igual ao do SmartPOS).
+  // O endereço em partes existe pra filtrar e entregar; `endereco` continua
+  // sendo a linha pronta que vai no recibo, montada a partir delas.
+  email          String?
+  nascimento     DateTime?
+  rgIe           String?
+  cep            String?
+  logradouro     String?
+  numeroEndereco String?
+  complemento    String?
+  bairro         String?
+  cidade         String?
+  uf             String?
+
   // Como o cliente deve sair IMPRESSO, quando não é o nome que veio do
   // WhatsApp. Numa contabilidade o cliente é uma empresa: o contato se chama
   // "Paulo | PDUARTE" no celular, mas no comprovante precisa aparecer a razão
@@ -1005,6 +1020,9 @@ model Product {
   /// Como se cobra: uma vez ou todo mês. É o que faz uma assinatura entrar no
   /// MRR quando vai para uma negociação.
   cobranca       RecorrenciaNegociacao @default(UNICA)
+  /// Foto do produto no nosso armazenamento (R2). Aparece no catálogo, no pedido
+  /// e pode ir para o cliente no Inbox.
+  fotoKey        String?
   negociacaoItens NegociacaoItem[]
 
   // Descrição detalhada do serviço, pra equipe usar no atendimento (o

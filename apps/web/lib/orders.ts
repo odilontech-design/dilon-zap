@@ -1,6 +1,6 @@
 import { prisma } from "@dilon-zap/db";
 import type { PaymentMethod } from "@prisma/client";
-import { garantirContaDoPedido } from "@/lib/contas-receber";
+import { garantirContaDoPedido, receberNaConta, reparcelarConta } from "@/lib/contas-receber";
 
 /**
  * Regras do pedido que não podem morar numa rota.
@@ -36,6 +36,20 @@ export type FecharInput = {
   observacao?: string;
   /** Competência cobrada ("Setembro/2026"), pro texto do recibo. */
   mesReferencia?: string;
+  /**
+   * Parcelamento combinado na hora (fiado da Believe): entrada + N parcelas
+   * semanais, quinzenais ou mensais. Sem isto, o pedido devendo vira uma
+   * parcela só, com o vencimento informado.
+   */
+  parcelamento?: {
+    entradaCents: number;
+    /** A entrada foi paga agora, no balcão: entra como recebimento. */
+    entradaPaga: boolean;
+    entradaMeio?: PaymentMethod;
+    numParcelas: number;
+    periodicidade: "SEMANAL" | "QUINZENAL" | "MENSAL";
+    primeiroVencimento: Date;
+  } | null;
 };
 
 export async function fecharPedido(input: FecharInput) {
@@ -142,7 +156,38 @@ export async function fecharPedido(input: FecharInput) {
     // Pedido que fecha devendo vira uma conta a receber (uma parcela, com o
     // vencimento combinado). É dela que o A receber lê e que se reparcela.
     if (!input.pago && totais.totalCents > 0) {
-      await garantirContaDoPedido(tx, pedido.id, input.userId);
+      const conta = await garantirContaDoPedido(tx, pedido.id, input.userId);
+
+      const plano = input.parcelamento;
+      if (plano) {
+        // A conta nasce com uma parcela do total; o plano a refaz como entrada +
+        // parcelas. Tudo na mesma transação do fechamento: se o plano for
+        // inválido (entrada maior que o total, por exemplo), o pedido não fecha
+        // pela metade.
+        await reparcelarConta(tx, {
+          tenantId: input.tenantId,
+          contaId: conta.id,
+          entradaCents: plano.entradaCents || undefined,
+          vencimentoEntrada: agora,
+          numParcelas: plano.numParcelas,
+          periodicidade: plano.periodicidade,
+          primeiroVencimento: plano.primeiroVencimento,
+        });
+
+        if (plano.entradaPaga && plano.entradaCents > 0) {
+          const entrada = await tx.parcela.findFirst({ where: { contaId: conta.id, tipo: "ENTRADA" }, select: { id: true } });
+          await receberNaConta(tx, {
+            tenantId: input.tenantId,
+            contaId: conta.id,
+            parcelaId: entrada?.id,
+            valorCents: plano.entradaCents,
+            meio: plano.entradaMeio ?? "DINHEIRO",
+            recebidoEm: agora,
+            observacao: "Entrada paga no fechamento",
+            userId: input.userId,
+          });
+        }
+      }
     }
 
     return { jaEstavaFechado: false, pedido: atualizado };

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
+import { SeloPendencia } from "@/components/selo-pendencia";
 import { centsToBRL } from "@/lib/billing";
 import { LISTING_INTERVAL } from "@/lib/polling";
 import { intervaloDoPeriodo, type Periodo } from "@/lib/periodo";
@@ -495,6 +496,11 @@ function Cartao({
         />
         <p className="text-xs text-neutral-500 truncate">{n.contato.nome || n.contato.telefone || "Sem nome"}</p>
       </div>
+      {n.contato.pendencia && (
+        <div className="mb-2">
+          <SeloPendencia pendencia={n.contato.pendencia} compacto />
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs font-semibold tabular-nums">
           {centsToBRL(n.valorCents)}

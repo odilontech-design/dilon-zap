@@ -9,6 +9,8 @@ import {
   ErroDeNegocio,
   NEGOCIACAO_ABERTA_DO_CONTATO,
 } from "@/lib/negociacoes";
+import { pendenciaDoContato } from "@/lib/contas-receber";
+import { CAMPOS_ENDERECO, formatarCep, montarEndereco } from "@/lib/cadastro-cliente";
 
 const bodySchema = z.object({
   stageId: z.string().nullable().optional(),
@@ -17,6 +19,17 @@ const bodySchema = z.object({
   notes: z.string().max(4000).nullable().optional(),
   documento: z.string().max(40).nullable().optional(),
   endereco: z.string().max(300).nullable().optional(),
+  // Cadastro completo (pedido da Believe).
+  email: z.string().trim().max(120).nullable().optional(),
+  nascimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  rgIe: z.string().max(30).nullable().optional(),
+  cep: z.string().max(12).nullable().optional(),
+  logradouro: z.string().max(150).nullable().optional(),
+  numeroEndereco: z.string().max(20).nullable().optional(),
+  complemento: z.string().max(80).nullable().optional(),
+  bairro: z.string().max(80).nullable().optional(),
+  cidade: z.string().max(80).nullable().optional(),
+  uf: z.string().max(2).nullable().optional(),
 });
 
 /**
@@ -43,6 +56,16 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       notesUpdatedAt: true,
       documento: true,
       endereco: true,
+      email: true,
+      nascimento: true,
+      rgIe: true,
+      cep: true,
+      logradouro: true,
+      numeroEndereco: true,
+      complemento: true,
+      bairro: true,
+      cidade: true,
+      uf: true,
       hasWhatsapp: true,
       createdAt: true,
       negociacoes: NEGOCIACAO_ABERTA_DO_CONTATO,
@@ -73,7 +96,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const { negociacoes, ...resto } = contact;
-  return NextResponse.json({ ...resto, ...camposDoContato(negociacoes) });
+  const pendencia = await pendenciaDoContato(user.tenantId, contact.id);
+  return NextResponse.json({ ...resto, ...camposDoContato(negociacoes), pendencia: pendencia.saldoCents > 0 ? pendencia : null });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -86,7 +110,24 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   });
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  const { notes, documento, endereco, stageId, dealValueCents, ...resto } = parsed.data;
+  const {
+    notes,
+    documento,
+    endereco,
+    stageId,
+    dealValueCents,
+    email,
+    nascimento,
+    rgIe,
+    cep,
+    logradouro,
+    numeroEndereco,
+    complemento,
+    bairro,
+    cidade,
+    uf,
+    ...resto
+  } = parsed.data;
 
   // Etapa e valor são da negociação, não do contato (ver lib/negociacoes). A
   // etapa é conferida contra o tenant lá dentro — senão dava pra mover contato
@@ -121,8 +162,25 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         : {}),
       documento: limpo(documento),
       endereco: limpo(endereco),
+      email: limpo(email),
+      rgIe: limpo(rgIe),
+      cep: cep === undefined ? undefined : formatarCep(cep) || null,
+      logradouro: limpo(logradouro),
+      numeroEndereco: limpo(numeroEndereco),
+      complemento: limpo(complemento),
+      bairro: limpo(bairro),
+      cidade: limpo(cidade),
+      uf: uf === undefined ? undefined : uf?.trim().toUpperCase() || null,
+      ...(nascimento !== undefined ? { nascimento: nascimento ? new Date(`${nascimento}T12:00:00Z`) : null } : {}),
     },
   });
+
+  // Mexeu numa parte do endereço: a linha do recibo é remontada a partir das
+  // partes. Quem nunca preencheu as partes continua com o endereço livre de antes.
+  const mexeuNoEndereco = CAMPOS_ENDERECO.some((c) => parsed.data[c] !== undefined);
+  const final = mexeuNoEndereco
+    ? await prisma.contact.update({ where: { id: contact.id }, data: { endereco: montarEndereco(updated) } })
+    : updated;
 
   const abertas = await prisma.negociacao.findMany({
     where: { contactId: contact.id, ...NEGOCIACAO_ABERTA_DO_CONTATO.where },
@@ -130,7 +188,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     take: 1,
     select: NEGOCIACAO_ABERTA_DO_CONTATO.select,
   });
-  return NextResponse.json({ ...updated, ...camposDoContato(abertas) });
+  return NextResponse.json({ ...final, ...camposDoContato(abertas) });
 }
 
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {

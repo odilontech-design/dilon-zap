@@ -26,6 +26,7 @@ import {
 } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 import { OrderPanel, type Pedido } from "@/components/order-panel";
+import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 import { MOTIVOS_FECHAMENTO, MOTIVO_OUTRO } from "@/lib/close-reasons";
 import {
   CONVERSATION_LIST_INTERVAL,
@@ -84,7 +85,7 @@ type ConversationDetail = {
   ticketNumber: number;
   status: ConversationStatus;
   tags: string[];
-  contact: ContactRef & { stageId: string | null; notes: string | null; grupoParticipantes?: number | null };
+  contact: ContactRef & { stageId: string | null; notes: string | null; grupoParticipantes?: number | null; pendencia?: PendenciaResumo | null };
   assignedTo: { id: string; name: string } | null;
   setor: { id: string; nome: string } | null;
   closeReason: string | null;
@@ -1343,7 +1344,10 @@ export function ConversationThread({
                         : ""}
                     </p>
                   ) : (
-                    <p className="text-xs font-mono text-neutral-400">#{conversation.ticketNumber}</p>
+                    <p className="text-xs font-mono text-neutral-400 flex items-center gap-1.5">
+                      #{conversation.ticketNumber}
+                      <SeloPendencia pendencia={conversation.contact.pendencia} />
+                    </p>
                   )}
                 </div>
               </button>
@@ -1483,7 +1487,7 @@ export function ConversationThread({
                   </span>
                 )}
               </button>
-              {temMateriais && !modoGrupo && (
+              {(temMateriais || temPedidos) && !modoGrupo && (
                 <button
                   onClick={() => setEscolhendoMaterial(true)}
                   className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
@@ -3150,6 +3154,8 @@ type ProdutoComMaterial = {
   name: string;
   categoria: string | null;
   descricao: string | null;
+  priceCents: number;
+  fotoKey: string | null;
   materiais: {
     id: string;
     titulo: string;
@@ -3196,13 +3202,16 @@ function EscolherMaterial({
     (p) => !termo || p.name.toLowerCase().includes(termo) || (p.categoria ?? "").toLowerCase().includes(termo)
   );
 
+  // A foto do produto usa o id "foto:<produto>" no controle de enviados.
   async function enviar(materialId: string) {
     setErro(null);
     setEnviandoId(materialId);
     const res = await fetch(`/api/conversations/${conversationId}/materiais`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ materialId }),
+      body: JSON.stringify(
+        materialId.startsWith("foto:") ? { fotoDoProduto: materialId.slice(5) } : { materialId }
+      ),
     });
     setEnviandoId(null);
     if (!res.ok) {
@@ -3247,13 +3256,41 @@ function EscolherMaterial({
                 onClick={() => setAberto(aberto === p.id ? null : p.id)}
                 className="w-full text-left px-4 py-2.5 flex items-center justify-between gap-2 hover:bg-neutral-50"
               >
-                <span className="text-sm font-medium truncate">{p.name}</span>
+                <span className="flex items-center gap-2 min-w-0">
+                  {p.fotoKey && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={`/api/products/${p.id}/foto?v=${encodeURIComponent(p.fotoKey)}`}
+                      alt=""
+                      className="h-8 w-8 shrink-0 rounded object-cover border border-neutral-200"
+                    />
+                  )}
+                  <span className="text-sm font-medium truncate">{p.name}</span>
+                </span>
                 <span className="text-xs text-neutral-400 shrink-0">
-                  {p.materiais.length > 0 ? `${p.materiais.length} arquivo(s)` : "só descrição"}
+                  {p.materiais.length > 0
+                    ? `${p.materiais.length} arquivo(s)`
+                    : p.fotoKey
+                      ? "foto"
+                      : "só descrição"}
                 </span>
               </button>
               {aberto === p.id && (
                 <div className="px-4 pb-3 flex flex-col gap-1.5">
+                  {p.fotoKey && (
+                    <div className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 px-2.5 py-2">
+                      <span className="text-xs truncate">🖼️ Foto do produto (vai com nome e preço)</span>
+                      <button
+                        onClick={() => enviar(`foto:${p.id}`)}
+                        disabled={enviandoId === `foto:${p.id}`}
+                        className={`shrink-0 text-xs ${
+                          enviados.has(`foto:${p.id}`) ? "text-neutral-400" : "text-accent hover:underline"
+                        } disabled:opacity-50`}
+                      >
+                        {enviandoId === `foto:${p.id}` ? "Enviando..." : enviados.has(`foto:${p.id}`) ? "Enviado ✓" : "Enviar"}
+                      </button>
+                    </div>
+                  )}
                   {p.descricao && (
                     <button
                       onClick={() => onUsarDescricao(p.descricao!)}

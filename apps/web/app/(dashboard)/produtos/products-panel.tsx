@@ -18,6 +18,7 @@ type Product = {
   cobranca?: "UNICA" | "MENSAL";
   duracaoMinutos: number | null;
   descricao: string | null;
+  fotoKey?: string | null;
   _count?: { materiais: number; orderItems: number };
 };
 
@@ -280,6 +281,9 @@ export function ProductsPanel({
             {filtrados.map((p) => (
               <tr key={p.id} className="border-b border-neutral-200 last:border-0">
                 <td className="px-4 py-2.5">
+                  <div className="flex items-center gap-3">
+                  <FotoProduto produto={p} podeEditar={podeEditar} onMudou={mutate} onErro={setAviso} />
+                  <div>
                   <span className={p.isActive ? "font-medium text-neutral-800" : "text-neutral-400"}>{p.name}</span>
                   {p.sku && <span className="ml-2 text-[10px] font-mono text-neutral-400">{p.sku}</span>}
                   {!p.isActive && (
@@ -287,6 +291,8 @@ export function ProductsPanel({
                       inativo
                     </span>
                   )}
+                  </div>
+                  </div>
                 </td>
                 <td className="px-4 py-2.5 text-neutral-500">{p.categoria ?? "—"}</td>
                 {temEstoque && (
@@ -375,6 +381,92 @@ export function ProductsPanel({
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Miniatura do produto. Quem edita o catálogo clica pra subir ou trocar; a
+ * mesma foto aparece no pedido e pode ser enviada na conversa.
+ */
+function FotoProduto({
+  produto,
+  podeEditar,
+  onMudou,
+  onErro,
+}: {
+  produto: Product;
+  podeEditar: boolean;
+  onMudou: () => void;
+  onErro: (msg: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [enviando, setEnviando] = useState(false);
+
+  async function enviar(file: File) {
+    setEnviando(true);
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`/api/products/${produto.id}/foto`, { method: "POST", body: form });
+    setEnviando(false);
+    if (!res.ok) {
+      const j = await res.json().catch(() => ({}));
+      onErro(typeof j.error === "string" ? j.error : "não deu pra enviar a foto");
+      return;
+    }
+    onMudou();
+  }
+
+  async function remover() {
+    if (!confirm(`Tirar a foto de "${produto.name}"?`)) return;
+    await fetch(`/api/products/${produto.id}/foto`, { method: "DELETE" });
+    onMudou();
+  }
+
+  const miniatura = produto.fotoKey ? (
+    // A chave muda a cada troca de foto: entra na URL pra o navegador não
+    // mostrar a anterior do cache.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`/api/products/${produto.id}/foto?v=${encodeURIComponent(produto.fotoKey)}`}
+      alt=""
+      className="h-10 w-10 rounded-md object-cover border border-neutral-200"
+    />
+  ) : (
+    <span className="h-10 w-10 rounded-md border border-dashed border-neutral-300 text-neutral-400 text-[10px] flex items-center justify-center">
+      {podeEditar ? "+ foto" : ""}
+    </span>
+  );
+
+  if (!podeEditar) return <span className="shrink-0">{miniatura}</span>;
+
+  return (
+    <span className="shrink-0 flex flex-col items-center gap-0.5">
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        disabled={enviando}
+        title={produto.fotoKey ? "Trocar foto" : "Adicionar foto"}
+        className={enviando ? "opacity-50" : "hover:opacity-80"}
+      >
+        {miniatura}
+      </button>
+      {produto.fotoKey && (
+        <button type="button" onClick={remover} className="text-[10px] text-neutral-400 hover:text-red-600">
+          tirar
+        </button>
+      )}
+      <input
+        ref={input}
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) enviar(f);
+        }}
+      />
+    </span>
   );
 }
 

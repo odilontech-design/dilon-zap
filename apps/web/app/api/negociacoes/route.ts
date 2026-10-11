@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { funilDaEmpresa, garantirMotivosDePerda } from "@/lib/funis";
 import { criarNegociacao, ErroDeNegocio } from "@/lib/negociacoes";
+import { pendenciasPorContato } from "@/lib/contas-receber";
 import {
   calcularIndicadores,
   filtrarNegociacoes,
@@ -75,6 +76,7 @@ export async function GET(req: Request) {
     ate: dataOuNada(q.get("ate")),
   });
   const idsFiltrados = new Set(filtradas.map((n) => n.id));
+  const pendencias = await pendenciasPorContato(user.tenantId, { contactIds: [...new Set(brutas.map((n) => n.contactId))] });
 
   const eventosBrutos = await prisma.historicoDeEtapa.findMany({
     where: { negociacaoId: { in: [...idsFiltrados] } },
@@ -149,6 +151,7 @@ export async function GET(req: Request) {
       proximaTarefa: proximaDe.get(n.id) ?? null,
       tarefasAtrasadas: atrasadasDe.get(n.id) ?? 0,
       contato: {
+        pendencia: pendencias.get(n.contact.id) ?? null,
         id: n.contact.id,
         nome: n.contact.name,
         telefone: n.contact.phoneNumber ?? (n.contact.waJid.endsWith("@s.whatsapp.net") ? n.contact.waJid.split("@")[0] : null),

@@ -7,6 +7,7 @@ import { fecharPedido } from "@/lib/orders";
 import { registrarPagamento } from "@/lib/receivables";
 import { logAudit } from "@/lib/audit";
 import { ehGerencia } from "@/lib/papeis";
+import { pendenciaDoContato } from "@/lib/contas-receber";
 
 function ehFinanceiro(role: string) {
   return ehGerencia(role);
@@ -29,6 +30,20 @@ const patchSchema = z.object({
   paymentMethod: z.enum(["PIX", "PIX_PENDENTE", "CARTAO", "DINHEIRO", "BOLETO", "FIADO"]).optional(),
   // Prazo combinado com o cliente. So vale em pedido que fecha devendo.
   vencimento: z.string().datetime().nullable().optional(),
+  // Entrada + parcelas, combinado na hora (fiado da Believe).
+  parcelamento: z
+    .object({
+      entradaCents: z.number().int().min(0),
+      entradaPaga: z.boolean(),
+      entradaMeio: z.enum(["PIX", "CARTAO", "DINHEIRO"]).optional(),
+      numParcelas: z.number().int().min(1).max(60),
+      periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]),
+      primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    })
+    .nullable()
+    .optional(),
+  // O responsável libera venda a prazo para quem tem parcela pendente.
+  liberarPendencia: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -143,6 +158,35 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const pagoNaHora =
     parsed.data.paymentMethod === "PIX" || parsed.data.paymentMethod === "CARTAO" || parsed.data.paymentMethod === "DINHEIRO";
 
+  // Venda a prazo para quem já tem parcela em aberto: bloqueada (pedido da
+  // Believe — "em parcelamento, não deixar fazer nova compra"). Compra paga na
+  // hora passa: não cria dívida nova. Só o responsável da conta libera, e a
+  // liberação fica no registro de auditoria.
+  if (!pagoNaHora) {
+    const pendencia = await pendenciaDoContato(user.tenantId, pedido.contactId, pedido.id);
+    if (pendencia.saldoCents > 0) {
+      const podeLiberar = user.role === "OWNER" || user.role === "SUPERADMIN";
+      if (!(parsed.data.liberarPendencia && podeLiberar)) {
+        const valor = (pendencia.saldoCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+        const atraso = pendencia.vencidas > 0 ? `, ${pendencia.vencidas} em atraso` : "";
+        return NextResponse.json(
+          {
+            error: `Cliente com parcelas pendentes: ${valor} em ${pendencia.parcelas} parcela(s)${atraso}. Venda a prazo bloqueada até quitar${podeLiberar ? " — você pode liberar mesmo assim." : "; peça ao responsável para liberar, ou feche como pago na hora."}`,
+            pendencia,
+            podeLiberar,
+          },
+          { status: 409 }
+        );
+      }
+      await logAudit({ actor: user, action: "order.liberou_venda_com_pendencia", metadata: { numero: pedido.numero, pendencia } });
+    }
+  }
+
+  const plano = parsed.data.parcelamento;
+  if (plano && pagoNaHora) {
+    return NextResponse.json({ error: "parcelamento só vale para venda a prazo (fiado, boleto ou PIX a pagar)" }, { status: 400 });
+  }
+
   try {
     const r = await fecharPedido({
       orderId: pedido.id,
@@ -154,6 +198,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       pago: pagoNaHora,
       observacao: parsed.data.observacao,
       mesReferencia: parsed.data.mesReferencia,
+      parcelamento: plano
+        ? {
+            entradaCents: plano.entradaCents,
+            entradaPaga: plano.entradaPaga,
+            entradaMeio: plano.entradaMeio,
+            numParcelas: plano.numParcelas,
+            periodicidade: plano.periodicidade,
+            primeiroVencimento: new Date(`${plano.primeiroVencimento}T12:00:00Z`),
+          }
+        : null,
     });
 
     if (!r.jaEstavaFechado) {

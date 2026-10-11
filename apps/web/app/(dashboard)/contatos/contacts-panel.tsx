@@ -7,6 +7,7 @@ import { Avatar } from "@/components/avatar";
 import { contactLabel, formatDate, formatPhone, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 import { LISTING_INTERVAL } from "@/lib/polling";
+import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 
 type StageDef = { id: string; name: string; color: string };
 
@@ -18,6 +19,8 @@ type Contact = ContactRef & {
   createdAt: string;
   // null = ainda não checado, que é diferente de "não tem".
   hasWhatsapp: boolean | null;
+  // Quanto deve em parcelas em aberto (null = nada).
+  pendencia: PendenciaResumo | null;
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
@@ -31,6 +34,8 @@ export function ContactsPanel() {
   const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("");
+  // Pagamento: todos | quem tem parcela em aberto | quem tem parcela vencida.
+  const [pagamentoFiltro, setPagamentoFiltro] = useState<"" | "pendente" | "atraso">("");
   const [dupeOnly, setDupeOnly] = useState(false);
   const [editing, setEditing] = useState<Contact | "new" | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
@@ -79,12 +84,14 @@ export function ContactsPanel() {
     return contacts.filter((c) => {
       if (dupeOnly && !duplicateReasons.has(c.id)) return false;
       if (stageFilter && c.stageId !== stageFilter) return false;
+      if (pagamentoFiltro === "pendente" && !c.pendencia) return false;
+      if (pagamentoFiltro === "atraso" && !(c.pendencia && c.pendencia.vencidas > 0)) return false;
       if (!term) return true;
       return (
         contactLabel(c).toLowerCase().includes(term) || formatPhone(c.waJid).includes(term)
       );
     });
-  }, [contacts, search, stageFilter, dupeOnly, duplicateReasons]);
+  }, [contacts, search, stageFilter, pagamentoFiltro, dupeOnly, duplicateReasons]);
 
   async function handleStartConversation(contact: Contact) {
     const res = await fetch(`/api/contacts/${contact.id}/start-conversation`, { method: "POST" });
@@ -249,6 +256,16 @@ export function ContactsPanel() {
             </option>
           ))}
         </select>
+        <select
+          value={pagamentoFiltro}
+          onChange={(e) => setPagamentoFiltro(e.target.value as typeof pagamentoFiltro)}
+          className="text-sm rounded-md border border-neutral-300 px-2 py-2"
+          title="Clientes com parcelas em aberto no A receber"
+        >
+          <option value="">Pagamento: todos</option>
+          <option value="pendente">Com pagamento pendente</option>
+          <option value="atraso">Com pagamento em atraso</option>
+        </select>
         {duplicateReasons.size > 0 && (
           <label className="flex items-center gap-1.5 text-xs text-amber-700">
             <input type="checkbox" checked={dupeOnly} onChange={(e) => setDupeOnly(e.target.checked)} />
@@ -284,6 +301,11 @@ export function ContactsPanel() {
                     <Avatar contact={c} size={28} />
                     <div>
                       <span className="font-medium">{contactLabel(c)}</span>
+                      {c.pendencia && (
+                        <div className="mt-0.5">
+                          <SeloPendencia pendencia={c.pendencia} />
+                        </div>
+                      )}
                       {duplicateReasons.has(c.id) && (
                         <p className="text-[10px] text-amber-700" title="Confira se não é o mesmo contato duas vezes">
                           ⚠ possível duplicata — {duplicateReasons.get(c.id)}

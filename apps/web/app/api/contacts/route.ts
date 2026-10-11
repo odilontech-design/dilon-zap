@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { camposDoContato, NEGOCIACAO_ABERTA_DO_CONTATO } from "@/lib/negociacoes";
+import { pendenciasPorContato } from "@/lib/contas-receber";
 
 export async function GET() {
   const user = await requireUser();
@@ -41,7 +42,11 @@ export async function GET() {
   // Contato não tem tag própria — usa as tags da conversa mais recente, que
   // é onde elas realmente vivem (ver /inbox). Também expõe essa conversa
   // (id + atendente) pro Funil linkar direto pro Inbox.
+  // Quanto cada um deve: selo na lista e filtro "com pagamento pendente".
+  const pendencias = await pendenciasPorContato(user.tenantId);
+
   const withTags = contacts.map(({ conversations, negociacoes, ...contact }) => ({
+    pendencia: pendencias.get(contact.id) ?? null,
     ...contact,
     ...camposDoContato(negociacoes),
     tags: conversations[0]?.tags ?? [],

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
+import { gerarParcelas } from "@dilon-zap/receivables";
+import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 
 /**
  * Painel do pedido — o mesmo dos dois lados.
@@ -58,6 +60,7 @@ type Produto = {
   isActive: boolean;
   tipo: "PRODUTO" | "SERVICO";
   duracaoMinutos: number | null;
+  fotoKey?: string | null;
 };
 
 const fetcher = async (url: string) => {
@@ -86,6 +89,13 @@ function parseValor(texto: string): number | null {
   if (!Number.isFinite(v) || v < 0) return null;
   return Math.round(v * 100);
 }
+
+/** Daqui a n dias, no formato do <input type="date"> (dia de Brasília). */
+function diaDaquiA(n: number): string {
+  return new Date(Date.now() - 3 * 3_600_000 + n * 86_400_000).toISOString().slice(0, 10);
+}
+
+const A_PRAZO = ["PIX_PENDENTE", "BOLETO", "FIADO"];
 
 const STATUS_LABEL: Record<Pedido["status"], string> = {
   RASCUNHO: "Rascunho",
@@ -141,6 +151,24 @@ export function OrderPanel({
   // nome impresso só porque ninguém reparou no campo.
   const [nomeNoRecibo, setNomeNoRecibo] = useState(pedido.contact.nomeNoRecibo ?? "");
 
+  // Quanto o cliente já deve em outras compras. A consultora vê ao montar; o
+  // financeiro vê ao fechar — venda a prazo para quem deve fica bloqueada.
+  const { data: pendencia } = useSWR<PendenciaResumo>(
+    pedido.status === "FECHADO" || pedido.status === "CANCELADO" ? null : `/api/contacts/${pedido.contact.id}/pendencias?excluirPedido=${pedido.id}`,
+    fetcher
+  );
+
+  // Venda a prazo: uma parcela com vencimento, ou entrada + parcelas.
+  const [vencimento, setVencimento] = useState(diaDaquiA(7));
+  const [parcelar, setParcelar] = useState(false);
+  const [entrada, setEntrada] = useState("");
+  const [entradaPaga, setEntradaPaga] = useState(true);
+  const [entradaMeio, setEntradaMeio] = useState<"PIX" | "DINHEIRO" | "CARTAO">("DINHEIRO");
+  const [numParcelas, setNumParcelas] = useState("4");
+  const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("SEMANAL");
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(diaDaquiA(7));
+  const [podeLiberar, setPodeLiberar] = useState(false);
+
   const editavel = pedido.status === "RASCUNHO" || pedido.status === "AGUARDANDO_FINANCEIRO";
   const podeFechar = ehFinanceiro && pedido.status === "AGUARDANDO_FINANCEIRO";
 
@@ -150,6 +178,29 @@ export function OrderPanel({
   );
   const descontoCents = parseValor(desconto) ?? 0;
   const total = Math.max(subtotal - Math.min(descontoCents, subtotal), 0);
+  const aPrazo = A_PRAZO.includes(pagamento);
+  const entradaCents = parseValor(entrada) ?? 0;
+
+  const previaParcelas = useMemo(() => {
+    if (!aPrazo || !parcelar || total <= 0) return { erro: null as string | null, linhas: [] as ReturnType<typeof gerarParcelas> };
+    const n = Number(numParcelas);
+    if (!Number.isInteger(n) || n < 1) return { erro: "informe o número de parcelas", linhas: [] };
+    try {
+      return {
+        erro: null,
+        linhas: gerarParcelas({
+          totalCents: total,
+          entradaCents,
+          numParcelas: n,
+          periodicidade,
+          primeiroVencimento: new Date(`${primeiroVencimento}T12:00:00Z`),
+          vencimentoEntrada: new Date(`${diaDaquiA(0)}T12:00:00Z`),
+        }),
+      };
+    } catch (e) {
+      return { erro: (e as Error).message, linhas: [] };
+    }
+  }, [aPrazo, parcelar, total, entradaCents, numParcelas, periodicidade, primeiroVencimento]);
 
   const sugestoes = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -237,16 +288,47 @@ export function OrderPanel({
     if ((await acao({ acao: "enviarAoFinanceiro" })) !== null) onFechar();
   }
 
-  async function fechar() {
+  async function fechar(liberarPendencia = false) {
+    if (aPrazo && parcelar && previaParcelas.erro) return setErro(previaParcelas.erro);
+    if (aPrazo && !parcelar && !vencimento) return setErro("informe quando o cliente vai pagar");
     if ((await salvarItens()) === null) return;
-    const r = await acao({
-      acao: "fechar",
-      paymentMethod: pagamento,
-      descontoCents,
-      observacao,
-      mesReferencia,
+
+    setErro(null);
+    setOcupado(true);
+    const res = await fetch(`/api/orders/${pedido.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        acao: "fechar",
+        paymentMethod: pagamento,
+        descontoCents,
+        observacao,
+        mesReferencia,
+        ...(aPrazo && !parcelar ? { vencimento: new Date(`${vencimento}T12:00:00Z`).toISOString() } : {}),
+        ...(aPrazo && parcelar
+          ? {
+              parcelamento: {
+                entradaCents,
+                entradaPaga: entradaCents > 0 && entradaPaga,
+                entradaMeio,
+                numParcelas: Number(numParcelas),
+                periodicidade,
+                primeiroVencimento,
+              },
+            }
+          : {}),
+        ...(liberarPendencia ? { liberarPendencia: true } : {}),
+      }),
     });
-    if (r === null) return;
+    setOcupado(false);
+    const r = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setErro(typeof r.error === "string" ? r.error : "não deu pra fechar");
+      setPodeLiberar(res.status === 409 && r.podeLiberar === true);
+      return;
+    }
+    setPodeLiberar(false);
+    onMudou();
     if (r.jaEstavaFechado) setErro("Esse pedido já tinha sido fechado — nada foi baixado de novo.");
     else setFechadoAgora(typeof r.total === "number" ? r.total : total);
   }
@@ -337,7 +419,25 @@ export function OrderPanel({
 
         <div className="overflow-y-auto p-5 flex flex-col gap-4">
           {erro && (
-            <p className="rounded-md border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm">{erro}</p>
+            <div className="rounded-md border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm flex flex-col gap-2">
+              <p>{erro}</p>
+              {podeLiberar && (
+                <button
+                  onClick={() => fechar(true)}
+                  disabled={ocupado}
+                  className="self-start rounded-md border border-red-400 px-3 py-1 text-xs font-medium hover:bg-red-100 disabled:opacity-50"
+                >
+                  Liberar e fechar mesmo assim
+                </button>
+              )}
+            </div>
+          )}
+
+          {pendencia && pendencia.saldoCents > 0 && editavel && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
+              <SeloPendencia pendencia={pendencia} />
+              <span>Cliente com parcelas em aberto: venda a prazo (fiado, boleto, PIX a pagar) fica bloqueada. Pago na hora pode.</span>
+            </div>
           )}
 
           {editavel && (
@@ -354,9 +454,21 @@ export function OrderPanel({
                     <button
                       key={p.id}
                       onClick={() => adicionar(p)}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-100 flex justify-between gap-3"
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-100 flex items-center justify-between gap-3"
                     >
-                      <span className="truncate">{p.name}</span>
+                      <span className="flex items-center gap-2 min-w-0">
+                        {p.fotoKey ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={`/api/products/${p.id}/foto?v=${encodeURIComponent(p.fotoKey)}`}
+                            alt=""
+                            className="h-8 w-8 shrink-0 rounded object-cover border border-neutral-200"
+                          />
+                        ) : (
+                          <span className="h-8 w-8 shrink-0 rounded bg-neutral-100" />
+                        )}
+                        <span className="truncate">{p.name}</span>
+                      </span>
                       <span className="shrink-0 text-neutral-500 tabular-nums">
                         {centsToBRL(p.priceCents)}
                         {/* Avisa mas deixa vender, conforme decidido. */}
@@ -501,6 +613,83 @@ export function OrderPanel({
             </label>
           )}
 
+          {podeFechar && aPrazo && (
+            <div className="rounded-md border border-neutral-200 p-3 flex flex-col gap-3 text-sm">
+              <div className="flex gap-4">
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" checked={!parcelar} onChange={() => setParcelar(false)} />
+                  Uma parcela
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input type="radio" checked={parcelar} onChange={() => setParcelar(true)} />
+                  Entrada + parcelas
+                </label>
+              </div>
+
+              {!parcelar ? (
+                <label>
+                  <span className="text-xs font-medium text-neutral-700">Vence em</span>
+                  <input
+                    type="date"
+                    value={vencimento}
+                    onChange={(e) => setVencimento(e.target.value)}
+                    className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
+                  />
+                </label>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <label>
+                      <span className="text-xs font-medium text-neutral-700">Entrada (R$)</span>
+                      <input value={entrada} onChange={(e) => setEntrada(e.target.value)} inputMode="decimal" placeholder="0,00" className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5 tabular-nums" />
+                    </label>
+                    <label>
+                      <span className="text-xs font-medium text-neutral-700">Parcelas</span>
+                      <input value={numParcelas} onChange={(e) => setNumParcelas(e.target.value)} inputMode="numeric" className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5" />
+                    </label>
+                    <label>
+                      <span className="text-xs font-medium text-neutral-700">A cada</span>
+                      <select value={periodicidade} onChange={(e) => setPeriodicidade(e.target.value as typeof periodicidade)} className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5">
+                        <option value="SEMANAL">Semana</option>
+                        <option value="QUINZENAL">Quinzena</option>
+                        <option value="MENSAL">Mês</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span className="text-xs font-medium text-neutral-700">1ª parcela</span>
+                      <input type="date" value={primeiroVencimento} onChange={(e) => setPrimeiroVencimento(e.target.value)} className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5" />
+                    </label>
+                  </div>
+                  {entradaCents > 0 && (
+                    <label className="flex flex-wrap items-center gap-2">
+                      <input type="checkbox" checked={entradaPaga} onChange={(e) => setEntradaPaga(e.target.checked)} />
+                      Entrada paga agora, em
+                      <select value={entradaMeio} onChange={(e) => setEntradaMeio(e.target.value as typeof entradaMeio)} disabled={!entradaPaga} className="rounded-md border border-neutral-300 bg-surface px-2 py-1">
+                        <option value="DINHEIRO">Dinheiro</option>
+                        <option value="PIX">PIX</option>
+                        <option value="CARTAO">Cartão</option>
+                      </select>
+                    </label>
+                  )}
+                  {previaParcelas.linhas.length > 0 && (
+                    <ul className="rounded-md border border-neutral-200 divide-y divide-neutral-100 tabular-nums">
+                      {previaParcelas.linhas.map((p, i) => (
+                        <li key={i} className="flex justify-between px-3 py-1.5">
+                          <span>
+                            {p.tipo === "ENTRADA" ? "Entrada" : `${p.numero} de ${p.totalParcelas}`} ·{" "}
+                            {p.vencimento.toISOString().slice(0, 10).split("-").reverse().join("/")}
+                          </span>
+                          <span>{centsToBRL(p.valorCents)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {previaParcelas.erro && <p className="text-xs text-red-600">{previaParcelas.erro}</p>}
+                </>
+              )}
+            </div>
+          )}
+
           {pedido.status === "FECHADO" && (
             <p className="text-sm text-neutral-600">
               Fechado em {new Date(pedido.fechadoEm!).toLocaleString("pt-BR")} ·{" "}
@@ -574,7 +763,7 @@ export function OrderPanel({
 
           {podeFechar && (
             <button
-              onClick={fechar}
+              onClick={() => fechar()}
               disabled={ocupado || itens.length === 0}
               className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-40"
             >

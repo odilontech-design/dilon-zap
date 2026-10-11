@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { corDoMotivo } from "@/lib/close-reasons";
+import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 
 /**
  * Ficha do cliente: tudo sobre uma pessoa num lugar só, com os campos
@@ -38,6 +39,17 @@ type Ficha = ContactRef & {
   notesUpdatedAt: string | null;
   documento: string | null;
   endereco: string | null;
+  email: string | null;
+  nascimento: string | null;
+  rgIe: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numeroEndereco: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  cidade: string | null;
+  uf: string | null;
+  pendencia: PendenciaResumo | null;
   hasWhatsapp: boolean | null;
   createdAt: string;
   stage: { id: string; name: string; color: string } | null;
@@ -106,8 +118,6 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
   const [nome, setNome] = useState<string | null>(null);
   const [valor, setValor] = useState<string | null>(null);
   const [anotacoes, setAnotacoes] = useState<string | null>(null);
-  const [documento, setDocumento] = useState<string | null>(null);
-  const [endereco, setEndereco] = useState<string | null>(null);
 
   async function salvar(campos: Record<string, unknown>) {
     await fetch(`/api/contacts/${contactId}`, {
@@ -173,6 +183,11 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
                 <span className="ml-2 text-[10px] rounded-full bg-red-100 text-red-900 px-2 py-0.5">sem WhatsApp</span>
               )}
             </p>
+            {ficha.pendencia && (
+              <div className="mt-1">
+                <SeloPendencia pendencia={ficha.pendencia} />
+              </div>
+            )}
           </div>
           <button onClick={onFechar} className="text-neutral-400 hover:text-neutral-700 text-xl leading-none" aria-label="Fechar">
             ×
@@ -216,35 +231,7 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
             </label>
           </div>
 
-          {/* Só servem pro recibo impresso. Ficam aqui, e não num cadastro à
-              parte, porque é na ficha que a equipe já procura o cliente. */}
-          <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-4">
-            <label className="text-sm">
-              <span className="block text-xs font-medium text-neutral-700">CPF / CNPJ</span>
-              <input
-                value={documento ?? ficha.documento ?? ""}
-                onChange={(e) => setDocumento(e.target.value)}
-                onBlur={() => {
-                  if (documento !== null && documento !== (ficha.documento ?? "")) salvar({ documento });
-                }}
-                inputMode="numeric"
-                placeholder="Sai no recibo"
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5 tabular-nums"
-              />
-            </label>
-            <label className="text-sm">
-              <span className="block text-xs font-medium text-neutral-700">Endereço</span>
-              <input
-                value={endereco ?? ficha.endereco ?? ""}
-                onChange={(e) => setEndereco(e.target.value)}
-                onBlur={() => {
-                  if (endereco !== null && endereco !== (ficha.endereco ?? "")) salvar({ endereco });
-                }}
-                placeholder="Rua, número, bairro, cidade"
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
-              />
-            </label>
-          </div>
+          <CadastroDoCliente ficha={ficha} salvar={salvar} />
 
           <label className="text-sm">
             <span className="block text-xs font-medium text-neutral-700">Anotações</span>
@@ -308,6 +295,106 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+type CampoCadastro =
+  | "documento"
+  | "rgIe"
+  | "email"
+  | "nascimento"
+  | "cep"
+  | "logradouro"
+  | "numeroEndereco"
+  | "complemento"
+  | "bairro"
+  | "cidade"
+  | "uf";
+
+/**
+ * Cadastro completo do cliente, na própria ficha — é aqui que a equipe procura
+ * o cliente (pedido da Believe: "cadastro do cliente integrado com os
+ * contatos"). Cada campo salva ao sair dele, como o resto da ficha. O endereço
+ * em partes monta, no servidor, a linha que sai no recibo.
+ *
+ * CEP com 8 dígitos preenche rua, bairro, cidade e UF pelo ViaCEP, sem
+ * sobrescrever o que já foi digitado.
+ */
+function CadastroDoCliente({ ficha, salvar }: { ficha: Ficha; salvar: (c: Record<string, unknown>) => Promise<void> }) {
+  const [edicao, setEdicao] = useState<Partial<Record<CampoCadastro, string>>>({});
+
+  const valor = (c: CampoCadastro) => {
+    if (edicao[c] !== undefined) return edicao[c]!;
+    if (c === "nascimento") return ficha.nascimento ? ficha.nascimento.slice(0, 10) : "";
+    return (ficha[c] as string | null) ?? "";
+  };
+  const original = (c: CampoCadastro) => (c === "nascimento" ? (ficha.nascimento ? ficha.nascimento.slice(0, 10) : "") : ((ficha[c] as string | null) ?? ""));
+
+  async function sair(c: CampoCadastro) {
+    const v = edicao[c];
+    if (v === undefined || v === original(c)) return;
+    await salvar({ [c]: v.trim() || null });
+    setEdicao((e) => ({ ...e, [c]: undefined }));
+    if (c === "cep") await completarPeloCep(v);
+  }
+
+  async function completarPeloCep(cep: string) {
+    const d = cep.replace(/\D/g, "");
+    if (d.length !== 8) return;
+    try {
+      const r = await fetch(`https://viacep.com.br/ws/${d}/json/`);
+      const j = (await r.json()) as { logradouro?: string; bairro?: string; localidade?: string; uf?: string; erro?: boolean };
+      if (j.erro) return;
+      const novos: Record<string, string> = {};
+      if (!ficha.logradouro && j.logradouro) novos.logradouro = j.logradouro;
+      if (!ficha.bairro && j.bairro) novos.bairro = j.bairro;
+      if (!ficha.cidade && j.localidade) novos.cidade = j.localidade;
+      if (!ficha.uf && j.uf) novos.uf = j.uf;
+      if (Object.keys(novos).length) await salvar(novos);
+    } catch {
+      // Sem internet ou CEP fora do ar: a pessoa digita à mão.
+    }
+  }
+
+  const campo = (c: CampoCadastro, rotulo: string, extra: { placeholder?: string; inputMode?: "numeric" | "email" | "text"; tipo?: string; className?: string } = {}) => (
+    <label className={`text-sm ${extra.className ?? ""}`}>
+      <span className="block text-xs font-medium text-neutral-700">{rotulo}</span>
+      <input
+        type={extra.tipo ?? "text"}
+        value={valor(c)}
+        onChange={(e) => setEdicao((ed) => ({ ...ed, [c]: e.target.value }))}
+        onBlur={() => sair(c)}
+        inputMode={extra.inputMode}
+        placeholder={extra.placeholder}
+        className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+      />
+    </label>
+  );
+
+  return (
+    <div className="flex flex-col gap-3">
+      <h3 className="text-xs font-medium text-neutral-700">Cadastro do cliente</h3>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {campo("documento", "CPF / CNPJ", { inputMode: "numeric", placeholder: "Sai no recibo" })}
+        {campo("rgIe", "RG / Inscrição estadual")}
+        {campo("nascimento", "Nascimento", { tipo: "date" })}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
+        {campo("cep", "CEP", { inputMode: "numeric", placeholder: "Preenche o resto" })}
+        {campo("email", "E-mail", { inputMode: "email", tipo: "email" })}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,3fr)_minmax(0,1fr)] gap-3">
+        {campo("logradouro", "Rua / Avenida")}
+        {campo("numeroEndereco", "Número")}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,2fr)_minmax(0,2fr)_minmax(0,2fr)_minmax(0,1fr)] gap-3">
+        {campo("complemento", "Complemento")}
+        {campo("bairro", "Bairro")}
+        {campo("cidade", "Cidade")}
+        {campo("uf", "UF")}
+      </div>
+      {ficha.endereco && <p className="text-[11px] text-neutral-500">No recibo: {ficha.endereco}</p>}
     </div>
   );
 }
