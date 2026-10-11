@@ -104,25 +104,14 @@ const NAV_ITEMS = [
     icon: icon(<><path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4H6Z" /><path d="M3 6h18M16 10a4 4 0 0 1-8 0" /></>),
   },
   {
+    // Um item só: A receber, A pagar e Caixa trocam pelas abas do topo da
+    // própria página (pedido do Felipe, 11/10 — o menu estava comprido).
     href: "/receber",
+    tambemAtivoEm: ["/pagar", "/caixa"],
     recurso: "CONTAS_RECEBER" as Recurso,
-    label: "A receber",
-    icon: icon(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M6 15h4" /></>),
+    label: "Financeiro",
+    icon: icon(<><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3" /><path d="M3 7h16a2 2 0 0 1 2 2v3h-5a2 2 0 0 0 0 4h5" /><path d="M16.5 14h.01" /></>),
     // Responsável e financeiro: é quem opera o dinheiro (a página e as rotas já eram assim).
-    somenteGestao: true,
-  },
-  {
-    href: "/pagar",
-    recurso: "CONTAS_RECEBER" as Recurso,
-    label: "A pagar",
-    icon: icon(<><rect x="2" y="5" width="20" height="14" rx="2" /><path d="M2 10h20" /><path d="M14 15h4" /></>),
-    somenteGestao: true,
-  },
-  {
-    href: "/caixa",
-    recurso: "CONTAS_RECEBER" as Recurso,
-    label: "Caixa",
-    icon: icon(<><rect x="3" y="7" width="18" height="12" rx="2" /><path d="M3 11h18" /><path d="M12 15h.01" /><path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" /></>),
     somenteGestao: true,
   },
   {
@@ -344,7 +333,8 @@ export function Sidebar({
                 ativos.has(item.recurso) ||
                 ("recursoAlternativo" in item && !!item.recursoAlternativo && ativos.has(item.recursoAlternativo)))
           ).map((item) => {
-            const active = pathname === item.href || pathname?.startsWith(item.href + "/");
+            const prefixos = [item.href, ...("tambemAtivoEm" in item && item.tambemAtivoEm ? item.tambemAtivoEm : [])];
+            const active = prefixos.some((h) => pathname === h || pathname?.startsWith(h + "/"));
             return (
               <Link
                 key={item.href}
