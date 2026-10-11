@@ -220,7 +220,7 @@ checa(
     })
   );
   checa("fiado com parcela: vencimento, pago e saldo", r.pagamento.map((l) => [l.rotulo, n(l.valor)]), [
-    ["Forma de pagamento", "Fiado"],
+    ["Forma de pagamento", "Recorrente"],
     ["Vencimento", "30/09/2026"],
     ["Já pago", "R$ 30,00"],
     ["Saldo a pagar", "R$ 70,00"],
@@ -231,7 +231,7 @@ checa(
 checa(
   "fiado sem nada pago não imprime saldo igual ao total",
   montarRecibo(entrada({ pedido: { paymentMethod: "FIADO", pago: false, pagoEm: null, pagamentos: [] } })).pagamento,
-  [{ rotulo: "Forma de pagamento", valor: "Fiado" }]
+  [{ rotulo: "Forma de pagamento", valor: "Recorrente" }]
 );
 
 // ---------------------------------------------------------------------------

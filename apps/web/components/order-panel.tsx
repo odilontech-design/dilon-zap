@@ -110,7 +110,7 @@ const PAGAMENTO_LABEL: Record<NonNullable<Pedido["paymentMethod"]>, string> = {
   CARTAO: "Cartão",
   DINHEIRO: "Dinheiro",
   BOLETO: "Boleto",
-  FIADO: "Fiado",
+  FIADO: "Recorrente",
 };
 
 export function OrderPanel({
@@ -125,6 +125,10 @@ export function OrderPanel({
   onMudou: () => void;
 }) {
   const { data: produtos } = useSWR<Produto[]>("/api/products", fetcher);
+  const fotoDe = useMemo(
+    () => new Map((produtos ?? []).filter((p) => p.fotoKey).map((p) => [p.id, p.fotoKey!])),
+    [produtos]
+  );
   const [itens, setItens] = useState<PedidoItem[]>(pedido.items);
   const [observacao, setObservacao] = useState(pedido.observacao ?? "");
   const [mesReferencia, setMesReferencia] = useState(pedido.mesReferencia ?? "");
@@ -160,7 +164,7 @@ export function OrderPanel({
 
   // Venda a prazo: uma parcela com vencimento, ou entrada + parcelas.
   const [vencimento, setVencimento] = useState(diaDaquiA(7));
-  const [parcelar, setParcelar] = useState(false);
+  const [parcelar, setParcelar] = useState(pagamento === "FIADO");
   const [entrada, setEntrada] = useState("");
   const [entradaPaga, setEntradaPaga] = useState(true);
   const [entradaMeio, setEntradaMeio] = useState<"PIX" | "DINHEIRO" | "CARTAO">("DINHEIRO");
@@ -436,7 +440,7 @@ export function OrderPanel({
           {pendencia && pendencia.saldoCents > 0 && editavel && (
             <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
               <SeloPendencia pendencia={pendencia} />
-              <span>Cliente com parcelas em aberto: venda a prazo (fiado, boleto, PIX a pagar) fica bloqueada. Pago na hora pode.</span>
+              <span>Cliente com parcelas em aberto: venda a prazo (recorrente, boleto, PIX a pagar) fica bloqueada. Pago na hora pode.</span>
             </div>
           )}
 
@@ -491,8 +495,29 @@ export function OrderPanel({
 
           {itens.map((item, idx) => {
             const comDesconto = item.precoUnitCents < item.precoTabelaCents;
+            // Foto do catálogo ao lado do item: quem separa o pedido confere
+            // pela imagem, não só pelo nome (pedido da Believe).
+            const fotoKey = item.productId ? fotoDe.get(item.productId) : null;
             return (
               <div key={idx} className="flex items-center gap-2 text-sm border-b border-neutral-200 pb-2">
+                {fotoKey ? (
+                  <a
+                    href={`/api/products/${item.productId}/foto?v=${encodeURIComponent(fotoKey)}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Ver foto ampliada"
+                    className="shrink-0"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/api/products/${item.productId}/foto?v=${encodeURIComponent(fotoKey)}`}
+                      alt=""
+                      className="h-10 w-10 rounded-md object-cover border border-neutral-200"
+                    />
+                  </a>
+                ) : (
+                  <span className="h-10 w-10 shrink-0 rounded-md bg-neutral-100" aria-hidden />
+                )}
                 <span className="flex-1 min-w-0 truncate">{item.nomeProduto}</span>
 
                 <input
@@ -600,7 +625,12 @@ export function OrderPanel({
               <span className="text-xs font-medium text-neutral-700">Forma de pagamento</span>
               <select
                 value={pagamento}
-                onChange={(e) => setPagamento(e.target.value as typeof pagamento)}
+                onChange={(e) => {
+                  const meio = e.target.value as typeof pagamento;
+                  setPagamento(meio);
+                  // Recorrente é, por definição, entrada + parcelas; boleto e PIX a pagar costumam ser uma só.
+                  setParcelar(meio === "FIADO");
+                }}
                 className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2"
               >
                 <option value="PIX">PIX — já pago</option>
@@ -608,7 +638,7 @@ export function OrderPanel({
                 <option value="CARTAO">Cartão na maquininha — já pago</option>
                 <option value="DINHEIRO">Dinheiro — já pago</option>
                 <option value="BOLETO">Boleto — a receber</option>
-                <option value="FIADO">Fiado — a receber</option>
+                <option value="FIADO">Recorrente — a receber em parcelas</option>
               </select>
             </label>
           )}

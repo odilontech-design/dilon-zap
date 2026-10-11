@@ -184,7 +184,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const plano = parsed.data.parcelamento;
   if (plano && pagoNaHora) {
-    return NextResponse.json({ error: "parcelamento só vale para venda a prazo (fiado, boleto ou PIX a pagar)" }, { status: 400 });
+    return NextResponse.json({ error: "parcelamento só vale para venda a prazo (recorrente, boleto ou PIX a pagar)" }, { status: 400 });
   }
 
   try {

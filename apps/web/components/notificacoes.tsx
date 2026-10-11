@@ -37,7 +37,19 @@ type Estado =
   | "ligado"
   | "bloqueado";
 
-export function Notificacoes() {
+const MENSAGEM: Partial<Record<Estado, string>> = {
+  "precisa-instalar": "Pra receber aviso no iPhone, toque em Compartilhar e depois em \"Adicionar à Tela de Início\". Abrindo por lá, o aviso pode ser ativado.",
+  "sem-suporte": "Este navegador não recebe notificação.",
+  "sem-chave": "Os avisos ainda não estão configurados neste servidor — fale com o suporte da Dilon Tech.",
+  bloqueado: "A notificação está bloqueada nas configurações do navegador para este site — libere por lá (no cadeado ao lado do endereço) pra conseguir ativar.",
+};
+
+/**
+ * `compacto`: só o sino, pro rodapé do menu. Fica à vista em toda tela — no
+ * Painel sozinho, quase ninguém achava o botão, e sem ativar em CADA aparelho
+ * o aviso de mensagem nova não chega.
+ */
+export function Notificacoes({ compacto = false }: { compacto?: boolean } = {}) {
   const [estado, setEstado] = useState<Estado>("carregando");
   const [ocupado, setOcupado] = useState(false);
 
@@ -124,6 +136,35 @@ export function Notificacoes() {
   }
 
   if (estado === "carregando") return null;
+
+  if (compacto) {
+    const ligado = estado === "ligado";
+    const titulo = ligado
+      ? "Avisos ativos neste aparelho (clique para desativar)"
+      : MENSAGEM[estado] ?? "Ativar avisos de mensagem neste aparelho";
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          if (estado === "ligado") return desligar();
+          if (estado === "desligado") return ligar();
+          alert(MENSAGEM[estado]);
+        }}
+        disabled={ocupado}
+        aria-label={titulo}
+        title={titulo}
+        className={`relative grid place-items-center w-7 h-7 rounded-md hover:bg-neutral-100 disabled:opacity-50 ${
+          ligado ? "text-accent" : "text-neutral-400 hover:text-accent"
+        }`}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="w-[18px] h-[18px]" aria-hidden>
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          {!ligado && <path d="M3 3l18 18" />}
+        </svg>
+      </button>
+    );
+  }
 
   if (estado === "precisa-instalar") {
     return (

@@ -113,7 +113,7 @@ const ROTULO_MEIO: Record<MeioDePagamento, string> = {
   CARTAO: "Cartão",
   DINHEIRO: "Dinheiro",
   BOLETO: "Boleto",
-  FIADO: "Fiado",
+  FIADO: "Recorrente",
 };
 
 /**

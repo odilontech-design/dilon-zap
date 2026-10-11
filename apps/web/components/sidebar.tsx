@@ -9,6 +9,7 @@ import { SignOutButton } from "@/components/sign-out-button";
 import { AppVersion } from "@/components/app-version";
 import { DilonMark } from "@/components/dilon-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Notificacoes } from "@/components/notificacoes";
 
 // Ícones inline (sem lib externa: são poucos e assim não entra mais um
 // pacote no bundle). Todos no mesmo padrão — traço, 24x24, herdando a cor
@@ -393,6 +394,7 @@ export function Sidebar({
             >
               {icon(<><circle cx="8" cy="15" r="4" /><path d="m10.8 12.2 9.2-9.2M17 6l3 3M14 9l2 2" /></>)}
             </Link>
+            <Notificacoes compacto />
             <ThemeToggle compact />
           </div>
 

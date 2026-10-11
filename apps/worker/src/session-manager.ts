@@ -20,6 +20,7 @@ import { randomUUID } from "node:crypto";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
+import { avisarMensagemNova } from "./aviso-mensagem";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
 import { decidirAutoResposta, avaliarAutomacao, equipeFalou, numeroTemRobo, type OpcaoUra } from "./auto-reply-decisao";
@@ -1250,6 +1251,17 @@ async function recordMessage(params: {
         uraReenvios: decisao.reiniciarRoteamento ? 0 : conversation.uraReenvios,
       });
     }
+  }
+  // Depois do robô de propósito: a escolha no menu da URA muda o setor, e o
+  // aviso tem de ir para quem a conversa É agora. Nunca segura a mensagem.
+  if (isInbound && !params.grupo) {
+    void avisarMensagemNova({
+      tenantId: session.tenantId,
+      conversationId: conversation.id,
+      texto: params.text,
+      mediaType: params.media?.type,
+      mediaFileName: params.media?.fileName,
+    }).catch((err) => logger.warn({ err: (err as Error).message }, "aviso de mensagem nova falhou"));
   }
 }
 
