@@ -83,16 +83,16 @@ model Tenant {
   // Tudo opcional e em texto livre. Endereço estruturado (rua, número, CEP em
   // campos) só serviria se alguém fosse consultar por CEP, e ninguém vai; em
   // texto livre a empresa escreve do jeito que quer ver impresso.
-  reciboNome      String?
-  reciboDocumento String?
-  reciboEndereco  String?
-  reciboTelefone  String?
+  reciboNome            String?
+  reciboDocumento       String?
+  reciboEndereco        String?
+  reciboTelefone        String?
   // Mensagem no pé do recibo: política de troca, agradecimento, Instagram.
-  reciboRodape    String?
+  reciboRodape          String?
   // Chave PIX impressa no recibo quando o pedido fecha como "PIX — a pagar".
   // Sem ela o cliente recebe o comprovante sabendo quanto deve e não pra onde
   // mandar — foi o pedido da Guttierres, que cobra honorário por PIX.
-  reciboChavePix  String?
+  reciboChavePix        String?
   // Os dois textos do corpo do recibo, por situação de pagamento. Em aberto o
   // comprovante é uma COBRANÇA ("os honorários em aberto são de X, pague no
   // PIX abaixo"); quitado é uma QUITAÇÃO ("recebemos a importância de X").
@@ -101,16 +101,16 @@ model Tenant {
   //
   // Aceitam {cliente}, {valor}, {mes}, {numero} e {data} — ver aplicarVariaveis
   // em lib/recibo.ts.
-  reciboTextoPendente String?
-  reciboTextoPago     String?
+  reciboTextoPendente   String?
+  reciboTextoPago       String?
   // Logo impressa no topo do recibo. Guarda só a chave do objeto no R2, igual
   // às mídias das conversas — o arquivo nunca entra no banco.
-  reciboLogoKey       String?
+  reciboLogoKey         String?
   // Cor da faixa do topo e do TOTAL, em hex. Nulo mantém o verde do sistema,
   // então empresa que nunca mexeu nisso não muda de aparência. Existe porque o
   // recibo é a cara da empresa pro cliente dela, não a nossa: a Guttierres é
   // cinza grafite, e um comprovante verde-água parecia de outro negócio.
-  reciboCorDestaque   String?
+  reciboCorDestaque     String?
   // Esconde o telefone do cliente no bloco do recibo. Desligado por padrão:
   // quem vende pra pessoa física usa o telefone pra identificar a cliente no
   // balcão. Quem emite pra empresa (contabilidade) identifica por CNPJ, e aí
@@ -126,7 +126,7 @@ model Tenant {
   // 58 é o das impressoras portáteis. Fica na empresa, e não escolhido a cada
   // impressão, porque a impressora não muda — e errar a largura corta o texto
   // ou deixa uma faixa em branco.
-  reciboLarguraMm Int     @default(80)
+  reciboLarguraMm       Int     @default(80)
 
   users             User[]
   sessions          WhatsAppSession[]
@@ -142,6 +142,8 @@ model Tenant {
   negociacoes       Negociacao[]
   motivosDePerda    MotivoDePerda[]
   tarefasNegociacao TarefaNegociacao[]
+  notasNegociacao   NegociacaoNota[]
+  anexosNegociacao  NegociacaoAnexo[]
   metricasMensais   MetricaMensal[]
   contasReceber     ContaReceber[]
   parcelas          Parcela[]
@@ -384,27 +386,27 @@ model User {
 
   pushSubscriptions PushSubscription[]
 
-  assignedConversations  Conversation[]     @relation("AssignedAgent")
-  transfersMade          Conversation[]     @relation("AssignedBy")
-  uraOpcoes              UraOpcao[]         @relation("UraDestino")
-  setores                SetorMembro[]
-  solicitacoesDecididas  SolicitacaoDeAcesso[] @relation("SolicitacaoDecididaPor")
-  negociacoesSobResponsabilidade Negociacao[] @relation("NegociacaoResponsavel")
-  tarefasSobResponsabilidade     TarefaNegociacao[] @relation("TarefaResponsavel")
-  caixasAbertos                  Caixa[]            @relation("CaixaAbertoPor")
-  caixasFechados                 Caixa[]            @relation("CaixaFechadoPor")
+  assignedConversations          Conversation[]        @relation("AssignedAgent")
+  transfersMade                  Conversation[]        @relation("AssignedBy")
+  uraOpcoes                      UraOpcao[]            @relation("UraDestino")
+  setores                        SetorMembro[]
+  solicitacoesDecididas          SolicitacaoDeAcesso[] @relation("SolicitacaoDecididaPor")
+  negociacoesSobResponsabilidade Negociacao[]          @relation("NegociacaoResponsavel")
+  tarefasSobResponsabilidade     TarefaNegociacao[]    @relation("TarefaResponsavel")
+  caixasAbertos                  Caixa[]               @relation("CaixaAbertoPor")
+  caixasFechados                 Caixa[]               @relation("CaixaFechadoPor")
   movimentosDeCaixa              MovimentoCaixa[]
   saidasLancadas                 SaidaPagamento[]
-  sentMessages           Message[]          @relation("MessageSender")
-  messageReactions       MessageReaction[]
-  scheduledMessages      ScheduledMessage[] @relation("ScheduledBy")
-  ordersCreated          Order[]            @relation("OrderCreatedBy")
-  ordersClosed           Order[]            @relation("OrderClosedBy")
-  stockMovements         StockMovement[]    @relation("StockMovementBy")
-  pagamentos             Pagamento[]        @relation("PagamentoPor")
-  atendimentosEncerrados Atendimento[]      @relation("AtendimentoEncerradoPor")
-  teamMessages           TeamMessage[]      @relation("TeamMessageAuthor")
-  teamMessagesRecebidas  TeamMessage[]      @relation("TeamMessageDestinatario")
+  sentMessages                   Message[]             @relation("MessageSender")
+  messageReactions               MessageReaction[]
+  scheduledMessages              ScheduledMessage[]    @relation("ScheduledBy")
+  ordersCreated                  Order[]               @relation("OrderCreatedBy")
+  ordersClosed                   Order[]               @relation("OrderClosedBy")
+  stockMovements                 StockMovement[]       @relation("StockMovementBy")
+  pagamentos                     Pagamento[]           @relation("PagamentoPor")
+  atendimentosEncerrados         Atendimento[]         @relation("AtendimentoEncerradoPor")
+  teamMessages                   TeamMessage[]         @relation("TeamMessageAuthor")
+  teamMessagesRecebidas          TeamMessage[]         @relation("TeamMessageDestinatario")
 
   @@index([tenantId])
 }
@@ -499,7 +501,7 @@ model Stage {
   probabilidade Int @default(0)
 
   // Mantido enquanto o funil antigo (um contato, uma etapa) é desativado.
-  contacts Contact[]
+  contacts    Contact[]
   negociacoes Negociacao[]
 
   // Por funil, e não por empresa: "Qualificação" existe em mais de um funil.
@@ -515,16 +517,16 @@ model Funil {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  nome     String
-  position Int    @default(0)
+  nome            String
+  position        Int       @default(0)
   /// O funil que abre por padrão e recebe a negociação criada sem escolha.
-  padrao   Boolean @default(false)
+  padrao          Boolean   @default(false)
   /// Toda negociação nova ganha a tarefa "Ligar" para o dia seguinte.
-  tarefaLigarAuto Boolean @default(false)
+  tarefaLigarAuto Boolean   @default(false)
   /// Arquivar em vez de apagar: negociações ganhas e perdidas continuam
   /// apontando pra ele, e o histórico de conversão não pode sumir junto.
-  arquivadoEm DateTime?
-  createdAt DateTime @default(now())
+  arquivadoEm     DateTime?
+  createdAt       DateTime  @default(now())
 
   etapas      Stage[]
   negociacoes Negociacao[]
@@ -572,14 +574,14 @@ model Negociacao {
   stageId String
   stage   Stage  @relation(fields: [stageId], references: [id])
 
-  titulo      String
-  valorCents  Int                   @default(0)
-  recorrencia RecorrenciaNegociacao @default(UNICA)
+  titulo           String
+  valorCents       Int                   @default(0)
+  recorrencia      RecorrenciaNegociacao @default(UNICA)
   /// Quanto do valor se repete todo mês. É o que alimenta o MRR. Com itens, é a
   /// soma dos itens mensais (assim uma negociação com taxa de implantação única
   /// mais plano mensal não conta a taxa como MRR); sem itens, é o valor inteiro
   /// quando a cobrança é mensal e zero quando é única.
-  valorMensalCents Int @default(0)
+  valorMensalCents Int                   @default(0)
 
   responsavelId String?
   responsavel   User?   @relation("NegociacaoResponsavel", fields: [responsavelId], references: [id], onDelete: SetNull)
@@ -590,9 +592,9 @@ model Negociacao {
 
   previsaoFechamento DateTime?
 
-  status StatusNegociacao @default(ABERTA)
+  status        StatusNegociacao @default(ABERTA)
   motivoPerdaId String?
-  motivoPerda   MotivoDePerda? @relation(fields: [motivoPerdaId], references: [id], onDelete: SetNull)
+  motivoPerda   MotivoDePerda?   @relation(fields: [motivoPerdaId], references: [id], onDelete: SetNull)
   /// Detalhe da perda, em texto livre, além do motivo da lista.
   detalhePerda  String?
   fechadaEm     DateTime?
@@ -607,6 +609,8 @@ model Negociacao {
   eventos HistoricoDeEtapa[]
   tarefas TarefaNegociacao[]
   itens   NegociacaoItem[]
+  notas   NegociacaoNota[]
+  anexos  NegociacaoAnexo[]
   pedidos Order[]
 
   @@index([tenantId, funilId, status])
@@ -624,12 +628,12 @@ model HistoricoDeEtapa {
   negociacaoId String
   negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
 
-  tipo TipoEventoNegociacao
+  tipo          TipoEventoNegociacao
   /// Nulos quando a etapa foi apagada depois — o nome em foto abaixo preserva
   /// o registro legível, igual ao de TransferenciaSetor.
-  deStageId    String?
-  paraStageId  String?
-  deEtapaNome  String?
+  deStageId     String?
+  paraStageId   String?
+  deEtapaNome   String?
   paraEtapaNome String?
 
   porUserId String?
@@ -715,8 +719,8 @@ model Contact {
   // null = ainda não triado no funil (aparece numa coluna "Sem etapa" à
   // parte, nunca chuta o contato pra uma etapa que possa estar errada).
   stageId         String?
-  stage           Stage?    @relation(fields: [stageId], references: [id], onDelete: SetNull)
-  dealValueCents  Int       @default(0) // valor do negócio — soma no total de cada coluna do funil
+  stage           Stage?       @relation(fields: [stageId], references: [id], onDelete: SetNull)
+  dealValueCents  Int          @default(0) // valor do negócio — soma no total de cada coluna do funil
   negociacoes     Negociacao[]
 
   // Anotação livre sobre o cliente. Fica no CONTATO e não na conversa: o
@@ -789,12 +793,12 @@ model Contact {
 
   conversations Conversation[]
   orders        Order[]
+  contasReceber ContaReceber[]
 
   @@unique([tenantId, waJid])
   @@index([tenantId])
   @@index([tenantId, stageId])
   @@index([tenantId, grupo])
-  contasReceber ContaReceber[]
 }
 
 enum ConversationStatus {
@@ -1011,18 +1015,18 @@ model Product {
   // Quanto tempo o serviço ocupa, em minutos. Só faz sentido pra SERVICO, e é
   // o campo que uma agenda consome pra saber onde cabe. Nulo em produto, e
   // nulo também em serviço que a empresa não quis medir.
-  duracaoMinutos Int?
+  duracaoMinutos  Int?
   // Código interno da Believe, quando existir. Opcional porque nem todo
   // produto tem, e exigir um código inventado só pra cadastrar é atrito.
-  sku            String?
-  categoria      String?
-  priceCents     Int
+  sku             String?
+  categoria       String?
+  priceCents      Int
   /// Como se cobra: uma vez ou todo mês. É o que faz uma assinatura entrar no
   /// MRR quando vai para uma negociação.
-  cobranca       RecorrenciaNegociacao @default(UNICA)
+  cobranca        RecorrenciaNegociacao @default(UNICA)
   /// Foto do produto no nosso armazenamento (R2). Aparece no catálogo, no pedido
   /// e pode ir para o cliente no Inbox.
-  fotoKey        String?
+  fotoKey         String?
   negociacaoItens NegociacaoItem[]
 
   // Descrição detalhada do serviço, pra equipe usar no atendimento (o
@@ -1135,7 +1139,7 @@ model Order {
   descontoCents Int @default(0)
   totalCents    Int @default(0)
 
-  observacao String?
+  observacao    String?
   // Competência do que está sendo cobrado ("Setembro/2026"), pro texto do
   // recibo. Texto livre e não data: escritório cobra em outubro o serviço de
   // setembro, às vezes cobra dois meses juntos, e uma data calculada erraria
@@ -1183,7 +1187,7 @@ model Order {
 // correcao do anterior. Reescrever o passado e o que faz o extrato perder a
 // serventia.
 model Pagamento {
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   /// Nulo quando o recebimento é de uma conta avulsa (sem pedido).
   orderId String?
   order   Order?  @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -1757,9 +1761,9 @@ model TransferenciaSetor {
   conversationId String
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 
-  deSetorNome   String?
-  paraSetorId   String?
-  paraSetorNome String?
+  deSetorNome    String?
+  paraSetorId    String?
+  paraSetorNome  String?
   /// Quem recebeu, quando a conversa foi passada a uma PESSOA e não a uma
   /// fila. Nome em foto, igual aos de setor: o registro precisa continuar
   /// legível se o usuário for desativado depois.
@@ -1874,10 +1878,10 @@ model ProdutoMaterial {
 model SolicitacaoDeAcesso {
   id String @id @default(cuid())
 
-  nome     String
-  empresa  String
-  email    String
-  telefone String
+  nome      String
+  empresa   String
+  email     String
+  telefone  String
   /// Só os dígitos. Guardar formatado faria "67.211.588/0001-01" e
   /// "67211588000101" serem dois cadastros do mesmo CNPJ.
   documento String
@@ -1917,6 +1921,46 @@ enum TipoTarefa {
 /// Próximo passo combinado de uma negociação: "ligar sexta", "mandar proposta".
 /// Negociação sem tarefa pendente é a que esfria sem ninguém perceber, então o
 /// quadro sinaliza tanto a tarefa atrasada quanto a ausência de tarefa.
+/// Anotação livre na linha do tempo da negociação ("cliente pediu desconto",
+/// "volta a falar depois do dia 20") — o equivalente às anotações do RD Station.
+model NegociacaoNota {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  negociacaoId String
+  negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
+
+  texto     String
+  porUserId String?
+  /// Nome em foto: a nota continua legível se o usuário for removido.
+  porNome   String?
+  em        DateTime @default(now())
+
+  @@index([negociacaoId, em])
+}
+
+/// Arquivo anexado à negociação (proposta, contrato, orçamento). O arquivo
+/// vive no R2; o banco guarda só a chave.
+model NegociacaoAnexo {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  negociacaoId String
+  negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
+
+  nome         String
+  mediaKey     String
+  mimeType     String
+  tamanhoBytes Int
+  porUserId    String?
+  porNome      String?
+  criadoEm     DateTime @default(now())
+
+  @@index([negociacaoId, criadoEm])
+}
+
 model TarefaNegociacao {
   id       String @id @default(cuid())
   tenantId String
@@ -1936,7 +1980,7 @@ model TarefaNegociacao {
   /// Só para ligações: o que aconteceu. Fica na própria tarefa concluída.
   resultado   ResultadoTarefa?
   anotacao    String?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime         @default(now())
 
   @@index([tenantId, concluidaEm, venceEm])
   @@index([negociacaoId, concluidaEm])
@@ -1955,11 +1999,11 @@ model MetricaMensal {
   /// empurrar o registro para o mês vizinho.
   mes String
 
-  visitantes        Int @default(0)
-  investimentoCents Int @default(0)
+  visitantes        Int  @default(0)
+  investimentoCents Int  @default(0)
   /// Clientes que cancelaram no mês, e quanto de MRR saiu com eles.
-  cancelamentos     Int @default(0)
-  mrrCanceladoCents Int @default(0)
+  cancelamentos     Int  @default(0)
+  mrrCanceladoCents Int  @default(0)
   /// MRR que a empresa já tinha no INÍCIO deste mês, quando informado. O funil
   /// só enxerga o que foi vendido por ele; isto é o ponto de partida de quem já
   /// tinha clientes antes. Vale dali em diante, até o próximo valor informado.
@@ -2083,14 +2127,14 @@ model Caixa {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  abertoPorId String?
-  abertoPor   User?   @relation("CaixaAbertoPor", fields: [abertoPorId], references: [id], onDelete: SetNull)
-  abertoEm    DateTime @default(now())
-  valorInicialCents Int @default(0)
+  abertoPorId       String?
+  abertoPor         User?    @relation("CaixaAbertoPor", fields: [abertoPorId], references: [id], onDelete: SetNull)
+  abertoEm          DateTime @default(now())
+  valorInicialCents Int      @default(0)
 
-  fechadoPorId String?
-  fechadoPor   User?   @relation("CaixaFechadoPor", fields: [fechadoPorId], references: [id], onDelete: SetNull)
-  fechadoEm    DateTime?
+  fechadoPorId          String?
+  fechadoPor            User?     @relation("CaixaFechadoPor", fields: [fechadoPorId], references: [id], onDelete: SetNull)
+  fechadoEm             DateTime?
   /// Congelados no fechamento: o que o sistema esperava em dinheiro, o que foi
   /// contado e a diferença. Congelar é o que mantém o histórico fiel mesmo se um
   /// recebimento for corrigido depois.
@@ -2124,7 +2168,7 @@ model MovimentoCaixa {
   descricao  String
 
   createdById String?
-  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
   @@index([caixaId])
@@ -2149,12 +2193,12 @@ model Fornecedor {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  nome      String
-  documento String?
-  telefone  String?
+  nome       String
+  documento  String?
+  telefone   String?
   observacao String?
-  ativo     Boolean @default(true)
-  createdAt DateTime @default(now())
+  ativo      Boolean  @default(true)
+  createdAt  DateTime @default(now())
 
   contas ContaPagar[]
 
@@ -2202,9 +2246,9 @@ model ParcelaPagar {
   vencimento DateTime?
   valorCents Int
 
-  canceladaEm   DateTime?
-  reembolsadaEm DateTime?
-  observacao    String?
+  canceladaEm             DateTime?
+  reembolsadaEm           DateTime?
+  observacao              String?
   ultimoLembreteInternoEm DateTime?
 
   pagamentos SaidaPagamento[]
@@ -2221,19 +2265,19 @@ model SaidaPagamento {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  contaId String
-  conta   ContaPagar @relation(fields: [contaId], references: [id], onDelete: Cascade)
+  contaId   String
+  conta     ContaPagar    @relation(fields: [contaId], references: [id], onDelete: Cascade)
   parcelaId String?
   parcela   ParcelaPagar? @relation(fields: [parcelaId], references: [id], onDelete: SetNull)
 
   valorCents Int
   meio       FormaPagamentoConta?
   /// Quando o dinheiro saiu (pode ser anterior ao lançamento).
-  pagoEm     DateTime @default(now())
+  pagoEm     DateTime             @default(now())
   observacao String?
 
   createdById String?
-  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
 
   @@index([contaId])

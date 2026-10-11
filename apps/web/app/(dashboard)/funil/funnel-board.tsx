@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
 import { SeloPendencia } from "@/components/selo-pendencia";
@@ -9,7 +10,6 @@ import { centsToBRL } from "@/lib/billing";
 import { LISTING_INTERVAL } from "@/lib/polling";
 import { intervaloDoPeriodo, type Periodo } from "@/lib/periodo";
 import { IndicadoresFunil } from "./indicadores-funil";
-import { NegociacaoDrawer } from "./negociacao-drawer";
 import { NovaNegociacao } from "./nova-negociacao";
 import { diasParada, fetcher, ROTULO_TAREFA, type FunilResumo, type Negociacao, type Quadro } from "./tipos";
 
@@ -17,8 +17,10 @@ type Aba = "ABERTA" | "GANHA" | "PERDIDA";
 type Foco = "" | "atrasadas" | "sem-passo" | "paradas";
 const DIAS_PARADA = 14;
 
-export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
-  const [funilId, setFuniId] = useState("");
+export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; funilInicial?: string }) {
+  const router = useRouter();
+  // Voltar da página da negociação cai no mesmo funil (?funil=…).
+  const [funilId, setFuniId] = useState(funilInicial ?? "");
   const [aba, setAba] = useState<Aba>("ABERTA");
   const [responsavel, setResponsavel] = useState("");
   const [origem, setOrigem] = useState("");
@@ -28,7 +30,6 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
 
-  const [selecionada, setSelecionada] = useState<string | null>(null);
   const [criando, setCriando] = useState<{ etapaId?: string } | null>(null);
   const [arrastando, setArrastando] = useState<string | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
@@ -166,7 +167,6 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
   if (!quadro || !funis) return <p className="text-sm text-neutral-400">Carregando...</p>;
 
   const funilAtual = quadro.funil.id;
-  const selecionadaObj = quadro.negociacoes.find((n) => n.id === selecionada) ?? null;
   const campo = "text-sm rounded-md border border-neutral-300 px-2 py-1.5 bg-surface";
 
   return (
@@ -399,7 +399,7 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
                     <Cartao
                       key={n.id}
                       n={n}
-                      onAbrir={() => setSelecionada(n.id)}
+                      onAbrir={() => router.push(`/funil/${n.id}`)}
                       onArrastar={() => setArrastando(n.id)}
                       onSoltar={() => {
                         setArrastando(null);
@@ -424,20 +424,7 @@ export function FunnelBoard({ podeGerir }: { podeGerir: boolean }) {
           aba={aba}
           etapas={quadro.etapas}
           motivos={quadro.motivos}
-          onAbrir={(id) => setSelecionada(id)}
-        />
-      )}
-
-      {selecionadaObj && (
-        <NegociacaoDrawer
-          key={selecionadaObj.id}
-          negociacao={selecionadaObj}
-          etapas={quadro.etapas}
-          usuarios={quadro.usuarios}
-          motivos={quadro.motivos}
-          origens={quadro.origens}
-          onFechar={() => setSelecionada(null)}
-          onMudou={() => mutate()}
+          onAbrir={(id) => router.push(`/funil/${id}`)}
         />
       )}
 

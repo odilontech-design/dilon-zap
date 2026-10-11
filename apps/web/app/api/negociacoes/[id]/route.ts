@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
+import { deleteMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
+import { pendenciaDoContato } from "@/lib/contas-receber";
 import { ehGerencia } from "@/lib/papeis";
 import {
   ErroDeNegocio,
@@ -16,23 +18,89 @@ async function daEmpresa(id: string, tenantId: string) {
   return prisma.negociacao.findFirst({ where: { id, tenantId } });
 }
 
-/** Detalhe + linha do tempo, para a gaveta da negociação. */
+/**
+ * Tudo que a página da negociação mostra, num pedido só: os campos, o funil
+ * com as etapas (a régua do topo), o contato, a linha do tempo (etapas,
+ * anotações e arquivos) e as listas de apoio dos campos.
+ */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
   const n = await prisma.negociacao.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
     include: {
-      contact: { select: { id: true, name: true, phoneNumber: true, waJid: true } },
+      funil: { select: { id: true, nome: true } },
+      contact: {
+        select: { id: true, name: true, phoneNumber: true, waJid: true, avatarUrl: true, email: true, documento: true, endereco: true },
+      },
       responsavel: { select: { id: true, name: true } },
       motivoPerda: { select: { id: true, nome: true } },
       eventos: { orderBy: { em: "desc" } },
+      notas: { orderBy: { em: "desc" }, select: { id: true, texto: true, porUserId: true, porNome: true, em: true } },
+      anexos: {
+        orderBy: { criadoEm: "desc" },
+        select: { id: true, nome: true, mimeType: true, tamanhoBytes: true, porUserId: true, porNome: true, criadoEm: true },
+      },
       _count: { select: { itens: true } },
       // Pedidos nascidos desta negociação: a ponte de volta com Pedidos.
       pedidos: { orderBy: { numero: "desc" }, select: { id: true, numero: true, status: true, totalCents: true, pago: true } },
     },
   });
   if (!n) return NextResponse.json({ error: "negociação não encontrada" }, { status: 404 });
-  return NextResponse.json(n);
+
+  const [etapas, usuarios, motivos, origensBrutas, pendencia] = await Promise.all([
+    prisma.stage.findMany({ where: { funilId: n.funilId }, orderBy: { position: "asc" } }),
+    prisma.user.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    prisma.motivoDePerda.findMany({ where: { tenantId: user.tenantId }, select: { id: true, nome: true, ativo: true } }),
+    prisma.negociacao.findMany({
+      where: { tenantId: user.tenantId, origem: { not: null } },
+      distinct: ["origem"],
+      select: { origem: true },
+    }),
+    pendenciaDoContato(user.tenantId, n.contactId),
+  ]);
+
+  const c = n.contact;
+  return NextResponse.json({
+    negociacao: {
+      id: n.id,
+      titulo: n.titulo,
+      stageId: n.stageId,
+      status: n.status,
+      valorCents: n.valorCents,
+      recorrencia: n.recorrencia,
+      valorMensalCents: n.valorMensalCents,
+      origem: n.origem,
+      previsaoFechamento: n.previsaoFechamento,
+      etapaDesde: n.etapaDesde,
+      createdAt: n.createdAt,
+      fechadaEm: n.fechadaEm,
+      motivoPerdaId: n.motivoPerdaId,
+      detalhePerda: n.detalhePerda,
+      proximaTarefa: null,
+      tarefasAtrasadas: 0,
+      contato: {
+        id: c.id,
+        nome: c.name,
+        telefone: c.phoneNumber ?? (c.waJid.endsWith("@s.whatsapp.net") ? c.waJid.split("@")[0] : null),
+        avatarUrl: c.avatarUrl,
+        email: c.email,
+        documento: c.documento,
+        endereco: c.endereco,
+        pendencia: pendencia && pendencia.saldoCents > 0 ? pendencia : null,
+      },
+      responsavel: n.responsavel,
+    },
+    funil: n.funil,
+    etapas: etapas.map((e) => ({ id: e.id, nome: e.name, cor: e.color, position: e.position, probabilidade: e.probabilidade })),
+    usuarios,
+    motivos,
+    origens: origensBrutas.map((o) => o.origem!).sort(),
+    eventos: n.eventos,
+    notas: n.notas,
+    anexos: n.anexos,
+    pedidos: n.pedidos,
+    itens: n._count.itens,
+  });
 }
 
 const schema = z.object({
@@ -118,6 +186,9 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   const n = await daEmpresa(params.id, user.tenantId);
   if (!n) return NextResponse.json({ error: "negociação não encontrada" }, { status: 404 });
 
+  // Os arquivos ficam no R2: as linhas somem em cascata, os objetos não.
+  const anexos = await prisma.negociacaoAnexo.findMany({ where: { negociacaoId: n.id }, select: { mediaKey: true } });
   await prisma.negociacao.delete({ where: { id: n.id } });
+  await Promise.all(anexos.map((a) => deleteMedia(a.mediaKey).catch(() => {})));
   return NextResponse.json({ ok: true });
 }

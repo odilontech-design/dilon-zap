@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { LISTING_INTERVAL } from "@/lib/polling";
@@ -148,7 +149,10 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
                   <p className={`text-sm font-medium ${t.concluidaEm ? "line-through text-neutral-400" : ""}`}>{t.titulo}</p>
                   <p className="text-xs text-neutral-500 truncate">
                     {t.contato.nome || "Sem nome"}
-                    {fone && <> · {formatarTelefone(fone)}</>} · {t.negociacao.titulo}
+                    {fone && <> · {formatarTelefone(fone)}</>} ·{" "}
+                    <Link href={`/funil/${t.negociacao.id}`} className="hover:text-accent hover:underline">
+                      {t.negociacao.titulo}
+                    </Link>
                   </p>
                   <p className={`text-[11px] ${atrasada ? "text-red-600 font-medium" : "text-neutral-400"}`}>
                     {ROTULO_TAREFA[t.tipo]} · {quandoBR(t.venceEm)}
