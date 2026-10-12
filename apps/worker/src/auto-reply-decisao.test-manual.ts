@@ -152,6 +152,31 @@ checa(
   decidirAutoResposta(
     cenario({ regras: [PALAVRA, SAUDACAO], textoRecebido: "qual o horário de vocês?" })
   ),
+  // No primeiro contato a palavra-chave vale como a saudação (marca o contato).
+  resposta(PALAVRA.response, false, true)
+);
+
+checa(
+  "depois de recebido pela palavra-chave, a próxima mensagem NÃO leva a saudação por cima",
+  decidirAutoResposta(
+    cenario({
+      regras: [PALAVRA, SAUDACAO],
+      textoRecebido: "revenda de gás, atendo umas 25 conversas por dia",
+      saudacaoEnviadaEm: new Date("2026-09-01T14:59:00Z"),
+    })
+  ),
+  calado
+);
+
+checa(
+  "palavra-chave para quem já foi saudado não remarca a saudação",
+  decidirAutoResposta(
+    cenario({
+      regras: [PALAVRA, SAUDACAO],
+      textoRecebido: "qual o horário?",
+      saudacaoEnviadaEm: new Date("2026-08-01T12:00:00Z"),
+    })
+  ),
   resposta(PALAVRA.response)
 );
 
@@ -165,7 +190,7 @@ checa(
       mensagemAusencia: AUSENCIA,
     })
   ),
-  resposta(PALAVRA.response)
+  resposta(PALAVRA.response, false, true)
 );
 
 checa(
@@ -258,7 +283,7 @@ checa(
       textoRecebido: "Bom dia, qual o Horário?",
     })
   ),
-  resposta(PALAVRA.response)
+  resposta(PALAVRA.response, false, true)
 );
 
 // ---------------------------------------------------------------------------
@@ -403,7 +428,7 @@ checa(
 checa(
   "palavra-chave continua valendo pra quem escreve outra coisa durante o menu",
   decidirAutoResposta(comMenu({ textoRecebido: "qual o horário de vocês?", regras: [PALAVRA] })),
-  resposta(PALAVRA.response)
+  resposta(PALAVRA.response, false, true)
 );
 
 checa(

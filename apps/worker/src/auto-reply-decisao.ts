@@ -310,7 +310,12 @@ export function decidirAutoResposta(e: EntradaDecisao): Decisao | null {
     (r) => !r.isDefault && !r.isGreeting && r.keyword && texto.includes(r.keyword.toLowerCase())
   );
   if (porPalavraChave) {
-    return { texto: porPalavraChave.response, marcarAusencia: false, marcarSaudacao: false };
+    // No primeiro contato, a resposta da palavra-chave É a boas-vindas: marca
+    // a saudação junto. Sem isso, a próxima mensagem do cliente disparava a
+    // saudação por cima ("Oi! Aqui é o Felipe...") logo depois de ele já ter
+    // sido recebido pela palavra-chave — a sobreposição que a Dilon Tech viu
+    // no lead do anúncio (12/10).
+    return { texto: porPalavraChave.response, marcarAusencia: false, marcarSaudacao: !e.saudacaoEnviadaEm };
   }
 
   if (e.foraDoHorario && e.mensagemAusencia) {
