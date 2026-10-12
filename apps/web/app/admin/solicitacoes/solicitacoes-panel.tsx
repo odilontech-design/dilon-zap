@@ -3,6 +3,8 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { formatarDocumentoBR } from "@/lib/documento";
+import { planoSugerido, rotuloFaixa } from "@/lib/qualificacao";
+import { PLANOS, type Plano } from "@/lib/plano-regras";
 
 /**
  * Fila de autocadastros vindos da página de login.
@@ -18,7 +20,9 @@ type Solicitacao = {
   empresa: string;
   email: string;
   telefone: string;
-  documento: string;
+  documento: string | null;
+  ramo: string | null;
+  atendentes: string | null;
   status: "PENDENTE" | "APROVADA" | "RECUSADA";
   motivo: string | null;
   criadoEm: string;
@@ -27,7 +31,34 @@ type Solicitacao = {
   tenant: { id: string; name: string } | null;
 };
 
-type Credenciais = { email: string; senha: string; empresa: string };
+type Credenciais = { email: string; senha: string; empresa: string; nome: string; telefone: string };
+
+/**
+ * wa.me exige o número com código do país. Cadastro do formulário costuma vir
+ * só com DDD — "(21) 99999-9999" — então o 55 entra quando falta.
+ */
+function numeroWhatsApp(telefone: string): string {
+  const d = telefone.replace(/\D/g, "");
+  return d.length <= 11 ? `55${d}` : d;
+}
+
+/**
+ * Mensagem com o acesso, pronta pra Dilon Tech só tocar em enviar. Antes era
+ * copiar e-mail e senha da tela e digitar a mensagem à mão — com o lead do
+ * anúncio esfriando do outro lado.
+ */
+function mensagemDeAcesso(c: Credenciais): string {
+  const primeiroNome = c.nome.trim().split(/\s+/)[0] ?? "";
+  return [
+    `Oi, ${primeiroNome}! Seu teste grátis de 14 dias do Dilon Zap está liberado 🎉`,
+    ``,
+    `Acesse: ${window.location.origin}/login`,
+    `E-mail: ${c.email}`,
+    `Senha provisória: ${c.senha}`,
+    ``,
+    `No primeiro acesso o sistema pede pra você criar sua própria senha. Qual o melhor horário pra eu te ajudar a conectar seu WhatsApp? Leva uns 15 minutos.`,
+  ].join("\n");
+}
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -44,10 +75,13 @@ export function SolicitacoesPanel() {
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [credenciais, setCredenciais] = useState<Credenciais | null>(null);
+  // Plano escolhido por cadastro; sem escolha, vale o sugerido pela equipe informada.
+  const [planoEscolhido, setPlanoEscolhido] = useState<Record<string, Plano>>({});
+  const planoDe = (s: Solicitacao) => planoEscolhido[s.id] ?? planoSugerido(s.atendentes);
 
   async function decidir(s: Solicitacao, acao: "aprovar" | "recusar") {
     if (acao === "aprovar") {
-      if (!confirm(`Criar a empresa "${s.empresa}" e liberar o acesso de ${s.email}?`)) return;
+      if (!confirm(`Criar a empresa "${s.empresa}" no plano ${PLANOS[planoDe(s)].nome} e liberar o acesso de ${s.email}?`)) return;
     }
     const motivo = acao === "recusar" ? prompt("Motivo da recusa (opcional):") ?? "" : undefined;
 
@@ -56,7 +90,7 @@ export function SolicitacoesPanel() {
     const res = await fetch(`/api/admin/solicitacoes/${s.id}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ acao, motivo }),
+      body: JSON.stringify({ acao, motivo, plano: planoDe(s) }),
     });
     setOcupadoId(null);
 
@@ -66,7 +100,7 @@ export function SolicitacoesPanel() {
       return;
     }
     if (acao === "aprovar" && b.senha) {
-      setCredenciais({ email: b.email, senha: b.senha, empresa: s.empresa });
+      setCredenciais({ email: b.email, senha: b.senha, empresa: s.empresa, nome: s.nome, telefone: s.telefone });
     }
     mutate();
   }
@@ -93,12 +127,22 @@ export function SolicitacoesPanel() {
             A senha não fica guardada e não aparece de novo — copie antes de fechar. O responsável
             troca no primeiro acesso.
           </p>
-          <button
-            onClick={() => setCredenciais(null)}
-            className="mt-3 rounded-md border border-emerald-700 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-900/40"
-          >
-            Já copiei
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <a
+              href={`https://wa.me/${numeroWhatsApp(credenciais.telefone)}?text=${encodeURIComponent(mensagemDeAcesso(credenciais))}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:opacity-90"
+            >
+              Enviar acesso pelo WhatsApp
+            </a>
+            <button
+              onClick={() => setCredenciais(null)}
+              className="rounded-md border border-emerald-700 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-900/40"
+            >
+              Já enviei
+            </button>
+          </div>
         </div>
       )}
 
@@ -123,8 +167,17 @@ export function SolicitacoesPanel() {
                   </div>
                   <p className="text-sm text-neutral-300">{s.nome}</p>
                   <p className="text-xs text-neutral-400">
-                    {s.email} · {s.telefone} · {formatarDocumentoBR(s.documento)}
+                    {[s.email, s.telefone, s.documento ? formatarDocumentoBR(s.documento) : null]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
+                  {(s.ramo || s.atendentes) && (
+                    <p className="mt-1 text-xs text-emerald-300/90">
+                      {[s.ramo, s.atendentes ? `${rotuloFaixa(s.atendentes)} no WhatsApp` : null]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  )}
                   <p className="mt-1 text-[11px] text-neutral-500">
                     Enviado em {new Date(s.criadoEm).toLocaleString("pt-BR")}
                     {s.decididoEm &&
@@ -135,7 +188,22 @@ export function SolicitacoesPanel() {
                 </div>
 
                 {s.status === "PENDENTE" && (
-                  <div className="flex shrink-0 gap-2">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
+                    {/* Pré-selecionado pelo tamanho da equipe; a Dilon Tech decide. */}
+                    <select
+                      value={planoDe(s)}
+                      onChange={(e) => setPlanoEscolhido((m) => ({ ...m, [s.id]: e.target.value as Plano }))}
+                      disabled={ocupadoId === s.id}
+                      aria-label="Plano do teste"
+                      className="rounded-md border border-neutral-700 bg-neutral-950 px-2 py-1.5 text-xs"
+                    >
+                      {(Object.keys(PLANOS) as Plano[]).map((p) => (
+                        <option key={p} value={p}>
+                          {PLANOS[p].nome}
+                          {p === planoSugerido(s.atendentes) && s.atendentes ? " (sugerido)" : ""}
+                        </option>
+                      ))}
+                    </select>
                     <button
                       onClick={() => decidir(s, "recusar")}
                       disabled={ocupadoId === s.id}

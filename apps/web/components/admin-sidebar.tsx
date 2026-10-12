@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { SignOutButton } from "@/components/sign-out-button";
+import { Notificacoes } from "@/components/notificacoes";
 import { AppVersion } from "@/components/app-version";
 import { DilonMark } from "@/components/dilon-mark";
 
@@ -107,7 +108,12 @@ export function AdminSidebar({ name }: { name: string }) {
           })}
         </nav>
         <div className="mt-auto pt-4 border-t border-neutral-800 text-xs text-neutral-400">
-          <p className="mb-2 font-medium text-neutral-200 truncate">{name}</p>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="font-medium text-neutral-200 truncate">{name}</p>
+            {/* Aviso de novo autocadastro chega por aqui — lead do anúncio
+                esfria em minutos e ninguém fica olhando /admin o dia todo. */}
+            <Notificacoes compacto />
+          </div>
           <SignOutButton />
           <div className="mt-3">
             <AppVersion />

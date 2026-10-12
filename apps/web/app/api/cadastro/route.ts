@@ -2,14 +2,23 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { documentoValido, somenteDigitos } from "@/lib/documento";
+import { RAMOS, VALORES_FAIXA, rotuloFaixa } from "@/lib/qualificacao";
+import { avisarNoCelular } from "@/lib/push";
 
 /**
  * Autocadastro vindo da página de login.
  *
  * Esta rota é PÚBLICA e grava no banco — a única assim no sistema. Ela existe
  * porque a Dilon Tech faz tráfego pago pra cá, e tráfego pago significa que
- * robô vai achar o formulário. Daí as três barreiras abaixo; nenhuma delas é
+ * robô vai achar o formulário. Daí as barreiras abaixo; nenhuma delas é
  * paranoia, são o custo de ter um endereço aberto na internet.
+ *
+ * CPF/CNPJ deixou de ser obrigatório (era a terceira barreira): no celular,
+ * vindo do anúncio, ele travava quem só queria testar. Continua validado
+ * quando vier, e passa a ser pedido na ativação do plano. Dá pra abrir mão
+ * dele aqui justamente pelo motivo do parágrafo abaixo — esta rota só
+ * registra pedido, então o pior que um robô consegue é uma linha a mais na
+ * fila, que a Dilon Tech recusa com um clique.
  *
  * O que ela NÃO faz, de propósito: criar empresa, usuário ou qualquer acesso.
  * Só registra o pedido. Quem cria a conta é a Dilon Tech, aprovando no painel.
@@ -22,7 +31,10 @@ const schema = z.object({
   empresa: z.string().trim().min(2, "informe o nome da empresa").max(120),
   email: z.string().trim().email("e-mail inválido").max(160),
   telefone: z.string().trim().min(8, "telefone inválido").max(40),
-  documento: z.string().trim().min(11).max(30),
+  /** Opcional desde o cadastro de teste grátis — ver o comentário do topo. */
+  documento: z.string().trim().max(30).optional(),
+  ramo: z.enum(RAMOS).optional(),
+  atendentes: z.enum(VALORES_FAIXA).optional(),
   /** Campo-armadilha: ver abaixo. Humano nunca preenche. */
   website: z.string().optional(),
 });
@@ -86,10 +98,18 @@ export async function POST(req: Request) {
     );
   }
 
-  // 3. Documento de verdade, pelo dígito verificador. Barra "11111111111" e
-  // qualquer sequência digitada ao acaso — ver lib/documento.
-  const documento = somenteDigitos(d.documento);
-  if (!documentoValido(documento)) {
+  // 3. Telefone com cara de telefone brasileiro (DDD + número, com ou sem o
+  // 55). É por ele que a Dilon Tech chama pra liberar o acesso; sem um número
+  // utilizável o cadastro não serve pra nada.
+  const digitosTelefone = somenteDigitos(d.telefone);
+  if (digitosTelefone.length < 10 || digitosTelefone.length > 13) {
+    return NextResponse.json({ error: "confira o número de WhatsApp" }, { status: 400 });
+  }
+
+  // 4. Documento, SE veio: conferido pelo dígito verificador. Barra
+  // "11111111111" e qualquer sequência digitada ao acaso — ver lib/documento.
+  const documento = d.documento ? somenteDigitos(d.documento) : "";
+  if (documento && !documentoValido(documento)) {
     return NextResponse.json({ error: "CPF ou CNPJ inválido" }, { status: 400 });
   }
 
@@ -110,7 +130,7 @@ export async function POST(req: Request) {
   // cadastros iguais pra Dilon Tech peneirar. Responde como sucesso porque,
   // pra ela, é: o pedido está lá.
   const pendente = await prisma.solicitacaoDeAcesso.findFirst({
-    where: { status: "PENDENTE", OR: [{ email }, { documento }] },
+    where: { status: "PENDENTE", OR: documento ? [{ email }, { documento }] : [{ email }] },
     select: { id: true },
   });
   if (pendente) return NextResponse.json({ ok: true, jaRegistrado: true });
@@ -121,9 +141,35 @@ export async function POST(req: Request) {
       empresa: d.empresa,
       email,
       telefone: d.telefone,
-      documento,
+      documento: documento || null,
+      ramo: d.ramo ?? null,
+      atendentes: d.atendentes ?? null,
     },
   });
 
+  // Lead do anúncio esfria em minutos: sem este aviso, o cadastro só era visto
+  // quando alguém lembrava de abrir /admin. Best-effort — avisarNoCelular nunca
+  // lança, e o pedido já está gravado de qualquer jeito.
+  void avisarSuperadmins(d.empresa, d.ramo, d.atendentes);
+
   return NextResponse.json({ ok: true });
+}
+
+async function avisarSuperadmins(empresa: string, ramo?: string, atendentes?: string) {
+  try {
+    const admins = await prisma.user.findMany({ where: { role: "SUPERADMIN" }, select: { id: true } });
+    const detalhe = [ramo, rotuloFaixa(atendentes)].filter(Boolean).join(" · ");
+    await Promise.all(
+      admins.map((a) =>
+        avisarNoCelular(a.id, {
+          titulo: "Novo cadastro no Dilon Zap",
+          corpo: detalhe ? `${empresa} — ${detalhe}` : empresa,
+          url: "/admin/solicitacoes",
+          tag: "solicitacao-acesso",
+        })
+      )
+    );
+  } catch (err) {
+    console.error("[cadastro] falha ao avisar superadmins", err);
+  }
 }

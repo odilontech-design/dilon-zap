@@ -1884,7 +1884,19 @@ model SolicitacaoDeAcesso {
   telefone  String
   /// Só os dígitos. Guardar formatado faria "67.211.588/0001-01" e
   /// "67211588000101" serem dois cadastros do mesmo CNPJ.
-  documento String
+  ///
+  /// Opcional desde o cadastro de teste grátis: pedir CPF/CNPJ antes de a
+  /// pessoa ver o sistema travava quem chegava pelo anúncio, no celular. O
+  /// documento passa a ser pedido na ativação do plano, quando vira cobrança.
+  /// Cadastros antigos continuam com ele preenchido.
+  documento String?
+
+  /// Qualificação vinda do formulário — ver apps/web/lib/qualificacao.ts.
+  /// Texto livre no banco (e não enum) de propósito: a lista de ramos é
+  /// comercial e muda com a campanha; um enum exigiria `db push` a cada ajuste.
+  ramo       String?
+  /// Faixa de quantas pessoas atendem o WhatsApp: SO_EU, 2_3, 4_8, 9_MAIS.
+  atendentes String?
 
   status       StatusSolicitacao @default(PENDENTE)
   /// Por que foi recusada — pra Dilon Tech lembrar quando a pessoa insistir.

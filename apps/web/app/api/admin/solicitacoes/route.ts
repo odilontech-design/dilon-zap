@@ -23,6 +23,8 @@ export async function GET(req: Request) {
       email: true,
       telefone: true,
       documento: true,
+      ramo: true,
+      atendentes: true,
       status: true,
       motivo: true,
       criadoEm: true,
