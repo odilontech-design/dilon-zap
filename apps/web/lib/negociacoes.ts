@@ -439,3 +439,133 @@ export async function gerarPedido(n: { id: string; contactId: string }, tenantId
     select: { id: true, numero: true },
   });
 }
+
+/* ------------------------------------------------------------------------ *
+ * Entre funis
+ * ------------------------------------------------------------------------ */
+
+async function funilEEtapa(tenantId: string, funilId: string, stageId: string) {
+  const funil = await prisma.funil.findFirst({
+    where: { id: funilId, tenantId, arquivadoEm: null },
+    select: { id: true, nome: true },
+  });
+  if (!funil) throw new ErroDeNegocio("funil não encontrado", 404);
+  const etapa = await etapaDoFunil(stageId, funil.id);
+  return { funil, etapa };
+}
+
+/**
+ * Leva a negociação para outro funil (ex.: de "Prospecção" para "Vendas").
+ * Grava um evento ETAPA com os nomes "Funil · Etapa" dos dois lados: a
+ * negociação chega à etapa nova do outro funil e os indicadores de lá a
+ * enxergam; os do funil de origem deixam de contar com ela, porque ela não
+ * é mais de lá.
+ *
+ * Só em andamento: ganha ou perdida já encerrou o ciclo naquele funil — o
+ * próximo passo (pós-venda, renovação) é Duplicar, que preserva o resultado.
+ */
+export async function moverParaOutroFunil(
+  n: NegociacaoAtual & { tenantId: string },
+  destino: { funilId: string; stageId: string },
+  quem: Quem
+) {
+  if (n.status !== "ABERTA") {
+    throw new ErroDeNegocio("só negociação em andamento muda de funil — para uma ganha ou perdida, use Duplicar", 409);
+  }
+  if (n.funilId === destino.funilId) throw new ErroDeNegocio("a negociação já está neste funil", 400);
+
+  const [{ funil, etapa }, origem] = await Promise.all([
+    funilEEtapa(n.tenantId, destino.funilId, destino.stageId),
+    prisma.stage.findUnique({ where: { id: n.stageId }, select: { name: true, funil: { select: { nome: true } } } }),
+  ]);
+
+  await prisma.$transaction([
+    prisma.negociacao.update({
+      where: { id: n.id },
+      data: { funilId: funil.id, stageId: etapa.id, etapaDesde: new Date() },
+    }),
+    prisma.historicoDeEtapa.create({
+      data: {
+        negociacaoId: n.id,
+        tipo: "ETAPA",
+        deStageId: n.stageId,
+        paraStageId: etapa.id,
+        deEtapaNome: origem ? `${origem.funil?.nome ?? "?"} · ${origem.name}` : null,
+        paraEtapaNome: `${funil.nome} · ${etapa.name}`,
+        porUserId: quem.id,
+        porNome: quem.name,
+      },
+    }),
+  ]);
+}
+
+/**
+ * Cria uma cópia da negociação em outro funil (ou no mesmo), com os mesmos
+ * dados e produtos. A original fica como está — é o caso do pós-venda: a
+ * venda continua ganha no funil comercial e começa um ciclo novo no outro.
+ * Tarefas, anotações e arquivos não vão junto (são do ciclo antigo); uma
+ * anotação em cada lado registra de onde veio e para onde foi.
+ */
+export async function duplicarEmOutroFunil(
+  negociacaoId: string,
+  tenantId: string,
+  destino: { funilId: string; stageId: string },
+  quem: Quem
+) {
+  const original = await prisma.negociacao.findFirst({
+    where: { id: negociacaoId, tenantId },
+    include: { itens: true, funil: { select: { nome: true } } },
+  });
+  if (!original) throw new ErroDeNegocio("negociação não encontrada", 404);
+  const { funil, etapa } = await funilEEtapa(tenantId, destino.funilId, destino.stageId);
+
+  const copia = await criarNegociacao({
+    tenantId,
+    quem,
+    contactId: original.contactId,
+    funilId: funil.id,
+    stageId: etapa.id,
+    titulo: original.titulo,
+    valorCents: original.valorCents,
+    recorrencia: original.recorrencia,
+    responsavelId: original.responsavelId,
+    origem: original.origem,
+    previsaoFechamento: original.previsaoFechamento,
+  });
+
+  if (original.itens.length > 0) {
+    await prisma.negociacaoItem.createMany({
+      data: original.itens.map((i) => ({
+        negociacaoId: copia.id,
+        productId: i.productId,
+        nomeProduto: i.nomeProduto,
+        precoTabelaCents: i.precoTabelaCents,
+        precoUnitCents: i.precoUnitCents,
+        quantidade: i.quantidade,
+        cobranca: i.cobranca,
+      })),
+    });
+    await recalcularValores(copia.id);
+  }
+
+  await prisma.negociacaoNota.createMany({
+    data: [
+      {
+        tenantId,
+        negociacaoId: copia.id,
+        texto: `Criada a partir da negociação do funil ${original.funil.nome}.`,
+        porUserId: quem.id,
+        porNome: quem.name,
+      },
+      {
+        tenantId,
+        negociacaoId: original.id,
+        texto: `Duplicada para o funil ${funil.nome} (${etapa.name}).`,
+        porUserId: quem.id,
+        porNome: quem.name,
+      },
+    ],
+  });
+
+  return copia;
+}

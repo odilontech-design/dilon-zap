@@ -226,6 +226,8 @@ export function NegociacaoPagina({ id, userId, podeGerir }: { id: string; userId
           ocupado={ocupado}
           enviar={enviar}
           abrirConversa={abrirConversa}
+          funilAtualId={data.funil.id}
+          onFunilMudou={(novoId) => (novoId === id ? mutate() : router.push(`/funil/${novoId}`))}
         />
       </div>
 
@@ -406,14 +408,19 @@ function Acoes({
   ocupado,
   enviar,
   abrirConversa,
+  funilAtualId,
+  onFunilMudou,
 }: {
   n: Negociacao;
   motivos: Motivo[];
   ocupado: boolean;
   enviar: (corpo: Record<string, unknown>) => Promise<boolean>;
   abrirConversa: () => void;
+  funilAtualId: string;
+  onFunilMudou: (negociacaoId: string) => void;
 }) {
   const [perdendo, setPerdendo] = useState(false);
+  const [outroFunil, setOutroFunil] = useState(false);
   const [motivoId, setMotivoId] = useState("");
   const [detalhe, setDetalhe] = useState("");
   const [faltaMotivo, setFaltaMotivo] = useState(false);
@@ -452,7 +459,27 @@ function Acoes({
         <button onClick={abrirConversa} className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50">
           Abrir conversa
         </button>
+        <button
+          onClick={() => {
+            setOutroFunil((v) => !v);
+            setPerdendo(false);
+          }}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50"
+        >
+          Outro funil
+        </button>
       </div>
+
+      {outroFunil && (
+        <OutroFunil
+          n={n}
+          funilAtualId={funilAtualId}
+          onFeito={(novoId) => {
+            setOutroFunil(false);
+            onFunilMudou(novoId);
+          }}
+        />
+      )}
 
       {perdendo && aberta && (
         <div className="w-full sm:w-80 rounded-md border border-red-200 bg-red-50/50 p-3 flex flex-col gap-2">
@@ -894,6 +921,107 @@ function Arquivos({
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+type FunilComEtapas = { id: string; nome: string; etapas: { id: string; name: string }[] };
+
+/**
+ * Enviar a negociação para outro funil, ou duplicá-la lá (pós-venda,
+ * renovação). Enviar só vale para negociação em andamento; duplicar vale
+ * sempre e deixa a original como está.
+ */
+function OutroFunil({
+  n,
+  funilAtualId,
+  onFeito,
+}: {
+  n: Negociacao;
+  funilAtualId: string;
+  onFeito: (negociacaoId: string) => void;
+}) {
+  const aberta = n.status === "ABERTA";
+  const { data: funis } = useSWR<FunilComEtapas[]>(`/api/contacts/${n.contato.id}/funis`, fetcher);
+  const [modo, setModo] = useState<"mover" | "duplicar">(aberta ? "mover" : "duplicar");
+  const [funilId, setFunilId] = useState("");
+  const [stageId, setStageId] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  const opcoes = (funis ?? []).filter((f) => modo === "duplicar" || f.id !== funilAtualId);
+  const escolhido = opcoes.find((f) => f.id === funilId);
+  const campo = "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm bg-surface";
+
+  async function confirmar() {
+    if (!funilId || !stageId) return setErro("escolha o funil e a etapa");
+    setErro(null);
+    setOcupado(true);
+    const res = await fetch(`/api/negociacoes/${n.id}/funil`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ modo, funilId, stageId }),
+    });
+    setOcupado(false);
+    const b = await res.json().catch(() => ({}));
+    if (!res.ok) return setErro(typeof b.error === "string" ? b.error : "não deu certo");
+    onFeito(b.id);
+  }
+
+  return (
+    <div className="w-full sm:w-80 rounded-md border border-neutral-200 bg-surface p-3 flex flex-col gap-2 text-sm">
+      <div className="flex gap-4">
+        <label className={`flex items-center gap-1.5 ${aberta ? "" : "opacity-50"}`} title={aberta ? undefined : "Só negociação em andamento muda de funil"}>
+          <input type="radio" checked={modo === "mover"} disabled={!aberta} onChange={() => { setModo("mover"); setFunilId(""); setStageId(""); }} />
+          Enviar
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="radio" checked={modo === "duplicar"} onChange={() => setModo("duplicar")} />
+          Duplicar
+        </label>
+      </div>
+      <p className="text-[11px] text-neutral-500">
+        {modo === "mover"
+          ? "A negociação sai deste funil e continua no outro, com histórico, tarefas, anotações e arquivos."
+          : "Cria uma cópia (mesmos dados e produtos) no funil escolhido. Esta continua como está."}
+      </p>
+      <select
+        value={funilId}
+        onChange={(e) => {
+          setFunilId(e.target.value);
+          setStageId(opcoes.find((f) => f.id === e.target.value)?.etapas[0]?.id ?? "");
+        }}
+        className={campo}
+        aria-label="Funil de destino"
+      >
+        <option value="">{funis ? "Escolha o funil" : "Carregando..."}</option>
+        {opcoes.map((f) => (
+          <option key={f.id} value={f.id}>
+            {f.nome}
+            {f.id === funilAtualId ? " (este)" : ""}
+          </option>
+        ))}
+      </select>
+      {escolhido && (
+        <select value={stageId} onChange={(e) => setStageId(e.target.value)} className={campo} aria-label="Etapa de destino">
+          {escolhido.etapas.map((et) => (
+            <option key={et.id} value={et.id}>
+              {et.name}
+            </option>
+          ))}
+        </select>
+      )}
+      {funis && opcoes.length === 0 && (
+        <p className="text-xs text-neutral-500">Não há outro funil. Crie um no CRM (seletor de funis, "Novo funil").</p>
+      )}
+      {erro && <p className="text-xs text-red-600">{erro}</p>}
+      <button
+        onClick={confirmar}
+        disabled={ocupado || !funilId || !stageId}
+        className="self-end rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+      >
+        {ocupado ? "Aguarde..." : modo === "mover" ? "Enviar para o funil" : "Duplicar no funil"}
+      </button>
     </div>
   );
 }

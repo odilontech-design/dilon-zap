@@ -26,6 +26,7 @@ import {
 } from "@/lib/contact";
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 import { OrderPanel, type Pedido } from "@/components/order-panel";
+import { EtapasPorFunil } from "@/components/etapas-por-funil";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 import { MOTIVOS_FECHAMENTO, MOTIVO_OUTRO } from "@/lib/close-reasons";
 import {
@@ -38,7 +39,6 @@ import {
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
-type StageDef = { id: string; name: string; color: string };
 
 type MarcadorAtendimento = {
   numero: number;
@@ -2947,7 +2947,6 @@ function ContactPanel({
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
   const [name, setName] = useState(contact.name ?? "");
   const [notes, setNotes] = useState(contact.notes ?? "");
 
@@ -2985,21 +2984,7 @@ function ContactPanel({
         <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone</label>
         <p className="text-sm text-neutral-600">{formatPhoneDisplay(contact)}</p>
       </div>
-      <div>
-        <label className="block text-xs font-medium text-neutral-700 mb-1">Etapa</label>
-        <select
-          value={contact.stageId ?? ""}
-          onChange={(e) => save({ stageId: e.target.value || null })}
-          className="w-full text-sm rounded-md border border-neutral-300 px-2 py-1.5"
-        >
-          <option value="">Sem etapa</option>
-          {stages?.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <EtapasPorFunil contactId={contact.id} onSalvo={onSaved} compacto />
       <div>
         <label className="block text-xs font-medium text-neutral-700 mb-1">Anotações</label>
         <textarea

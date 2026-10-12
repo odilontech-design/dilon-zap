@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { Avatar } from "@/components/avatar";
 import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact";
 import { corDoMotivo } from "@/lib/close-reasons";
+import { EtapasPorFunil } from "@/components/etapas-por-funil";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 
 /**
@@ -56,7 +57,6 @@ type Ficha = ContactRef & {
   conversations: ConversaResumo[];
 };
 
-type StageDef = { id: string; name: string; color: string };
 
 /**
  * Lança em resposta não-OK em vez de devolver o corpo de erro como dado.
@@ -113,7 +113,6 @@ function previa(c: ConversaResumo) {
 export function ContactCard({ contactId, onFechar }: { contactId: string; onFechar: () => void }) {
   const router = useRouter();
   const { data: ficha, error: fichaErro, mutate } = useSWR<Ficha>(`/api/contacts/${contactId}`, fetcher);
-  const { data: stages } = useSWR<StageDef[]>("/api/stages", fetcher);
 
   const [nome, setNome] = useState<string | null>(null);
   const [valor, setValor] = useState<string | null>(null);
@@ -199,21 +198,9 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
               uma tela de 360px, e o valor em reais e o CNPJ (18 caracteres)
               não cabem nisso — é onde a ficha quebrava. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <label className="text-sm">
-              <span className="block text-xs font-medium text-neutral-700">Etapa do funil</span>
-              <select
-                value={ficha.stageId ?? ""}
-                onChange={(e) => salvar({ stageId: e.target.value || null })}
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
-              >
-                <option value="">Sem etapa</option>
-                {stages?.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+            <div className="text-sm sm:col-span-2">
+              <EtapasPorFunil contactId={contactId} onSalvo={() => mutate()} />
+            </div>
 
             <label className="text-sm">
               <span className="block text-xs font-medium text-neutral-700">Valor do negócio</span>
