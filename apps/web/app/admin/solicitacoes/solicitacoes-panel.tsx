@@ -62,6 +62,40 @@ function mensagemDeAcesso(c: Credenciais): string {
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+async function erroDe(res: Response, padrao: string): Promise<string> {
+  const b = await res.json().catch(() => ({}));
+  return typeof b.error === "string" ? b.error : padrao;
+}
+
+/**
+ * Manda o acesso pelo número da própria Dilon Tech, dentro do Dilon Zap — o
+ * mesmo caminho do "Nova conversa" do Inbox: cria (ou acha) o contato, abre a
+ * conversa assumida por quem aprovou e põe a mensagem na fila do worker.
+ * Assim o lead fica no Inbox e no CRM da Dilon Tech, com o histórico, em vez
+ * de ir parar no WhatsApp do celular de alguém.
+ */
+async function enviarPeloDilonZap(c: Credenciais): Promise<{ conversaId: string }> {
+  const resContato = await fetch("/api/contacts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ phone: numeroWhatsApp(c.telefone), name: c.nome.trim() || c.empresa }),
+  });
+  if (!resContato.ok) throw new Error(await erroDe(resContato, "não deu pra criar o contato"));
+  const contato = await resContato.json();
+
+  const resConversa = await fetch(`/api/contacts/${contato.id}/start-conversation`, { method: "POST" });
+  if (!resConversa.ok) throw new Error(await erroDe(resConversa, "não deu pra abrir a conversa"));
+  const conversa = await resConversa.json();
+
+  const resEnvio = await fetch("/api/messages/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ conversationId: conversa.id, text: mensagemDeAcesso(c) }),
+  });
+  if (!resEnvio.ok) throw new Error(await erroDe(resEnvio, "não deu pra enviar a mensagem"));
+  return { conversaId: conversa.id };
+}
+
 const ROTULO_STATUS: Record<Solicitacao["status"], { texto: string; classe: string }> = {
   PENDENTE: { texto: "Aguardando", classe: "border-amber-900 bg-amber-950/50 text-amber-300" },
   APROVADA: { texto: "Aprovada", classe: "border-emerald-900 bg-emerald-950/50 text-emerald-300" },
@@ -75,6 +109,17 @@ export function SolicitacoesPanel() {
   const [ocupadoId, setOcupadoId] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [credenciais, setCredenciais] = useState<Credenciais | null>(null);
+  const [envio, setEnvio] = useState<{ estado: "enviando" | "enviado" | "erro"; conversaId?: string; erro?: string } | null>(null);
+
+  async function enviarAcesso(c: Credenciais) {
+    setEnvio({ estado: "enviando" });
+    try {
+      const { conversaId } = await enviarPeloDilonZap(c);
+      setEnvio({ estado: "enviado", conversaId });
+    } catch (e) {
+      setEnvio({ estado: "erro", erro: (e as Error).message });
+    }
+  }
   // Plano escolhido por cadastro; sem escolha, vale o sugerido pela equipe informada.
   const [planoEscolhido, setPlanoEscolhido] = useState<Record<string, Plano>>({});
   const planoDe = (s: Solicitacao) => planoEscolhido[s.id] ?? planoSugerido(s.atendentes);
@@ -101,6 +146,7 @@ export function SolicitacoesPanel() {
     }
     if (acao === "aprovar" && b.senha) {
       setCredenciais({ email: b.email, senha: b.senha, empresa: s.empresa, nome: s.nome, telefone: s.telefone });
+      setEnvio(null);
     }
     mutate();
   }
@@ -127,22 +173,49 @@ export function SolicitacoesPanel() {
             A senha não fica guardada e não aparece de novo — copie antes de fechar. O responsável
             troca no primeiro acesso.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <a
-              href={`https://wa.me/${numeroWhatsApp(credenciais.telefone)}?text=${encodeURIComponent(mensagemDeAcesso(credenciais))}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:opacity-90"
-            >
-              Enviar acesso pelo WhatsApp
-            </a>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {envio?.estado === "enviado" ? (
+              <>
+                <span className="text-xs font-medium text-emerald-300">Mensagem com o acesso enviada pelo Dilon Zap ✓</span>
+                <a
+                  href={`/inbox?open=${envio.conversaId}`}
+                  className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:opacity-90"
+                >
+                  Abrir a conversa
+                </a>
+              </>
+            ) : (
+              <button
+                onClick={() => enviarAcesso(credenciais)}
+                disabled={envio?.estado === "enviando"}
+                className="rounded-md bg-emerald-500 px-3 py-1.5 text-xs font-medium text-neutral-950 hover:opacity-90 disabled:opacity-50"
+              >
+                {envio?.estado === "enviando" ? "Enviando..." : "Enviar acesso pelo Dilon Zap"}
+              </button>
+            )}
             <button
-              onClick={() => setCredenciais(null)}
+              onClick={() => {
+                setCredenciais(null);
+                setEnvio(null);
+              }}
               className="rounded-md border border-emerald-700 px-3 py-1.5 text-xs text-emerald-200 hover:bg-emerald-900/40"
             >
-              Já enviei
+              {envio?.estado === "enviado" ? "Fechar" : "Já enviei"}
             </button>
           </div>
+          {envio?.estado === "erro" && (
+            <p className="mt-2 text-xs text-red-300">
+              {envio.erro}.{" "}
+              <a
+                href={`https://wa.me/${numeroWhatsApp(credenciais.telefone)}?text=${encodeURIComponent(mensagemDeAcesso(credenciais))}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                Enviar pelo WhatsApp do celular
+              </a>
+            </p>
+          )}
         </div>
       )}
 
