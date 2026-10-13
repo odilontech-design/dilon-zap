@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { PlanoPanel } from "./plano-panel";
+import { ErpPanel } from "./erp-panel";
 import type { Recurso } from "@/lib/plano-regras";
 import { formatDate, formatTime } from "@/lib/contact";
 import { centsToBRL, effectiveInvoiceStatus } from "@/lib/billing";
@@ -194,6 +195,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         excecoes={tenant.recursos ?? []}
         onSalvo={mutate}
       />
+      <ErpPanel tenantId={tenant.id} tenantName={tenant.name} onSalvo={mutate} />
       <BillingSection tenantId={tenant.id} subscription={tenant.subscription} invoices={tenant.invoices} onChanged={mutate} />
 
       <section className="mb-8">

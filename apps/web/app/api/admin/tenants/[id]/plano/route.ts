@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import type { Prisma } from "@prisma/client";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
+import { sincronizarErp } from "@/lib/erp-sync";
 import {
   recursosEfetivos,
   TODOS_RECURSOS,
@@ -133,6 +134,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
     return { efetivos: RECURSOS_GERENCIAVEIS.filter((r) => efetivos.has(r)), uraDesligada };
   });
+
+  // Cancelar/pausar/reativar a assinatura reflete no ERP na hora (se a empresa tiver o produto).
+  // Falha aqui não desfaz a troca de plano; a varredura do cron tenta de novo.
+  await sincronizarErp(tenant.id).catch(() => undefined);
 
   await logAudit({
     actor: admin,

@@ -159,6 +159,7 @@ model Tenant {
   setores           Setor[]
   apiKeys           ApiKey[]
   recursos          TenantRecurso[]
+  erpContabilidade  TenantErpContabilidade?
   businessHours     BusinessHour[]
   savedTexts        SavedText[]
   scheduledMessages ScheduledMessage[]
@@ -2295,4 +2296,69 @@ model SaidaPagamento {
   @@index([contaId])
   @@index([parcelaId])
   @@index([tenantId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ERP Dilon Contabilidade — produto vendido à mesma empresa (tenant)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Os planos do ERP. Quem define o que cada um permite (limites) é o Zap, que os
+// envia ao ERP; o ERP só aplica o limite recebido. Preço sugerido na lib, mas
+// o valor combinado fica em mensalCents (negociado por cliente, como a assinatura).
+enum ErpPlano {
+  ESSENCIAL
+  PROFISSIONAL
+  ESCRITORIO_PLUS
+  SOB_MEDIDA
+}
+
+enum ErpStatus {
+  ATIVO
+  SUSPENSO
+}
+
+// Quem suspendeu: AUTO = a regra de cobrança (assinatura cancelada/pausada ou
+// fatura vencida há muito); MANUAL = o Super Admin. Só a suspensão AUTO é
+// desfeita sozinha quando a cobrança se regulariza — a manual espera uma pessoa.
+enum ErpSuspensoPor {
+  AUTO
+  MANUAL
+}
+
+// Uma linha por tenant que contratou o ERP. A chave com o ERP é o id do tenant
+// (o ERP guarda como zapTenantId); escritorioSlug é o código que a equipe do
+// escritório digita no login.
+//
+// O valor do ERP faz parte do total em Subscription.amountCents (a cobrança
+// continua uma só, nas mesmas faturas). mensalCents registra a PARTE do ERP
+// para o painel mostrar a composição e para ajustar o total sem erro.
+model TenantErpContabilidade {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  escritorioId   String
+  escritorioSlug String
+  loginUrl       String
+
+  plano          ErpPlano
+  mensalCents    Int       @default(0)
+  // Nulo = sem limite. Enviados ao ERP em toda alteração.
+  limiteEmpresas Int?
+  limiteUsuarios Int?
+
+  status         ErpStatus      @default(ATIVO)
+  suspensoPor    ErpSuspensoPor?
+  suspensoMotivo String?
+  suspensoEm     DateTime?
+
+  // Último uso informado pelo ERP (cache para a tela e para o painel SaaS).
+  empresasAtivas    Int?
+  usuariosEquipe    Int?
+  acessosPortal     Int?
+  ultimaAtividadeEm DateTime?
+  usoAtualizadoEm   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
