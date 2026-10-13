@@ -1,6 +1,6 @@
 {
   "name": "dilon-zap",
-  "version": "1.21.2",
+  "version": "1.21.3",
   "private": true,
   "workspaces": [
     "apps/*",

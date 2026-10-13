@@ -69,17 +69,30 @@ export type NovaContaPagarInput = {
   descricao?: string | null;
   forma: FormaPagamentoConta;
   plano: PlanoDeParcelas;
+  /**
+   * Parcelas digitadas uma a uma (data e valor de cada boleto). Quando vem, o
+   * plano só serviu de ponto de partida na tela e é ignorado aqui. Pedido da
+   * Believe: boletos do mesmo fornecedor com vencimentos que não seguem um
+   * intervalo fixo, inclusive meses anteriores.
+   */
+  parcelasManuais?: { vencimento: Date; valorCents: number }[];
   userId?: string;
 };
 
 export async function criarContaPagar(db: Db, input: NovaContaPagarInput) {
   const fornecedor = await achaOuCriaFornecedor(db, input.tenantId, { id: input.fornecedorId, nome: input.fornecedorNome });
 
-  let parcelas;
-  try {
-    parcelas = gerarParcelas(input.plano);
-  } catch (e) {
-    throw new ErroDePagar((e as Error).message);
+  let parcelas: { numero: number; totalParcelas: number; vencimento: Date; valorCents: number }[];
+  if (input.parcelasManuais?.length) {
+    if (input.parcelasManuais.some((p) => !(p.valorCents > 0))) throw new ErroDePagar("toda parcela precisa de valor");
+    const total = input.parcelasManuais.length;
+    parcelas = input.parcelasManuais.map((p, i) => ({ numero: i + 1, totalParcelas: total, vencimento: p.vencimento, valorCents: p.valorCents }));
+  } else {
+    try {
+      parcelas = gerarParcelas(input.plano);
+    } catch (e) {
+      throw new ErroDePagar((e as Error).message);
+    }
   }
 
   return db.contaPagar.create({

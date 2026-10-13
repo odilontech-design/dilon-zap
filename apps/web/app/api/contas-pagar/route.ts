@@ -59,6 +59,12 @@ const novaSchema = z
     periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]),
     primeiroVencimento: dia,
     forma: z.enum(FORMAS).default("BOLETO"),
+    // Data e valor de cada boleto, ajustados na prévia. Ver criarContaPagar.
+    parcelas: z
+      .array(z.object({ vencimento: dia, valorCents: z.number().int().min(1).max(10_000_000_000) }))
+      .min(1)
+      .max(60)
+      .optional(),
   })
   .refine((d) => d.fornecedorId || d.fornecedorNome, "informe o fornecedor");
 
@@ -81,9 +87,10 @@ export async function POST(req: Request) {
         forma: d.forma,
         userId: user.id,
         plano: { totalCents: d.totalCents, numParcelas: d.numParcelas, periodicidade: d.periodicidade, primeiroVencimento: parseDia(d.primeiroVencimento)! },
+        parcelasManuais: d.parcelas?.map((p) => ({ vencimento: parseDia(p.vencimento)!, valorCents: p.valorCents })),
       })
     );
-    await logAudit({ actor: user, action: "conta_pagar.criada", metadata: { contaId: conta.id, totalCents: d.totalCents, parcelas: d.numParcelas } });
+    await logAudit({ actor: user, action: "conta_pagar.criada", metadata: { contaId: conta.id, totalCents: d.parcelas ? d.parcelas.reduce((s, p) => s + p.valorCents, 0) : d.totalCents, parcelas: d.parcelas?.length ?? d.numParcelas, manuais: !!d.parcelas } });
     return NextResponse.json(conta, { status: 201 });
   } catch (e) {
     if (e instanceof ErroDePagar) return NextResponse.json({ error: e.message }, { status: e.status });
