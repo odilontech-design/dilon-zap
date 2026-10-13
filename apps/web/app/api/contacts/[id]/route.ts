@@ -21,7 +21,9 @@ const bodySchema = z.object({
   endereco: z.string().max(300).nullable().optional(),
   // Cadastro completo (pedido da Believe).
   email: z.string().trim().max(120).nullable().optional(),
-  nascimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  // Aniversário: "MM-DD" (só dia e mês, o que a equipe usa para parabenizar)
+  // ou a data completa "AAAA-MM-DD". Ver dataDoAniversario.
+  nascimento: z.string().regex(/^(\d{4}-)?\d{2}-\d{2}$/).nullable().optional(),
   rgIe: z.string().max(30).nullable().optional(),
   cep: z.string().max(12).nullable().optional(),
   logradouro: z.string().max(150).nullable().optional(),
@@ -100,6 +102,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   return NextResponse.json({ ...resto, ...camposDoContato(negociacoes), pendencia: pendencia.saldoCents > 0 ? pendencia : null });
 }
 
+/**
+ * Só dia e mês ("MM-DD") vira 2000-MM-DD: 2000 é bissexto, então 29/02 cabe, e
+ * o ano não aparece em lugar nenhum. Data impossível (31/04) devolve null.
+ */
+function dataDoAniversario(valor: string): Date | null {
+  const iso = valor.length === 5 ? `2000-${valor}` : valor;
+  const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== iso) return null;
+  return d;
+}
+
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
   const parsed = bodySchema.safeParse(await req.json());
@@ -141,6 +154,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     throw e;
   }
 
+  const nascimentoData = nascimento ? dataDoAniversario(nascimento) : null;
+  if (nascimento && !nascimentoData) return NextResponse.json({ error: "data de aniversário inválida" }, { status: 400 });
+
   // Mesma regra da anotação: campo apagado vira null, não string vazia, pra
   // o recibo só ter um caso a checar na hora de omitir a linha.
   const limpo = (v: string | null | undefined) => (v === undefined ? undefined : v?.trim() || null);
@@ -171,7 +187,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       bairro: limpo(bairro),
       cidade: limpo(cidade),
       uf: uf === undefined ? undefined : uf?.trim().toUpperCase() || null,
-      ...(nascimento !== undefined ? { nascimento: nascimento ? new Date(`${nascimento}T12:00:00Z`) : null } : {}),
+      ...(nascimento !== undefined ? { nascimento: nascimentoData } : {}),
     },
   });
 

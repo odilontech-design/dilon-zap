@@ -286,11 +286,61 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
   );
 }
 
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+/**
+ * Aniversário: só dia e mês — é o que a equipe usa para parabenizar, e
+ * perguntar o ano à cliente é constrangedor. Salva quando os dois estão
+ * escolhidos; voltar os dois para "—" apaga.
+ */
+function Aniversario({ valor, salvar }: { valor: string | null; salvar: (c: Record<string, unknown>) => Promise<void> }) {
+  // Guardado como data (ano 2000); só o mês e o dia interessam.
+  const [dia, setDia] = useState(valor ? String(Number(valor.slice(8, 10))) : "");
+  const [mes, setMes] = useState(valor ? String(Number(valor.slice(5, 7))) : "");
+  const [erro, setErro] = useState(false);
+
+  async function mudar(novoDia: string, novoMes: string) {
+    setDia(novoDia);
+    setMes(novoMes);
+    setErro(false);
+    if (!novoDia && !novoMes) return salvar({ nascimento: null });
+    if (!novoDia || !novoMes) return;
+    const maxDia = new Date(Date.UTC(2000, Number(novoMes), 0)).getUTCDate();
+    if (Number(novoDia) > maxDia) return setErro(true);
+    await salvar({ nascimento: `${novoMes.padStart(2, "0")}-${novoDia.padStart(2, "0")}` });
+  }
+
+  const sel = "mt-1 rounded-md border border-neutral-300 bg-surface px-2 py-1.5";
+  return (
+    <div className="text-sm">
+      <span className="block text-xs font-medium text-neutral-700">Aniversário</span>
+      <div className="flex gap-2">
+        <select value={dia} onChange={(e) => mudar(e.target.value, mes)} aria-label="Dia do aniversário" className={`${sel} w-20`}>
+          <option value="">Dia</option>
+          {Array.from({ length: 31 }, (_, i) => String(i + 1)).map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <select value={mes} onChange={(e) => mudar(dia, e.target.value)} aria-label="Mês do aniversário" className={`${sel} flex-1 min-w-0`}>
+          <option value="">Mês</option>
+          {MESES.map((m, i) => (
+            <option key={m} value={String(i + 1)}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+      {erro && <p className="mt-1 text-xs text-red-600">Esse mês não tem esse dia.</p>}
+    </div>
+  );
+}
+
 type CampoCadastro =
   | "documento"
   | "rgIe"
   | "email"
-  | "nascimento"
   | "cep"
   | "logradouro"
   | "numeroEndereco"
@@ -313,10 +363,9 @@ function CadastroDoCliente({ ficha, salvar }: { ficha: Ficha; salvar: (c: Record
 
   const valor = (c: CampoCadastro) => {
     if (edicao[c] !== undefined) return edicao[c]!;
-    if (c === "nascimento") return ficha.nascimento ? ficha.nascimento.slice(0, 10) : "";
     return (ficha[c] as string | null) ?? "";
   };
-  const original = (c: CampoCadastro) => (c === "nascimento" ? (ficha.nascimento ? ficha.nascimento.slice(0, 10) : "") : ((ficha[c] as string | null) ?? ""));
+  const original = (c: CampoCadastro) => ((ficha[c] as string | null) ?? "");
 
   async function sair(c: CampoCadastro) {
     const v = edicao[c];
@@ -365,7 +414,7 @@ function CadastroDoCliente({ ficha, salvar }: { ficha: Ficha; salvar: (c: Record
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {campo("documento", "CPF / CNPJ", { inputMode: "numeric", placeholder: "Sai no recibo" })}
         {campo("rgIe", "RG / Inscrição estadual")}
-        {campo("nascimento", "Nascimento", { tipo: "date" })}
+        <Aniversario valor={ficha.nascimento} salvar={salvar} />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3">
         {campo("cep", "CEP", { inputMode: "numeric", placeholder: "Preenche o resto" })}

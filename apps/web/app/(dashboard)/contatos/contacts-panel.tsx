@@ -8,6 +8,7 @@ import { contactLabel, formatDate, formatPhone, formatPhoneDisplay, type Contact
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 import { LISTING_INTERVAL } from "@/lib/polling";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
+import { ContactCard } from "@/components/contact-card";
 
 type StageDef = { id: string; name: string; color: string };
 
@@ -38,6 +39,9 @@ export function ContactsPanel() {
   const [pagamentoFiltro, setPagamentoFiltro] = useState<"" | "pendente" | "atraso">("");
   const [dupeOnly, setDupeOnly] = useState(false);
   const [editing, setEditing] = useState<Contact | "new" | null>(null);
+  // "Editar" abre a ficha completa (cadastro, etapas, pedidos), a mesma do
+  // Inbox — o formulário curto ficou só para "Novo contato".
+  const [fichaDe, setFichaDe] = useState<string | null>(null);
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const [checando, setChecando] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -360,7 +364,7 @@ export function ContactsPanel() {
                 <td className="px-4 py-2.5 text-neutral-500">{formatDate(c.createdAt)}</td>
                 <td className="px-4 py-2.5">
                   <div className="flex gap-3 text-xs">
-                    <button onClick={() => setEditing(c)} className="text-neutral-600 hover:text-accent">
+                    <button onClick={() => setFichaDe(c.id)} className="text-neutral-600 hover:text-accent">
                       Editar
                     </button>
                     <button onClick={() => handleStartConversation(c)} className="text-accent hover:underline">
@@ -379,6 +383,16 @@ export function ContactsPanel() {
           </tbody>
         </table>
       </div>
+
+      {fichaDe && (
+        <ContactCard
+          contactId={fichaDe}
+          onFechar={() => {
+            setFichaDe(null);
+            mutate();
+          }}
+        />
+      )}
 
       {editing && (
         <ContactFormModal
