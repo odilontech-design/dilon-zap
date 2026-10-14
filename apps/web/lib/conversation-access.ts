@@ -84,7 +84,16 @@ export function ramosDeVisibilidade({
  * OWNER e SUPERADMIN a função retorna antes de qualquer consulta.
  */
 export async function conversationVisibilityWhere(
-  user: CurrentUser
+  user: CurrentUser,
+  /**
+   * `listagem`: o filtro é de uma LISTA ou CONTAGEM (Inbox, abas, som,
+   * encaminhar), não do acesso a uma conversa pelo id. Nas listas o FINANCEIRO
+   * fica só com o que é dele e do setor dele: o ramo da pendência financeira
+   * enchia o Inbox do financeiro com conversas dos outros setores (pedido do
+   * Carlos, Guttierres, 13/10). Abrir a conversa a partir do A receber continua
+   * funcionando, porque aquilo é acesso direto, sem `listagem`.
+   */
+  opcoes: { listagem?: boolean } = {}
 ): Promise<Prisma.ConversationWhereInput> {
   if (temVisaoLivreDoTenant(user.role)) return {};
 
@@ -106,7 +115,7 @@ export async function conversationVisibilityWhere(
       // Tenant sumido não deveria acontecer; se acontecer, o lado seguro é
       // mostrar de menos, não de mais.
       filaGeralRestrita: tenant?.restringirFilaGeral ?? true,
-      vePendenciaFinanceira: user.role === "FINANCEIRO",
+      vePendenciaFinanceira: user.role === "FINANCEIRO" && !opcoes.listagem,
     }),
   };
 }

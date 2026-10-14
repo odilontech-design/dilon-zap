@@ -33,7 +33,7 @@ export async function GET(req: Request) {
     ...(setorId ? (setorId === "sem" ? { setorId: null } : { setorId }) : {}),
     ...(unreadOnly ? { messages: { some: { direction: "INBOUND", readAt: null } } } : {}),
     AND: [
-      (await conversationVisibilityWhere(user)),
+      (await conversationVisibilityWhere(user, { listagem: true })),
       ...(search
         ? [
             {

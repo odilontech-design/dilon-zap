@@ -258,7 +258,7 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
-  const { data: statusCounts } = useSWR<Record<ConversationStatus, number>>(
+  const { data: statusCounts } = useSWR<Record<ConversationStatus, number> & { naoLidas?: Record<ConversationStatus, number> }>(
     "/api/conversations/status-counts",
     fetcher,
     { refreshInterval: STATUS_COUNTS_INTERVAL }
@@ -331,13 +331,14 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
               }`}
             >
               {t.label}
-              {!!statusCounts?.[t.key] && (
+              {/* Mensagens não lidas da aba, como nos Grupos. O total de
+                  conversas fica na dica, ao passar o mouse. */}
+              {!!statusCounts?.naoLidas?.[t.key] && (
                 <span
-                  className={`text-[10px] rounded-full px-1.5 py-0.5 ${
-                    tab === t.key ? "bg-accent/15 text-accent" : "bg-neutral-200 text-neutral-600"
-                  }`}
+                  title={`${statusCounts.naoLidas[t.key]} mensagem(ns) não lida(s) em ${statusCounts[t.key]} conversa(s)`}
+                  className="text-[10px] rounded-full px-1.5 py-0.5 bg-accent text-white font-semibold"
                 >
-                  {statusCounts[t.key]}
+                  {statusCounts.naoLidas[t.key] > 99 ? "99+" : statusCounts.naoLidas[t.key]}
                 </span>
               )}
             </button>
