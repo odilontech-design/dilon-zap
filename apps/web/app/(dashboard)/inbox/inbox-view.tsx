@@ -778,6 +778,19 @@ export function ConversationThread({
   const [reactionBarFor, setReactionBarFor] = useState<string | null>(null);
   // Mensagens editadas com a versão original aberta (clique em "editado").
   const [originaisAbertas, setOriginaisAbertas] = useState<Set<string>>(new Set());
+  // Clicar na citação leva à mensagem original e a destaca por um instante,
+  // como no WhatsApp (pedido da Hemoderi, 14/10).
+  const [destacada, setDestacada] = useState<string | null>(null);
+  function irParaMensagem(id: string) {
+    const alvo = document.getElementById(`msg-${id}`);
+    if (!alvo) {
+      alert("A mensagem original não está nesta conversa (pode ter sido apagada).");
+      return;
+    }
+    alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+    setDestacada(id);
+    window.setTimeout(() => setDestacada((atual) => (atual === id ? null : atual)), 2000);
+  }
   const [fullReactionPickerFor, setFullReactionPickerFor] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement>(null);
@@ -1600,9 +1613,10 @@ export function ConversationThread({
                 )}
                 <div className="relative">
                 <div
-                  className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
+                  id={`msg-${m.id}`}
+                  className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm transition-shadow duration-500 ${
                     m.direction === "OUTBOUND" ? "bg-accent text-white" : "bg-neutral-100 text-neutral-900"
-                  }`}
+                  } ${destacada === m.id ? "ring-4 ring-amber-400" : ""}`}
                 >
                 {m.direction === "OUTBOUND" && m.sender && (
                   <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
@@ -1629,9 +1643,12 @@ export function ConversationThread({
                       </p>
                     )}
                     {m.quotedMessage && (
-                      <div
-                        className={`mb-1.5 rounded border-l-2 pl-2 py-1 ${
-                          m.direction === "OUTBOUND" ? "border-white/50 bg-surface/10" : "border-accent/50 bg-black/5"
+                      <button
+                        type="button"
+                        onClick={() => irParaMensagem(m.quotedMessage!.id)}
+                        title="Ir para a mensagem original"
+                        className={`block w-full text-left mb-1.5 rounded border-l-2 pl-2 py-1 cursor-pointer hover:brightness-95 ${
+                          m.direction === "OUTBOUND" ? "border-white/50 bg-surface/10 hover:bg-surface/20" : "border-accent/50 bg-black/5 hover:bg-black/10"
                         }`}
                       >
                         <p className={`text-xs font-medium ${m.direction === "OUTBOUND" ? "text-white/90" : "text-accent"}`}>
@@ -1640,7 +1657,7 @@ export function ConversationThread({
                         <p className={`text-xs truncate ${m.direction === "OUTBOUND" ? "text-white/70" : "text-neutral-500"}`}>
                           {quotedSnippet(m.quotedMessage)}
                         </p>
-                      </div>
+                      </button>
                     )}
                     {m.mediaType && (
                       <MessageMedia
