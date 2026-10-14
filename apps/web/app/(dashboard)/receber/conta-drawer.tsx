@@ -97,10 +97,32 @@ export function ContaDrawer({
   }
 
   async function cancelarConta() {
-    if (!confirm("Cancelar esta conta inteira? As parcelas deixam de contar como a receber.")) return;
+    const recebido = data ? data.totalCents - data.saldoCents : 0;
+    const motivo = prompt(
+      recebido > 0
+        ? `Excluir esta conta? O que já foi recebido (${centsToBRL(recebido)}) será estornado e as parcelas deixam de contar como a receber.\n\nMotivo:`
+        : "Excluir esta conta? As parcelas deixam de contar como a receber.\n\nMotivo:"
+    );
+    if (motivo === null) return;
     setAviso(null);
-    const r = await chamar(`/api/contas-receber/${contaId}`, "PATCH", { acao: "cancelar" });
-    if (!r.ok) return setAviso(r.erro ?? "não deu pra cancelar");
+    const r = await chamar(`/api/contas-receber/${contaId}`, "PATCH", { acao: "cancelar", estornar: true, motivo: motivo.trim() || undefined });
+    if (!r.ok) return setAviso(r.erro ?? "não deu pra excluir");
+    onMudou();
+    onFechar();
+  }
+
+  // Conta de pedido não se exclui sozinha: cancela o PEDIDO, que devolve o
+  // estoque, estorna o recebido e cancela a conta junto (Believe, 14/10).
+  async function cancelarPedidoDaConta() {
+    if (!data?.pedido) return;
+    const motivo = prompt(
+      `Cancelar o pedido #${data.pedido.numero}? Os produtos voltam ao estoque, o que foi recebido é estornado e esta conta é cancelada.\n\nMotivo (obrigatório):`
+    );
+    if (motivo === null) return;
+    if (motivo.trim().length < 3) return setAviso("explique o motivo do cancelamento");
+    setAviso(null);
+    const r = await chamar(`/api/orders/${data.pedido.id}`, "PATCH", { acao: "cancelar", motivo: motivo.trim() });
+    if (!r.ok) return setAviso(r.erro ?? "não deu pra cancelar o pedido");
     onMudou();
     onFechar();
   }
@@ -164,7 +186,12 @@ export function ContaDrawer({
         )}
         {manual && !cancelada && (
           <button onClick={cancelarConta} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
-            Cancelar conta
+            Excluir conta
+          </button>
+        )}
+        {!manual && !cancelada && data.pedido && (
+          <button onClick={cancelarPedidoDaConta} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
+            Cancelar pedido #{data.pedido.numero}
           </button>
         )}
       </div>

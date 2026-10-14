@@ -1,6 +1,6 @@
 import { prisma } from "@dilon-zap/db";
 import type { PaymentMethod } from "@prisma/client";
-import { garantirContaDoPedido, receberNaConta, reparcelarConta } from "@/lib/contas-receber";
+import { estornarNaConta, garantirContaDoPedido, receberNaConta, reparcelarConta } from "@/lib/contas-receber";
 
 /**
  * Regras do pedido que não podem morar numa rota.
@@ -217,4 +217,167 @@ export async function saldoDevedor(tenantId: string, contactId: string) {
     0
   );
   return { totalCents, pedidos: pedidos.length };
+}
+
+/* ------------------------------------------------------------------------ *
+ * Cancelar (e refazer) pedido — inclusive já fechado
+ * ------------------------------------------------------------------------ */
+
+export type CancelarInput = {
+  orderId: string;
+  tenantId: string;
+  userId: string;
+  userName: string;
+  motivo: string;
+  /** "Editar" um pedido fechado: cancela este e cria uma cópia para ajustar e fechar de novo. */
+  refazer?: boolean;
+};
+
+/**
+ * Cancela o pedido desfazendo o que o fechamento fez (pedido da Believe,
+ * reunião de 14/10 — o pedido errado da cliente não tinha como sair):
+ *
+ * - estoque: devolve cada produto vendido, com movimentação DEVOLUCAO no
+ *   extrato (serviço não tem estoque);
+ * - financeiro: o que foi recebido entra como estorno (lançamento negativo,
+ *   nunca apagando o que já aconteceu) e a conta a receber é cancelada.
+ *
+ * Com `refazer`, nasce uma cópia aguardando o financeiro, com os mesmos itens
+ * e condição — é o "editar pedido fechado": ajusta, fecha de novo, e o
+ * estoque e o financeiro saem certos. Tudo numa transação só.
+ */
+export async function cancelarPedido(input: CancelarInput) {
+  const motivo = input.motivo.trim();
+  if (motivo.length < 3) throw new Error("explique o motivo do cancelamento");
+
+  return prisma.$transaction(async (tx) => {
+    const pedido = await tx.order.findFirst({
+      where: { id: input.orderId, tenantId: input.tenantId },
+      include: {
+        items: true,
+        conta: { select: { id: true, canceladaEm: true } },
+        pagamentos: { select: { valorCents: true, meio: true, contaId: true } },
+      },
+    });
+    if (!pedido) throw new Error("pedido não encontrado");
+    if (pedido.status === "CANCELADO") throw new Error("este pedido já está cancelado");
+
+    const agora = new Date();
+    const resumo = { itensDevolvidos: 0, estornadoCents: 0 };
+
+    if (pedido.status === "FECHADO") {
+      // Estoque de volta.
+      for (const item of pedido.items) {
+        if (!item.productId) continue;
+        const cadastro = await tx.product.findUnique({ where: { id: item.productId }, select: { tipo: true } });
+        if (!cadastro || cadastro.tipo === "SERVICO") continue;
+        const produto = await tx.product.update({
+          where: { id: item.productId },
+          data: { stockQty: { increment: item.quantidade } },
+          select: { stockQty: true },
+        });
+        await tx.stockMovement.create({
+          data: {
+            tenantId: input.tenantId,
+            productId: item.productId,
+            tipo: "DEVOLUCAO",
+            quantidade: item.quantidade,
+            motivo: `Cancelamento do pedido #${pedido.numero}`,
+            saldoDepois: produto.stockQty,
+            createdById: input.userId,
+          },
+        });
+        resumo.itensDevolvidos += item.quantidade;
+      }
+
+      const observacaoEstorno = `Estorno — pedido #${pedido.numero} cancelado: ${motivo}`.slice(0, 300);
+
+      if (pedido.conta && !pedido.conta.canceladaEm) {
+        // Venda a prazo: estorna o recebido na conta e cancela as parcelas.
+        const recebido = pedido.pagamentos.filter((p) => p.contaId).reduce((s, p) => s + p.valorCents, 0);
+        if (recebido > 0) {
+          await estornarNaConta(tx, {
+            tenantId: input.tenantId,
+            contaId: pedido.conta.id,
+            valorCents: recebido,
+            observacao: observacaoEstorno,
+            userId: input.userId,
+          });
+          resumo.estornadoCents += recebido;
+        }
+        await tx.parcela.updateMany({ where: { contaId: pedido.conta.id, canceladaEm: null }, data: { canceladaEm: agora } });
+        await tx.contaReceber.update({ where: { id: pedido.conta.id }, data: { canceladaEm: agora } });
+      } else {
+        // Pago na hora: o recebimento volta como lançamento negativo, por meio
+        // de pagamento — assim o caixa do dia confere (dinheiro devolvido sai
+        // da gaveta; PIX e cartão ficam no extrato).
+        const porMeio = new Map<string, number>();
+        for (const p of pedido.pagamentos.filter((x) => !x.contaId)) {
+          const chave = p.meio ?? "";
+          porMeio.set(chave, (porMeio.get(chave) ?? 0) + p.valorCents);
+        }
+        for (const [meio, valor] of porMeio) {
+          if (valor <= 0) continue;
+          await tx.pagamento.create({
+            data: {
+              orderId: pedido.id,
+              valorCents: -valor,
+              meio: (meio || undefined) as never,
+              recebidoEm: agora,
+              observacao: observacaoEstorno,
+              createdById: input.userId,
+            },
+          });
+          resumo.estornadoCents += valor;
+        }
+      }
+    }
+
+    await tx.order.update({
+      where: { id: pedido.id },
+      data: {
+        status: "CANCELADO",
+        canceladoEm: agora,
+        motivoCancelamento: motivo,
+        canceladoPorNome: input.userName,
+        pago: false,
+      },
+    });
+
+    let copia: { id: string; numero: number } | null = null;
+    if (input.refazer) {
+      copia = await tx.order.create({
+        data: {
+          tenantId: input.tenantId,
+          contactId: pedido.contactId,
+          conversationId: pedido.conversationId,
+          createdById: input.userId,
+          negociacaoId: pedido.negociacaoId,
+          status: "AGUARDANDO_FINANCEIRO",
+          enviadoAoFinanceiroEm: agora,
+          paymentMethod: pedido.paymentMethod,
+          planoEntradaCents: pedido.planoEntradaCents,
+          planoNumParcelas: pedido.planoNumParcelas,
+          planoPeriodicidade: pedido.planoPeriodicidade,
+          planoPrimeiroVencimento: pedido.planoPrimeiroVencimento,
+          observacao: pedido.observacao,
+          mesReferencia: pedido.mesReferencia,
+          descontoCents: pedido.descontoCents,
+          refeitoDeNumero: pedido.numero,
+          items: {
+            create: pedido.items.map((i) => ({
+              productId: i.productId,
+              nomeProduto: i.nomeProduto,
+              precoTabelaCents: i.precoTabelaCents,
+              precoUnitCents: i.precoUnitCents,
+              quantidade: i.quantidade,
+            })),
+          },
+        },
+        select: { id: true, numero: true },
+      });
+    }
+
+    return { ...resumo, copia, eraFechado: pedido.status === "FECHADO" };
+  });
 }

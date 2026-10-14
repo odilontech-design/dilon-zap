@@ -124,6 +124,7 @@ export function CaixaPanel() {
           aberto
           onMovimento={setMovimento}
           onFechar={() => setFechando(true)}
+          onMudou={() => mutate()}
         />
       )}
 
@@ -205,13 +206,29 @@ function DetalheDoCaixa({
   aberto,
   onMovimento,
   onFechar,
+  onMudou,
 }: {
   dados: Dados;
   aberto: boolean;
   onMovimento?: (t: "SUPRIMENTO" | "SANGRIA" | "DESPESA") => void;
   onFechar?: () => void;
+  onMudou?: () => void;
 }) {
   const r = dados.resumo;
+
+  async function excluirMovimento(m: { id: string; descricao: string }) {
+    if (!confirm(`Excluir o lançamento "${m.descricao}"?`)) return;
+    const res = await fetch(`/api/caixa/${dados.caixa.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao: "excluirMovimento", movimentoId: m.id }),
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      return alert(typeof b.error === "string" ? b.error : "não deu pra excluir");
+    }
+    onMudou?.();
+  }
   const meios = Object.entries(r.porMeio).filter(([, v]) => v !== 0);
 
   return (
@@ -289,8 +306,15 @@ function DetalheDoCaixa({
                   <span className="min-w-0 truncate">
                     {ROTULO_MOV[m.tipo]} · {m.descricao}
                   </span>
-                  <span className={`shrink-0 ${m.tipo === "SUPRIMENTO" ? "text-green-700" : "text-red-600"}`}>
-                    {m.tipo === "SUPRIMENTO" ? "+" : "−"} {centsToBRL(m.valorCents)}
+                  <span className="shrink-0 flex items-center gap-2">
+                    <span className={m.tipo === "SUPRIMENTO" ? "text-green-700" : "text-red-600"}>
+                      {m.tipo === "SUPRIMENTO" ? "+" : "−"} {centsToBRL(m.valorCents)}
+                    </span>
+                    {aberto && (
+                      <button onClick={() => excluirMovimento(m)} title="Excluir lançamento" className="text-neutral-400 hover:text-red-600 text-xs">
+                        🗑
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}

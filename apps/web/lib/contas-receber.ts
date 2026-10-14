@@ -331,15 +331,33 @@ export async function cancelarParcela(db: Db, input: { tenantId: string; parcela
   return { ok: true };
 }
 
-export async function cancelarConta(db: Db, input: { tenantId: string; contaId: string }) {
-  const conta = await db.contaReceber.findFirst({
+export async function cancelarConta(
+  db: Db,
+  input: { tenantId: string; contaId: string; estornar?: boolean; userId?: string; motivo?: string | null }
+) {
+  let conta = await db.contaReceber.findFirst({
     where: { id: input.contaId, tenantId: input.tenantId },
     include: { parcelas: { include: { pagamentos: true } } },
   });
   if (!conta) throw new ErroDeConta("conta não encontrada", 404);
   if (conta.orderId) throw new ErroDeConta("conta de pedido: cancele o pedido");
-  if (conta.parcelas.some((p) => situacao(p).pagoCents > 0)) {
-    throw new ErroDeConta("a conta tem recebimentos: estorne ou reembolse antes de cancelar");
+  const recebido = conta.parcelas.reduce((s, p) => s + (p.canceladaEm || p.reembolsadaEm ? 0 : situacao(p).pagoCents), 0);
+  if (recebido > 0) {
+    // "Excluir conta" (Believe, 14/10): a conta não vale mais — o que entrou
+    // volta como estorno, registrado, e então ela é cancelada. Sem pedir para
+    // estornar antes, que era o que travava a correção.
+    if (!input.estornar) throw new ErroDeConta("a conta tem recebimentos: estorne ou reembolse antes de cancelar");
+    await estornarNaConta(db, {
+      tenantId: input.tenantId,
+      contaId: conta.id,
+      valorCents: recebido,
+      observacao: `Estorno — conta excluída${input.motivo ? `: ${input.motivo}` : ""}`.slice(0, 300),
+      userId: input.userId,
+    });
+    conta = (await db.contaReceber.findFirst({
+      where: { id: input.contaId, tenantId: input.tenantId },
+      include: { parcelas: { include: { pagamentos: true } } },
+    }))!;
   }
   const agora = new Date();
   await db.parcela.updateMany({ where: { contaId: conta.id, canceladaEm: null }, data: { canceladaEm: agora } });

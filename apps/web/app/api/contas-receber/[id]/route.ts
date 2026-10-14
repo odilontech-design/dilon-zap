@@ -19,7 +19,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "data inválida");
 
 const schema = z.discriminatedUnion("acao", [
-  z.object({ acao: z.literal("cancelar") }),
+  z.object({ acao: z.literal("cancelar"), estornar: z.boolean().optional(), motivo: z.string().trim().max(200).optional() }),
   z.object({
     acao: z.literal("reparcelar"),
     entradaCents: z.number().int().min(0).optional(),
@@ -49,7 +49,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   try {
     const resultado = await prisma.$transaction(async (tx) => {
-      if (d.acao === "cancelar") return cancelarConta(tx, { tenantId: user.tenantId, contaId: params.id });
+      if (d.acao === "cancelar")
+        return cancelarConta(tx, { tenantId: user.tenantId, contaId: params.id, estornar: d.estornar, motivo: d.motivo, userId: user.id });
       if (d.acao === "reparcelar") {
         return reparcelarConta(tx, {
           tenantId: user.tenantId,

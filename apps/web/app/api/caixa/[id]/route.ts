@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { guardaFinanceiro } from "@/lib/guarda-financeiro";
-import { dadosDoCaixa, ErroDeCaixa, fecharCaixa, registrarMovimento } from "@/lib/caixa";
+import { dadosDoCaixa, ErroDeCaixa, excluirMovimento, fecharCaixa, registrarMovimento } from "@/lib/caixa";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
@@ -21,6 +21,10 @@ const schema = z.discriminatedUnion("acao", [
     tipo: z.enum(["SUPRIMENTO", "SANGRIA", "DESPESA"]),
     valorCents: z.number().int().min(1).max(10_000_000_000),
     descricao: z.string().trim().min(1).max(200),
+  }),
+  z.object({
+    acao: z.literal("excluirMovimento"),
+    movimentoId: z.string().min(1),
   }),
   z.object({
     acao: z.literal("fechar"),
@@ -43,6 +47,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const m = await registrarMovimento(user.tenantId, user.id, params.id, { tipo: d.tipo, valorCents: d.valorCents, descricao: d.descricao });
       await logAudit({ actor: user, action: `caixa.${d.tipo.toLowerCase()}`, metadata: { caixaId: params.id, valorCents: d.valorCents } });
       return NextResponse.json(m, { status: 201 });
+    }
+    if (d.acao === "excluirMovimento") {
+      const m = await excluirMovimento(user.tenantId, params.id, d.movimentoId);
+      await logAudit({ actor: user, action: "caixa.movimento.excluido", metadata: { caixaId: params.id, ...m } });
+      return NextResponse.json({ ok: true });
     }
     const r = await fecharCaixa(user.tenantId, user.id, params.id, d.contadoDinheiroCents, d.observacao);
     await logAudit({ actor: user, action: "caixa.fechado", metadata: { caixaId: params.id, ...r } });

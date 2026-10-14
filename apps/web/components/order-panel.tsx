@@ -43,6 +43,11 @@ export type Pedido = {
   planoPeriodicidade?: "ENTRADA" | "UNICA" | "SEMANAL" | "QUINZENAL" | "MENSAL" | null;
   planoPrimeiroVencimento?: string | null;
   negociacaoId?: string | null;
+  canceladoEm?: string | null;
+  motivoCancelamento?: string | null;
+  canceladoPorNome?: string | null;
+  /** Cópia criada ao editar um pedido fechado. */
+  refeitoDeNumero?: number | null;
   createdAt: string;
   fechadoEm: string | null;
   createdBy: { name: string } | null;
@@ -132,6 +137,8 @@ export function OrderPanel({
   onMudou: () => void;
 }) {
   const termo = useTermoPedido();
+  // Cancelar (ou editar = cancelar e refazer) pede o motivo antes.
+  const [cancelando, setCancelando] = useState<null | "cancelar" | "refazer">(null);
   const { data: produtos } = useSWR<Produto[]>("/api/products", fetcher);
   const fotoDe = useMemo(
     () => new Map((produtos ?? []).filter((p) => p.fotoKey).map((p) => [p.id, p.fotoKey!])),
@@ -427,6 +434,9 @@ export function OrderPanel({
                 </span>
               )}
             </h2>
+            {pedido.refeitoDeNumero && (
+              <p className="text-xs text-accent mt-0.5">Refeito do {termo.minusculo} #{pedido.refeitoDeNumero}, que foi cancelado</p>
+            )}
             <p className="text-sm text-neutral-500 mt-0.5">
               {pedido.contact.name ?? pedido.contact.phoneNumber ?? "Cliente"}
               {pedido.createdBy && ` · aberto por ${pedido.createdBy.name}`}
@@ -742,6 +752,14 @@ export function OrderPanel({
             </div>
           )}
 
+          {pedido.status === "CANCELADO" && (
+            <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              Cancelado{pedido.canceladoEm ? ` em ${new Date(pedido.canceladoEm).toLocaleString("pt-BR")}` : ""}
+              {pedido.canceladoPorNome ? ` por ${pedido.canceladoPorNome}` : ""}
+              {pedido.motivoCancelamento ? <> — <i>{pedido.motivoCancelamento}</i></> : null}
+            </p>
+          )}
+
           {pedido.status === "FECHADO" && (
             <p className="text-sm text-neutral-600">
               Fechado em {new Date(pedido.fechadoEm!).toLocaleString("pt-BR")} ·{" "}
@@ -783,13 +801,24 @@ export function OrderPanel({
             </button>
           )}
 
-          {editavel && ehFinanceiro && (
+          {pedido.status === "FECHADO" && ehFinanceiro && (
             <button
-              onClick={() => acao({ acao: "cancelar" }).then((r) => r && onFechar())}
+              onClick={() => setCancelando("refazer")}
+              disabled={ocupado}
+              title="Cancela este e cria uma cópia para ajustar e fechar de novo"
+              className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
+            >
+              Editar
+            </button>
+          )}
+
+          {(editavel || pedido.status === "FECHADO") && ehFinanceiro && (
+            <button
+              onClick={() => setCancelando("cancelar")}
               disabled={ocupado}
               className="px-3 py-2 text-red-600 hover:underline disabled:opacity-50"
             >
-              Cancelar pedido
+              Cancelar {termo.minusculo}
             </button>
           )}
 
@@ -824,6 +853,27 @@ export function OrderPanel({
           )}
         </footer>
       </div>
+
+      {cancelando && (
+        <CancelarPedido
+          numero={pedido.numero}
+          fechado={pedido.status === "FECHADO"}
+          refazer={cancelando === "refazer"}
+          termo={termo}
+          onVoltar={() => setCancelando(null)}
+          onConfirmar={async (motivo) => {
+            const r = await acao({ acao: "cancelar", motivo, refazer: cancelando === "refazer" });
+            setCancelando(null);
+            if (!r) return;
+            if (r.copia) {
+              alert(
+                `${termo.singular} #${pedido.numero} cancelado. A cópia #${r.copia.numero} está em "Aguardando financeiro" para você ajustar e fechar.`
+              );
+            }
+            onFechar();
+          }}
+        />
+      )}
 
       {confirmandoRecibo && (
         <ConfirmarEnvioDoRecibo
@@ -987,6 +1037,82 @@ function ConfirmarEnvioDoRecibo({
             className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-50"
           >
             {enviando ? "Enviando..." : "Enviar ao cliente"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Confirmação de cancelamento — e de "editar", que é cancelar e refazer.
+ * Diz o que vai acontecer com o estoque e o financeiro antes, e pede o motivo
+ * (pedido da Believe, 14/10: cancelamento sem justificativa não se explica
+ * depois).
+ */
+function CancelarPedido({
+  numero,
+  fechado,
+  refazer,
+  termo,
+  onVoltar,
+  onConfirmar,
+}: {
+  numero: number;
+  fechado: boolean;
+  refazer: boolean;
+  termo: { singular: string; minusculo: string };
+  onVoltar: () => void;
+  onConfirmar: (motivo: string) => Promise<void>;
+}) {
+  const [motivo, setMotivo] = useState(refazer ? "Correção do pedido" : "");
+  const [enviando, setEnviando] = useState(false);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onVoltar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md p-5 flex flex-col gap-3">
+        <h3 className="font-semibold">
+          {refazer ? `Editar ${termo.minusculo} #${numero}` : `Cancelar ${termo.minusculo} #${numero}`}
+        </h3>
+        {fechado ? (
+          <ul className="text-sm text-neutral-700 list-disc pl-5 flex flex-col gap-1">
+            <li>Os produtos <b>voltam ao estoque</b> (fica registrado como devolução).</li>
+            <li>O que já foi recebido é <b>estornado</b>, e as parcelas a receber são canceladas.</li>
+            {refazer && (
+              <li>
+                Nasce uma <b>cópia</b> com os mesmos itens e condição, em “Aguardando financeiro”, para ajustar e fechar de novo.
+              </li>
+            )}
+          </ul>
+        ) : (
+          <p className="text-sm text-neutral-700">Ainda não foi fechado: nada de estoque ou financeiro para desfazer.</p>
+        )}
+        <label className="text-sm">
+          <span className="block text-xs font-medium text-neutral-700 mb-1">Motivo (obrigatório)</span>
+          <textarea
+            autoFocus
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            rows={3}
+            maxLength={300}
+            placeholder="Ex.: valor do produto errado, cliente desistiu, pedido duplicado..."
+            className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button onClick={onVoltar} className="px-4 py-2 text-sm text-neutral-600">
+            Voltar
+          </button>
+          <button
+            onClick={async () => {
+              setEnviando(true);
+              await onConfirmar(motivo.trim());
+              setEnviando(false);
+            }}
+            disabled={enviando || motivo.trim().length < 3}
+            className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${refazer ? "bg-accent" : "bg-red-600"}`}
+          >
+            {enviando ? "Aguarde..." : refazer ? "Cancelar e criar cópia" : `Cancelar ${termo.minusculo}`}
           </button>
         </div>
       </div>

@@ -245,3 +245,20 @@ export async function historicoDeCaixas(tenantId: string, limite = 30) {
     diferencaCents: c.diferencaCents,
   }));
 }
+
+/**
+ * Apaga um suprimento, sangria ou despesa lançado por engano — só com o caixa
+ * ainda aberto (o fechado tem a conferência congelada). Pedido da Believe,
+ * 14/10: a "despesa de estorno" lançada para acertar o caixa precisa poder
+ * sair quando o lançamento original for corrigido. Quem chama grava auditoria.
+ */
+export async function excluirMovimento(tenantId: string, caixaId: string, movimentoId: string) {
+  const mov = await prisma.movimentoCaixa.findFirst({
+    where: { id: movimentoId, caixaId, tenantId },
+    select: { id: true, tipo: true, valorCents: true, descricao: true, caixa: { select: { fechadoEm: true } } },
+  });
+  if (!mov) throw new ErroDeCaixa("lançamento não encontrado", 404);
+  if (mov.caixa.fechadoEm) throw new ErroDeCaixa("caixa já fechado: o lançamento faz parte da conferência", 409);
+  await prisma.movimentoCaixa.delete({ where: { id: mov.id } });
+  return { tipo: mov.tipo, valorCents: mov.valorCents, descricao: mov.descricao };
+}

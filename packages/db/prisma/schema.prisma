@@ -1170,6 +1170,13 @@ model Order {
   enviadoAoFinanceiroEm DateTime?
   fechadoEm             DateTime?
   canceladoEm           DateTime?
+  /// Por que foi cancelado — obrigatório desde 14/10 (reunião da Believe).
+  motivoCancelamento    String?
+  canceladoPorNome      String?
+  /// Cópia criada ao "editar" um pedido já fechado: o original é cancelado
+  /// (estoque e financeiro estornados) e este nasce no lugar, para ajustar e
+  /// fechar de novo.
+  refeitoDeNumero       Int?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 

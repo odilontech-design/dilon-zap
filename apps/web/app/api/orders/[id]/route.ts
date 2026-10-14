@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
-import { fecharPedido } from "@/lib/orders";
+import { cancelarPedido, fecharPedido } from "@/lib/orders";
 import { registrarPagamento } from "@/lib/receivables";
 import { logAudit } from "@/lib/audit";
 import { ehGerencia } from "@/lib/papeis";
@@ -44,6 +44,9 @@ const patchSchema = z.object({
     .optional(),
   // O responsável libera venda a prazo para quem tem parcela pendente.
   liberarPendencia: z.boolean().optional(),
+  // Cancelamento: motivo obrigatório; refazer = "editar" um pedido fechado.
+  motivo: z.string().trim().max(300).optional(),
+  refazer: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -67,7 +70,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ error: "só o financeiro pode fazer isso" }, { status: 403 });
   }
 
-  if (pedido.status === "FECHADO" && acao !== "marcarPago") {
+  if (pedido.status === "FECHADO" && acao !== "marcarPago" && acao !== "cancelar") {
     return NextResponse.json({ error: "pedido já fechado" }, { status: 400 });
   }
   if (pedido.status === "CANCELADO") {
@@ -105,12 +108,36 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   if (acao === "cancelar") {
-    await prisma.order.update({
-      where: { id: pedido.id },
-      data: { status: "CANCELADO", canceladoEm: new Date() },
-    });
-    await logAudit({ actor: user, action: "order.cancel", metadata: { numero: pedido.numero } });
-    return NextResponse.json({ ok: true });
+    // Pedido fechado também cancela (e pode ser refeito): estoque e financeiro
+    // são estornados lá dentro. Ver cancelarPedido.
+    if (!parsed.data.motivo || parsed.data.motivo.length < 3) {
+      return NextResponse.json({ error: "explique o motivo do cancelamento" }, { status: 400 });
+    }
+    try {
+      const r = await cancelarPedido({
+        orderId: pedido.id,
+        tenantId: user.tenantId,
+        userId: user.id,
+        userName: user.name,
+        motivo: parsed.data.motivo,
+        refazer: parsed.data.refazer,
+      });
+      await logAudit({
+        actor: user,
+        action: parsed.data.refazer ? "order.refazer" : "order.cancel",
+        metadata: {
+          numero: pedido.numero,
+          motivo: parsed.data.motivo,
+          eraFechado: r.eraFechado,
+          itensDevolvidos: r.itensDevolvidos,
+          estornadoCents: r.estornadoCents,
+          copia: r.copia?.numero ?? null,
+        },
+      });
+      return NextResponse.json({ ok: true, ...r });
+    } catch (e) {
+      return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+    }
   }
 
   if (acao === "marcarPago") {

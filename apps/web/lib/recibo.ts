@@ -51,6 +51,19 @@ export type ReciboEntrada = {
     vendedor: string | null;
     itens: { nomeProduto: string; precoTabelaCents: number; precoUnitCents: number; quantidade: number }[];
     pagamentos: { valorCents: number }[];
+    /**
+     * Parcelas da conta a receber do pedido (Recorrente: entrada + parcelas).
+     * Saem detalhadas no recibo — pedido da Believe, 14/10. Ausente ou com
+     * uma parcela só, o recibo segue com o vencimento simples.
+     */
+    parcelas?: {
+      tipo: "ENTRADA" | "UNICA" | "SEMANAL" | "QUINZENAL" | "MENSAL";
+      numero: number;
+      totalParcelas: number;
+      vencimento: Date | null;
+      valorCents: number;
+      pagoCents: number;
+    }[];
   };
   cliente: {
     nome: string | null;
@@ -216,6 +229,20 @@ function mesmoDia(a: Date, b: Date, tz: string) {
   return formatar(a, tz, false) === formatar(b, tz, false);
 }
 
+/** Parcelas da conta, já com o quanto foi pago em cada uma. */
+export function parcelasDoRecibo(
+  conta:
+    | {
+        canceladaEm: Date | null;
+        parcelas: { tipo: "ENTRADA" | "UNICA" | "SEMANAL" | "QUINZENAL" | "MENSAL"; numero: number; totalParcelas: number; vencimento: Date | null; valorCents: number; pagamentos: { valorCents: number }[] }[];
+      }
+    | null
+    | undefined
+) {
+  if (!conta || conta.canceladaEm) return undefined;
+  return conta.parcelas.map(({ pagamentos, ...p }) => ({ ...p, pagoCents: pagamentos.reduce((s, x) => s + x.valorCents, 0) }));
+}
+
 export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recibo {
   const tz = empresa.timezone;
 
@@ -275,6 +302,17 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
     totais.push({ rotulo: "Subtotal", valor: centsToBRL(pedido.subtotalCents) });
   }
   if (pedido.descontoCents > 0) totais.push({ rotulo: "Desconto", valor: `- ${centsToBRL(pedido.descontoCents)}` });
+  // Total de descontos somado, quando vem de mais de um lugar (dois itens com
+  // desconto, ou item e pedido): a cliente vê de uma vez quanto economizou —
+  // pedido da Believe, 14/10 (R$ 81 + R$ 31 = R$ 112 no pedido da Daniele).
+  const itensComDesconto = detalhado
+    ? itensBase.filter((i) => mostraDesconto && i.tabela - i.precoUnitCents > 0).length
+    : 0;
+  const fontesDeDesconto = itensComDesconto + (pedido.descontoCents > 0 ? 1 : 0);
+  const descontoTotal = (detalhado ? descontoItens : 0) + pedido.descontoCents;
+  if (fontesDeDesconto >= 2 && descontoTotal > 0) {
+    totais.push({ rotulo: "Total de descontos", valor: `- ${centsToBRL(descontoTotal)}` });
+  }
   totais.push({ rotulo: "TOTAL", valor: centsToBRL(pedido.totalCents), destaque: true });
 
   const quando = pedido.fechadoEm ?? pedido.createdAt;
@@ -296,7 +334,30 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
       const chave = texto(empresa.reciboChavePix);
       if (chave) pagamento.push({ rotulo: "Chave PIX", valor: chave });
     }
-    if (pedido.vencimento) pagamento.push({ rotulo: "Vencimento", valor: formatar(pedido.vencimento, tz, false) });
+    const parcelas = pedido.parcelas ?? [];
+    if (parcelas.length > 1) {
+      // Recorrente: entrada e cada parcela com data e valor; as já pagas
+      // marcadas. É o que a cliente usa para se organizar.
+      const regulares = parcelas.filter((p) => p.tipo !== "ENTRADA");
+      const tipo = regulares[0]?.tipo;
+      const intervalo = tipo === "SEMANAL" ? "semanais" : tipo === "QUINZENAL" ? "quinzenais" : tipo === "MENSAL" ? "mensais" : "";
+      for (const p of parcelas) {
+        const quando = p.vencimento ? formatar(p.vencimento, tz, false) : "sem data";
+        const paga = p.pagoCents >= p.valorCents;
+        pagamento.push({
+          rotulo: p.tipo === "ENTRADA" ? `Entrada · ${quando}` : `Parcela ${p.numero}/${p.totalParcelas} · ${quando}`,
+          valor: `${centsToBRL(p.valorCents)}${paga ? " ✓ pago" : ""}`,
+        });
+      }
+      if (regulares.length > 0 && intervalo) {
+        pagamento.splice(pagamento.length - parcelas.length, 0, {
+          rotulo: "Parcelamento",
+          valor: `${regulares.length} parcela(s) ${intervalo}`,
+        });
+      }
+    } else if (pedido.vencimento) {
+      pagamento.push({ rotulo: "Vencimento", valor: formatar(pedido.vencimento, tz, false) });
+    }
     // Mesma conta de saldoDoPedido(): a verdade é o histórico de pagamentos.
     const recebido = pedido.pagamentos.reduce((s, p) => s + p.valorCents, 0);
     if (recebido > 0) {

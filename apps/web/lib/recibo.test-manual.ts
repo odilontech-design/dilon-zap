@@ -106,6 +106,7 @@ checa("sem desconto: subtotal e total", totais(montarRecibo(entrada())), [
     ["Subtotal", "R$ 100,00"],
     ["Desconto nos itens", "- R$ 10,00"],
     ["Desconto", "- R$ 5,00"],
+    ["Total de descontos", "- R$ 15,00"],
     ["TOTAL", "R$ 85,00"],
   ]);
   checa("linha do item a preço de tabela", [r.itens[0].detalhe, r.itens[0].total].map(n), ["2 x R$ 50,00", "R$ 100,00"]);
@@ -667,4 +668,72 @@ checa("amarelo pede texto escuro", corDoTextoSobre("#ffd400"), "#1e293b");
 checa("azul escuro pede texto branco", corDoTextoSobre("#1e3a8a"), "#ffffff");
 
 console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
+// ---------------------------------------------------------------------------
+// Pedido da Believe, 14/10: total de descontos e parcelas do Recorrente
+// ---------------------------------------------------------------------------
+
+{
+  // Dois itens com desconto (R$ 81 e R$ 31): o total aparece somado.
+  const r = montarRecibo(
+    entrada({
+      pedido: {
+        subtotalCents: 38000 - 8100 + 18000 - 3100,
+        totalCents: 38000 - 8100 + 18000 - 3100,
+        itens: [
+          { nomeProduto: "Produto A", precoTabelaCents: 38000, precoUnitCents: 29900, quantidade: 1 },
+          { nomeProduto: "Produto B", precoTabelaCents: 18000, precoUnitCents: 14900, quantidade: 1 },
+        ],
+      },
+    })
+  );
+  checa("dois itens com desconto: total de descontos somado", totais(r), [
+    ["Subtotal", "R$ 560,00"],
+    ["Desconto nos itens", "- R$ 112,00"],
+    ["Total de descontos", "- R$ 112,00"],
+    ["TOTAL", "R$ 448,00"],
+  ]);
+}
+
+{
+  // Um desconto só: não repete a linha de total.
+  const r = montarRecibo(entrada({ pedido: { descontoCents: 500, totalCents: 9500 } }));
+  checa("um desconto só não ganha linha de total", totais(r).some(([rotulo]) => rotulo === "Total de descontos"), false);
+}
+
+{
+  const d = (iso: string) => new Date(`${iso}T12:00:00Z`);
+  const r = montarRecibo(
+    entrada({
+      pedido: {
+        paymentMethod: "FIADO",
+        pago: false,
+        pagoEm: null,
+        vencimento: d("2026-10-24"),
+        subtotalCents: 70000,
+        totalCents: 70000,
+        itens: [{ nomeProduto: "Produto A", precoTabelaCents: 70000, precoUnitCents: 70000, quantidade: 1 }],
+        pagamentos: [{ valorCents: 40000 }],
+        parcelas: [
+          { tipo: "ENTRADA", numero: 0, totalParcelas: 3, vencimento: d("2026-10-14"), valorCents: 40000, pagoCents: 40000 },
+          { tipo: "SEMANAL", numero: 1, totalParcelas: 3, vencimento: d("2026-10-24"), valorCents: 15000, pagoCents: 0 },
+          { tipo: "SEMANAL", numero: 2, totalParcelas: 3, vencimento: d("2026-10-31"), valorCents: 15000, pagoCents: 0 },
+        ],
+      },
+    })
+  );
+  checa(
+    "Recorrente: entrada e parcelas detalhadas no recibo",
+    r.pagamento.map((l) => [l.rotulo, n(l.valor)]),
+    [
+      ["Forma de pagamento", "Recorrente"],
+      ["Parcelamento", "2 parcela(s) semanais"],
+      ["Entrada · 14/10/2026", "R$ 400,00 ✓ pago"],
+      ["Parcela 1/3 · 24/10/2026", "R$ 150,00"],
+      ["Parcela 2/3 · 31/10/2026", "R$ 150,00"],
+      ["Já pago", "R$ 400,00"],
+      ["Saldo a pagar", "R$ 300,00"],
+    ]
+  );
+}
+
 if (falhas > 0) process.exit(1);

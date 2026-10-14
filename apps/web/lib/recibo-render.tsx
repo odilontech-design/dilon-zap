@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { downloadMedia } from "@dilon-zap/storage";
 import { prisma } from "@dilon-zap/db";
 import { telefoneConhecido } from "@/lib/contact";
-import { montarRecibo, type Recibo } from "@/lib/recibo";
+import { montarRecibo, parcelasDoRecibo, type Recibo } from "@/lib/recibo";
 import { ReciboImagemJSX } from "@/lib/recibo-imagem";
 
 /**
@@ -70,6 +70,16 @@ const SELECAO_PEDIDO = {
     orderBy: { id: "asc" },
   },
   pagamentos: { select: { valorCents: true } },
+  conta: {
+    select: {
+      canceladaEm: true,
+      parcelas: {
+        where: { canceladaEm: null, reembolsadaEm: null },
+        orderBy: { vencimento: "asc" },
+        select: { tipo: true, numero: true, totalParcelas: true, vencimento: true, valorCents: true, pagamentos: { select: { valorCents: true } } },
+      },
+    },
+  },
   contact: {
     select: {
       id: true,
@@ -134,7 +144,7 @@ export function montarReciboDoPedido(
 ): Recibo {
   return montarRecibo({
     empresa: { ...empresa, nome: empresa.name },
-    pedido: { ...pedido, vendedor: pedido.createdBy?.name ?? null, itens: pedido.items },
+    pedido: { ...pedido, vendedor: pedido.createdBy?.name ?? null, itens: pedido.items, parcelas: parcelasDoRecibo(pedido.conta) },
     cliente: {
       nome: pedido.contact.name,
       nomeNoRecibo: cliente.nomeNoRecibo,
