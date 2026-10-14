@@ -53,9 +53,11 @@ export async function GET(req: Request) {
     where = { tenantId: user.tenantId, setorId, destinatarioId: null };
   }
 
-  // Quem está com o canal aberto (a tela consulta isto em laço) já leu o que
-  // chegou: é o que zera o contador de mensagens novas desse canal.
-  await marcarCanalLido(user.id, chaveDoCanal(com ? null : setorId, com));
+  // Quem está com o canal aberto e a tela à vista já leu o que chegou: é o
+  // que zera o contador de mensagens novas e acende o "Vista" para quem
+  // escreveu. Só com ?marcar=1 — a tela manda isso apenas quando a aba está
+  // visível, senão um chat esquecido aberto em segundo plano "leria" tudo.
+  if (params.get("marcar") === "1") await marcarCanalLido(user.id, chaveDoCanal(com ? null : setorId, com));
 
   const mensagens = await prisma.teamMessage.findMany({
     where,
@@ -63,7 +65,33 @@ export async function GET(req: Request) {
     include: { author: { select: { id: true, name: true } } },
   });
 
-  return NextResponse.json(mensagens);
+  // Quem já viu as MINHAS mensagens: as leituras dos outros neste canal com
+  // "lido até" depois do envio. Na conversa direta, a leitura do colega fica
+  // na chave dm:<meu id> (é a conversa comigo, do ponto de vista dele).
+  const leituras = await prisma.teamChatLeitura.findMany({
+    where: com
+      ? { userId: com, canal: chaveDoCanal(null, user.id) }
+      : { canal: chaveDoCanal(setorId, null), userId: { not: user.id } },
+    select: { userId: true, lidoAte: true },
+  });
+  const nomes = new Map(
+    (
+      await prisma.user.findMany({
+        where: { id: { in: leituras.map((l) => l.userId) }, tenantId: user.tenantId },
+        select: { id: true, name: true },
+      })
+    ).map((u) => [u.id, u.name])
+  );
+
+  return NextResponse.json(
+    mensagens.map((m) => ({
+      ...m,
+      vistoPor:
+        m.authorId === user.id && !m.isDeleted
+          ? leituras.filter((l) => l.lidoAte >= m.createdAt && nomes.has(l.userId)).map((l) => nomes.get(l.userId)!)
+          : undefined,
+    }))
+  );
 }
 
 const mediaSchema = z.object({

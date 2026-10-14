@@ -2350,7 +2350,7 @@ function ForwardModal({
   );
 }
 
-function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
+export function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-10" onClick={onClose} />
@@ -2454,7 +2454,7 @@ type SavedTextItem = {
  * comum, não a exceção: depois de remover, junta espaço duplicado, vírgula
  * solta no começo da linha e espaço antes de pontuação.
  */
-function aplicarVariaveis(corpo: string, contact: ContactRef) {
+function aplicarVariaveis(corpo: string, contact: { name?: string | null }) {
   const primeiro = contact.name?.trim().split(/\s+/)[0];
   if (primeiro) return corpo.replace(/\{nome\}/gi, primeiro);
 
@@ -2467,12 +2467,13 @@ function aplicarVariaveis(corpo: string, contact: ContactRef) {
     .trim();
 }
 
-function SavedTextPicker({
-  contact,
+export function SavedTextPicker({
+  contact = { name: null },
   onPick,
   onClose,
 }: {
-  contact: ContactRef;
+  /** Sem contato (Chat da equipe), o {nome} sai do texto. */
+  contact?: { name?: string | null };
   onPick: (corpo: string) => void;
   onClose: () => void;
 }) {

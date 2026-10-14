@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { MESSAGES_INTERVAL, LISTING_INTERVAL } from "@/lib/polling";
+import { EmojiPicker, SavedTextPicker } from "../inbox/inbox-view";
 
 /**
  * Chat interno da equipe. Um canal É um Setor (ver lib/team-chat.ts) — Geral
@@ -29,9 +30,21 @@ type Mensagem = {
   mediaFileName: string | null;
   isDeleted: boolean;
   createdAt: string;
+  /** Só nas minhas mensagens: quem já viu (nomes). */
+  vistoPor?: string[];
 };
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
+
+/**
+ * Busca as mensagens marcando o canal como lido SÓ quando a aba está à
+ * vista — é o que acende o "Vista" para quem escreveu. Um chat aberto e
+ * esquecido em segundo plano não pode confirmar leitura de ninguém.
+ */
+const fetcherMensagens = (url: string) => {
+  const visivel = typeof document !== "undefined" && document.visibilityState === "visible";
+  return fetch(visivel ? `${url}${url.includes("?") ? "&" : "?"}marcar=1` : url).then((r) => r.json());
+};
 
 export function TeamChatPanel({ meuId }: { meuId: string }) {
   const { data: canais } = useSWR<Canal[]>("/api/team-chat/channels", fetcher, {
@@ -154,10 +167,16 @@ function CanalAberto({
   meuId: string;
 }) {
   const query = destinatarioId ? `?com=${destinatarioId}` : setorId ? `?setorId=${setorId}` : "";
-  const { data: mensagens, mutate } = useSWR<Mensagem[]>(`/api/team-chat/messages${query}`, fetcher, {
+  const { data: mensagens, mutate } = useSWR<Mensagem[]>(`/api/team-chat/messages${query}`, fetcherMensagens, {
     refreshInterval: MESSAGES_INTERVAL,
   });
   const [draft, setDraft] = useState("");
+  const [mostrarEmoji, setMostrarEmoji] = useState(false);
+  const [mostrarTextos, setMostrarTextos] = useState(false);
+  const [gravando, setGravando] = useState(false);
+  const gravadorRef = useRef<MediaRecorder | null>(null);
+  const pedacosRef = useRef<Blob[]>([]);
+  const campoRef = useRef<HTMLTextAreaElement>(null);
   const [enviando, setEnviando] = useState(false);
   const [anexoPendente, setAnexoPendente] = useState<{ file: File; url: string; ehImagem: boolean } | null>(
     null
@@ -209,11 +228,60 @@ function CanalAberto({
     }
   }
 
+  /** Insere no ponto do cursor (emoji, texto pronto). */
+  function inserir(trecho: string) {
+    const campo = campoRef.current;
+    const ini = campo?.selectionStart ?? draft.length;
+    const fim = campo?.selectionEnd ?? draft.length;
+    setDraft(draft.slice(0, ini) + trecho + draft.slice(fim));
+    requestAnimationFrame(() => {
+      campo?.focus();
+      campo?.setSelectionRange(ini + trecho.length, ini + trecho.length);
+    });
+  }
+
+  // Enter envia, Shift+Enter quebra a linha — igual ao Inbox. No celular
+  // (toque) o Enter quebra a linha e o envio é pelo botão.
+  function aoTeclar(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key !== "Enter" || e.shiftKey) return;
+    if (e.nativeEvent.isComposing) return;
+    if (typeof window !== "undefined" && window.matchMedia("(pointer: coarse)").matches) return;
+    e.preventDefault();
+    e.currentTarget.form?.requestSubmit();
+  }
+
+  async function gravarAudio() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const gravador = new MediaRecorder(stream);
+      pedacosRef.current = [];
+      gravador.ondataavailable = (e) => {
+        if (e.data.size > 0) pedacosRef.current.push(e.data);
+      };
+      gravador.onstop = () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const blob = new Blob(pedacosRef.current, { type: gravador.mimeType || "audio/webm" });
+        const ext = blob.type.includes("ogg") ? "ogg" : "webm";
+        enviarAnexo(new File([blob], `audio.${ext}`, { type: blob.type }), "");
+      };
+      gravador.start();
+      gravadorRef.current = gravador;
+      setGravando(true);
+    } catch {
+      alert("Não deu pra usar o microfone. Libere o acesso ao microfone no navegador.");
+    }
+  }
+
+  function pararAudio() {
+    gravadorRef.current?.stop();
+    setGravando(false);
+  }
+
   function abrirPrevia(file: File) {
     setAnexoPendente({ file, url: URL.createObjectURL(file), ehImagem: file.type.startsWith("image/") });
   }
 
-  function handlePaste(e: React.ClipboardEvent<HTMLInputElement>) {
+  function handlePaste(e: React.ClipboardEvent<HTMLTextAreaElement>) {
     const item = Array.from(e.clipboardData.items).find((i) => i.type.startsWith("image/"));
     if (!item) return;
     e.preventDefault();
@@ -258,22 +326,48 @@ function CanalAberto({
                     </p>
                   ) : (
                     <>
-                      {m.mediaType && (
+                      {m.mediaType === "IMAGE" ? (
+                        <a href={`/api/team-chat/messages/${m.id}/media`} target="_blank" rel="noopener noreferrer" className="block mb-1">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`/api/team-chat/messages/${m.id}/media`}
+                            alt={m.mediaFileName ?? "imagem"}
+                            className="max-h-60 max-w-full rounded-md object-contain"
+                          />
+                        </a>
+                      ) : m.mediaType === "AUDIO" ? (
+                        <audio controls preload="none" src={`/api/team-chat/messages/${m.id}/media`} className="max-w-full mb-1" style={{ height: 36 }} />
+                      ) : m.mediaType === "VIDEO" ? (
+                        <video controls preload="metadata" src={`/api/team-chat/messages/${m.id}/media`} className="max-h-60 max-w-full rounded-md mb-1" />
+                      ) : m.mediaType ? (
                         <a
                           href={`/api/team-chat/messages/${m.id}/media`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className={`block mb-1 text-sm underline ${minha ? "text-white" : "text-accent"}`}
                         >
-                          {m.mediaType === "IMAGE" ? "🖼" : m.mediaType === "VIDEO" ? "🎞" : "📎"}{" "}
-                          {m.mediaFileName || "anexo"}
+                          📎 {m.mediaFileName || "anexo"}
                         </a>
-                      )}
+                      ) : null}
                       {m.body && <p className="text-sm whitespace-pre-wrap break-words">{m.body}</p>}
                     </>
                   )}
-                  <p className={`text-[11px] mt-1 ${minha ? "text-white/70" : "text-neutral-400"}`}>
+                  <p className={`text-[11px] mt-1 flex items-center gap-1.5 ${minha ? "text-white/70 justify-end" : "text-neutral-400"}`}>
                     {new Date(m.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                    {/* Visto: na conversa direta, se a pessoa leu; no canal,
+                        quantos leram — os nomes aparecem ao passar o mouse. */}
+                    {minha && !m.isDeleted && m.vistoPor && (
+                      <span
+                        title={m.vistoPor.length ? `Vista por: ${m.vistoPor.join(", ")}` : "Ainda não vista"}
+                        className={m.vistoPor.length ? "text-white font-medium" : ""}
+                      >
+                        {m.vistoPor.length === 0
+                          ? "✓ Enviada"
+                          : destinatarioId
+                            ? "✓✓ Vista"
+                            : `✓✓ Vista por ${m.vistoPor.length}`}
+                      </span>
+                    )}
                   </p>
                   {minha && !m.isDeleted && (
                     <button
@@ -303,22 +397,57 @@ function CanalAberto({
             e.target.value = "";
           }}
         />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={enviando}
-          title="Anexar imagem ou arquivo"
-          className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
-        >
-          📎
-        </button>
-        <input
+        <div className="relative flex items-center gap-1">
+          {mostrarEmoji && (
+            <EmojiPicker
+              onPick={(emoji) => inserir(emoji)}
+              onClose={() => setMostrarEmoji(false)}
+            />
+          )}
+          {mostrarTextos && (
+            <SavedTextPicker
+              onPick={(corpo) => {
+                inserir(corpo);
+                setMostrarTextos(false);
+              }}
+              onClose={() => setMostrarTextos(false)}
+            />
+          )}
+          <button type="button" onClick={() => setMostrarEmoji((v) => !v)} title="Emoji" className="text-lg px-1 hover:opacity-80">
+            😊
+          </button>
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={enviando}
+            title="Anexar imagem ou arquivo"
+            className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+          >
+            📎
+          </button>
+          <button type="button" onClick={() => setMostrarTextos((v) => !v)} title="Textos prontos" className="text-lg px-1 hover:opacity-80">
+            ⚡
+          </button>
+          <button
+            type="button"
+            onClick={gravando ? pararAudio : gravarAudio}
+            disabled={enviando}
+            title={gravando ? "Parar e enviar o áudio" : "Gravar áudio"}
+            className={`text-lg px-1 disabled:opacity-40 ${gravando ? "text-red-600 animate-pulse" : "hover:opacity-80"}`}
+          >
+            {gravando ? "⏺" : "🎤"}
+          </button>
+        </div>
+        <textarea
+          ref={campoRef}
+          rows={1}
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={aoTeclar}
           onPaste={handlePaste}
           disabled={enviando}
-          placeholder={`Escreva pra ${nomeCanal}...`}
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
+          placeholder={gravando ? "Gravando áudio... clique em ⏺ para enviar" : `Escreva pra ${nomeCanal}...`}
+          className="flex-1 resize-y max-h-40 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
         />
         <button
           type="submit"
