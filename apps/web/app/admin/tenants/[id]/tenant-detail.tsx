@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { PlanoPanel } from "./plano-panel";
+import { AjustesEmpresa } from "./ajustes-empresa";
 import type { Recurso } from "@/lib/plano-regras";
 import { formatDate, formatTime } from "@/lib/contact";
 import { centsToBRL, effectiveInvoiceStatus } from "@/lib/billing";
@@ -87,6 +88,9 @@ type TenantDetailResponse = {
     recursos: { recurso: Recurso; ativo: boolean; motivo: string | null }[];
     invoices: Invoice[];
     _count: { contacts: number; conversations: number };
+    conversasAbertasATodos?: boolean;
+    restringirFilaGeral?: boolean;
+    termoPedido?: string | null;
   };
   recentAudit: AuditEntry[];
 };
@@ -192,6 +196,15 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         tenantId={tenant.id}
         assinatura={tenant.subscription}
         excecoes={tenant.recursos ?? []}
+        onSalvo={mutate}
+      />
+      <AjustesEmpresa
+        tenantId={tenant.id}
+        inicial={{
+          conversasAbertasATodos: !!tenant.conversasAbertasATodos,
+          restringirFilaGeral: !!tenant.restringirFilaGeral,
+          termoPedido: tenant.termoPedido ?? null,
+        }}
         onSalvo={mutate}
       />
       <BillingSection tenantId={tenant.id} subscription={tenant.subscription} invoices={tenant.invoices} onChanged={mutate} />

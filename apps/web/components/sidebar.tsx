@@ -12,6 +12,7 @@ import { AppVersion } from "@/components/app-version";
 import { DilonMark } from "@/components/dilon-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Notificacoes } from "@/components/notificacoes";
+import { termosDoPedido } from "@/components/recursos-context";
 
 // Ícones inline (sem lib externa: são poucos e assim não entra mais um
 // pacote no bundle). Todos no mesmo padrão — traço, 24x24, herdando a cor
@@ -171,6 +172,7 @@ export function Sidebar({
   name,
   role,
   recursos,
+  termoPedido,
 }: {
   name: string;
   role: "OWNER" | "AGENT" | "FINANCEIRO" | "SUPERADMIN";
@@ -178,6 +180,8 @@ export function Sidebar({
   // menu fora do layout do painel; ausente = mostra tudo, e o servidor
   // continua barrando o que está fora do plano.
   recursos?: Recurso[];
+  /** "Orçamento" troca o nome do menu Pedidos. Ver Tenant.termoPedido. */
+  termoPedido?: string | null;
 }) {
   const ativos = recursos ? new Set(recursos) : null;
   // `open` é só pro mobile (gaveta). No desktop a barra está sempre visível
@@ -345,6 +349,7 @@ export function Sidebar({
           ).map((item) => {
             const prefixos = [item.href, ...("tambemAtivoEm" in item && item.tambemAtivoEm ? item.tambemAtivoEm : [])];
             const active = prefixos.some((h) => pathname === h || pathname?.startsWith(h + "/"));
+            const rotulo = item.href === "/pedidos" ? termosDoPedido(termoPedido).plural : item.label;
             const naoLidas = item.href === "/inbox" ? contadores?.inbox : item.href === "/grupos" ? contadores?.grupos : 0;
             return (
               <Link
@@ -352,7 +357,7 @@ export function Sidebar({
                 href={item.href}
                 onClick={() => setOpen(false)}
                 // O title vira a dica de qual item é quando só o ícone aparece.
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? rotulo : undefined}
                 className={`flex items-center gap-3 rounded-md py-2 ${
                   collapsed ? "md:justify-center md:px-0 px-3" : "px-3"
                 } ${active ? "bg-accent/10 text-accent font-medium" : "text-neutral-700 hover:bg-neutral-100"}`}
@@ -364,7 +369,7 @@ export function Sidebar({
                     <span className="hidden md:block absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-surface" />
                   )}
                 </span>
-                <span className={`flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>{item.label}</span>
+                <span className={`flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>{rotulo}</span>
                 {!!naoLidas && (
                   <span
                     title={`${naoLidas} mensagem(ns) não lida(s)`}

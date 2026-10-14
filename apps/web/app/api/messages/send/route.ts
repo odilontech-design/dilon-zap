@@ -72,6 +72,13 @@ export async function POST(req: Request) {
   });
 
   // Tira o worker do ritmo ocioso pra essa mensagem sair na hora.
+  // Respondeu, então leu: as mensagens do cliente deixam de contar como não
+  // lidas (decisão da Hemoderi, 13/10 — mesma regra da resposta pelo celular).
+  await prisma.message.updateMany({
+    where: { conversationId: conversation.id, direction: "INBOUND", readAt: null },
+    data: { readAt: new Date() },
+  });
+
   await wakeOutbox(user.tenantId);
 
   return NextResponse.json(message);

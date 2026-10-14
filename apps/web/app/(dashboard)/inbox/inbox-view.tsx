@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useRecurso } from "@/components/recursos-context";
+import { useRecurso, useTermoPedido } from "@/components/recursos-context";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
@@ -140,6 +140,7 @@ type Message = {
   // atualizou os participantes ainda.
   autorTelefone: string | null;
   isEdited: boolean;
+  bodyOriginal?: string | null;
   isDeleted: boolean;
   isForwarded: boolean;
   retryRequestedAt: string | null;
@@ -400,6 +401,7 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
                 className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
               >
                 <option value="">Todos</option>
+                <option value="sem">Sem responsável</option>
                 {users?.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -774,6 +776,8 @@ export function ConversationThread({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [reactionBarFor, setReactionBarFor] = useState<string | null>(null);
+  // Mensagens editadas com a versão original aberta (clique em "editado").
+  const [originaisAbertas, setOriginaisAbertas] = useState<Set<string>>(new Set());
   const [fullReactionPickerFor, setFullReactionPickerFor] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement>(null);
@@ -810,6 +814,7 @@ export function ConversationThread({
   // mudou com a tela aberta, sessão expirou), `?? []` deixaria o objeto
   // passar e o .filter logo abaixo derrubaria o Inbox inteiro. Desligar um
   // módulo secundário não pode quebrar a tela principal do produto.
+  const termoPedido = useTermoPedido();
   const pedidosAbertos = (Array.isArray(pedidos) ? pedidos : []).filter(
     (p) => p.status === "RASCUNHO" || p.status === "AGUARDANDO_FINANCEIRO"
   );
@@ -1488,10 +1493,11 @@ export function ConversationThread({
               </button>
               <button
                 onClick={abrirPedido}
+                title={`${termoPedido.singular} desta conversa`}
                 hidden={!temPedidos || modoGrupo}
                 className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
               >
-                Pedido
+                {termoPedido.singular}
                 {pedidosAbertos.length > 0 && (
                   <span className="ml-1.5 rounded-full bg-accent text-white px-1.5 text-[10px]">
                     {pedidosAbertos.length}
@@ -1644,6 +1650,15 @@ export function ConversationThread({
                       />
                     )}
                     {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
+                    {m.isEdited && m.bodyOriginal && originaisAbertas.has(m.id) && (
+                      <p
+                        className={`mt-1 whitespace-pre-wrap text-xs border-l-2 pl-2 ${
+                          m.direction === "OUTBOUND" ? "border-white/50 text-white/80" : "border-neutral-300 text-neutral-500"
+                        }`}
+                      >
+                        <span className="font-medium">Original:</span> {m.bodyOriginal}
+                      </p>
+                    )}
                   </>
                 )}
                 <div
@@ -1681,7 +1696,29 @@ export function ConversationThread({
                     <span />
                   )}
                   <div className="flex items-center gap-1 shrink-0">
-                    {m.isEdited && !m.isDeleted && <span className="italic">editado</span>}
+                    {m.isEdited && !m.isDeleted && (
+                      // Como no WhatsApp: clicar em "editado" mostra o texto
+                      // original (pedido da Hemoderi, 13/10).
+                      m.bodyOriginal ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOriginaisAbertas((atual) => {
+                              const novo = new Set(atual);
+                              if (novo.has(m.id)) novo.delete(m.id);
+                              else novo.add(m.id);
+                              return novo;
+                            })
+                          }
+                          title="Ver a versão original"
+                          className="italic underline decoration-dotted hover:opacity-100"
+                        >
+                          editado
+                        </button>
+                      ) : (
+                        <span className="italic">editado</span>
+                      )
+                    )}
                     {m.status === "PENDING" ? (
                       // Com o número desconectado, "enviando..." sem fim faria
                       // a atendente achar que já foi.

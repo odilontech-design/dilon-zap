@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { useTermoPedido } from "@/components/recursos-context";
 import { OrderPanel, centsToBRL, type Pedido } from "@/components/order-panel";
 import { ReciboConfig } from "@/components/recibo-config";
 
@@ -20,6 +21,7 @@ const ABAS = [
 ] as const;
 
 export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
+  const termo = useTermoPedido();
   const [aba, setAba] = useState<(typeof ABAS)[number]["key"]>("AGUARDANDO_FINANCEIRO");
   const [aberto, setAberto] = useState<Pedido | null>(null);
   const [configAberta, setConfigAberta] = useState(false);
@@ -35,7 +37,7 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
   return (
     <div className="p-4 md:p-6 max-w-4xl">
       <div className="flex items-center justify-between gap-3 mb-1">
-        <h1 className="text-xl font-semibold">Pedidos</h1>
+        <h1 className="text-xl font-semibold">{termo.plural}</h1>
         <button
           onClick={() => setConfigAberta(true)}
           className="text-sm rounded-md border border-neutral-300 px-3 py-1.5 hover:border-accent"
@@ -77,7 +79,7 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
       {!pedidos && <p className="text-sm text-neutral-500">Carregando...</p>}
       {pedidos?.length === 0 && (
         <p className="text-sm text-neutral-500">
-          {aba === "AGUARDANDO_FINANCEIRO" ? "Nenhum pedido esperando." : "Nada aqui."}
+          {aba === "AGUARDANDO_FINANCEIRO" ? `Nenhum ${termo.minusculo} esperando.` : "Nada aqui."}
         </p>
       )}
 
@@ -112,7 +114,7 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
                 href={`/recibo/${p.id}`}
                 target="_blank"
                 rel="noopener"
-                title={`Imprimir recibo do pedido #${p.numero}`}
+                title={`Imprimir recibo do ${termo.minusculo} #${p.numero}`}
                 className="shrink-0 grid place-items-center rounded-lg border border-neutral-200 bg-surface px-3 text-sm text-neutral-700 hover:border-accent hover:text-accent"
               >
                 Recibo

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
+import { useTermoPedido } from "@/components/recursos-context";
 
 /**
  * Painel do pedido — o mesmo dos dois lados.
@@ -130,6 +131,7 @@ export function OrderPanel({
   onFechar: () => void;
   onMudou: () => void;
 }) {
+  const termo = useTermoPedido();
   const { data: produtos } = useSWR<Produto[]>("/api/products", fetcher);
   const fotoDe = useMemo(
     () => new Map((produtos ?? []).filter((p) => p.fotoKey).map((p) => [p.id, p.fotoKey!])),
@@ -348,7 +350,7 @@ export function OrderPanel({
     }
     setPodeLiberar(false);
     onMudou();
-    if (r.jaEstavaFechado) setErro("Esse pedido já tinha sido fechado — nada foi baixado de novo.");
+    if (r.jaEstavaFechado) setErro(`Esse ${termo.minusculo} já tinha sido fechado — nada foi baixado de novo.`);
     else setFechadoAgora(typeof r.total === "number" ? r.total : total);
   }
 
@@ -359,7 +361,7 @@ export function OrderPanel({
           onClick={(e) => e.stopPropagation()}
           className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm p-6 text-center"
         >
-          <p className="text-sm text-neutral-500">Pedido #{pedido.numero} fechado</p>
+          <p className="text-sm text-neutral-500">{termo.singular} #{pedido.numero} fechado</p>
           <p className="text-2xl font-semibold tabular-nums mt-1">{centsToBRL(fechadoAgora)}</p>
           <p className="text-sm text-neutral-600 mt-1">
             {PAGAMENTO_LABEL[pagamento]} · {pagamento === "PIX" || pagamento === "CARTAO" || pagamento === "DINHEIRO" ? "pago" : "a receber"}
@@ -415,7 +417,7 @@ export function OrderPanel({
         <header className="p-5 border-b border-neutral-200 flex items-start justify-between gap-3">
           <div>
             <h2 className="font-semibold">
-              Pedido #{pedido.numero}
+              {termo.singular} #{pedido.numero}
               <span className="ml-2 text-xs font-normal rounded-full bg-neutral-100 text-neutral-600 px-2 py-0.5">
                 {STATUS_LABEL[pedido.status]}
               </span>

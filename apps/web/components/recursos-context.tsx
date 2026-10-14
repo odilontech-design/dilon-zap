@@ -17,15 +17,39 @@ import type { Recurso } from "@/lib/plano-regras";
  * botão e a recusa, mas não é a barreira.
  */
 const RecursosContext = createContext<Set<Recurso> | null>(null);
+const TermoPedidoContext = createContext<string>("Pedido");
 
 export function RecursosProvider({
   recursos,
+  termoPedido,
   children,
 }: {
   recursos: Recurso[];
+  /** Como a empresa chama o pedido ("Pedido" ou "Orçamento"). Ver Tenant.termoPedido. */
+  termoPedido?: string | null;
   children: React.ReactNode;
 }) {
-  return <RecursosContext.Provider value={new Set(recursos)}>{children}</RecursosContext.Provider>;
+  return (
+    <RecursosContext.Provider value={new Set(recursos)}>
+      <TermoPedidoContext.Provider value={termoPedido || "Pedido"}>{children}</TermoPedidoContext.Provider>
+    </RecursosContext.Provider>
+  );
+}
+
+/**
+ * O nome do pedido nas telas, nas quatro formas que o texto usa. A Hemoderi
+ * trabalha com orçamento de serviço e pediu "Orçamento" (13/10); o resto
+ * continua "Pedido".
+ */
+export function useTermoPedido() {
+  const termo = useContext(TermoPedidoContext);
+  return termosDoPedido(termo);
+}
+
+export function termosDoPedido(termo: string | null | undefined) {
+  const t = termo || "Pedido";
+  const plural = t === "Orçamento" ? "Orçamentos" : "Pedidos";
+  return { singular: t, plural, minusculo: t.toLowerCase(), pluralMinusculo: plural.toLowerCase(), artigo: "o" };
 }
 
 /**

@@ -471,7 +471,31 @@ export async function startSession(sessionId: string) {
 
   socket.ev.on("messages.update", async (updates) => {
     for (const { key, update } of updates) {
-      if (!key.fromMe || !key.id || update.status == null) continue;
+      if (!key.id) continue;
+
+      // Mensagem editada no WhatsApp (pelo cliente, ou por nós no celular): o
+      // Baileys entrega a edição aqui. Antes era ignorada e o Inbox ficava com
+      // o texto velho. Guarda o original na primeira edição, para "editado"
+      // mostrar a versão anterior (pedido da Hemoderi, 13/10).
+      const editada = update.message?.editedMessage?.message;
+      if (editada) {
+        await aplicarEdicao(sessionId, key.id, textoDaEdicao(editada)).catch((err) =>
+          logger.error({ err, waMessageId: key.id }, "falha ao aplicar edição")
+        );
+        continue;
+      }
+
+      // Lida em outro aparelho nosso (o celular): o WhatsApp manda o recibo
+      // "read-self", que chega aqui como mensagem do cliente com status de
+      // lida. Marca lida no Inbox também — lido no celular é lido aqui.
+      if (!key.fromMe && update.status === proto.WebMessageInfo.Status.READ) {
+        await prisma.message
+          .updateMany({ where: { sessionId, waMessageId: key.id, direction: "INBOUND", readAt: null }, data: { readAt: new Date() } })
+          .catch((err) => logger.error({ err }, "falha ao marcar lida pelo celular"));
+        continue;
+      }
+
+      if (!key.fromMe || update.status == null) continue;
 
       const status = mapReceiptStatus(update.status);
       if (!status) continue;
@@ -500,6 +524,19 @@ export async function startSession(sessionId: string) {
       if (!status) continue;
 
       await aplicarRecibo(sessionId, key.id, status);
+    }
+  });
+
+  // Conversa marcada como lida no celular (abriu o chat no WhatsApp, ou
+  // "marcar como lida"): o app avisa com unreadCount 0. Sem isto, o que já
+  // foi lido no celular continuava "não lido" no Inbox — a dessincronia que a
+  // Hemoderi relatou (13/10).
+  socket.ev.on("chats.update", async (chats) => {
+    for (const chat of chats) {
+      if (chat.unreadCount !== 0 || !chat.id) continue;
+      await marcarConversaComoLida(sessionId, chat.id).catch((err) =>
+        logger.error({ err, jid: chat.id }, "falha ao marcar conversa lida pelo celular")
+      );
     }
   });
 
@@ -1184,6 +1221,15 @@ async function recordMessage(params: {
     });
   } else {
     await prisma.message.create({ data: messageData });
+  }
+
+  // Respondeu (pelo celular), então leu: as mensagens do cliente antes desta
+  // deixam de contar como não lidas. Decisão da Hemoderi (13/10) — mensagem
+  // respondida aparecia como pendente no filtro de não lidas.
+  if (!isInbound) {
+    await prisma.message
+      .updateMany({ where: { conversationId: conversation.id, direction: "INBOUND", readAt: null }, data: { readAt: new Date() } })
+      .catch((err) => logger.error({ err }, "falha ao marcar lidas após resposta"));
   }
 
   // A regra de quem cala o robô e de quando a triagem reinicia tem nome e
@@ -2285,4 +2331,46 @@ export function watchForNewSessions() {
   setInterval(() => {
     syncSessions();
   }, NEW_SESSION_POLL_INTERVAL_MS);
+}
+
+
+/** O texto de uma edição: conversa simples, texto com formatação ou legenda. */
+function textoDaEdicao(m: proto.IMessage): string | null {
+  return (
+    m.conversation ??
+    m.extendedTextMessage?.text ??
+    m.imageMessage?.caption ??
+    m.videoMessage?.caption ??
+    m.documentMessage?.caption ??
+    m.protocolMessage?.editedMessage?.conversation ??
+    m.protocolMessage?.editedMessage?.extendedTextMessage?.text ??
+    null
+  );
+}
+
+async function aplicarEdicao(sessionId: string, waMessageId: string, texto: string | null) {
+  if (texto == null) return;
+  const msg = await prisma.message.findFirst({
+    where: { sessionId, waMessageId },
+    select: { id: true, body: true, bodyOriginal: true },
+  });
+  if (!msg || msg.body === texto) return;
+  await prisma.message.update({
+    where: { id: msg.id },
+    data: { body: texto, isEdited: true, editedAt: new Date(), bodyOriginal: msg.bodyOriginal ?? msg.body },
+  });
+}
+
+/** Marca como lidas as mensagens do cliente na conversa daquele chat. */
+async function marcarConversaComoLida(sessionId: string, jid: string) {
+  await prisma.message.updateMany({
+    where: {
+      sessionId,
+      direction: "INBOUND",
+      readAt: null,
+      // O chat pode vir pelo número ou pelo LID; o contato guarda um dos dois.
+      conversation: { contact: { OR: [{ waJid: jid }, { phoneNumber: jid.split("@")[0] }] } },
+    },
+    data: { readAt: new Date() },
+  });
 }

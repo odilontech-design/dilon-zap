@@ -19,6 +19,10 @@ model Tenant {
   // em UTC dentro do container — sem isso, "18:00" viraria 15:00 pro cliente.
   timezone String @default("America/Sao_Paulo")
 
+  /// Como a empresa chama o pedido nas telas: "Orçamento" para quem vende
+  /// serviço sob orçamento (Hemoderi, 13/10). Nulo = "Pedido".
+  termoPedido String?
+
   // Mensagem de ausência. Vazia ou nula desliga o recurso inteiro: é o jeito
   // de a empresa que atende 24h simplesmente não configurar nada.
   outOfHoursMessage String?
@@ -1486,10 +1490,13 @@ model Message {
   mediaFileName        String? // nome original, relevante pra DOCUMENT
   mediaDurationSeconds Int? // relevante pra AUDIO e VIDEO
 
-  isEdited  Boolean   @default(false)
-  editedAt  DateTime?
-  isDeleted Boolean   @default(false) // "apagar pra todos" — mantém a linha (auditoria), esconde o conteúdo na UI
-  deletedAt DateTime?
+  isEdited     Boolean   @default(false)
+  /// O texto antes da PRIMEIRA edição, para "editada" ser clicável e mostrar a
+  /// versão original, como no WhatsApp (pedido da Hemoderi, 13/10).
+  bodyOriginal String?
+  editedAt     DateTime?
+  isDeleted    Boolean   @default(false) // "apagar pra todos" — mantém a linha (auditoria), esconde o conteúdo na UI
+  deletedAt    DateTime?
 
   // Só o rótulo visual "Encaminhada" — sem referência à mensagem original
   // (igual WhatsApp, que também não guarda esse vínculo).

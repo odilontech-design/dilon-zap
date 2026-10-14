@@ -16,7 +16,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Senha provisória não abre o painel. Consulta o banco, e não o JWT, pra
   // valer na hora: a redefinição feita pelo responsável precisa pegar também
   // quem já estava logado, e o JWT só é reemitido no próximo login.
-  const conta = await prisma.user.findUnique({ where: { id: user.id }, select: { senhaProvisoria: true } });
+  const [conta, empresa] = await Promise.all([
+    prisma.user.findUnique({ where: { id: user.id }, select: { senhaProvisoria: true } }),
+    prisma.tenant.findUnique({ where: { id: user.tenantId }, select: { termoPedido: true } }),
+  ]);
   if (conta?.senhaProvisoria) redirect("/trocar-senha");
 
   // Carregado uma vez aqui e distribuído pro menu e pras telas. Array, e não
@@ -25,9 +28,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const recursos = [...(await recursosDoTenant(user.tenantId))];
 
   return (
-    <RecursosProvider recursos={recursos}>
+    <RecursosProvider recursos={recursos} termoPedido={empresa?.termoPedido}>
       <div className="min-h-screen flex flex-col md:flex-row">
-        <Sidebar name={user.name} role={user.role} recursos={recursos} />
+        <Sidebar name={user.name} role={user.role} recursos={recursos} termoPedido={empresa?.termoPedido} />
         <main className="flex-1 min-w-0">{children}</main>
       </div>
     </RecursosProvider>

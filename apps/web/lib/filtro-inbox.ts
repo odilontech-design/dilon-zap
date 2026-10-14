@@ -25,7 +25,9 @@ export async function filtroDoInbox(user: CurrentUser, params: URLSearchParams):
     // Grupo tem tela própria e fica fora do Inbox — ver Contact.grupo.
     contact: { grupo: false },
     ...(tag ? { tags: { has: tag } } : {}),
-    ...(assignedToId ? { assignedToId } : {}),
+    // "sem" = ninguém assumiu ainda (com as conversas abertas a todos, é como
+    // se acha o que está esperando dono).
+    ...(assignedToId ? (assignedToId === "sem" ? { assignedToId: null } : { assignedToId }) : {}),
     ...(setorId ? (setorId === "sem" ? { setorId: null } : { setorId }) : {}),
     ...(unreadOnly ? { messages: { some: { direction: "INBOUND", readAt: null } } } : {}),
     AND: [
