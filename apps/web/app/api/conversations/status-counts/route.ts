@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { filtroDoInbox } from "@/lib/filtro-inbox";
 
 // Só a contagem por status (pro badge nas abas do Inbox) — separado de
 // /api/reports/summary porque aquele endpoint é pesado (amostra de 50
 // conversas com histórico completo) e esse aqui precisa ser leve pra dar
 // pra pollar com frequência junto da lista de conversas.
-export async function GET() {
+export async function GET(req: Request) {
   const user = await requireUser();
-  const visiveis = { tenantId: user.tenantId, contact: { grupo: false }, ...(await conversationVisibilityWhere(user, { listagem: true })) };
+  // Os mesmos filtros da lista (atendente, setor, etiqueta, busca, não lidas):
+  // o número da aba tem de bater com o que a lista mostra.
+  const visiveis = await filtroDoInbox(user, new URL(req.url).searchParams);
 
   const [counts, ...naoLidas] = await Promise.all([
     prisma.conversation.groupBy({

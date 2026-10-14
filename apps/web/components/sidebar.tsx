@@ -5,6 +5,8 @@ import type { Recurso } from "@/lib/plano-regras";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
+import { UNREAD_COUNT_INTERVAL } from "@/lib/polling";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AppVersion } from "@/components/app-version";
 import { DilonMark } from "@/components/dilon-mark";
@@ -183,6 +185,13 @@ export function Sidebar({
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  // Não lidas do Inbox e dos Grupos, no próprio menu: dá pra ver que chegou
+  // mensagem estando em qualquer tela (pedido da Dilon Tech, 13/10).
+  const { data: contadores } = useSWR<{ inbox: number; grupos: number }>(
+    "/api/menu-contadores",
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : { inbox: 0, grupos: 0 })),
+    { refreshInterval: UNREAD_COUNT_INTERVAL }
+  );
 
   // Lido depois da montagem, não no estado inicial: localStorage não existe
   // no servidor, e usar lá quebraria a hidratação do React.
@@ -336,6 +345,7 @@ export function Sidebar({
           ).map((item) => {
             const prefixos = [item.href, ...("tambemAtivoEm" in item && item.tambemAtivoEm ? item.tambemAtivoEm : [])];
             const active = prefixos.some((h) => pathname === h || pathname?.startsWith(h + "/"));
+            const naoLidas = item.href === "/inbox" ? contadores?.inbox : item.href === "/grupos" ? contadores?.grupos : 0;
             return (
               <Link
                 key={item.href}
@@ -347,8 +357,22 @@ export function Sidebar({
                   collapsed ? "md:justify-center md:px-0 px-3" : "px-3"
                 } ${active ? "bg-accent/10 text-accent font-medium" : "text-neutral-700 hover:bg-neutral-100"}`}
               >
-                {item.icon}
-                <span className={collapsed ? "md:hidden" : ""}>{item.label}</span>
+                <span className="relative shrink-0 flex">
+                  {item.icon}
+                  {/* Recolhido, só o ícone aparece: o número vira uma bolinha nele. */}
+                  {!!naoLidas && collapsed && (
+                    <span className="hidden md:block absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-surface" />
+                  )}
+                </span>
+                <span className={`flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>{item.label}</span>
+                {!!naoLidas && (
+                  <span
+                    title={`${naoLidas} mensagem(ns) não lida(s)`}
+                    className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-accent text-white ${collapsed ? "md:hidden" : ""}`}
+                  >
+                    {naoLidas > 99 ? "99+" : naoLidas}
+                  </span>
+                )}
               </Link>
             );
           })}

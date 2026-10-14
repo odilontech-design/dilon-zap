@@ -258,8 +258,12 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
+  // Mesmo filtro da lista, sem o status: o número de cada aba bate com o que
+  // ela mostra quando a atendente, o setor ou a busca estão escolhidos.
+  const filtroDasAbas = new URLSearchParams(query);
+  filtroDasAbas.delete("status");
   const { data: statusCounts } = useSWR<Record<ConversationStatus, number> & { naoLidas?: Record<ConversationStatus, number> }>(
-    "/api/conversations/status-counts",
+    `/api/conversations/status-counts?${filtroDasAbas.toString()}`,
     fetcher,
     { refreshInterval: STATUS_COUNTS_INTERVAL }
   );
@@ -331,14 +335,20 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
               }`}
             >
               {t.label}
-              {/* Mensagens não lidas da aba, como nos Grupos. O total de
-                  conversas fica na dica, ao passar o mouse. */}
-              {!!statusCounts?.naoLidas?.[t.key] && (
+              {/* Total de conversas da aba, já com o filtro aplicado. As não
+                  lidas ficam no menu da esquerda e na dica ao passar o mouse. */}
+              {!!statusCounts?.[t.key] && (
                 <span
-                  title={`${statusCounts.naoLidas[t.key]} mensagem(ns) não lida(s) em ${statusCounts[t.key]} conversa(s)`}
-                  className="text-[10px] rounded-full px-1.5 py-0.5 bg-accent text-white font-semibold"
+                  title={
+                    statusCounts.naoLidas?.[t.key]
+                      ? `${statusCounts[t.key]} conversa(s), ${statusCounts.naoLidas[t.key]} mensagem(ns) não lida(s)`
+                      : `${statusCounts[t.key]} conversa(s)`
+                  }
+                  className={`text-[10px] rounded-full px-1.5 py-0.5 ${
+                    tab === t.key ? "bg-accent/15 text-accent" : "bg-neutral-200 text-neutral-600"
+                  }`}
                 >
-                  {statusCounts.naoLidas[t.key] > 99 ? "99+" : statusCounts.naoLidas[t.key]}
+                  {statusCounts[t.key]}
                 </span>
               )}
             </button>

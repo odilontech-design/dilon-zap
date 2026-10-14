@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { filtroDoInbox } from "@/lib/filtro-inbox";
 
 const VALID_STATUS = ["OPEN", "PENDING", "RESOLVED"] as const;
 
@@ -15,38 +15,9 @@ export async function GET(req: Request) {
     ? (statusParam as (typeof VALID_STATUS)[number])
     : undefined;
 
-  const search = params.get("search")?.trim();
-  const tag = params.get("tag")?.trim();
-  const assignedToId = params.get("assignedToId")?.trim();
-  const setorId = params.get("setorId")?.trim();
-  const unreadOnly = params.get("unreadOnly") === "1";
-
-  const searchDigits = search?.replace(/\D/g, "");
-
   const where: Prisma.ConversationWhereInput = {
-    tenantId: user.tenantId,
-    // Grupo tem tela própria e fica fora do Inbox — ver Contact.grupo.
-    contact: { grupo: false },
+    ...(await filtroDoInbox(user, params)),
     ...(status ? { status } : {}),
-    ...(tag ? { tags: { has: tag } } : {}),
-    ...(assignedToId ? { assignedToId } : {}),
-    ...(setorId ? (setorId === "sem" ? { setorId: null } : { setorId }) : {}),
-    ...(unreadOnly ? { messages: { some: { direction: "INBOUND", readAt: null } } } : {}),
-    AND: [
-      (await conversationVisibilityWhere(user, { listagem: true })),
-      ...(search
-        ? [
-            {
-              OR: [
-                { contact: { name: { contains: search, mode: "insensitive" as const } } },
-                ...(searchDigits ? [{ contact: { waJid: { contains: searchDigits } } }] : []),
-                ...(searchDigits ? [{ contact: { phoneNumber: { contains: searchDigits } } }] : []),
-                { messages: { some: { body: { contains: search, mode: "insensitive" as const } } } },
-              ],
-            },
-          ]
-        : []),
-    ],
   };
 
   // select explícito (não `include: { contact: true }`) porque essa rota é
