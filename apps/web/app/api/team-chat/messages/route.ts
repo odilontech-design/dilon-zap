@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser, type CurrentUser } from "@/lib/session";
 import { podeVerCanal } from "@/lib/team-chat";
 import { avisarNoCelular } from "@/lib/push";
+import { chaveDoCanal, marcarCanalLido } from "@/lib/team-chat-leitura";
 
 /**
  * Setores de que o usuário faz parte — só o necessário pra checar UM canal,
@@ -51,6 +52,10 @@ export async function GET(req: Request) {
     // destinatarioId nulo: sem isso o Geral misturaria as conversas diretas.
     where = { tenantId: user.tenantId, setorId, destinatarioId: null };
   }
+
+  // Quem está com o canal aberto (a tela consulta isto em laço) já leu o que
+  // chegou: é o que zera o contador de mensagens novas desse canal.
+  await marcarCanalLido(user.id, chaveDoCanal(com ? null : setorId, com));
 
   const mensagens = await prisma.teamMessage.findMany({
     where,

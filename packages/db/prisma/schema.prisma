@@ -1997,6 +1997,17 @@ model NegociacaoAnexo {
   @@index([negociacaoId, criadoEm])
 }
 
+/// Até quando cada pessoa já leu cada conversa do Chat da equipe. É o que
+/// conta as mensagens novas no menu e em cada canal (pedido da Hemoderi, 14/10).
+/// `canal`: "geral", "setor:<id>" ou "dm:<id do colega>".
+model TeamChatLeitura {
+  userId  String
+  canal   String
+  lidoAte DateTime
+
+  @@id([userId, canal])
+}
+
 model TarefaNegociacao {
   id       String @id @default(cuid())
   tenantId String

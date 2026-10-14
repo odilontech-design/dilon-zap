@@ -191,7 +191,7 @@ export function Sidebar({
   const pathname = usePathname();
   // Não lidas do Inbox e dos Grupos, no próprio menu: dá pra ver que chegou
   // mensagem estando em qualquer tela (pedido da Dilon Tech, 13/10).
-  const { data: contadores } = useSWR<{ inbox: number; grupos: number }>(
+  const { data: contadores } = useSWR<{ inbox: number; grupos: number; chatEquipe?: number }>(
     "/api/menu-contadores",
     (url: string) => fetch(url).then((r) => (r.ok ? r.json() : { inbox: 0, grupos: 0 })),
     { refreshInterval: UNREAD_COUNT_INTERVAL }
@@ -350,7 +350,14 @@ export function Sidebar({
             const prefixos = [item.href, ...("tambemAtivoEm" in item && item.tambemAtivoEm ? item.tambemAtivoEm : [])];
             const active = prefixos.some((h) => pathname === h || pathname?.startsWith(h + "/"));
             const rotulo = item.href === "/pedidos" ? termosDoPedido(termoPedido).plural : item.label;
-            const naoLidas = item.href === "/inbox" ? contadores?.inbox : item.href === "/grupos" ? contadores?.grupos : 0;
+            const naoLidas =
+              item.href === "/inbox"
+                ? contadores?.inbox
+                : item.href === "/grupos"
+                  ? contadores?.grupos
+                  : item.href === "/chat-equipe"
+                    ? contadores?.chatEquipe
+                    : 0;
             return (
               <Link
                 key={item.href}

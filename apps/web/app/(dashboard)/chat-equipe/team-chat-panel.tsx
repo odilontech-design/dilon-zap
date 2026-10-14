@@ -39,6 +39,19 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
   });
   // Todo colega ativo da empresa, de qualquer setor — o ponto da conversa
   // direta é justamente falar com quem está em outro setor.
+  // Mensagens novas por canal e por pessoa. O canal aberto zera sozinho,
+  // porque abrir/consultar marca como lido no servidor.
+  const { data: naoLidas } = useSWR<{ total: number; porCanal: Record<string, number> }>(
+    "/api/team-chat/nao-lidas",
+    fetcher,
+    { refreshInterval: 10_000 }
+  );
+  const selo = (canal: string) => {
+    const n = naoLidas?.porCanal?.[canal] ?? 0;
+    return n > 0 ? (
+      <span className="ml-auto text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-accent text-white">{n > 99 ? "99+" : n}</span>
+    ) : null;
+  };
   const { data: pessoas } = useSWR<Pessoa[]>("/api/team-chat/people", fetcher, {
     refreshInterval: LISTING_INTERVAL,
   });
@@ -75,6 +88,7 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
                   style={{ background: c.cor ?? "#6B7280" }}
                 />
                 <span className="text-sm font-medium text-neutral-900">{c.nome}</span>
+                {!(selecao?.tipo === "canal" && selecao.setorId === c.setorId) && selo(c.setorId ? `setor:${c.setorId}` : "geral")}
               </button>
             ))
           )}
@@ -99,6 +113,7 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
                   {pe.name.charAt(0).toUpperCase()}
                 </span>
                 <span className="text-sm text-neutral-900 truncate">{pe.name}</span>
+                {!(selecao?.tipo === "pessoa" && selecao.id === pe.id) && selo(`dm:${pe.id}`)}
               </button>
             ))
           )}
