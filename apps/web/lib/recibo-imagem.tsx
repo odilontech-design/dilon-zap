@@ -1,4 +1,4 @@
-import { corDoTextoSobre, type Recibo } from "./recibo";
+import { corDoTextoSobre, corLegivelSobre, type Recibo } from "./recibo";
 
 /**
  * Recibo visual para enviar como imagem pelo WhatsApp.
@@ -24,6 +24,10 @@ export function ReciboImagemJSX({
   const mutedColor = "#64748b";
   const lightBorder = "#e2e8f0";
   const lightBg = "#f8fafc";
+  // A cor da marca como TEXTO precisa de contraste: o TOTAL fica sobre o
+  // fundo claro e, com uma cor de marca clara, sumia (ver corLegivelSobre).
+  const corDoValor = corLegivelSobre(accentColor, lightBg);
+  const corDoAjuste = corLegivelSobre(accentColor, bgColor);
 
   return (
     <div
@@ -133,7 +137,7 @@ export function ReciboImagemJSX({
               <span style={{ fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{item.total}</span>
             </div>
             {item.ajuste && (
-              <span style={{ fontSize: 11, color: accentColor, marginTop: 2 }}>{item.ajuste}</span>
+              <span style={{ fontSize: 11, color: corDoAjuste, marginTop: 2 }}>{item.ajuste}</span>
             )}
           </div>
         ))}
@@ -170,7 +174,7 @@ export function ReciboImagemJSX({
                 justifyContent: "space-between",
                 fontSize: 24,
                 fontWeight: 700,
-                color: accentColor,
+                color: corDoValor,
                 marginTop: 4,
               }}
             >

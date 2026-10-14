@@ -207,6 +207,60 @@ export function corDoTextoSobre(fundo: string): string {
   return luz > 0.45 ? "#1e293b" : "#ffffff";
 }
 
+function luminancia(hex: string): number {
+  const n = (i: number) => parseInt(hex.slice(i, i + 2), 16) / 255;
+  const canal = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * canal(n(1)) + 0.7152 * canal(n(3)) + 0.0722 * canal(n(5));
+}
+
+function contraste(a: string, b: string): number {
+  const [x, y] = [luminancia(a), luminancia(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+/**
+ * A cor da marca usada como TEXTO sobre fundo claro (o TOTAL, o desconto do
+ * item). Cor clara — o lilás da Believe — deixava o valor do pedido quase
+ * apagado (14/10). Escurece a mesma cor, mantendo o tom, até ter contraste de
+ * leitura (4,5:1, o mínimo da WCAG para texto); cor que já é escura passa igual.
+ */
+export function corLegivelSobre(cor: string, fundo = "#ffffff", minimo = 4.5): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(cor)) return "#1e293b";
+  if (contraste(cor, fundo) >= minimo) return cor;
+  // Escurece pela luminosidade (HSL), mantendo matiz e saturação: o lilás
+  // vira roxo, não cinza.
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(cor.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let sat = 0;
+  let l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h /= 6;
+  }
+  const paraHex = (hh: number, ss: number, ll: number) => {
+    const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss;
+    const pp = 2 * ll - q;
+    const canal = (t: number) => {
+      const tt = t < 0 ? t + 1 : t > 1 ? t - 1 : t;
+      if (tt < 1 / 6) return pp + (q - pp) * 6 * tt;
+      if (tt < 1 / 2) return q;
+      if (tt < 2 / 3) return pp + (q - pp) * (2 / 3 - tt) * 6;
+      return pp;
+    };
+    return "#" + [canal(hh + 1 / 3), canal(hh), canal(hh - 1 / 3)].map((c) => Math.round(c * 255).toString(16).padStart(2, "0")).join("");
+  };
+  let saida = cor;
+  while (l > 0 && contraste(saida, fundo) < minimo) {
+    l = Math.max(0, l - 0.03);
+    saida = paraHex(h, sat, l);
+  }
+  return saida;
+}
+
 export function aplicarVariaveis(texto: string, valores: Record<string, string>): string {
   return texto.replace(/\{(\w+)\}/g, (original, chave: string) => valores[chave] ?? original);
 }

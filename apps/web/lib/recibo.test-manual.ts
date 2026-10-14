@@ -9,6 +9,7 @@ import {
   corDoTextoSobre,
   COR_PADRAO,
   type ReciboEntrada,
+  corLegivelSobre,
 } from "./recibo";
 
 let falhas = 0;
@@ -735,5 +736,9 @@ console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
     ]
   );
 }
+
+// Cor da marca como texto do TOTAL (Believe, 14/10): clara escurece, escura passa igual.
+checa("cor escura da marca passa igual no TOTAL", corLegivelSobre("#0F766E", "#f8fafc"), "#0F766E");
+checa("lilás claro vira roxo legível, não cinza", corLegivelSobre("#E9D5FF", "#f8fafc"), "#993cff");
 
 if (falhas > 0) process.exit(1);
