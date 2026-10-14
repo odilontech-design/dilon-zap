@@ -592,6 +592,15 @@ model Negociacao {
 
   previsaoFechamento DateTime?
 
+  /// Condição de pagamento combinada na negociação (pedido da Believe, 13/10):
+  /// vai junto para o pedido gerado e chega preenchida ao financeiro. Com
+  /// Recorrente (FIADO), entrada + parcelas na periodicidade escolhida.
+  pagForma              PaymentMethod?
+  pagEntradaCents       Int?
+  pagNumParcelas        Int?
+  pagPeriodicidade      TipoParcela?
+  pagPrimeiroVencimento DateTime?
+
   status        StatusNegociacao @default(ABERTA)
   motivoPerdaId String?
   motivoPerda   MotivoDePerda?   @relation(fields: [motivoPerdaId], references: [id], onDelete: SetNull)
@@ -1145,6 +1154,14 @@ model Order {
   // setembro, às vezes cobra dois meses juntos, e uma data calculada erraria
   // justamente na cobrança atrasada — que é a que mais precisa ficar clara.
   mesReferencia String?
+
+  /// Plano de parcelas combinado antes do fechamento (vem da negociação). É
+  /// só a sugestão com que o painel do pedido abre; o que vale é o que o
+  /// financeiro confirma ao fechar.
+  planoEntradaCents       Int?
+  planoNumParcelas        Int?
+  planoPeriodicidade      TipoParcela?
+  planoPrimeiroVencimento DateTime?
 
   enviadoAoFinanceiroEm DateTime?
   fechadoEm             DateTime?

@@ -403,6 +403,12 @@ export async function salvarItens(negociacaoId: string, tenantId: string, itens:
  */
 export async function gerarPedido(n: { id: string; contactId: string }, tenantId: string, quem: Quem) {
   const itens = await prisma.negociacaoItem.findMany({ where: { negociacaoId: n.id } });
+  // Condição de pagamento combinada na negociação: o pedido nasce com ela, e o
+  // financeiro só confere ao fechar (pedido da Believe, 13/10).
+  const pag = await prisma.negociacao.findUnique({
+    where: { id: n.id },
+    select: { pagForma: true, pagEntradaCents: true, pagNumParcelas: true, pagPeriodicidade: true, pagPrimeiroVencimento: true },
+  });
   if (itens.length === 0) throw new ErroDeNegocio("adicione itens à negociação antes de gerar o pedido", 400);
 
   const existente = await prisma.order.findFirst({
@@ -426,6 +432,11 @@ export async function gerarPedido(n: { id: string; contactId: string }, tenantId
       conversationId: conversa?.id ?? null,
       createdById: quem.id,
       negociacaoId: n.id,
+      paymentMethod: pag?.pagForma ?? null,
+      planoEntradaCents: pag?.pagForma === "FIADO" ? pag.pagEntradaCents : null,
+      planoNumParcelas: pag?.pagForma === "FIADO" ? pag.pagNumParcelas : null,
+      planoPeriodicidade: pag?.pagForma === "FIADO" ? pag.pagPeriodicidade : null,
+      planoPrimeiroVencimento: pag?.pagPrimeiroVencimento ?? null,
       items: {
         create: itens.map((i) => ({
           productId: i.productId,
@@ -532,6 +543,20 @@ export async function duplicarEmOutroFunil(
     origem: original.origem,
     previsaoFechamento: original.previsaoFechamento,
   });
+
+  // A condição de pagamento combinada vai junto com a cópia.
+  if (original.pagForma) {
+    await prisma.negociacao.update({
+      where: { id: copia.id },
+      data: {
+        pagForma: original.pagForma,
+        pagEntradaCents: original.pagEntradaCents,
+        pagNumParcelas: original.pagNumParcelas,
+        pagPeriodicidade: original.pagPeriodicidade,
+        pagPrimeiroVencimento: original.pagPrimeiroVencimento,
+      },
+    });
+  }
 
   if (original.itens.length > 0) {
     await prisma.negociacaoItem.createMany({

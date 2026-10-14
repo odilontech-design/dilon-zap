@@ -76,6 +76,15 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       fechadaEm: n.fechadaEm,
       motivoPerdaId: n.motivoPerdaId,
       detalhePerda: n.detalhePerda,
+      pagamento: n.pagForma
+        ? {
+            forma: n.pagForma,
+            entradaCents: n.pagEntradaCents,
+            numParcelas: n.pagNumParcelas,
+            periodicidade: n.pagPeriodicidade,
+            primeiroVencimento: n.pagPrimeiroVencimento ? n.pagPrimeiroVencimento.toISOString().slice(0, 10) : null,
+          }
+        : null,
       proximaTarefa: null,
       tarefasAtrasadas: 0,
       contato: {
@@ -116,6 +125,17 @@ const schema = z.object({
   responsavelId: z.string().nullable().optional(),
   origem: z.string().trim().max(60).nullable().optional(),
   previsaoFechamento: z.string().nullable().optional(),
+  // Condição de pagamento combinada; null limpa. Vai para o pedido gerado.
+  pagamento: z
+    .object({
+      forma: z.enum(["PIX", "PIX_PENDENTE", "CARTAO", "DINHEIRO", "BOLETO", "FIADO"]),
+      entradaCents: z.number().int().min(0).max(10_000_000_000).optional(),
+      numParcelas: z.number().int().min(1).max(60).optional(),
+      periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]).optional(),
+      primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -147,6 +167,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
               ? new Date(d.previsaoFechamento)
               : null,
           }
+        : {}),
+      ...(d.pagamento !== undefined
+        ? (() => {
+            const p = d.pagamento;
+            // Plano de parcelas só faz sentido no Recorrente; nas outras formas
+            // fica só a forma (e, a prazo, o 1º vencimento como data combinada).
+            const recorrente = p?.forma === "FIADO";
+            return {
+              pagForma: p?.forma ?? null,
+              pagEntradaCents: recorrente ? p?.entradaCents ?? 0 : null,
+              pagNumParcelas: recorrente ? p?.numParcelas ?? 1 : null,
+              pagPeriodicidade: recorrente ? p?.periodicidade ?? "SEMANAL" : null,
+              pagPrimeiroVencimento: p?.primeiroVencimento ? new Date(`${p.primeiroVencimento}T12:00:00Z`) : null,
+            };
+          })()
         : {}),
     };
     if (Object.keys(campos).length > 0) {

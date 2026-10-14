@@ -36,6 +36,12 @@ export type Pedido = {
   totalCents: number;
   observacao: string | null;
   mesReferencia?: string | null;
+  // Plano combinado na negociação que gerou o pedido (sugestão para o fechamento).
+  planoEntradaCents?: number | null;
+  planoNumParcelas?: number | null;
+  planoPeriodicidade?: "ENTRADA" | "UNICA" | "SEMANAL" | "QUINZENAL" | "MENSAL" | null;
+  planoPrimeiroVencimento?: string | null;
+  negociacaoId?: string | null;
   createdAt: string;
   fechadoEm: string | null;
   createdBy: { name: string } | null;
@@ -163,14 +169,23 @@ export function OrderPanel({
   );
 
   // Venda a prazo: uma parcela com vencimento, ou entrada + parcelas.
-  const [vencimento, setVencimento] = useState(diaDaquiA(7));
+  // Data combinada na negociação; se já passou, sugere daqui a 7 dias.
+  const vencimentoCombinado =
+    pedido.planoPrimeiroVencimento && pedido.planoPrimeiroVencimento.slice(0, 10) >= diaDaquiA(0)
+      ? pedido.planoPrimeiroVencimento.slice(0, 10)
+      : diaDaquiA(7);
+  const [vencimento, setVencimento] = useState(vencimentoCombinado);
   const [parcelar, setParcelar] = useState(pagamento === "FIADO");
-  const [entrada, setEntrada] = useState("");
+  const [entrada, setEntrada] = useState(
+    pedido.planoEntradaCents ? (pedido.planoEntradaCents / 100).toFixed(2).replace(".", ",") : ""
+  );
   const [entradaPaga, setEntradaPaga] = useState(true);
   const [entradaMeio, setEntradaMeio] = useState<"PIX" | "DINHEIRO" | "CARTAO">("DINHEIRO");
-  const [numParcelas, setNumParcelas] = useState("4");
-  const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("SEMANAL");
-  const [primeiroVencimento, setPrimeiroVencimento] = useState(diaDaquiA(7));
+  const [numParcelas, setNumParcelas] = useState(String(pedido.planoNumParcelas ?? 4));
+  const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">(
+    pedido.planoPeriodicidade === "QUINZENAL" || pedido.planoPeriodicidade === "MENSAL" ? pedido.planoPeriodicidade : "SEMANAL"
+  );
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(vencimentoCombinado);
   const [podeLiberar, setPodeLiberar] = useState(false);
 
   const editavel = pedido.status === "RASCUNHO" || pedido.status === "AGUARDANDO_FINANCEIRO";
@@ -645,6 +660,11 @@ export function OrderPanel({
 
           {podeFechar && aPrazo && (
             <div className="rounded-md border border-neutral-200 p-3 flex flex-col gap-3 text-sm">
+              {pedido.negociacaoId && (pedido.planoNumParcelas || pedido.planoPrimeiroVencimento) && (
+                <p className="text-xs rounded-md bg-accent/10 text-accent px-2 py-1">
+                  Condição combinada na negociação — confira antes de fechar.
+                </p>
+              )}
               <div className="flex gap-4">
                 <label className="flex items-center gap-1.5">
                   <input type="radio" checked={!parcelar} onChange={() => setParcelar(false)} />

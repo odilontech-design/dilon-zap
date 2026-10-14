@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
 import { Avatar } from "@/components/avatar";
 import { ContactCard } from "@/components/contact-card";
@@ -54,6 +55,7 @@ type TarefaFeita = {
 type Pagina = {
   negociacao: Negociacao & {
     detalhePerda: string | null;
+    pagamento: Pagamento | null;
     contato: Negociacao["contato"] & { email: string | null; documento: string | null; endereco: string | null };
   };
   funil: { id: string; nome: string };
@@ -66,6 +68,14 @@ type Pagina = {
   anexos: Anexo[];
   pedidos: { id: string; numero: number; status: string; totalCents: number; pago: boolean }[];
   itens: number;
+};
+
+type Pagamento = {
+  forma: "PIX" | "PIX_PENDENTE" | "CARTAO" | "DINHEIRO" | "BOLETO" | "FIADO";
+  entradaCents: number | null;
+  numParcelas: number | null;
+  periodicidade: "SEMANAL" | "QUINZENAL" | "MENSAL" | null;
+  primeiroVencimento: string | null;
 };
 
 type Aba = "historico" | "tarefas" | "itens" | "arquivos";
@@ -276,6 +286,14 @@ export function NegociacaoPagina({ id, userId, podeGerir }: { id: string; userId
             comItens={data.itens > 0}
             usuarios={data.usuarios}
             origens={data.origens}
+            ocupado={ocupado}
+            enviar={enviar}
+          />
+
+          <CondicaoPagamento
+            key={JSON.stringify(n.pagamento) + n.valorCents}
+            pagamento={n.pagamento}
+            totalCents={n.valorCents}
             ocupado={ocupado}
             enviar={enviar}
           />
@@ -1023,5 +1041,155 @@ function OutroFunil({
         {ocupado ? "Aguarde..." : modo === "mover" ? "Enviar para o funil" : "Duplicar no funil"}
       </button>
     </div>
+  );
+}
+
+const ROTULO_FORMA: Record<Pagamento["forma"], string> = {
+  PIX: "PIX — pago na hora",
+  PIX_PENDENTE: "PIX — a pagar",
+  CARTAO: "Cartão",
+  DINHEIRO: "Dinheiro",
+  BOLETO: "Boleto",
+  FIADO: "Recorrente — entrada + parcelas",
+};
+
+const diaDaquiA = (n: number) => new Date(Date.now() - 3 * 3_600_000 + n * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * Condição de pagamento combinada com o cliente. Vai junto quando a
+ * negociação gera o pedido, e o pedido abre no financeiro já com a forma e o
+ * plano de parcelas preenchidos (pedido da Believe, 13/10). O financeiro
+ * confere e pode ajustar ao fechar.
+ */
+function CondicaoPagamento({
+  pagamento,
+  totalCents,
+  ocupado,
+  enviar,
+}: {
+  pagamento: Pagamento | null;
+  totalCents: number;
+  ocupado: boolean;
+  enviar: (corpo: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [forma, setForma] = useState<Pagamento["forma"] | "">(pagamento?.forma ?? "");
+  const [entrada, setEntrada] = useState(pagamento?.entradaCents ? (pagamento.entradaCents / 100).toFixed(2).replace(".", ",") : "");
+  const [numParcelas, setNumParcelas] = useState(String(pagamento?.numParcelas ?? 4));
+  const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">(pagamento?.periodicidade ?? "SEMANAL");
+  const [primeiro, setPrimeiro] = useState(pagamento?.primeiroVencimento ?? diaDaquiA(7));
+  const [salvo, setSalvo] = useState(false);
+
+  const recorrente = forma === "FIADO";
+  const aPrazo = forma === "FIADO" || forma === "BOLETO" || forma === "PIX_PENDENTE";
+  const entradaCents = reaisParaCentavos(entrada) ?? 0;
+
+  let previa: ReturnType<typeof gerarParcelas> = [];
+  let erroPrevia: string | null = null;
+  if (recorrente && totalCents > 0) {
+    try {
+      previa = gerarParcelas({
+        totalCents,
+        entradaCents,
+        numParcelas: Number(numParcelas),
+        periodicidade,
+        primeiroVencimento: new Date(`${primeiro}T12:00:00Z`),
+        vencimentoEntrada: new Date(`${diaDaquiA(0)}T12:00:00Z`),
+      });
+    } catch (e) {
+      erroPrevia = (e as Error).message;
+    }
+  }
+
+  async function salvar() {
+    const ok = await enviar({
+      pagamento: forma
+        ? {
+            forma,
+            ...(recorrente ? { entradaCents, numParcelas: Number(numParcelas), periodicidade } : {}),
+            ...(aPrazo && primeiro ? { primeiroVencimento: primeiro } : {}),
+          }
+        : null,
+    });
+    if (ok) {
+      setSalvo(true);
+      setTimeout(() => setSalvo(false), 2000);
+    }
+  }
+
+  const campo = "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm bg-surface";
+  const rotulo = "block text-xs font-medium text-neutral-700 mb-1";
+
+  return (
+    <section className="rounded-lg border border-neutral-200 bg-surface p-4 flex flex-col gap-3">
+      <h2 className="text-sm font-semibold">Condição de pagamento</h2>
+      <div>
+        <label className={rotulo}>Forma</label>
+        <select value={forma} onChange={(e) => setForma(e.target.value as Pagamento["forma"] | "")} className={campo}>
+          <option value="">Ainda não combinada</option>
+          {(Object.keys(ROTULO_FORMA) as Pagamento["forma"][]).map((f) => (
+            <option key={f} value={f}>
+              {ROTULO_FORMA[f]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {recorrente && (
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={rotulo}>Entrada (R$)</label>
+            <input value={entrada} onChange={(e) => setEntrada(e.target.value)} inputMode="decimal" placeholder="0,00" className={`${campo} tabular-nums`} />
+          </div>
+          <div>
+            <label className={rotulo}>Parcelas</label>
+            <input value={numParcelas} onChange={(e) => setNumParcelas(e.target.value)} inputMode="numeric" className={campo} />
+          </div>
+          <div>
+            <label className={rotulo}>A cada</label>
+            <select value={periodicidade} onChange={(e) => setPeriodicidade(e.target.value as typeof periodicidade)} className={campo}>
+              <option value="SEMANAL">Semana</option>
+              <option value="QUINZENAL">Quinzena</option>
+              <option value="MENSAL">Mês</option>
+            </select>
+          </div>
+          <div>
+            <label className={rotulo}>1ª parcela</label>
+            <input type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} className={campo} />
+          </div>
+        </div>
+      )}
+
+      {aPrazo && !recorrente && (
+        <div>
+          <label className={rotulo}>Vencimento combinado</label>
+          <input type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} className={campo} />
+        </div>
+      )}
+
+      {recorrente && previa.length > 0 && (
+        <ul className="rounded-md border border-neutral-200 divide-y divide-neutral-100 text-xs tabular-nums">
+          {previa.map((p, i) => (
+            <li key={i} className="flex justify-between px-3 py-1.5">
+              <span>
+                {p.tipo === "ENTRADA" ? "Entrada" : `${p.numero} de ${p.totalParcelas}`} ·{" "}
+                {p.vencimento.toISOString().slice(0, 10).split("-").reverse().join("/")}
+              </span>
+              <span>{centsToBRL(p.valorCents)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {recorrente && totalCents <= 0 && <p className="text-xs text-neutral-500">Informe o valor (ou os produtos) para ver as parcelas.</p>}
+      {erroPrevia && <p className="text-xs text-red-600">{erroPrevia}</p>}
+
+      <p className="text-[11px] text-neutral-500">Vai junto para o pedido gerado; o financeiro confere ao fechar.</p>
+      <button
+        onClick={salvar}
+        disabled={ocupado || !!erroPrevia}
+        className="self-end rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+      >
+        {salvo ? "Salvo ✓" : "Salvar condição"}
+      </button>
+    </section>
   );
 }
