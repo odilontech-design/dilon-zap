@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
 import { wakeOutbox } from "@/lib/worker-client";
+import { lerConversa } from "@/lib/ler-conversa";
 
 const mediaSchema = z.object({
   mediaKey: z.string(),
@@ -35,6 +36,7 @@ export async function POST(req: Request) {
 
   const conversation = await prisma.conversation.findFirst({
     where: { id: parsed.data.conversationId, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
+    include: { contact: { select: { waJid: true } } },
   });
   if (!conversation) return NextResponse.json({ error: "not found" }, { status: 404 });
 
@@ -74,10 +76,7 @@ export async function POST(req: Request) {
   // Tira o worker do ritmo ocioso pra essa mensagem sair na hora.
   // Respondeu, então leu: as mensagens do cliente deixam de contar como não
   // lidas (decisão da Hemoderi, 13/10 — mesma regra da resposta pelo celular).
-  await prisma.message.updateMany({
-    where: { conversationId: conversation.id, direction: "INBOUND", readAt: null },
-    data: { readAt: new Date() },
-  });
+  await lerConversa({ id: conversation.id, sessionId: conversation.sessionId, contact: { waJid: conversation.contact.waJid } });
 
   await wakeOutbox(user.tenantId);
 

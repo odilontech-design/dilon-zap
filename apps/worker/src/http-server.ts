@@ -5,6 +5,7 @@ import {
   editOutboundMessage,
   deleteOutboundMessage,
   reactToMessage,
+  marcarLidasNoWhatsApp,
   wakeOutboxForTenant,
   checarNumerosNoWhatsApp,
   setWhatsAppBlock,
@@ -55,6 +56,11 @@ export function startInternalServer() {
 
     if (req.method === "POST" && req.url === "/internal/messages/delete") {
       handleDeleteMessage(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/messages/read") {
+      handleReadMessages(req, res);
       return;
     }
 
@@ -395,6 +401,28 @@ function handleBlockWhatsApp(req: http.IncomingMessage, res: http.ServerResponse
       res
         .writeHead(500, { "Content-Type": "application/json" })
         .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+function handleReadMessages(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { sessionId, waJid, mensagens } = JSON.parse(body) as {
+        sessionId?: string;
+        waJid?: string;
+        mensagens?: { id: string; participant?: string | null }[];
+      };
+      if (!sessionId || !waJid || !Array.isArray(mensagens)) {
+        res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "sessionId, waJid e mensagens são obrigatórios" }));
+        return;
+      }
+      const result = await marcarLidasNoWhatsApp(sessionId, waJid, mensagens);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: (err as Error).message }));
     }
   });
 }

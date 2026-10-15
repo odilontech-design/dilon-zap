@@ -102,6 +102,34 @@ export function getSocketForSession(sessionId: string) {
   return activeSessions.get(sessionId)?.socket ?? null;
 }
 
+/**
+ * Marca como lidas, NO WHATSAPP do aparelho conectado, mensagens que a equipe
+ * leu no Dilon Zap. Sem isto, abrir a conversa aqui zerava o contador só do
+ * sistema e o celular continuava mostrando tudo como não lido — a
+ * dessincronia que a Hemoderi relatou (15/10). O caminho contrário (lido no
+ * celular → lido aqui) é o read-self/chats.update, no messages.update.
+ *
+ * Uma leitura por conversa aberta, com no máximo as últimas 50 mensagens:
+ * é o mesmo gesto de abrir o chat no celular, não varredura.
+ */
+export async function marcarLidasNoWhatsApp(
+  sessionId: string,
+  waJid: string,
+  mensagens: { id: string; participant?: string | null }[]
+): Promise<{ ok: boolean; reason?: string }> {
+  const socket = getSocketForSession(sessionId);
+  if (!socket) return { ok: false, reason: "sem conexão ativa" };
+  const chaves = mensagens.slice(-50).map((m) => ({
+    remoteJid: waJid,
+    id: m.id,
+    fromMe: false,
+    ...(m.participant ? { participant: m.participant } : {}),
+  }));
+  if (chaves.length === 0) return { ok: true };
+  await socket.readMessages(chaves);
+  return { ok: true };
+}
+
 /** Edita o texto de uma mensagem já enviada — WhatsApp só deixa editar mensagem própria (fromMe). */
 /**
  * Como o texto sai no WhatsApp do cliente. Vários atendentes dividem o mesmo
