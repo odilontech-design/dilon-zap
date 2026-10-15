@@ -126,7 +126,7 @@ export function ReciboImagemJSX({
               display: "flex",
               flexDirection: "column",
               padding: "10px 0",
-              borderBottom: i < recibo.itens.length - 1 ? `1px dotted ${lightBorder}` : "none",
+              borderBottom: i < recibo.itens.length - 1 ? `1px solid ${lightBorder}` : "none",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

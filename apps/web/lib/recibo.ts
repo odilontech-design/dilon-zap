@@ -400,7 +400,7 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
         const paga = p.pagoCents >= p.valorCents;
         pagamento.push({
           rotulo: p.tipo === "ENTRADA" ? `Entrada · ${quando}` : `Parcela ${p.numero}/${p.totalParcelas} · ${quando}`,
-          valor: `${centsToBRL(p.valorCents)}${paga ? " ✓ pago" : ""}`,
+          valor: `${centsToBRL(p.valorCents)}${paga ? " (pago)" : ""}`,
         });
       }
       if (regulares.length > 0 && intervalo) {

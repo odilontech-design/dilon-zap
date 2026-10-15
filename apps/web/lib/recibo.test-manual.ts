@@ -728,7 +728,7 @@ console.log(falhas === 0 ? "\nTudo certo." : `\n${falhas} falha(s).`);
     [
       ["Forma de pagamento", "Recorrente"],
       ["Parcelamento", "2 parcela(s) semanais"],
-      ["Entrada · 14/10/2026", "R$ 400,00 ✓ pago"],
+      ["Entrada · 14/10/2026", "R$ 400,00 (pago)"],
       ["Parcela 1/3 · 24/10/2026", "R$ 150,00"],
       ["Parcela 2/3 · 31/10/2026", "R$ 150,00"],
       ["Já pago", "R$ 400,00"],
