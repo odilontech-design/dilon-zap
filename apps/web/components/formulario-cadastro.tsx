@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { linkComMensagem } from "@/lib/suporte";
 import { FAIXAS_ATENDENTES, RAMOS } from "@/lib/qualificacao";
+import { registrarCadastro, type ConfigRastreamento } from "@/lib/rastreamento";
 
 /**
  * Formulário de autocadastro do teste grátis — o mesmo na tela de login e na
@@ -22,11 +23,14 @@ import { FAIXAS_ATENDENTES, RAMOS } from "@/lib/qualificacao";
 export function FormularioCadastro({
   numero,
   aoFechar,
+  rastreamento,
 }: {
   /** WhatsApp comercial, para o botão depois do envio. */
   numero: string;
   /** Na tela de login o formulário abre recolhido e pode ser fechado; na /cadastro não. */
   aoFechar?: () => void;
+  /** Só a página /cadastro passa: é onde os anúncios medem conversão. */
+  rastreamento?: ConfigRastreamento;
 }) {
   const [nome, setNome] = useState("");
   const [empresa, setEmpresa] = useState("");
@@ -79,6 +83,9 @@ export function FormularioCadastro({
         setErro(typeof b.error === "string" ? b.error : "não deu pra enviar. Tente de novo.");
         return;
       }
+      // Respostas de "já registrado" também são sucesso pra pessoa, mas não
+      // são cadastro novo: contar de novo inflaria a conversão do anúncio.
+      if (!b.jaRegistrado) registrarCadastro(rastreamento);
       setEnviado(true);
     } catch {
       setErro("não deu pra enviar — confira sua conexão e tente de novo.");

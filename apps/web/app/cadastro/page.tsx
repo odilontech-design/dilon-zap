@@ -4,6 +4,8 @@ import { notFound, redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { numeroDoComercial } from "@/lib/suporte";
 import { FormularioCadastro } from "@/components/formulario-cadastro";
+import { TagsAnuncio } from "@/components/tags-anuncio";
+import { configRastreamento } from "@/lib/rastreamento";
 import { LogoDilon } from "../login/logo-dilon";
 
 /**
@@ -38,9 +40,11 @@ export default async function CadastroPage() {
 
   const numero = numeroDoComercial();
   if (!numero) notFound();
+  const rastreamento = configRastreamento();
 
   return (
     <div className="min-h-screen bg-canvas">
+      <TagsAnuncio cfg={rastreamento} />
       <div className="mx-auto flex max-w-md flex-col gap-6 px-5 py-8">
         <a href="https://dilontech.com.br/zap" className="w-fit" aria-label="Conhecer o Dilon Zap">
           <LogoDilon />
@@ -61,7 +65,7 @@ export default async function CadastroPage() {
           </ul>
         </div>
 
-        <FormularioCadastro numero={numero} />
+        <FormularioCadastro numero={numero} rastreamento={rastreamento} />
 
         <p className="text-center text-xs text-neutral-500">
           Já é cliente?{" "}
