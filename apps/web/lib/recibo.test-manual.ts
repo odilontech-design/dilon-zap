@@ -742,3 +742,19 @@ checa("cor escura da marca passa igual no TOTAL", corLegivelSobre("#0F766E", "#f
 checa("lilás claro vira roxo legível, não cinza", corLegivelSobre("#E9D5FF", "#f8fafc"), "#993cff");
 
 if (falhas > 0) process.exit(1);
+
+{
+  // Orçamento (Believe, 16/10): sem cobrança nem PIX, com a condição combinada.
+  const base = entrada({ pedido: { paymentMethod: "FIADO", pago: false, pagoEm: null, fechadoEm: null, subtotalCents: 70000, totalCents: 70000, pagamentos: [] } });
+  const r = montarRecibo({
+    ...base,
+    empresa: { ...base.empresa, reciboChavePix: "chave@teste.com" },
+    orcamento: { plano: { entradaCents: 10000, numParcelas: 4, periodicidade: "SEMANAL", primeiroVencimento: new Date("2026-10-23T12:00:00Z") } },
+  });
+  checa("orçamento: título, selo e sem PIX", [r.titulo, r.situacao, r.pixCopiaECola], ["Orçamento nº 42", "ORCAMENTO", null]);
+  checa("orçamento: forma e condição combinada", r.pagamento.map((l) => [l.rotulo, n(l.valor)]), [
+    ["Forma de pagamento", "Recorrente"],
+    ["Condição", "Entrada R$ 100,00 + 4x de R$ 150,00 semanais"],
+    ["1ª parcela", "23/10/2026"],
+  ]);
+}

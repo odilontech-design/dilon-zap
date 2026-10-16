@@ -161,6 +161,9 @@ export function OrderPanel({
   const [enviandoRecibo, setEnviandoRecibo] = useState(false);
   const [reciboEnviado, setReciboEnviado] = useState(false);
   const [confirmandoRecibo, setConfirmandoRecibo] = useState(false);
+  // O mesmo envio serve ao recibo (pedido fechado) e ao orçamento (em montagem).
+  const [envioDeOrcamento, setEnvioDeOrcamento] = useState(false);
+  const [orcamentoEnviado, setOrcamentoEnviado] = useState(false);
   const [erroRecibo, setErroRecibo] = useState<string | null>(null);
   // Vem da ficha do contato: no primeiro recibo chega vazio e a pessoa digita;
   // do segundo em diante já vem preenchido.
@@ -290,14 +293,16 @@ export function OrderPanel({
           documento: documento.trim() || null,
           nomeNoRecibo: nomeNoRecibo.trim() || null,
           mesReferencia: mesReferencia.trim() || null,
+          ...(envioDeOrcamento ? { orcamento: true } : {}),
         }),
       });
       const b = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErroRecibo(typeof b.error === "string" ? b.error : "não deu pra enviar o recibo");
+        setErroRecibo(typeof b.error === "string" ? b.error : "não deu pra enviar");
         return;
       }
-      setReciboEnviado(true);
+      if (envioDeOrcamento) setOrcamentoEnviado(true);
+      else setReciboEnviado(true);
       setConfirmandoRecibo(false);
       onMudou();
     } catch {
@@ -383,7 +388,10 @@ export function OrderPanel({
               Imprimir recibo
             </a>
             <button
-              onClick={() => setConfirmandoRecibo(true)}
+              onClick={() => {
+                setEnvioDeOrcamento(false);
+                setConfirmandoRecibo(true);
+              }}
               disabled={reciboEnviado}
               className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
             >
@@ -783,7 +791,10 @@ export function OrderPanel({
 
           {pedido.status === "FECHADO" && (
             <button
-              onClick={() => setConfirmandoRecibo(true)}
+              onClick={() => {
+                setEnvioDeOrcamento(false);
+                setConfirmandoRecibo(true);
+              }}
               disabled={reciboEnviado}
               className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
             >
@@ -812,13 +823,29 @@ export function OrderPanel({
             </button>
           )}
 
-          {(editavel || pedido.status === "FECHADO") && ehFinanceiro && (
+          {editavel && itens.length > 0 && (
+            <button
+              onClick={async () => {
+                // A prévia lê os itens salvos: salva antes, para o orçamento sair com o que está na tela.
+                if ((await salvarItens()) === null) return;
+                setEnvioDeOrcamento(true);
+                setConfirmandoRecibo(true);
+              }}
+              disabled={ocupado || orcamentoEnviado}
+              title="Manda para a cliente conferir antes de fechar"
+              className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
+            >
+              {orcamentoEnviado ? "✓ Orçamento enviado" : "Enviar orçamento"}
+            </button>
+          )}
+
+          {(editavel || (pedido.status === "FECHADO" && ehFinanceiro)) && (
             <button
               onClick={() => setCancelando("cancelar")}
               disabled={ocupado}
               className="px-3 py-2 text-red-600 hover:underline disabled:opacity-50"
             >
-              Cancelar {termo.minusculo}
+              {editavel ? "Cancelar orçamento" : `Cancelar ${termo.minusculo}`}
             </button>
           )}
 
@@ -889,6 +916,7 @@ export function OrderPanel({
           erro={erroRecibo}
           onEnviar={enviarReciboWhatsApp}
           onCancelar={() => setConfirmandoRecibo(false)}
+          orcamento={envioDeOrcamento}
         />
       )}
     </div>
@@ -916,7 +944,9 @@ function ConfirmarEnvioDoRecibo({
   erro,
   onEnviar,
   onCancelar,
+  orcamento = false,
 }: {
+  orcamento?: boolean;
   pedidoId: string;
   nomeCliente: string;
   documento: string;
@@ -937,12 +967,12 @@ function ConfirmarEnvioDoRecibo({
 
   useEffect(() => {
     const t = setTimeout(() => {
-      const p = new URLSearchParams({ documento, nomeNoRecibo, mesReferencia });
+      const p = new URLSearchParams({ documento, nomeNoRecibo, mesReferencia, ...(orcamento ? { orcamento: "1" } : {}) });
       setConsultaPrevia(p.toString());
       setCarregandoPrevia(true);
     }, 500);
     return () => clearTimeout(t);
-  }, [documento, nomeNoRecibo, mesReferencia]);
+  }, [documento, nomeNoRecibo, mesReferencia, orcamento]);
 
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onCancelar}>
@@ -951,7 +981,7 @@ function ConfirmarEnvioDoRecibo({
         className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm max-h-[92vh] flex flex-col"
       >
         <div className="p-5 pb-0">
-          <h3 className="font-semibold">Enviar recibo ao cliente</h3>
+          <h3 className="font-semibold">{orcamento ? "Enviar orçamento ao cliente" : "Enviar recibo ao cliente"}</h3>
           <p className="text-sm text-neutral-500 mt-0.5">
             É exatamente isto que {nomeCliente} vai receber no WhatsApp.
           </p>
@@ -1036,7 +1066,7 @@ function ConfirmarEnvioDoRecibo({
             disabled={enviando}
             className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-50"
           >
-            {enviando ? "Enviando..." : "Enviar ao cliente"}
+            {enviando ? "Enviando..." : orcamento ? "Enviar orçamento" : "Enviar ao cliente"}
           </button>
         </div>
       </div>
@@ -1072,7 +1102,7 @@ function CancelarPedido({
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onVoltar}>
       <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md p-5 flex flex-col gap-3">
         <h3 className="font-semibold">
-          {refazer ? `Editar ${termo.minusculo} #${numero}` : `Cancelar ${termo.minusculo} #${numero}`}
+          {refazer ? `Editar ${termo.minusculo} #${numero}` : fechado ? `Cancelar ${termo.minusculo} #${numero}` : `Cancelar orçamento #${numero}`}
         </h3>
         {fechado ? (
           <ul className="text-sm text-neutral-700 list-disc pl-5 flex flex-col gap-1">
@@ -1112,7 +1142,7 @@ function CancelarPedido({
             disabled={enviando || motivo.trim().length < 3}
             className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${refazer ? "bg-accent" : "bg-red-600"}`}
           >
-            {enviando ? "Aguarde..." : refazer ? "Cancelar e criar cópia" : `Cancelar ${termo.minusculo}`}
+            {enviando ? "Aguarde..." : refazer ? "Cancelar e criar cópia" : fechado ? `Cancelar ${termo.minusculo}` : "Cancelar orçamento"}
           </button>
         </div>
       </div>

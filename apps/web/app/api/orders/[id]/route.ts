@@ -66,7 +66,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   // Fechar, cancelar e marcar pago são do financeiro. Montar e enviar são de
   // quem atende — é a divisão real do fluxo da Believe.
-  if (["fechar", "cancelar", "marcarPago"].includes(acao) && !ehFinanceiro(user.role)) {
+  // Cancelar um orçamento ainda em montagem é de quem atende (Believe, 16/10);
+  // cancelar pedido FECHADO mexe em estoque e dinheiro, e segue do financeiro.
+  const cancelandoEmMontagem = acao === "cancelar" && pedido.status !== "FECHADO";
+  if (["fechar", "cancelar", "marcarPago"].includes(acao) && !ehFinanceiro(user.role) && !cancelandoEmMontagem) {
     return NextResponse.json({ error: "só o financeiro pode fazer isso" }, { status: 403 });
   }
 

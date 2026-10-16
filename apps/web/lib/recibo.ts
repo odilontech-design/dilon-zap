@@ -19,6 +19,14 @@ import { montarBrCode } from "./pix";
 export type MeioDePagamento = "PIX" | "PIX_PENDENTE" | "CARTAO" | "DINHEIRO" | "BOLETO" | "FIADO";
 
 export type ReciboEntrada = {
+  /**
+   * Orçamento: o pedido ainda não fechou (a consultora manda para a cliente
+   * conferir antes — Believe, 16/10). Muda título, selo e pagamento; sem PIX
+   * nem cobrança. `plano` é a condição combinada, se houver.
+   */
+  orcamento?: {
+    plano?: { entradaCents: number | null; numParcelas: number | null; periodicidade: string | null; primeiroVencimento: Date | null } | null;
+  };
   empresa: {
     nome: string;
     reciboNome: string | null;
@@ -98,7 +106,7 @@ export type Recibo = {
   itens: ItemRecibo[];
   quantidadeDeItens: number;
   totais: (Linha & { destaque?: boolean })[];
-  situacao: "PAGO" | "PENDENTE";
+  situacao: "PAGO" | "PENDENTE" | "ORCAMENTO";
   pagamento: Linha[];
   /**
    * "Copia e cola" do PIX, já com o saldo devedor. Só existe quando o pedido
@@ -297,7 +305,41 @@ export function parcelasDoRecibo(
   return conta.parcelas.map(({ pagamentos, ...p }) => ({ ...p, pagoCents: pagamentos.reduce((s, x) => s + x.valorCents, 0) }));
 }
 
-export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recibo {
+export function montarRecibo(entrada: ReciboEntrada): Recibo {
+  const recibo = montarReciboBase(entrada);
+  if (!entrada.orcamento) return recibo;
+
+  // Orçamento: mesmo papel, mas é proposta — nada de "pendente", PIX ou saldo.
+  const { pedido, empresa } = entrada;
+  const tz = empresa.timezone;
+  const pagamento: Linha[] = [];
+  if (pedido.paymentMethod) pagamento.push({ rotulo: "Forma de pagamento", valor: ROTULO_MEIO[pedido.paymentMethod] });
+  const plano = entrada.orcamento.plano;
+  if (plano?.numParcelas) {
+    const intervalo =
+      plano.periodicidade === "SEMANAL" ? "semanais" : plano.periodicidade === "QUINZENAL" ? "quinzenais" : plano.periodicidade === "MENSAL" ? "mensais" : "";
+    const restante = pedido.totalCents - (plano.entradaCents ?? 0);
+    const parcela = Math.floor(restante / plano.numParcelas);
+    const condicao = [
+      plano.entradaCents ? `Entrada ${centsToBRL(plano.entradaCents)}` : null,
+      `${plano.numParcelas}x de ${centsToBRL(parcela)}${intervalo ? ` ${intervalo}` : ""}`,
+    ]
+      .filter(Boolean)
+      .join(" + ");
+    pagamento.push({ rotulo: "Condição", valor: condicao });
+    if (plano.primeiroVencimento) pagamento.push({ rotulo: "1ª parcela", valor: formatar(plano.primeiroVencimento, tz, false) });
+  }
+  return {
+    ...recibo,
+    titulo: `Orçamento nº ${pedido.numero}`,
+    situacao: "ORCAMENTO",
+    pagamento,
+    pixCopiaECola: null,
+    mensagem: "Este é um orçamento: os valores e as condições valem até a confirmação do pedido.",
+  };
+}
+
+function montarReciboBase({ empresa, pedido, cliente }: ReciboEntrada): Recibo {
   const tz = empresa.timezone;
 
   // Item sem preço de tabela (lançado à mão, fora do catálogo) não tem

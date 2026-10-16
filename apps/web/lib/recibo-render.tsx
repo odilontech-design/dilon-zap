@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { downloadMedia } from "@dilon-zap/storage";
 import { prisma } from "@dilon-zap/db";
 import { telefoneConhecido } from "@/lib/contact";
+import { calcularTotais } from "@/lib/orders";
 import { montarRecibo, parcelasDoRecibo, type Recibo } from "@/lib/recibo";
 import { ReciboImagemJSX } from "@/lib/recibo-imagem";
 
@@ -70,6 +71,10 @@ const SELECAO_PEDIDO = {
     orderBy: { id: "asc" },
   },
   pagamentos: { select: { valorCents: true } },
+  planoEntradaCents: true,
+  planoNumParcelas: true,
+  planoPeriodicidade: true,
+  planoPrimeiroVencimento: true,
   conta: {
     select: {
       canceladaEm: true,
@@ -103,12 +108,19 @@ export type EmpresaDoRecibo = Carregado["empresa"];
  * não foi fechado — recibo de pedido aberto seria um valor que ainda pode
  * mudar na mão do cliente.
  */
-export async function carregarPedidoDoRecibo(tenantId: string, orderId: string) {
+export async function carregarPedidoDoRecibo(tenantId: string, orderId: string, opcoes: { orcamento?: boolean } = {}) {
   const [empresa, pedido] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: SELECAO_TENANT }),
     prisma.order.findFirst({ where: { id: orderId, tenantId }, select: SELECAO_PEDIDO }),
   ]);
-  if (!pedido || pedido.status !== "FECHADO") return null;
+  if (!pedido) return null;
+  // Recibo só de pedido fechado; orçamento só de pedido ainda em montagem.
+  if (opcoes.orcamento ? pedido.status !== "RASCUNHO" && pedido.status !== "AGUARDANDO_FINANCEIRO" : pedido.status !== "FECHADO") return null;
+  if (opcoes.orcamento) {
+    // Antes do fechamento os totais gravados ainda não valem: conta pelos itens.
+    const totais = calcularTotais(pedido.items, pedido.descontoCents);
+    return { empresa, pedido: { ...pedido, ...totais } };
+  }
   return { empresa, pedido };
 }
 
@@ -140,9 +152,22 @@ export function resolverMesReferencia(
 export function montarReciboDoPedido(
   empresa: EmpresaDoRecibo,
   pedido: PedidoDoRecibo,
-  cliente: { documento: string | null; nomeNoRecibo: string | null }
+  cliente: { documento: string | null; nomeNoRecibo: string | null },
+  opcoes: { orcamento?: boolean } = {}
 ): Recibo {
   return montarRecibo({
+    ...(opcoes.orcamento
+      ? {
+          orcamento: {
+            plano: {
+              entradaCents: pedido.planoEntradaCents,
+              numParcelas: pedido.planoNumParcelas,
+              periodicidade: pedido.planoPeriodicidade,
+              primeiroVencimento: pedido.planoPrimeiroVencimento,
+            },
+          },
+        }
+      : {}),
     empresa: { ...empresa, nome: empresa.name },
     pedido: { ...pedido, vendedor: pedido.createdBy?.name ?? null, itens: pedido.items, parcelas: parcelasDoRecibo(pedido.conta) },
     cliente: {

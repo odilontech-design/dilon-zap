@@ -210,12 +210,12 @@ export function ReciboImagemJSX({
             letterSpacing: 1,
             padding: "8px 32px",
             borderRadius: 6,
-            backgroundColor: recibo.situacao === "PAGO" ? "#dcfce7" : "#fef9c3",
-            color: recibo.situacao === "PAGO" ? "#166534" : "#854d0e",
-            border: `1.5px solid ${recibo.situacao === "PAGO" ? "#86efac" : "#fde047"}`,
+            backgroundColor: recibo.situacao === "PAGO" ? "#dcfce7" : recibo.situacao === "ORCAMENTO" ? "#e0f2fe" : "#fef9c3",
+            color: recibo.situacao === "PAGO" ? "#166534" : recibo.situacao === "ORCAMENTO" ? "#075985" : "#854d0e",
+            border: `1.5px solid ${recibo.situacao === "PAGO" ? "#86efac" : recibo.situacao === "ORCAMENTO" ? "#7dd3fc" : "#fde047"}`,
           }}
         >
-          {recibo.situacao === "PAGO" ? "PAGO" : "PAGAMENTO PENDENTE"}
+          {recibo.situacao === "PAGO" ? "PAGO" : recibo.situacao === "ORCAMENTO" ? "ORÇAMENTO" : "PAGAMENTO PENDENTE"}
         </div>
       </div>
 
