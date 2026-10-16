@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { MESSAGES_INTERVAL, LISTING_INTERVAL } from "@/lib/polling";
 import { EmojiPicker, SavedTextPicker } from "../inbox/inbox-view";
+import { TextoWhatsApp } from "@/components/texto-whatsapp";
 
 /**
  * Chat interno da equipe. Um canal É um Setor (ver lib/team-chat.ts) — Geral
@@ -349,7 +350,11 @@ function CanalAberto({
                           📎 {m.mediaFileName || "anexo"}
                         </a>
                       ) : null}
-                      {m.body && <p className="text-sm whitespace-pre-wrap break-words">{m.body}</p>}
+                      {m.body && (
+                        <p className="text-sm whitespace-pre-wrap break-words">
+                          <TextoWhatsApp texto={m.body} />
+                        </p>
+                      )}
                     </>
                   )}
                   <p className={`text-[11px] mt-1 flex items-center gap-1.5 ${minha ? "text-white/70 justify-end" : "text-neutral-400"}`}>

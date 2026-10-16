@@ -21,6 +21,7 @@ import { prisma, type Prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { avisarMensagemNova } from "./aviso-mensagem";
+import { abrirEdicaoSecreta, textoDoContato } from "./contato-e-edicao";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
 import { decidirAutoResposta, avaliarAutomacao, equipeFalou, numeroTemRobo, type OpcaoUra } from "./auto-reply-decisao";
@@ -454,6 +455,16 @@ export async function startSession(sessionId: string) {
         }
         continue;
       }
+      // Edição no formato novo: vem cifrada com o segredo da original. Vale
+      // para conversa e para grupo, por isso antes do desvio de grupo.
+      const secreta = normalizeMessageContent(msg.message)?.secretEncryptedMessage;
+      if (secreta) {
+        await aplicarEdicaoSecreta(sessionId, msg, secreta, socket).catch((err) =>
+          logger.error({ err, waMessageId: msg.key.id }, "falha ao abrir edição cifrada")
+        );
+        continue;
+      }
+
       // Grupo tem caminho próprio: só grava se a equipe ativou, e grava quem
       // mandou cada mensagem. Ver registrarMensagemDeGrupo.
       if (ehGrupo(waJid)) {
@@ -492,6 +503,8 @@ export async function startSession(sessionId: string) {
         // 6.x populava sem declarar no tipo — e nem sempre populava.
         remoteJidAlt: msg.key.remoteJidAlt ?? undefined,
         quotedWaMessageId: content.quotedWaMessageId,
+        waSecret: segredoDe(msg),
+        contatoVcard: content.contatoVcard,
         socket,
       }).catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
     }
@@ -854,7 +867,7 @@ function comPrefixoDeStatus(m: proto.IMessage, texto: string): string {
 async function extractInboundContent(
   msg: WAMessage,
   socket: ReturnType<typeof makeWASocket>
-): Promise<{ text: string; media?: InboundMedia; quotedWaMessageId?: string } | null> {
+): Promise<{ text: string; media?: InboundMedia; quotedWaMessageId?: string; contatoVcard?: string } | null> {
   // Desembrulha antes de olhar o tipo: PDF/arquivo enviado COM legenda chega
   // dentro de documentWithCaptionMessage (e o mesmo vale pra mensagem
   // temporária e de visualização única). Sem isso o arquivo caía no
@@ -929,6 +942,26 @@ async function extractInboundContent(
       quotedWaMessageId,
       media: { type: "IMAGE", buffer, mimeType: m.stickerMessage.mimetype ?? "image/webp", fileName: "figurinha.webp" },
     };
+  }
+
+  // Cartão de contato: fica como texto legível (nome e telefone) e o vCard
+  // vai junto, para o Inbox mostrar o cartão com "Abrir conversa".
+  if (m.contactMessage?.vcard) {
+    return {
+      text: textoDoContato(m.contactMessage.vcard, m.contactMessage.displayName),
+      contatoVcard: m.contactMessage.vcard,
+      quotedWaMessageId,
+    };
+  }
+  if (m.contactsArrayMessage?.contacts?.length) {
+    const cartoes = m.contactsArrayMessage.contacts.filter((c) => c.vcard);
+    if (cartoes.length) {
+      return {
+        text: cartoes.map((c) => textoDoContato(c.vcard!, c.displayName)).join("\n\n"),
+        contatoVcard: cartoes.map((c) => c.vcard).join("\n"),
+        quotedWaMessageId,
+      };
+    }
   }
 
   const texto = comPrefixoDeStatus(m, plainText);
@@ -1068,6 +1101,9 @@ async function recordMessage(params: {
   pushName?: string;
   remoteJidAlt?: string;
   quotedWaMessageId?: string;
+  /** messageSecret da mensagem (base64) — ver Message.waSecret. */
+  waSecret?: string;
+  contatoVcard?: string;
   socket: ReturnType<typeof makeWASocket>;
   // Mensagem de grupo: o contato da conversa é o grupo, e o autor vai na
   // própria mensagem. autorJid/autorNome nulos = mandada pela empresa.
@@ -1233,6 +1269,8 @@ async function recordMessage(params: {
     // enviou já foi descartado pela pré-checagem de waMessageId acima. Grupo
     // fica de fora — lá o robô nunca fala, então a marca não serviria a nada.
     deCelular: !isInbound && !params.grupo,
+    waSecret: params.waSecret,
+    contatoVcard: params.contatoVcard,
     ...mediaFields,
   };
 
@@ -1497,6 +1535,8 @@ async function registrarMensagemDeGrupo(p: {
     media: content.media,
     waMessageId: p.msg.key.id ?? undefined,
     quotedWaMessageId: content.quotedWaMessageId,
+    waSecret: segredoDe(p.msg),
+    contatoVcard: content.contatoVcard,
     socket: p.socket,
     // Mandada do celular da empresa: igual a uma OUTBOUND num chat 1:1, não
     // tem participante a mostrar.
@@ -2261,7 +2301,15 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
             });
           }
 
-          if (message.mediaType && message.mediaKey) {
+          if (message.contatoVcard) {
+            // Cartão de contato: o WhatsApp mostra com "Conversar" e "Salvar".
+            const nomeDoCartao = /^FN:(.*)$/m.exec(message.contatoVcard)?.[1]?.trim() || "Contato";
+            await socket.sendMessage(
+              jid,
+              { contacts: { displayName: nomeDoCartao, contacts: [{ vcard: message.contatoVcard }] } },
+              { quoted, messageId: waMessageId }
+            );
+          } else if (message.mediaType && message.mediaKey) {
             await sendOutboundMedia(socket, jid, messageForSend, { quoted, messageId: waMessageId });
           } else {
             await socket.sendMessage(jid, { text: displayBody }, { quoted, messageId: waMessageId });
@@ -2401,4 +2449,59 @@ async function marcarConversaComoLida(sessionId: string, jid: string) {
     },
     data: { readAt: new Date() },
   });
+}
+
+
+/** O messageSecret que vem com a mensagem, em base64 (ou undefined). */
+function segredoDe(msg: WAMessage): string | undefined {
+  const segredo =
+    msg.message?.messageContextInfo?.messageSecret ?? normalizeMessageContent(msg.message)?.messageContextInfo?.messageSecret;
+  return segredo && segredo.length ? Buffer.from(segredo).toString("base64") : undefined;
+}
+
+/**
+ * Edição que chegou cifrada (secretEncryptedMessage, MESSAGE_EDIT). Acha a
+ * original pelo id, abre com o segredo dela e aplica como uma edição comum.
+ * Sem o segredo (mensagem recebida antes de guardarmos), não há como abrir —
+ * fica no log para a pergunta "por que não editou?" ter resposta.
+ */
+async function aplicarEdicaoSecreta(
+  sessionId: string,
+  msg: WAMessage,
+  secreta: proto.Message.ISecretEncryptedMessage,
+  socket: ReturnType<typeof makeWASocket>
+) {
+  if (secreta.secretEncType !== proto.Message.SecretEncryptedMessage.SecretEncType.MESSAGE_EDIT) return;
+  const idOriginal = secreta.targetMessageKey?.id;
+  if (!idOriginal || !secreta.encPayload || !secreta.encIv) return;
+
+  const original = await prisma.message.findFirst({
+    where: { sessionId, waMessageId: idOriginal },
+    select: { id: true, waSecret: true, direction: true, autorJid: true },
+  });
+  if (!original) return;
+  if (!original.waSecret) {
+    logger.warn({ waMessageId: idOriginal }, "edição cifrada de mensagem sem segredo guardado (recebida antes de 15/10)");
+    return;
+  }
+
+  const eu = [socket.user?.id, socket.user?.lid];
+  const k = msg.key as typeof msg.key & { participantAlt?: string | null };
+  const autorDaEdicao = msg.key.fromMe ? eu : [k.participant, k.participantAlt, k.remoteJid, k.remoteJidAlt];
+  const autorDaOriginal =
+    original.direction === "OUTBOUND" ? eu : [original.autorJid, k.participant, k.participantAlt, k.remoteJid, k.remoteJidAlt];
+
+  const nova = abrirEdicaoSecreta({
+    segredo: Buffer.from(original.waSecret, "base64"),
+    idOriginal,
+    autoresOriginal: autorDaOriginal,
+    autoresEdicao: autorDaEdicao,
+    encPayload: secreta.encPayload,
+    encIv: secreta.encIv,
+  });
+  if (!nova) {
+    logger.warn({ waMessageId: idOriginal }, "edição cifrada não abriu com nenhuma combinação de autor");
+    return;
+  }
+  await aplicarEdicao(sessionId, idOriginal, textoDaEdicao(nova));
 }

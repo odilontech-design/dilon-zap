@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
 import { wakeOutbox } from "@/lib/worker-client";
 import { lerConversa } from "@/lib/ler-conversa";
+import { montarVcard, telefoneComPais } from "@/lib/vcard";
 
 const mediaSchema = z.object({
   mediaKey: z.string(),
@@ -20,9 +21,11 @@ const bodySchema = z
     text: z.string().max(4096).optional(),
     media: mediaSchema.optional(),
     quotedMessageId: z.string().optional(),
+    // Cartão de contato (vCard). Vai pelo WhatsApp com "Conversar" e "Salvar".
+    contato: z.object({ nome: z.string().trim().min(1).max(120), telefone: z.string().trim().min(8).max(30) }).optional(),
   })
-  .refine((v) => (v.text && v.text.trim().length > 0) || v.media, {
-    message: "mensagem precisa de texto ou anexo",
+  .refine((v) => (v.text && v.text.trim().length > 0) || v.media || v.contato, {
+    message: "mensagem precisa de texto, anexo ou contato",
   });
 
 // Só cria a mensagem como PENDING — quem efetivamente manda pro WhatsApp é o
@@ -55,7 +58,10 @@ export async function POST(req: Request) {
       sessionId: conversation.sessionId,
       direction: "OUTBOUND",
       status: "PENDING",
-      body: parsed.data.text ?? "",
+      body: parsed.data.contato
+        ? `📇 ${parsed.data.contato.nome}\n+${telefoneComPais(parsed.data.contato.telefone)}`
+        : (parsed.data.text ?? ""),
+      contatoVcard: parsed.data.contato ? montarVcard(parsed.data.contato.nome, parsed.data.contato.telefone) : undefined,
       senderUserId: user.id,
       mediaType: parsed.data.media?.mediaType,
       mediaKey: parsed.data.media?.mediaKey,

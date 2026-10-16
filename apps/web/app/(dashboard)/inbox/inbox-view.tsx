@@ -2,6 +2,8 @@
 
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRecurso, useTermoPedido } from "@/components/recursos-context";
+import { TextoWhatsApp, semMarcacao } from "@/components/texto-whatsapp";
+import { lerVcards } from "@/lib/vcard";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
@@ -141,6 +143,7 @@ type Message = {
   autorTelefone: string | null;
   isEdited: boolean;
   bodyOriginal?: string | null;
+  contatoVcard?: string | null;
   isDeleted: boolean;
   isForwarded: boolean;
   retryRequestedAt: string | null;
@@ -461,7 +464,7 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
                     <p
                       className={`text-xs truncate ${c.unreadCount > 0 ? "text-neutral-800" : "text-neutral-500"}`}
                     >
-                      {c.messages[0]?.body ?? ""}
+                      {semMarcacao(c.messages[0]?.body ?? "")}
                     </p>
                     {c.unreadCount > 0 && (
                       <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-semibold flex items-center justify-center">
@@ -778,6 +781,7 @@ export function ConversationThread({
   const [reactionBarFor, setReactionBarFor] = useState<string | null>(null);
   // Mensagens editadas com a versão original aberta (clique em "editado").
   const [originaisAbertas, setOriginaisAbertas] = useState<Set<string>>(new Set());
+  const [enviandoContato, setEnviandoContato] = useState(false);
   // Clicar na citação leva à mensagem original e a destaca por um instante,
   // como no WhatsApp (pedido da Hemoderi, 14/10).
   const [destacada, setDestacada] = useState<string | null>(null);
@@ -1666,7 +1670,15 @@ export function ConversationThread({
                         onAmpliar={() => setImagemAberta(m.id)}
                       />
                     )}
-                    {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
+                    {m.contatoVcard ? (
+                      <CartaoDeContato vcard={m.contatoVcard} escuro={m.direction === "OUTBOUND"} />
+                    ) : (
+                      m.body && (
+                        <p className="whitespace-pre-wrap break-words">
+                          <TextoWhatsApp texto={m.body} />
+                        </p>
+                      )
+                    )}
                     {m.isEdited && m.bodyOriginal && originaisAbertas.has(m.id) && (
                       <p
                         className={`mt-1 whitespace-pre-wrap text-xs border-l-2 pl-2 ${
@@ -2049,6 +2061,15 @@ export function ConversationThread({
             </button>
             <button
               type="button"
+              onClick={() => setEnviandoContato(true)}
+              disabled={uploading || recording || !!editingMessage || aviso?.bloqueiaEnvio}
+              title="Enviar contato"
+              className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+            >
+              👤
+            </button>
+            <button
+              type="button"
               onClick={() => setAgendando(true)}
               disabled={uploading || recording || !!editingMessage}
               title="Agendar esta mensagem"
@@ -2154,6 +2175,25 @@ export function ConversationThread({
             // menos 1 caractere, então mandar "" faria o "Fechar sem motivo"
             // devolver 400 e a conversa simplesmente não fechar.
             patchConversation(motivo ? { status: "RESOLVED", closeReason: motivo } : { status: "RESOLVED" });
+          }}
+        />
+      )}
+      {enviandoContato && (
+        <EnviarContato
+          onFechar={() => setEnviandoContato(false)}
+          onEscolher={async (nome, telefone) => {
+            const res = await fetch("/api/messages/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ conversationId, contato: { nome, telefone } }),
+            });
+            if (!res.ok) {
+              const b = await res.json().catch(() => ({}));
+              alert(typeof b.error === "string" ? b.error : "não deu pra enviar o contato");
+              return;
+            }
+            setEnviandoContato(false);
+            mutateMessages();
           }}
         />
       )}
@@ -3719,6 +3759,134 @@ function AvisoDeConexao({ aviso }: { aviso: NonNullable<ReturnType<typeof avisoD
     <div className={`border-b px-3 md:px-6 py-2 text-sm ${cores}`} role="status">
       <p className="font-semibold">{aviso.titulo}</p>
       <p className="opacity-90">{aviso.detalhe}</p>
+    </div>
+  );
+}
+
+/**
+ * Cartão de contato dentro da conversa (recebido ou enviado), com atalho para
+ * conversar com o número — como o "Conversar" do WhatsApp.
+ */
+function CartaoDeContato({ vcard, escuro }: { vcard: string; escuro: boolean }) {
+  const router = useRouter();
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+  const cartoes = lerVcards(vcard);
+
+  async function conversar(nome: string, telefone: string) {
+    setAbrindo(telefone);
+    try {
+      const resContato = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: telefone, name: nome }),
+      });
+      if (!resContato.ok) return alert("não deu pra abrir esse contato");
+      const contato = await resContato.json();
+      const resConversa = await fetch(`/api/contacts/${contato.id}/start-conversation`, { method: "POST" });
+      const conversa = await resConversa.json().catch(() => ({}));
+      if (!resConversa.ok) return alert(typeof conversa.error === "string" ? conversa.error : "não deu pra abrir a conversa");
+      router.push(`/inbox?open=${conversa.id}`);
+    } finally {
+      setAbrindo(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 min-w-[12rem]">
+      {cartoes.map((c, i) => (
+        <div key={i} className={`rounded-md px-3 py-2 ${escuro ? "bg-white/15" : "bg-white border border-neutral-200"}`}>
+          <p className="font-medium flex items-center gap-1.5">
+            <span aria-hidden>👤</span> {c.nome}
+          </p>
+          {c.telefones.map((t) => (
+            <div key={t} className="flex items-center justify-between gap-3 mt-1">
+              <span className={`text-xs tabular-nums ${escuro ? "text-white/80" : "text-neutral-600"}`}>+{t}</span>
+              <button
+                onClick={() => conversar(c.nome, t)}
+                disabled={abrindo === t}
+                className={`text-xs font-medium hover:underline disabled:opacity-50 ${escuro ? "text-white" : "text-accent"}`}
+              >
+                {abrindo === t ? "Abrindo..." : "Conversar"}
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type ContatoParaEnviar = { id: string; name: string | null; phoneNumber: string | null; waJid: string };
+
+/** Escolher um contato da agenda (ou digitar nome e número) para enviar como cartão. */
+function EnviarContato({ onFechar, onEscolher }: { onFechar: () => void; onEscolher: (nome: string, telefone: string) => Promise<void> }) {
+  const { data: contatos } = useSWR<ContatoParaEnviar[]>("/api/contacts", fetcher);
+  const [busca, setBusca] = useState("");
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  const termo = busca.trim().toLowerCase();
+  const digitosBusca = busca.replace(/\D/g, "");
+  const telefoneDe = (c: ContatoParaEnviar) => c.phoneNumber ?? (c.waJid.endsWith("@s.whatsapp.net") ? c.waJid.split("@")[0] : null);
+  const lista = (Array.isArray(contatos) ? contatos : [])
+    .filter((c) => telefoneDe(c))
+    .filter((c) => !termo || (c.name ?? "").toLowerCase().includes(termo) || (digitosBusca && (telefoneDe(c) ?? "").includes(digitosBusca)))
+    .slice(0, 30);
+
+  async function enviar(n: string, t: string) {
+    setEnviando(true);
+    await onEscolher(n, t);
+    setEnviando(false);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md max-h-[85vh] flex flex-col">
+        <header className="p-4 border-b border-neutral-200">
+          <h2 className="font-semibold mb-2">Enviar contato</h2>
+          <input
+            autoFocus
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar na agenda por nome ou número"
+            className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm"
+          />
+        </header>
+        <ul className="overflow-y-auto divide-y divide-neutral-100">
+          {!contatos && <li className="p-4 text-sm text-neutral-400">Carregando...</li>}
+          {contatos && lista.length === 0 && <li className="p-4 text-sm text-neutral-400">Nenhum contato encontrado.</li>}
+          {lista.map((c) => (
+            <li key={c.id}>
+              <button
+                onClick={() => enviar(c.name || telefoneDe(c)!, telefoneDe(c)!)}
+                disabled={enviando}
+                className="w-full text-left px-4 py-2.5 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                <p className="text-sm font-medium truncate">{c.name || "Sem nome"}</p>
+                <p className="text-xs text-neutral-500 tabular-nums">+{telefoneDe(c)}</p>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <footer className="p-4 border-t border-neutral-200 flex flex-col gap-2">
+          <p className="text-xs text-neutral-500">Ou digite outro contato:</p>
+          <div className="flex gap-2">
+            <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" className="flex-1 min-w-0 rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm" />
+            <input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(11) 99999-9999" inputMode="tel" className="w-40 rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={onFechar} className="px-3 py-1.5 text-sm text-neutral-600">Fechar</button>
+            <button
+              onClick={() => enviar(nome.trim(), telefone)}
+              disabled={enviando || !nome.trim() || telefone.replace(/\D/g, "").length < 10}
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {enviando ? "Enviando..." : "Enviar"}
+            </button>
+          </div>
+        </footer>
+      </div>
     </div>
   );
 }

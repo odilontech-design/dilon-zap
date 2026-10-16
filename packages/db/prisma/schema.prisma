@@ -1501,6 +1501,12 @@ model Message {
   /// O texto antes da PRIMEIRA edição, para "editada" ser clicável e mostrar a
   /// versão original, como no WhatsApp (pedido da Hemoderi, 13/10).
   bodyOriginal String?
+  /// messageSecret que o WhatsApp manda junto da mensagem (base64). É a chave
+  /// para abrir as edições no formato novo (secretEncryptedMessage) — sem ela,
+  /// a edição chega cifrada e não dá para ler (Hemoderi, 15/10).
+  waSecret     String?
+  /// Cartão de contato (vCard) — enviado pelo Inbox ou recebido do cliente.
+  contatoVcard String?
   editedAt     DateTime?
   isDeleted    Boolean   @default(false) // "apagar pra todos" — mantém a linha (auditoria), esconde o conteúdo na UI
   deletedAt    DateTime?
