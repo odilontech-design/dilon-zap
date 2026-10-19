@@ -19,7 +19,7 @@ const patchSchema = z.object({
 
 // Mesma regra do POST: quem atende escreve e corrige o próprio texto.
 function podeEditar(role: string) {
-  return role === "OWNER" || role === "AGENT" || role === "FINANCEIRO";
+  return role === "OWNER" || role === "SUPERADMIN" || role === "AGENT" || role === "FINANCEIRO";
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -57,7 +57,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 // usar e não achar.
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
-  if (user.role !== "OWNER") return NextResponse.json({ error: "sem permissão" }, { status: 403 });
+  if (user.role !== "OWNER" && user.role !== "SUPERADMIN") return NextResponse.json({ error: "sem permissão" }, { status: 403 });
 
   const alvo = await prisma.savedText.findFirst({
     where: { id: params.id, tenantId: user.tenantId },

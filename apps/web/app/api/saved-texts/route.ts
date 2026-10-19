@@ -12,7 +12,7 @@ import { requireUser } from "@/lib/session";
 // reversíveis e visíveis; apagar tira de todo mundo um texto que ninguém vai
 // notar que sumiu até precisar dele.
 function podeEditar(role: string) {
-  return role === "OWNER" || role === "AGENT" || role === "FINANCEIRO";
+  return role === "OWNER" || role === "SUPERADMIN" || role === "AGENT" || role === "FINANCEIRO";
 }
 
 export async function GET() {

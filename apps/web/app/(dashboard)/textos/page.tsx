@@ -8,8 +8,8 @@ export default async function TextosPage() {
   // Dois direitos distintos: todo mundo escreve, só o Responsável apaga.
   return (
     <TextsPanel
-      podeEditar={user.role === "OWNER" || user.role === "AGENT" || user.role === "FINANCEIRO"}
-      podeExcluir={user.role === "OWNER"}
+      podeEditar={user.role === "OWNER" || user.role === "SUPERADMIN" || user.role === "AGENT" || user.role === "FINANCEIRO"}
+      podeExcluir={user.role === "OWNER" || user.role === "SUPERADMIN"}
     />
   );
 }
