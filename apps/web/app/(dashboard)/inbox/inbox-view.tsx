@@ -4,6 +4,7 @@ import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from 
 import { useRecurso, useTermoPedido } from "@/components/recursos-context";
 import { TextoWhatsApp, semMarcacao } from "@/components/texto-whatsapp";
 import { lerVcards } from "@/lib/vcard";
+import { casaComBusca } from "@/lib/busca";
 import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
@@ -795,6 +796,13 @@ export function ConversationThread({
     setDestacada(id);
     window.setTimeout(() => setDestacada((atual) => (atual === id ? null : atual)), 2000);
   }
+  // Busca DENTRO da conversa (a lupa do WhatsApp): acha a palavra no texto, no
+  // nome de quem escreveu e no nome do arquivo, e anda entre os resultados.
+  // Vale também para Grupos, que usam esta mesma tela (André, Hemoderi, 19/10).
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  const [termoBusca, setTermoBusca] = useState("");
+  const [indiceBusca, setIndiceBusca] = useState(0);
+  const buscaInputRef = useRef<HTMLInputElement>(null);
   const [fullReactionPickerFor, setFullReactionPickerFor] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement>(null);
@@ -847,6 +855,41 @@ export function ConversationThread({
     historicoOculto: boolean;
   }>(`/api/conversations/${conversationId}/messages`, fetcher, { refreshInterval: MESSAGES_INTERVAL });
   const messages = messagesData?.mensagens;
+  // Resultados em ordem de tela (antigas primeiro). A busca começa a valer com
+  // 2 letras, para não acender a conversa inteira.
+  const resultadosBusca = useMemo(() => {
+    const termo = termoBusca.trim();
+    if (!buscaAberta || termo.length < 2) return [] as string[];
+    return (messages ?? [])
+      .filter((m) => !m.isDeleted && casaComBusca([m.body, m.autorNome ?? "", m.sender?.name ?? "", m.mediaFileName ?? ""].join(" "), termo))
+      .map((m) => m.id);
+  }, [messages, termoBusca, buscaAberta]);
+  const idsDaBusca = useMemo(() => new Set(resultadosBusca), [resultadosBusca]);
+  const resultadoAtual = resultadosBusca.length > 0 ? resultadosBusca[Math.min(indiceBusca, resultadosBusca.length - 1)] : null;
+
+  function abrirBusca() {
+    setBuscaAberta(true);
+    requestAnimationFrame(() => buscaInputRef.current?.select());
+  }
+  function fecharBusca() {
+    setBuscaAberta(false);
+    setTermoBusca("");
+    setIndiceBusca(0);
+  }
+  function andarNaBusca(passo: 1 | -1) {
+    if (resultadosBusca.length === 0) return;
+    setIndiceBusca((i) => (Math.min(i, resultadosBusca.length - 1) + passo + resultadosBusca.length) % resultadosBusca.length);
+  }
+  // Ao digitar, começa pelo resultado mais RECENTE (é o que se procura quase sempre).
+  useEffect(() => {
+    setIndiceBusca(Math.max(resultadosBusca.length - 1, 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só quando o termo muda
+  }, [termoBusca, buscaAberta]);
+  // Leva a tela até o resultado atual.
+  useEffect(() => {
+    if (!resultadoAtual) return;
+    document.getElementById(`msg-${resultadoAtual}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [resultadoAtual, indiceBusca]);
   // As imagens desta conversa, em ordem, pra navegar entre elas no
   // visualizador. Apagada fica de fora: o conteúdo já não existe mais.
   const imagensDaConversa = useMemo(
@@ -1501,6 +1544,16 @@ export function ConversationThread({
                 </button>
               )}
               <button
+                onClick={() => (buscaAberta ? fecharBusca() : abrirBusca())}
+                title="Pesquisar nesta conversa"
+                aria-label="Pesquisar nesta conversa"
+                className={`text-xs rounded-md border px-2.5 py-1.5 ${
+                  buscaAberta ? "border-accent text-accent bg-accent/5" : "border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                🔍
+              </button>
+              <button
                 onClick={toggleSelectionMode}
                 className={`text-xs rounded-md border px-2.5 py-1.5 ${
                   selectionMode ? "border-accent text-accent bg-accent/5" : "border-neutral-300 hover:bg-neutral-50"
@@ -1561,6 +1614,53 @@ export function ConversationThread({
         )}
         {aviso && <AvisoDeConexao aviso={aviso} />}
 
+        {buscaAberta && (
+          <div className="flex items-center gap-2 px-3 md:px-6 py-2 border-b border-neutral-200 bg-surface">
+            <input
+              ref={buscaInputRef}
+              autoFocus
+              value={termoBusca}
+              onChange={(e) => setTermoBusca(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") fecharBusca();
+                else if (e.key === "Enter") {
+                  e.preventDefault();
+                  andarNaBusca(e.shiftKey ? 1 : -1);
+                }
+              }}
+              placeholder="Pesquisar nesta conversa (nome, clínica, palavra...)"
+              aria-label="Pesquisar nesta conversa"
+              className="flex-1 min-w-0 rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            <span className="text-xs text-neutral-500 tabular-nums shrink-0 min-w-[5.5rem] text-right">
+              {termoBusca.trim().length < 2
+                ? ""
+                : resultadosBusca.length === 0
+                  ? "Nada encontrado"
+                  : `${Math.min(indiceBusca, resultadosBusca.length - 1) + 1} de ${resultadosBusca.length}`}
+            </span>
+            <button
+              onClick={() => andarNaBusca(-1)}
+              disabled={resultadosBusca.length === 0}
+              title="Resultado anterior (Enter)"
+              className="rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40 hover:bg-neutral-50"
+            >
+              ↑
+            </button>
+            <button
+              onClick={() => andarNaBusca(1)}
+              disabled={resultadosBusca.length === 0}
+              title="Próximo resultado (Shift+Enter)"
+              className="rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40 hover:bg-neutral-50"
+            >
+              ↓
+            </button>
+            <button onClick={fecharBusca} title="Fechar a pesquisa (Esc)" aria-label="Fechar a pesquisa" className="text-neutral-400 hover:text-neutral-700 text-lg leading-none px-1">
+              ×
+            </button>
+          </div>
+        )}
+
         <div
           ref={messagesContainerRef}
           className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
@@ -1620,7 +1720,13 @@ export function ConversationThread({
                   id={`msg-${m.id}`}
                   className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm transition-shadow duration-500 ${
                     m.direction === "OUTBOUND" ? "bg-accent text-white" : "bg-neutral-100 text-neutral-900"
-                  } ${destacada === m.id ? "ring-4 ring-amber-400" : ""}`}
+                  } ${
+                    destacada === m.id || resultadoAtual === m.id
+                      ? "ring-4 ring-amber-400"
+                      : idsDaBusca.has(m.id)
+                        ? "ring-2 ring-amber-200"
+                        : ""
+                  }`}
                 >
                 {m.direction === "OUTBOUND" && m.sender && (
                   <p className="text-[10px] font-semibold text-white/75 mb-0.5">{m.sender.name}</p>
