@@ -8,7 +8,17 @@ type Ajustes = { conversasAbertasATodos: boolean; restringirFilaGeral: boolean; 
  * Ajustes que antes só mudavam direto no banco. Cada mudança salva na hora e
  * fica na auditoria.
  */
-export function AjustesEmpresa({ tenantId, inicial, onSalvo }: { tenantId: string; inicial: Ajustes; onSalvo: () => void }) {
+export function AjustesEmpresa({
+  tenantId,
+  inicial,
+  suspensoEm,
+  onSalvo,
+}: {
+  tenantId: string;
+  inicial: Ajustes;
+  suspensoEm: string | null;
+  onSalvo: () => void;
+}) {
   const [ajustes, setAjustes] = useState(inicial);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -95,6 +105,60 @@ export function AjustesEmpresa({ tenantId, inicial, onSalvo }: { tenantId: strin
         </div>
       </div>
       {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+      <SuspensaoDoAcesso tenantId={tenantId} suspensoEm={suspensoEm} onSalvo={onSalvo} />
     </section>
+  );
+}
+
+/**
+ * Suspende o acesso por falta de pagamento: o pessoal da empresa cai numa tela
+ * de aviso, o WhatsApp segue conectado e nada é apagado. Pede confirmação, e
+ * reativar é um clique.
+ */
+function SuspensaoDoAcesso({ tenantId, suspensoEm, onSalvo }: { tenantId: string; suspensoEm: string | null; onSalvo: () => void }) {
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const suspensa = !!suspensoEm;
+
+  async function mudar(suspender: boolean) {
+    if (suspender && !window.confirm("Suspender o acesso desta empresa? Todos os usuários dela passam a ver só o aviso de pendência.")) return;
+    setErro(null);
+    setSalvando(true);
+    const res = await fetch(`/api/admin/tenants/${tenantId}/suspensao`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ suspender }),
+    });
+    setSalvando(false);
+    if (!res.ok) {
+      const corpo = await res.json().catch(() => ({}));
+      return setErro(typeof corpo.error === "string" ? corpo.error : "não deu pra salvar");
+    }
+    onSalvo();
+  }
+
+  return (
+    <div className={`mt-3 rounded-lg border px-4 py-3 ${suspensa ? "border-red-900 bg-red-950/40" : "border-neutral-800 bg-neutral-900"}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-sm text-neutral-200">{suspensa ? "Acesso suspenso" : "Suspender acesso"}</p>
+          <p className="text-xs text-neutral-500">
+            {suspensa
+              ? `Desde ${new Date(suspensoEm!).toLocaleString("pt-BR")}. Os usuários veem só o aviso de pendência; o WhatsApp segue conectado.`
+              : "Por falta de pagamento. Os usuários veem só um aviso para falar com o suporte; dados e WhatsApp ficam como estão."}
+          </p>
+        </div>
+        <button
+          onClick={() => mudar(!suspensa)}
+          disabled={salvando}
+          className={`shrink-0 rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-50 ${
+            suspensa ? "bg-green-700 text-white hover:bg-green-600" : "bg-red-800 text-white hover:bg-red-700"
+          }`}
+        >
+          {suspensa ? "Reativar acesso" : "Suspender acesso"}
+        </button>
+      </div>
+      {erro && <p className="mt-2 text-xs text-red-400">{erro}</p>}
+    </div>
   );
 }

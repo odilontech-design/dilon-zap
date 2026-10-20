@@ -86,6 +86,13 @@ model Tenant {
   // contrário: a consultora precisa ver o selo antes de vender a prazo.
   pedidosSoGerencia Boolean @default(false)
 
+  // Acesso suspenso (falta de pagamento): quem não é SUPERADMIN cai numa tela
+  // de aviso em vez do painel. Campo próprio, e não BillingStatus.PAUSED: o
+  // PAUSED é só um rótulo do painel e já está em outras empresas — ligá-lo ao
+  // bloqueio tiraria o acesso de quem nunca foi cobrado por isso. Os dados e a
+  // sessão do WhatsApp ficam intactos; reativar é limpar o campo.
+  suspensoEm DateTime?
+
   // Cabeçalho do recibo impresso. Separado de `name` de propósito: o nome
   // que a equipe vê no sistema ("Believe Cosméticos") não é o que vai no
   // comprovante — ali vai a razão social ou o nome do MEI, que é o que

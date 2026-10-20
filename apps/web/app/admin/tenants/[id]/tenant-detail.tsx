@@ -92,6 +92,7 @@ type TenantDetailResponse = {
     restringirFilaGeral?: boolean;
     termoPedido?: string | null;
     pedidosSoGerencia?: boolean;
+    suspensoEm?: string | null;
   };
   recentAudit: AuditEntry[];
 };
@@ -207,6 +208,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
           termoPedido: tenant.termoPedido ?? null,
           pedidosSoGerencia: !!tenant.pedidosSoGerencia,
         }}
+        suspensoEm={tenant.suspensoEm ?? null}
         onSalvo={mutate}
       />
       <BillingSection tenantId={tenant.id} subscription={tenant.subscription} invoices={tenant.invoices} onChanged={mutate} />
