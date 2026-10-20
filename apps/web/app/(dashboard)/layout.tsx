@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { recursosDoTenant } from "@/lib/plano";
+import { recursosDoUsuario } from "@/lib/plano";
 import { Sidebar } from "@/components/sidebar";
 import { RecursosProvider } from "@/components/recursos-context";
 
@@ -25,7 +25,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Carregado uma vez aqui e distribuído pro menu e pras telas. Array, e não
   // Set, porque atravessa a fronteira servidor → cliente, que só aceita dado
   // serializável.
-  const recursos = [...(await recursosDoTenant(user.tenantId))];
+  const recursos = [...(await recursosDoUsuario(user))];
 
   return (
     <RecursosProvider recursos={recursos} termoPedido={empresa?.termoPedido}>

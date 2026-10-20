@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { funilDaEmpresa, garantirMotivosDePerda } from "@/lib/funis";
 import { criarNegociacao, ErroDeNegocio } from "@/lib/negociacoes";
 import { pendenciasPorContato } from "@/lib/contas-receber";
+import { podeVerPendencia } from "@/lib/plano";
 import {
   calcularIndicadores,
   filtrarNegociacoes,
@@ -76,7 +77,9 @@ export async function GET(req: Request) {
     ate: dataOuNada(q.get("ate")),
   });
   const idsFiltrados = new Set(filtradas.map((n) => n.id));
-  const pendencias = await pendenciasPorContato(user.tenantId, { contactIds: [...new Set(brutas.map((n) => n.contactId))] });
+  const pendencias = (await podeVerPendencia(user))
+    ? await pendenciasPorContato(user.tenantId, { contactIds: [...new Set(brutas.map((n) => n.contactId))] })
+    : new Map();
 
   const eventosBrutos = await prisma.historicoDeEtapa.findMany({
     where: { negociacaoId: { in: [...idsFiltrados] } },

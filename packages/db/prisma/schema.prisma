@@ -79,6 +79,13 @@ model Tenant {
   // organizar. Ligado à mão no banco, como restringirFilaGeral.
   conversasAbertasATodos Boolean @default(false)
 
+  // Pedidos e o quanto cada cliente deve ficam só com o Responsável e o
+  // Financeiro: o atendente perde o botão Pedido, o menu e o selo "Deve R$".
+  // Pedido da Guttierres (19/10) — numa contabilidade a dívida do cliente não
+  // é assunto de quem atende. Desligado por padrão porque na Believe é o
+  // contrário: a consultora precisa ver o selo antes de vender a prazo.
+  pedidosSoGerencia Boolean @default(false)
+
   // Cabeçalho do recibo impresso. Separado de `name` de propósito: o nome
   // que a equipe vê no sistema ("Believe Cosméticos") não é o que vai no
   // comprovante — ali vai a razão social ou o nome do MEI, que é o que

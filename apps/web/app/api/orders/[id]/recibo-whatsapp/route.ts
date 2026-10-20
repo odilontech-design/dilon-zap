@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@dilon-zap/db";
 import { uploadMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { wakeOutbox } from "@/lib/worker-client";
 import { numeroParaEnviar } from "@/lib/whatsapp-sessions";
 import {
@@ -16,6 +17,8 @@ import {
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
 
   // Nome e documento vêm da tela de confirmação do envio. Campo ausente
   // mantém o que já está salvo na ficha; texto vazio limpa.

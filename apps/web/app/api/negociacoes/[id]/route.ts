@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { deleteMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
 import { pendenciaDoContato } from "@/lib/contas-receber";
+import { podeVerPendencia, recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import {
   ErroDeNegocio,
@@ -56,7 +57,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       distinct: ["origem"],
       select: { origem: true },
     }),
-    pendenciaDoContato(user.tenantId, n.contactId),
+    podeVerPendencia(user).then((pode) => (pode ? pendenciaDoContato(user.tenantId, n.contactId) : null)),
   ]);
 
   const c = n.contact;
@@ -107,7 +108,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     eventos: n.eventos,
     notas: n.notas,
     anexos: n.anexos,
-    pedidos: n.pedidos,
+    // Atendente sem Pedidos (empresa que reservou isso à gerência) não vê valores.
+    pedidos: (await recursosDoUsuario(user)).has("PEDIDOS") || user.role === "SUPERADMIN" ? n.pedidos : [],
     itens: n._count.itens,
   });
 }

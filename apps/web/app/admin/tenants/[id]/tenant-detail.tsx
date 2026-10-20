@@ -91,6 +91,7 @@ type TenantDetailResponse = {
     conversasAbertasATodos?: boolean;
     restringirFilaGeral?: boolean;
     termoPedido?: string | null;
+    pedidosSoGerencia?: boolean;
   };
   recentAudit: AuditEntry[];
 };
@@ -204,6 +205,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
           conversasAbertasATodos: !!tenant.conversasAbertasATodos,
           restringirFilaGeral: !!tenant.restringirFilaGeral,
           termoPedido: tenant.termoPedido ?? null,
+          pedidosSoGerencia: !!tenant.pedidosSoGerencia,
         }}
         onSalvo={mutate}
       />

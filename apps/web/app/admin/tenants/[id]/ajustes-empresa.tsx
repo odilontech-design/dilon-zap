@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Ajustes = { conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string | null };
+type Ajustes = { conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string | null; pedidosSoGerencia: boolean };
 
 /**
  * Ajustes que antes só mudavam direto no banco. Cada mudança salva na hora e
@@ -13,7 +13,7 @@ export function AjustesEmpresa({ tenantId, inicial, onSalvo }: { tenantId: strin
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  async function salvar(mudanca: Partial<{ conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string }>) {
+  async function salvar(mudanca: Partial<{ conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string; pedidosSoGerencia: boolean }>) {
     setErro(null);
     setSalvando(true);
     const res = await fetch(`/api/admin/tenants/${tenantId}/ajustes`, {
@@ -60,6 +60,22 @@ export function AjustesEmpresa({ tenantId, inicial, onSalvo }: { tenantId: strin
             onChange={(e) => salvar({ restringirFilaGeral: e.target.checked })}
             className="mt-1 h-4 w-4"
             aria-label="Fila geral só para o responsável"
+          />
+        </div>
+        <div className={linha}>
+          <div>
+            <p className="text-sm text-neutral-200">Pedidos e valores devidos só para responsável e financeiro</p>
+            <p className="text-xs text-neutral-500">
+              O atendente deixa de ver o botão e o menu de pedidos e o selo de quanto o cliente deve.
+            </p>
+          </div>
+          <input
+            type="checkbox"
+            checked={ajustes.pedidosSoGerencia}
+            disabled={salvando}
+            onChange={(e) => salvar({ pedidosSoGerencia: e.target.checked })}
+            className="mt-1 h-4 w-4"
+            aria-label="Pedidos e valores devidos só para responsável e financeiro"
           />
         </div>
         <div className={linha}>

@@ -12,6 +12,7 @@ const schema = z.object({
   conversasAbertasATodos: z.boolean().optional(),
   restringirFilaGeral: z.boolean().optional(),
   termoPedido: z.enum(["Pedido", "Orçamento"]).optional(),
+  pedidosSoGerencia: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -22,7 +23,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: params.id },
-    select: { id: true, name: true, conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true },
+    select: { id: true, name: true, conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true, pedidosSoGerencia: true },
   });
   if (!tenant) return NextResponse.json({ error: "empresa não encontrada" }, { status: 404 });
 
@@ -31,10 +32,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     data: {
       ...(d.conversasAbertasATodos !== undefined ? { conversasAbertasATodos: d.conversasAbertasATodos } : {}),
       ...(d.restringirFilaGeral !== undefined ? { restringirFilaGeral: d.restringirFilaGeral } : {}),
+      ...(d.pedidosSoGerencia !== undefined ? { pedidosSoGerencia: d.pedidosSoGerencia } : {}),
       // "Pedido" é o padrão: guarda nulo, para o padrão poder mudar no código.
       ...(d.termoPedido !== undefined ? { termoPedido: d.termoPedido === "Pedido" ? null : d.termoPedido } : {}),
     },
-    select: { conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true },
+    select: { conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true, pedidosSoGerencia: true },
   });
 
   await logAudit({
@@ -43,7 +45,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     targetTenantId: tenant.id,
     targetTenantName: tenant.name,
     metadata: {
-      de: { conversasAbertasATodos: tenant.conversasAbertasATodos, restringirFilaGeral: tenant.restringirFilaGeral, termoPedido: tenant.termoPedido },
+      de: {
+        conversasAbertasATodos: tenant.conversasAbertasATodos,
+        restringirFilaGeral: tenant.restringirFilaGeral,
+        termoPedido: tenant.termoPedido,
+        pedidosSoGerencia: tenant.pedidosSoGerencia,
+      },
       para: atualizado,
     },
   });
