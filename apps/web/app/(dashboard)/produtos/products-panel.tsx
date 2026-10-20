@@ -208,6 +208,11 @@ export function ProductsPanel({
         <h1 className="text-xl font-semibold">Produtos</h1>
         {podeEditar && (
           <div className="flex gap-2">
+            {temEstoque && (
+              <a href="/estoque" className="text-xs rounded-md border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
+                Relatório de estoque
+              </a>
+            )}
             <button
               onClick={() => fileRef.current?.click()}
               className="text-xs rounded-md border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50"
