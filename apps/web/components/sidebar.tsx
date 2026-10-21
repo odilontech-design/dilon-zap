@@ -1,5 +1,6 @@
 "use client";
 
+import { signOut } from "next-auth/react";
 import type { Recurso } from "@/lib/plano-regras";
 
 import { useEffect, useState } from "react";
@@ -325,7 +326,11 @@ export function Sidebar({
             simplesmente nunca aparecia, e o nav empurrava o rodapé pra fora
             da tela em vez de rolar. flex-1 dá a ele o espaço que sobra entre
             a marca e o rodapé. */}
-        <nav className="flex-1 min-h-0 flex flex-col gap-1 text-sm overflow-y-auto">
+        <nav
+          className={`flex-1 min-h-0 flex flex-col gap-1 text-sm overflow-y-auto ${
+            collapsed ? "md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden" : ""
+          }`}
+        >
           {NAV_ITEMS.filter(
             (item) =>
               // Superadmin conta como responsável da PRÓPRIA empresa (a Dilon
@@ -417,7 +422,7 @@ export function Sidebar({
               empurravam a lista de menu e criavam rolagem dentro da barra.
               O alternador aqui é só o ícone — o rótulo "Modo noite" era o
               que mais ocupava largura, e sol/lua já diz o que faz. */}
-          <div className={`flex items-center gap-2 mb-1.5 ${collapsed ? "md:justify-center" : ""}`}>
+          <div className={`flex items-center gap-2 mb-1.5 ${collapsed ? "md:flex-col md:gap-1" : ""}`}>
             <p className={`font-medium text-neutral-700 truncate flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>
               {name}
             </p>
@@ -441,10 +446,18 @@ export function Sidebar({
             <AppVersion />
           </div>
 
-          {/* Recolhida a barra tem 64px: nome e Sair já somem, e sobra só a
-              versão embaixo do ícone de tema. */}
+          {/* Recolhida a barra tem 64px: o nome some, Sair vira ícone e a
+              versão fica embaixo, centralizada. */}
           {collapsed && (
-            <div className="hidden md:block mt-2 text-center">
+            <div className="hidden md:flex md:flex-col md:items-center gap-1 mt-1">
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                aria-label="Sair"
+                title="Sair"
+                className="grid place-items-center w-7 h-7 rounded-md text-neutral-400 hover:text-red-600 hover:bg-neutral-100"
+              >
+                {icon(<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5M21 12H9" /></>)}
+              </button>
               <AppVersion compact />
             </div>
           )}
