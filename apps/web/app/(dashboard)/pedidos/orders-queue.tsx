@@ -35,8 +35,8 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
   const aReceber = (pedidos ?? []).filter((p) => p.status === "FECHADO" && !p.pago);
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl">
-      <div className="flex items-center justify-between gap-3 mb-1">
+    <div className="p-4 md:p-6 max-w-6xl">
+      <div className="flex items-center justify-between gap-3 mb-1 flex-wrap">
         <h1 className="text-xl font-semibold">{termo.plural}</h1>
         <button
           onClick={() => setConfigAberta(true)}

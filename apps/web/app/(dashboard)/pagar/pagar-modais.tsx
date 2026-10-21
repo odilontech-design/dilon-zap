@@ -191,7 +191,7 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
           </label>
 
           {previa.linhas.length > 0 && (
-            <div className="rounded-md border border-neutral-200 overflow-hidden">
+            <div className="rounded-md border border-neutral-200 overflow-x-auto">
               <table className="w-full text-sm tabular-nums">
                 <thead className="bg-neutral-50 text-xs text-neutral-500">
                   <tr>

@@ -22,9 +22,9 @@ export async function AbasFinanceiro({ atual, user }: { atual: Aba; user: { tena
   const visiveis = ABAS.filter((a) => (a.id === "estoque" ? comEstoque : comContas));
 
   return (
-    <div className="flex items-center gap-4 mb-6">
+    <div className="flex items-center gap-x-4 gap-y-2 mb-6 flex-wrap">
       <h1 className="text-lg font-semibold">Financeiro</h1>
-      <nav className="flex gap-1 text-sm">
+      <nav className="flex flex-wrap gap-1 text-sm">
         {visiveis.map((a) =>
           a.id === atual ? (
             <span key={a.id} className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">

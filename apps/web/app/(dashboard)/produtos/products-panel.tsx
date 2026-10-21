@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import useSWR from "swr";
+import { MenuAcoes } from "@/components/menu-acoes";
 
 type Product = {
   id: string;
@@ -225,11 +226,11 @@ export function ProductsPanel({
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl">
+    <div className="p-4 md:p-6 max-w-6xl">
       <div className="flex items-start justify-between gap-4 mb-1 flex-wrap">
         <h1 className="text-xl font-semibold">Produtos</h1>
         {podeEditar && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {temEstoque && (
               <a href="/estoque" className="text-xs rounded-md border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50">
                 Relatório de estoque
@@ -289,12 +290,12 @@ export function ProductsPanel({
           <thead className="text-xs text-neutral-500 border-b border-neutral-200">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Produto</th>
-              <th className="text-left font-medium px-4 py-2.5">Categoria</th>
+              <th className="hidden lg:table-cell text-left font-medium px-4 py-2.5">Categoria</th>
               {temEstoque && <th className="text-right font-medium px-4 py-2.5">Estoque</th>}
               <th className="text-right font-medium px-4 py-2.5">Preço</th>
-              {podeEditar && <th className="text-right font-medium px-4 py-2.5">Custo</th>}
-              {podeEditar && <th className="text-right font-medium px-4 py-2.5">Margem</th>}
-              {podeEditar && <th className="text-right font-medium px-4 py-2.5">Ações</th>}
+              {podeEditar && <th className="hidden md:table-cell text-right font-medium px-4 py-2.5">Custo</th>}
+              {podeEditar && <th className="hidden md:table-cell text-right font-medium px-4 py-2.5">Margem</th>}
+              {podeEditar && <th className="text-right font-medium px-4 py-2.5"><span className="sr-only">Ações</span></th>}
             </tr>
           </thead>
           <tbody>
@@ -320,10 +321,17 @@ export function ProductsPanel({
                       inativo
                     </span>
                   )}
+                  {/* Em tela estreita a coluna Categoria some: a categoria vem aqui. */}
+                  {p.categoria && <span className="lg:hidden block text-xs text-neutral-400">{p.categoria}</span>}
+                  {podeEditar && p.custoCents != null && (
+                    <span className="md:hidden block text-xs text-neutral-400">
+                      custo {centsToBRL(p.custoCents)} · <TextoMargem precoCents={p.priceCents} custoCents={p.custoCents} />
+                    </span>
+                  )}
                   </div>
                   </div>
                 </td>
-                <td className="px-4 py-2.5 text-neutral-500">{p.categoria ?? "—"}</td>
+                <td className="hidden lg:table-cell px-4 py-2.5 text-neutral-500">{p.categoria ?? "—"}</td>
                 {temEstoque && (
                 <td className="px-4 py-2.5 text-right">
                   {/* Serviço não abre extrato: não há movimentação pra ver, e o
@@ -348,39 +356,37 @@ export function ProductsPanel({
                 )}
                 <td className="px-4 py-2.5 text-right tabular-nums">{centsToBRL(p.priceCents)}</td>
                 {podeEditar && (
-                  <td className="px-4 py-2.5 text-right tabular-nums text-neutral-600">
+                  <td className="hidden md:table-cell px-4 py-2.5 text-right tabular-nums text-neutral-600">
                     {p.custoCents == null ? <span className="text-neutral-300">—</span> : centsToBRL(p.custoCents)}
                   </td>
                 )}
                 {podeEditar && (
-                  <td className="px-4 py-2.5 text-right tabular-nums">
+                  <td className="hidden md:table-cell px-4 py-2.5 text-right tabular-nums">
                     <TextoMargem precoCents={p.priceCents} custoCents={p.custoCents} />
                   </td>
                 )}
                 {podeEditar && (
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                    {temMateriais && (
-                      <button onClick={() => setMateriaisDe(p)} className="text-neutral-600 hover:text-accent mr-3">
-                        Materiais
-                        {(p._count?.materiais ?? 0) > 0 && (
-                          <span className="ml-1 rounded-full bg-accent/10 text-accent px-1.5 text-[10px]">
-                            {p._count!.materiais}
-                          </span>
-                        )}
-                      </button>
-                    )}
-                    <button onClick={() => setEditando(p)} className="text-neutral-600 hover:text-accent mr-3">
+                    {/* Editar fica à vista; o resto vai pro menu "⋯", senão a
+                        coluna empurra a tabela pra fora da tela. */}
+                    <button onClick={() => setEditando(p)} className="text-neutral-600 hover:text-accent mr-1">
                       Editar
                     </button>
-                    <button
-                      onClick={() => alternarAtivo(p)}
-                      className={p.isActive ? "text-red-600 hover:text-red-700" : "text-accent"}
-                    >
-                      {p.isActive ? "Desativar" : "Reativar"}
-                    </button>
-                    <button onClick={() => excluir(p)} className="text-neutral-400 hover:text-red-700 ml-3">
-                      Excluir
-                    </button>
+                    <MenuAcoes
+                      rotulo={`Mais ações de ${p.name}`}
+                      acoes={[
+                        ...(temMateriais
+                          ? [
+                              {
+                                rotulo: `Materiais${(p._count?.materiais ?? 0) > 0 ? ` (${p._count!.materiais})` : ""}`,
+                                onClick: () => setMateriaisDe(p),
+                              },
+                            ]
+                          : []),
+                        { rotulo: p.isActive ? "Desativar" : "Reativar", onClick: () => alternarAtivo(p), perigo: p.isActive },
+                        { rotulo: "Excluir", onClick: () => excluir(p), perigo: true },
+                      ]}
+                    />
                   </td>
                 )}
               </tr>
