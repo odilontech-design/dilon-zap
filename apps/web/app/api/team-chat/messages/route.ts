@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
-import { requireUser, type CurrentUser } from "@/lib/session";
+import { requireUser } from "@/lib/session";
 import { podeVerCanal } from "@/lib/team-chat";
 import { avisarNoCelular } from "@/lib/push";
 import { chaveDoCanal, marcarCanalLido } from "@/lib/team-chat-leitura";
+import { colegaPermitido, contextoDoChat, nomeParaLeitor, NOME_SUPORTE, usuarioDeSuporte } from "@/lib/suporte-chat";
 
 /**
  * Setores de que o usuário faz parte — só o necessário pra checar UM canal,
@@ -15,30 +16,24 @@ async function meusSetorIds(userId: string): Promise<string[]> {
   return membros.map((m) => m.setorId);
 }
 
-/** O colega existe, é da mesma empresa, está ativo e não sou eu. */
-async function colegaValido(user: CurrentUser, colegaId: string) {
-  if (colegaId === user.id) return false;
-  const colega = await prisma.user.findFirst({
-    where: { id: colegaId, tenantId: user.tenantId, deactivatedAt: null },
-    select: { id: true },
-  });
-  return !!colega;
-}
-
 export async function GET(req: Request) {
   const user = await requireUser();
   const params = new URL(req.url).searchParams;
   const setorId = params.get("setorId") || null;
   const com = params.get("com") || null; // conversa direta com esta pessoa
+  // O suporte (SUPERADMIN) lê o Geral e as conversas diretas de OUTRA empresa;
+  // para os demais papéis o parâmetro não tem efeito.
+  const ctx = contextoDoChat(user, params.get("empresa"));
+  const suporte = await usuarioDeSuporte();
 
   let where;
   if (com) {
-    if (!(await colegaValido(user, com))) {
+    if (!(await colegaPermitido(user, ctx, com))) {
       return NextResponse.json({ error: "colega não encontrado" }, { status: 404 });
     }
     // Só as mensagens entre nós dois, nos dois sentidos.
     where = {
-      tenantId: user.tenantId,
+      tenantId: ctx.tenantId,
       setorId: null,
       OR: [
         { authorId: user.id, destinatarioId: com },
@@ -46,18 +41,21 @@ export async function GET(req: Request) {
       ],
     };
   } else {
-    if (!podeVerCanal(user.role, await meusSetorIds(user.id), setorId)) {
+    // Fora da própria empresa o suporte só alcança o Geral, nunca um setor.
+    if (ctx.externo ? setorId !== null : !podeVerCanal(user.role, await meusSetorIds(user.id), setorId)) {
       return NextResponse.json({ error: "sem acesso a este canal" }, { status: 403 });
     }
     // destinatarioId nulo: sem isso o Geral misturaria as conversas diretas.
-    where = { tenantId: user.tenantId, setorId, destinatarioId: null };
+    where = { tenantId: ctx.tenantId, setorId, destinatarioId: null };
   }
 
   // Quem está com o canal aberto e a tela à vista já leu o que chegou: é o
   // que zera o contador de mensagens novas e acende o "Vista" para quem
   // escreveu. Só com ?marcar=1 — a tela manda isso apenas quando a aba está
   // visível, senão um chat esquecido aberto em segundo plano "leria" tudo.
-  if (params.get("marcar") === "1") await marcarCanalLido(user.id, chaveDoCanal(com ? null : setorId, com));
+  if (params.get("marcar") === "1") {
+    await marcarCanalLido(user.id, chaveDoCanal(com ? null : setorId, com, ctx.externo ? ctx.tenantId : null));
+  }
 
   const mensagens = await prisma.teamMessage.findMany({
     where,
@@ -77,15 +75,20 @@ export async function GET(req: Request) {
   const nomes = new Map(
     (
       await prisma.user.findMany({
-        where: { id: { in: leituras.map((l) => l.userId) }, tenantId: user.tenantId },
+        // O suporte mora em outra empresa, mas é quem pode ter visto a conversa.
+        where: {
+          id: { in: leituras.map((l) => l.userId) },
+          OR: [{ tenantId: ctx.tenantId }, ...(suporte ? [{ id: suporte.id }] : [])],
+        },
         select: { id: true, name: true },
       })
-    ).map((u) => [u.id, u.name])
+    ).map((u) => [u.id, nomeParaLeitor(user, u, suporte)])
   );
 
   return NextResponse.json(
     mensagens.map((m) => ({
       ...m,
+      author: { id: m.author.id, name: nomeParaLeitor(user, m.author, suporte) },
       vistoPor:
         m.authorId === user.id && !m.isDeleted
           ? leituras.filter((l) => l.lidoAte >= m.createdAt && nomes.has(l.userId)).map((l) => nomes.get(l.userId)!)
@@ -107,6 +110,8 @@ const bodySchema = z
     setorId: z.string().nullable(),
     // Preenchido = conversa direta com esta pessoa (setorId então precisa ser null).
     destinatarioId: z.string().nullable().optional(),
+    // Só vale para o SUPERADMIN: escreve na empresa indicada.
+    empresaId: z.string().nullable().optional(),
     text: z.string().max(4096).optional(),
     media: mediaSchema.optional(),
   })
@@ -122,18 +127,25 @@ export async function POST(req: Request) {
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
+  const ctx = contextoDoChat(user, parsed.data.empresaId);
+  const suporte = await usuarioDeSuporte();
   const destinatarioId = parsed.data.destinatarioId ?? null;
+
+  if (ctx.externo && !(await prisma.tenant.findUnique({ where: { id: ctx.tenantId }, select: { id: true } }))) {
+    return NextResponse.json({ error: "empresa não encontrada" }, { status: 404 });
+  }
+
   if (destinatarioId) {
-    if (!(await colegaValido(user, destinatarioId))) {
+    if (!(await colegaPermitido(user, ctx, destinatarioId))) {
       return NextResponse.json({ error: "colega não encontrado" }, { status: 404 });
     }
-  } else if (!podeVerCanal(user.role, await meusSetorIds(user.id), parsed.data.setorId)) {
+  } else if (ctx.externo ? parsed.data.setorId !== null : !podeVerCanal(user.role, await meusSetorIds(user.id), parsed.data.setorId)) {
     return NextResponse.json({ error: "sem acesso a este canal" }, { status: 403 });
   }
 
   const mensagem = await prisma.teamMessage.create({
     data: {
-      tenantId: user.tenantId,
+      tenantId: ctx.tenantId,
       setorId: parsed.data.setorId,
       destinatarioId,
       authorId: user.id,
@@ -148,17 +160,20 @@ export async function POST(req: Request) {
   });
 
   // Best-effort: nunca atrasa nem quebra o envio (avisarNoCelular engole a
-  // própria falha).
+  // própria falha). Quem é de outra empresa e fala com o suporte, ou o próprio
+  // suporte falando numa empresa, aparece sob o nome do canal.
+  const eSuporteFalando = !!suporte && user.id === suporte.id && user.tenantId !== ctx.tenantId;
   void avisar({
-    tenantId: user.tenantId,
+    tenantId: ctx.tenantId,
     setorId: parsed.data.setorId,
     destinatarioId,
     autorId: user.id,
-    autorNome: user.name,
+    autorNome: eSuporteFalando ? NOME_SUPORTE : user.name,
     corpo: parsed.data.text?.trim() || (parsed.data.media ? "enviou um anexo" : ""),
+    paraOSuporte: !!suporte && destinatarioId === suporte.id && user.tenantId !== suporte.tenantId,
   });
 
-  return NextResponse.json(mensagem, { status: 201 });
+  return NextResponse.json({ ...mensagem, author: { id: mensagem.author.id, name: nomeParaLeitor(user, mensagem.author, suporte) } }, { status: 201 });
 }
 
 async function avisar({
@@ -168,6 +183,7 @@ async function avisar({
   autorId,
   autorNome,
   corpo,
+  paraOSuporte,
 }: {
   tenantId: string;
   setorId: string | null;
@@ -175,14 +191,17 @@ async function avisar({
   autorId: string;
   autorNome: string;
   corpo: string;
+  paraOSuporte: boolean;
 }) {
   // Direta: só a outra pessoa é avisada, e o título é só o nome de quem
   // escreveu — não existe "canal" pra citar.
   if (destinatarioId) {
+    // O suporte atende várias empresas: o aviso diz de qual.
+    const empresa = paraOSuporte ? (await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }))?.name : null;
     await avisarNoCelular(destinatarioId, {
-      titulo: autorNome,
+      titulo: empresa ? `${autorNome} · ${empresa}` : autorNome,
       corpo,
-      url: "/chat-equipe",
+      url: paraOSuporte ? "/admin/suporte" : "/chat-equipe",
       tag: `chat-equipe-direta-${autorId}`,
     });
     return;

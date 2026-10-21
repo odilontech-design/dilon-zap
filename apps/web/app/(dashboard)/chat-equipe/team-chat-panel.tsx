@@ -17,7 +17,7 @@ import { TextoWhatsApp } from "@/components/texto-whatsapp";
  */
 
 type Canal = { setorId: string | null; nome: string; cor: string | null };
-type Pessoa = { id: string; name: string };
+type Pessoa = { id: string; name: string; suporte?: boolean };
 
 // O que está aberto: um canal (Geral ou de setor) ou uma conversa direta.
 type Selecao = { tipo: "canal"; setorId: string | null } | { tipo: "pessoa"; id: string; nome: string };
@@ -149,6 +149,8 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
               : (canais?.find((c) => c.setorId === selecao.setorId)?.nome ?? "")
           }
           meuId={meuId}
+          comSuporte={!!pessoas?.some((p) => p.suporte)}
+          conversaComSuporte={selecao.tipo === "pessoa" && !!pessoas?.find((p) => p.id === selecao.id)?.suporte}
         />
       )}
     </div>
@@ -160,12 +162,17 @@ function CanalAberto({
   destinatarioId,
   nomeCanal,
   meuId,
+  comSuporte,
+  conversaComSuporte,
 }: {
   setorId: string | null;
   /** Preenchido = conversa direta com esta pessoa (setorId vem null). */
   destinatarioId: string | null;
   nomeCanal: string;
   meuId: string;
+  /** A empresa conversa com o suporte da Dilon Tech (que também participa do Geral). */
+  comSuporte: boolean;
+  conversaComSuporte: boolean;
 }) {
   const query = destinatarioId ? `?com=${destinatarioId}` : setorId ? `?setorId=${setorId}` : "";
   const { data: mensagens, mutate } = useSWR<Mensagem[]>(`/api/team-chat/messages${query}`, fetcherMensagens, {
@@ -302,7 +309,16 @@ function CanalAberto({
     <div className="flex-1 flex flex-col min-w-0">
       <div className="p-4 border-b border-neutral-200">
         <h2 className="text-sm font-semibold text-neutral-900">{nomeCanal}</h2>
-        {destinatarioId && <p className="text-xs text-neutral-500">Conversa privada — só vocês dois veem.</p>}
+        {destinatarioId && (
+          <p className="text-xs text-neutral-500">
+            {conversaComSuporte
+              ? "Fale com a equipe da Dilon Tech. Conversa privada — só vocês dois veem."
+              : "Conversa privada — só vocês dois veem."}
+          </p>
+        )}
+        {!destinatarioId && !setorId && comSuporte && (
+          <p className="text-xs text-neutral-500">A equipe de suporte da Dilon Tech também participa deste canal.</p>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5">

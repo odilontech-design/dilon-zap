@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
-import { naoLidasDoChat } from "@/lib/team-chat-leitura";
+import { naoLidasDoChat, naoLidasDoSuporte } from "@/lib/team-chat-leitura";
 
 /**
  * Mensagens não lidas para o menu da esquerda: Inbox (só as conversas que a
@@ -11,7 +11,7 @@ import { naoLidasDoChat } from "@/lib/team-chat-leitura";
  */
 export async function GET() {
   const user = await requireUser();
-  const [inbox, grupos, chat] = await Promise.all([
+  const [inbox, grupos, chat, suporte] = await Promise.all([
     prisma.message.count({
       where: {
         direction: "INBOUND",
@@ -27,6 +27,8 @@ export async function GET() {
       },
     }),
     naoLidasDoChat(user),
+    // Conversas diretas escritas ao suporte (só o SUPERADMIN recebe valor).
+    user.role === "SUPERADMIN" ? naoLidasDoSuporte(user) : null,
   ]);
-  return NextResponse.json({ inbox, grupos, chatEquipe: chat.total });
+  return NextResponse.json({ inbox, grupos, chatEquipe: chat.total, suporte: suporte?.totalDiretas ?? 0 });
 }

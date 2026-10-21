@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
 import { SignOutButton } from "@/components/sign-out-button";
 import { Notificacoes } from "@/components/notificacoes";
 import { AppVersion } from "@/components/app-version";
@@ -36,6 +37,12 @@ const NAV_ITEMS = [
     icon: icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />),
   },
   {
+    // Conversas dos clientes com a Dilon Tech e o Geral de cada empresa.
+    href: "/admin/suporte",
+    label: "Suporte",
+    icon: icon(<><path d="M3 11a9 9 0 0 1 18 0" /><path d="M21 15v2a2 2 0 0 1-2 2h-2v-6h4M3 15v2a2 2 0 0 0 2 2h2v-6H3" /></>),
+  },
+  {
     href: "/admin/solicitacoes",
     label: "Cadastros",
     icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></>),
@@ -50,6 +57,12 @@ const NAV_ITEMS = [
 export function AdminSidebar({ name }: { name: string }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
+  // Mensagens novas escritas ao suporte, no próprio menu.
+  const { data: contadores } = useSWR<{ suporte?: number }>(
+    "/api/menu-contadores",
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : {})),
+    { refreshInterval: 15_000 }
+  );
 
   return (
     <>
@@ -103,6 +116,11 @@ export function AdminSidebar({ name }: { name: string }) {
               >
                 {item.icon}
                 {item.label}
+                {item.href === "/admin/suporte" && (contadores?.suporte ?? 0) > 0 && (
+                  <span className="ml-auto rounded-full bg-emerald-500 px-1.5 py-0.5 text-[10px] font-semibold text-neutral-950">
+                    {contadores!.suporte! > 99 ? "99+" : contadores!.suporte}
+                  </span>
+                )}
               </Link>
             );
           })}

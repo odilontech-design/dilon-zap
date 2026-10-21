@@ -1,6 +1,7 @@
 import { prisma } from "@dilon-zap/db";
 import type { CurrentUser } from "@/lib/session";
 import { podeVerCanal } from "@/lib/team-chat";
+import { usuarioDeSuporte } from "@/lib/suporte-chat";
 
 /**
  * Mensagens novas do Chat da equipe, por pessoa. Cada canal guarda "lido até"
@@ -11,9 +12,15 @@ import { podeVerCanal } from "@/lib/team-chat";
  */
 const JANELA_SEM_LEITURA_MS = 7 * 86_400_000;
 
-export function chaveDoCanal(setorId: string | null, comPessoaId: string | null): string {
+/**
+ * `tenantExterno` só existe para o suporte lendo o Geral de OUTRA empresa:
+ * "geral" é uma chave só por usuário, e sem a empresa na chave a leitura de
+ * uma empresa apagaria o "não lido" de todas as outras.
+ */
+export function chaveDoCanal(setorId: string | null, comPessoaId: string | null, tenantExterno?: string | null): string {
   if (comPessoaId) return `dm:${comPessoaId}`;
-  return setorId ? `setor:${setorId}` : "geral";
+  if (setorId) return `setor:${setorId}`;
+  return tenantExterno ? `geral@${tenantExterno}` : "geral";
 }
 
 /** Marca o canal como lido agora (ao abrir e enquanto está aberto). */
@@ -59,4 +66,59 @@ export async function naoLidasDoChat(user: CurrentUser): Promise<{ total: number
     total++;
   }
   return { total, porCanal };
+}
+
+/**
+ * O que chegou para o suporte vindo das empresas: conversas diretas escritas
+ * a ele (que contam no menu) e mensagens novas no Geral de cada empresa (que
+ * só aparecem dentro do painel — o Geral de cada empresa é conversa da equipe
+ * dela, e não deve acender o menu a cada bom-dia).
+ *
+ * Sem "lido até", conta só o último mês das diretas e a última semana do Geral.
+ */
+export async function naoLidasDoSuporte(user: CurrentUser): Promise<{
+  diretas: Record<string, number>; // por usuário que escreveu
+  totalDiretas: number;
+  geral: Record<string, number>; // por empresa
+}> {
+  const suporte = await usuarioDeSuporte();
+  if (!suporte || user.id !== suporte.id) return { diretas: {}, totalDiretas: 0, geral: {} };
+
+  const agora = Date.now();
+  const leituras = await prisma.teamChatLeitura.findMany({ where: { userId: user.id }, select: { canal: true, lidoAte: true } });
+  const lidoAte = new Map(leituras.map((l) => [l.canal, l.lidoAte]));
+
+  const [diretas, geral] = await Promise.all([
+    prisma.teamMessage.findMany({
+      where: { destinatarioId: user.id, isDeleted: false, createdAt: { gt: new Date(agora - 30 * 86_400_000) } },
+      select: { authorId: true, createdAt: true },
+    }),
+    prisma.teamMessage.findMany({
+      where: {
+        tenantId: { not: user.tenantId },
+        setorId: null,
+        destinatarioId: null,
+        isDeleted: false,
+        authorId: { not: user.id },
+        createdAt: { gt: new Date(agora - JANELA_SEM_LEITURA_MS) },
+      },
+      select: { tenantId: true, createdAt: true },
+    }),
+  ]);
+
+  const porUsuario: Record<string, number> = {};
+  let totalDiretas = 0;
+  for (const m of diretas) {
+    const corte = lidoAte.get(`dm:${m.authorId}`);
+    if (corte && m.createdAt <= corte) continue;
+    porUsuario[m.authorId] = (porUsuario[m.authorId] ?? 0) + 1;
+    totalDiretas++;
+  }
+  const porEmpresa: Record<string, number> = {};
+  for (const m of geral) {
+    const corte = lidoAte.get(`geral@${m.tenantId}`);
+    if (corte && m.createdAt <= corte) continue;
+    porEmpresa[m.tenantId] = (porEmpresa[m.tenantId] ?? 0) + 1;
+  }
+  return { diretas: porUsuario, totalDiretas, geral: porEmpresa };
 }
