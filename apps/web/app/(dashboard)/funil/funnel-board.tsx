@@ -24,6 +24,9 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
   const [aba, setAba] = useState<Aba>("ABERTA");
   const [responsavel, setResponsavel] = useState("");
   const [origem, setOrigem] = useState("");
+  // Celular: filtros e indicadores começam recolhidos (ver o cabeçalho).
+  const [filtrosNoCelular, setFiltrosNoCelular] = useState(false);
+  const [indicadoresNoCelular, setIndicadoresNoCelular] = useState(false);
   const [busca, setBusca] = useState("");
   const [periodo, setPeriodo] = useState<Periodo>("todos");
   const [foco, setFoco] = useState<Foco>("");
@@ -166,6 +169,8 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
   if (error) return <p className="text-sm text-red-600">Não deu pra carregar o funil.</p>;
   if (!quadro || !funis) return <p className="text-sm text-neutral-400">Carregando...</p>;
 
+  const qtdFiltros = [responsavel, origem, busca, periodo !== "todos" ? periodo : "", foco].filter(Boolean).length;
+
   const funilAtual = quadro.funil.id;
   const campo = "text-sm rounded-md border border-neutral-300 px-2 py-1.5 bg-surface";
 
@@ -191,6 +196,13 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
         )}
         <div className="flex-1" />
         <button
+          onClick={() => setFiltrosNoCelular((v) => !v)}
+          className="md:hidden rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-700"
+          aria-expanded={filtrosNoCelular}
+        >
+          Filtros{qtdFiltros ? ` (${qtdFiltros})` : ""}
+        </button>
+        <button
           onClick={() => setCriando({})}
           disabled={quadro.etapas.length === 0}
           className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
@@ -199,12 +211,12 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
         </button>
       </div>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
+      <div className={`${filtrosNoCelular ? "flex" : "hidden"} md:flex items-center gap-2 mb-4 flex-wrap`}>
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar cliente ou título"
-          className={`${campo} w-52`}
+          className={`${campo} w-full md:w-52`}
         />
         <select value={responsavel} onChange={(e) => setResponsavel(e.target.value)} className={campo}>
           <option value="">Responsável: todos</option>
@@ -269,9 +281,13 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
         )}
       </div>
 
-      {!semIndicadores && <IndicadoresFunil ind={quadro.indicadores} motivos={quadro.motivos} />}
+      {!semIndicadores && (
+        <div className={indicadoresNoCelular ? "" : "hidden md:block"}>
+          <IndicadoresFunil ind={quadro.indicadores} motivos={quadro.motivos} />
+        </div>
+      )}
 
-      <div className="flex gap-1 mb-3 border-b border-neutral-200">
+      <div className="flex gap-1 mb-3 border-b border-neutral-200 overflow-x-auto">
         {(
           [
             ["ABERTA", "Em andamento"],
@@ -282,7 +298,7 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
           <button
             key={id}
             onClick={() => setAba(id)}
-            className={`px-3 py-2 text-sm -mb-px border-b-2 ${
+            className={`px-3 py-2 text-sm -mb-px border-b-2 whitespace-nowrap ${
               aba === id ? "border-accent text-accent font-medium" : "border-transparent text-neutral-500 hover:text-neutral-800"
             }`}
           >
@@ -290,7 +306,13 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
           </button>
         ))}
         <div className="flex-1" />
-        <div className="flex items-center gap-3 text-xs text-neutral-500 pb-2">
+        <button
+          onClick={() => setIndicadoresNoCelular((v) => !v)}
+          className="md:hidden whitespace-nowrap px-2 pb-2 text-xs text-neutral-500 hover:text-accent"
+        >
+          {indicadoresNoCelular ? "Ocultar indicadores" : "Indicadores"}
+        </button>
+        <div className="hidden md:flex items-center gap-3 text-xs text-neutral-500 pb-2">
           {aba === "ABERTA" && quadro.etapas.length > 0 && (
             <>
               <button onClick={() => recolherTodas(quadro.etapas.map((e) => e.id), true)} className="hover:text-accent">
@@ -325,7 +347,7 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
         // cresce com o número de negociações. O desconto é o espaço do que fica
         // acima do quadro (filtros, abas e, se visível, os indicadores).
         <div
-          className="flex gap-4 overflow-x-auto pb-2 items-stretch"
+          className="flex gap-3 md:gap-4 overflow-x-auto pb-2 items-stretch snap-x snap-mandatory md:snap-none"
           style={{ height: semIndicadores ? "calc(100vh - 17rem)" : "calc(100vh - 25rem)", minHeight: "20rem" }}
         >
           {quadro.etapas.map((et) => {
@@ -368,7 +390,7 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
             }
 
             return (
-              <div key={et.id} className="w-72 shrink-0 h-full flex flex-col min-h-0" {...alvo}>
+              <div key={et.id} className="w-[85vw] sm:w-72 shrink-0 snap-start h-full flex flex-col min-h-0" {...alvo}>
                 <div className="rounded-t-md h-1.5 shrink-0" style={{ backgroundColor: et.cor }} />
                 <div className="border border-t-0 border-neutral-200 rounded-b-md bg-neutral-50 px-3 py-2.5 flex items-center justify-between gap-2 mb-2 shrink-0">
                   <div className="min-w-0">

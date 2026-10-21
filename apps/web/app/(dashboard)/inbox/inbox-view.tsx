@@ -761,6 +761,18 @@ export function ConversationThread({
   const [pedidoAberto, setPedidoAberto] = useState<Pedido | null>(null);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
+  // Áudio gravado espera aqui, com player, até a pessoa ouvir e mandar (ou
+  // descartar) — antes ele saía direto ao parar a gravação, sem chance de
+  // corrigir um áudio errado.
+  const [audioPendente, setAudioPendente] = useState<{ file: File; url: string } | null>(null);
+  const [segundosGravando, setSegundosGravando] = useState(0);
+  useEffect(() => {
+    if (!recording) return;
+    setSegundosGravando(0);
+    const t = setInterval(() => setSegundosGravando((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [recording]);
+  const tempoGravando = `${Math.floor(segundosGravando / 60)}:${String(segundosGravando % 60).padStart(2, "0")}`;
   // Imagem/arquivo colado ou anexado espera aqui até confirmar — igual o
   // WhatsApp mostra a prévia antes de mandar, em vez de sair enviando na
   // hora que a pessoa cola ou escolhe o arquivo.
@@ -1335,7 +1347,8 @@ export function ConversationThread({
       stream.getTracks().forEach((track) => track.stop());
       const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
       const ext = blob.type.includes("ogg") ? "ogg" : "webm";
-      uploadAndSend(new File([blob], `audio.${ext}`, { type: blob.type }));
+      const file = new File([blob], `audio.${ext}`, { type: blob.type });
+      setAudioPendente({ file, url: URL.createObjectURL(blob) });
     };
     recorder.start();
     mediaRecorderRef.current = recorder;
@@ -1345,6 +1358,19 @@ export function ConversationThread({
   function stopRecording() {
     mediaRecorderRef.current?.stop();
     setRecording(false);
+  }
+
+  function descartarAudio() {
+    if (audioPendente) URL.revokeObjectURL(audioPendente.url);
+    setAudioPendente(null);
+  }
+
+  async function enviarAudio() {
+    if (!audioPendente) return;
+    const { file, url } = audioPendente;
+    setAudioPendente(null);
+    URL.revokeObjectURL(url);
+    await uploadAndSend(file);
   }
 
   async function handleBlock(noWhatsApp: boolean) {
@@ -1420,8 +1446,9 @@ export function ConversationThread({
                         : ""}
                     </p>
                   ) : (
-                    <p className="text-xs font-mono text-neutral-400 flex items-center gap-1.5">
+                    <p className="text-xs font-mono text-neutral-400 flex items-center gap-1.5 flex-wrap">
                       #{conversation.ticketNumber}
+                      <PresencaDoContato conversationId={conversationId} />
                       <SeloPendencia pendencia={conversation.contact.pendencia} />
                     </p>
                   )}
@@ -2114,6 +2141,22 @@ export function ConversationThread({
               ícones, a caixa e o Enviar numa linha só deixavam ~100px pro
               texto — o placeholder aparecia cortado e escrever era
               incômodo. No computador continua tudo na mesma linha. */}
+          {audioPendente && (
+            <div className="mx-2.5 md:mx-4 mt-2 flex flex-wrap items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+              <audio controls src={audioPendente.url} className="h-9 flex-1 min-w-[200px]" />
+              <button type="button" onClick={descartarAudio} className="rounded-md px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+                Descartar
+              </button>
+              <button
+                type="button"
+                onClick={enviarAudio}
+                disabled={uploading || aviso?.bloqueiaEnvio}
+                className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                Enviar áudio
+              </button>
+            </div>
+          )}
           <form
             onSubmit={handleSend}
             className="relative p-2.5 md:p-4 flex flex-wrap md:flex-nowrap gap-1.5 md:gap-2 items-end"
@@ -2186,8 +2229,8 @@ export function ConversationThread({
             <button
               type="button"
               onClick={recording ? stopRecording : startRecording}
-              disabled={uploading || !!editingMessage || aviso?.bloqueiaEnvio}
-              title={recording ? "Parar gravação" : "Gravar áudio"}
+              disabled={uploading || !!editingMessage || aviso?.bloqueiaEnvio || !!audioPendente}
+              title={recording ? "Parar gravação (você ouve antes de enviar)" : "Gravar áudio"}
               className={`text-lg px-1 disabled:opacity-40 ${recording ? "text-red-600" : "text-neutral-500 hover:text-accent"}`}
             >
               {recording ? "⏹" : "🎤"}
@@ -2208,7 +2251,7 @@ export function ConversationThread({
                   : uploading
                     ? "Enviando anexo..."
                     : recording
-                      ? "Gravando áudio..."
+                      ? `Gravando áudio... ${tempoGravando} — clique em ⏹ para parar`
                       : "Escreva uma mensagem..."
               }
               disabled={uploading || recording || aviso?.bloqueiaEnvio}
@@ -3995,4 +4038,36 @@ function EnviarContato({ onFechar, onEscolher }: { onFechar: () => void; onEscol
       </div>
     </div>
   );
+}
+
+/**
+ * "online", "digitando…" ou "visto por último hoje às 14:32", como no
+ * WhatsApp. Consulta lenta (20s) e só com a conversa aberta; o worker assina a
+ * presença do contato sob demanda. Contato que esconde o visto por último (ou
+ * worker fora do ar) não mostra nada — melhor nada do que um palpite.
+ */
+function PresencaDoContato({ conversationId }: { conversationId: string }) {
+  const { data } = useSWR<{ estado: "online" | "digitando" | "gravando" | "offline" | null; vistoEm: number | null }>(
+    `/api/conversations/${conversationId}/presenca`,
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : { estado: null, vistoEm: null })),
+    { refreshInterval: 20_000 }
+  );
+  if (!data?.estado) return null;
+  if (data.estado === "digitando" || data.estado === "gravando") {
+    return <span className="font-sans text-accent">{data.estado === "digitando" ? "digitando…" : "gravando áudio…"}</span>;
+  }
+  if (data.estado === "online") return <span className="font-sans text-accent">online</span>;
+  if (!data.vistoEm) return null;
+  return <span className="font-sans">visto por último {vistoPorUltimo(data.vistoEm)}</span>;
+}
+
+function vistoPorUltimo(ms: number): string {
+  const d = new Date(ms);
+  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+  const dia = (x: Date) => x.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const hoje = new Date();
+  const ontem = new Date(Date.now() - 86_400_000);
+  if (dia(d) === dia(hoje)) return `hoje às ${hora}`;
+  if (dia(d) === dia(ontem)) return `ontem às ${hora}`;
+  return `em ${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })} às ${hora}`;
 }

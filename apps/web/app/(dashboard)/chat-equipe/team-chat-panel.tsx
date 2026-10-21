@@ -283,7 +283,8 @@ function CanalAberto({
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(pedacosRef.current, { type: gravador.mimeType || "audio/webm" });
         const ext = blob.type.includes("ogg") ? "ogg" : "webm";
-        enviarAnexo(new File([blob], `audio.${ext}`, { type: blob.type }), "");
+        // Abre a prévia (com player) em vez de mandar direto: dá pra ouvir e descartar.
+        abrirPrevia(new File([blob], `audio.${ext}`, { type: blob.type }));
       };
       gravador.start();
       gravadorRef.current = gravador;
@@ -471,10 +472,10 @@ function CanalAberto({
             type="button"
             onClick={gravando ? pararAudio : gravarAudio}
             disabled={enviando}
-            title={gravando ? "Parar e enviar o áudio" : "Gravar áudio"}
+            title={gravando ? "Parar gravação (você ouve antes de enviar)" : "Gravar áudio"}
             className={`text-lg px-1 disabled:opacity-40 ${gravando ? "text-red-600 animate-pulse" : "hover:opacity-80"}`}
           >
-            {gravando ? "⏺" : "🎤"}
+            {gravando ? "⏹" : "🎤"}
           </button>
         </div>
         <textarea
@@ -485,7 +486,7 @@ function CanalAberto({
           onKeyDown={aoTeclar}
           onPaste={handlePaste}
           disabled={enviando}
-          placeholder={gravando ? "Gravando áudio... clique em ⏺ para enviar" : `Escreva pra ${nomeCanal}...`}
+          placeholder={gravando ? "Gravando áudio... clique em ⏹ para parar e ouvir" : `Escreva pra ${nomeCanal}...`}
           className="flex-1 resize-y max-h-40 rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent disabled:bg-neutral-100"
         />
         <button
@@ -537,7 +538,7 @@ function PreviaDeAnexo({
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
       <div className="bg-surface rounded-lg w-full max-w-md shadow-lg flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-200">
-          <h2 className="text-sm font-semibold">Enviar anexo</h2>
+          <h2 className="text-sm font-semibold">{anexo.file.type.startsWith("audio/") ? "Ouvir e enviar áudio" : "Enviar anexo"}</h2>
           <button onClick={onCancelar} className="text-neutral-400 hover:text-neutral-700 text-lg leading-none">
             ✕
           </button>
@@ -546,6 +547,8 @@ function PreviaDeAnexo({
           {anexo.ehImagem ? (
             // eslint-disable-next-line @next/next/no-img-element -- prévia local, vem de um blob: URL
             <img src={anexo.url} alt="Prévia" className="max-h-[50vh] max-w-full rounded-md object-contain" />
+          ) : anexo.file.type.startsWith("audio/") ? (
+            <audio controls src={anexo.url} className="w-full" />
           ) : (
             <div className="flex flex-col items-center gap-2 py-8 text-neutral-500">
               <span className="text-4xl">📎</span>

@@ -21,6 +21,7 @@ import { prisma, type Prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { avisarMensagemNova } from "./aviso-mensagem";
+import { registrarPresenca } from "./presenca";
 import { abrirEdicaoSecreta, textoDoContato } from "./contato-e-edicao";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
@@ -679,6 +680,11 @@ export async function startSession(sessionId: string) {
 
   socket.ev.on("contacts.upsert", (contatos) => {
     void aplicarNomeDaAgenda(contatos);
+  });
+  // Online / digitando / visto por último de quem a equipe está com a conversa
+  // aberta (a assinatura é feita sob demanda, ver presenca.ts).
+  socket.ev.on("presence.update", (update) => {
+    registrarPresenca(sessionId, update as Parameters<typeof registrarPresenca>[1]);
   });
   socket.ev.on("contacts.update", (contatos) => {
     void aplicarNomeDaAgenda(contatos);
