@@ -70,6 +70,13 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
     refreshInterval: LISTING_INTERVAL,
   });
   const [selecao, setSelecao] = useState<Selecao | undefined>(undefined);
+  // No celular não cabem as duas colunas: mostra a lista ou a conversa. O
+  // Geral é escolhido sozinho ao abrir, mas só aparece quando a pessoa toca.
+  const [conversaAberta, setConversaAberta] = useState(false);
+  const abrir = (s: Selecao) => {
+    setSelecao(s);
+    setConversaAberta(true);
+  };
 
   // Geral assim que os canais chegam, se ainda não tiver nada escolhido —
   // abrir o chat sem nenhuma conversa selecionada deixaria a tela vazia à
@@ -80,7 +87,7 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
 
   return (
     <div className="flex h-[calc(100dvh-3rem)] md:h-screen">
-      <div className="w-full md:w-72 shrink-0 border-r border-neutral-200 flex flex-col">
+      <div className={`${conversaAberta ? "hidden md:flex" : "flex"} w-full md:w-72 shrink-0 border-r border-neutral-200 flex-col`}>
         <div className="p-4 border-b border-neutral-200">
           <h1 className="text-lg font-semibold">Chat da equipe</h1>
           <p className="text-xs text-neutral-500 mt-0.5">Conversa interna — não vai pro WhatsApp do cliente.</p>
@@ -92,7 +99,7 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
             canais.map((c) => (
               <button
                 key={c.setorId ?? "geral"}
-                onClick={() => setSelecao({ tipo: "canal", setorId: c.setorId })}
+                onClick={() => abrir({ tipo: "canal", setorId: c.setorId })}
                 className={`w-full flex items-center gap-2.5 px-4 py-3 text-left border-b border-neutral-100 hover:bg-neutral-50 ${
                   selecao?.tipo === "canal" && selecao.setorId === c.setorId ? "bg-accent/10" : ""
                 }`}
@@ -118,7 +125,7 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
             pessoas.map((pe) => (
               <button
                 key={pe.id}
-                onClick={() => setSelecao({ tipo: "pessoa", id: pe.id, nome: pe.name })}
+                onClick={() => abrir({ tipo: "pessoa", id: pe.id, nome: pe.name })}
                 className={`w-full flex items-center gap-2.5 px-4 py-2.5 text-left border-b border-neutral-100 hover:bg-neutral-50 ${
                   selecao?.tipo === "pessoa" && selecao.id === pe.id ? "bg-accent/10" : ""
                 }`}
@@ -139,7 +146,9 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
           Carregando...
         </div>
       ) : (
+        <div className={`${conversaAberta ? "flex" : "hidden md:flex"} flex-1 min-w-0`}>
         <CanalAberto
+          onVoltar={() => setConversaAberta(false)}
           key={selecao.tipo === "pessoa" ? `pessoa-${selecao.id}` : (selecao.setorId ?? "geral")}
           setorId={selecao.tipo === "canal" ? selecao.setorId : null}
           destinatarioId={selecao.tipo === "pessoa" ? selecao.id : null}
@@ -152,6 +161,7 @@ export function TeamChatPanel({ meuId }: { meuId: string }) {
           comSuporte={!!pessoas?.some((p) => p.suporte)}
           conversaComSuporte={selecao.tipo === "pessoa" && !!pessoas?.find((p) => p.id === selecao.id)?.suporte}
         />
+        </div>
       )}
     </div>
   );
@@ -164,6 +174,7 @@ function CanalAberto({
   meuId,
   comSuporte,
   conversaComSuporte,
+  onVoltar,
 }: {
   setorId: string | null;
   /** Preenchido = conversa direta com esta pessoa (setorId vem null). */
@@ -173,6 +184,8 @@ function CanalAberto({
   /** A empresa conversa com o suporte da Dilon Tech (que também participa do Geral). */
   comSuporte: boolean;
   conversaComSuporte: boolean;
+  /** Celular: volta para a lista de canais. */
+  onVoltar: () => void;
 }) {
   const query = destinatarioId ? `?com=${destinatarioId}` : setorId ? `?setorId=${setorId}` : "";
   const { data: mensagens, mutate } = useSWR<Mensagem[]>(`/api/team-chat/messages${query}`, fetcherMensagens, {
@@ -308,7 +321,12 @@ function CanalAberto({
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <div className="p-4 border-b border-neutral-200">
-        <h2 className="text-sm font-semibold text-neutral-900">{nomeCanal}</h2>
+        <div className="flex items-center gap-2">
+          <button onClick={onVoltar} className="md:hidden -ml-1 px-1 text-neutral-500 hover:text-neutral-800 text-lg leading-none" aria-label="Voltar para a lista">
+            ←
+          </button>
+          <h2 className="text-sm font-semibold text-neutral-900">{nomeCanal}</h2>
+        </div>
         {destinatarioId && (
           <p className="text-xs text-neutral-500">
             {conversaComSuporte

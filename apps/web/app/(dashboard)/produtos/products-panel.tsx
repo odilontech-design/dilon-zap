@@ -301,7 +301,7 @@ export function ProductsPanel({
           <tbody>
             {filtrados.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-neutral-400">
+                <td colSpan={8} className="px-4 py-8 text-center text-neutral-400">
                   {produtos?.length === 0
                     ? "Nenhum produto cadastrado. Importe um CSV ou cadastre o primeiro."
                     : "Nada encontrado."}

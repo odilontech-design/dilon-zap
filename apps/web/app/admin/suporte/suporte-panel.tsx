@@ -57,7 +57,7 @@ export function SuportePanel({ meuId }: { meuId: string }) {
 
   return (
     <div className="flex h-[calc(100dvh-3rem)] md:h-screen text-neutral-100">
-      <div className="w-full md:w-80 shrink-0 border-r border-neutral-800 flex flex-col">
+      <div className={`${aberto ? "hidden md:flex" : "flex"} w-full md:w-80 shrink-0 border-r border-neutral-800 flex-col`}>
         <div className="p-4 border-b border-neutral-800">
           <h1 className="text-lg font-semibold">Suporte</h1>
           <p className="text-xs text-neutral-500 mt-0.5">Conversas dos clientes com a Dilon Tech e o Geral de cada empresa.</p>
@@ -147,7 +147,12 @@ export function SuportePanel({ meuId }: { meuId: string }) {
       </div>
 
       {aberto ? (
-        <Conversa key={aberto.tipo === "direta" ? `d-${aberto.userId}` : `g-${aberto.tenantId}`} aberto={aberto} meuId={meuId} />
+        <Conversa
+          key={aberto.tipo === "direta" ? `d-${aberto.userId}` : `g-${aberto.tenantId}`}
+          aberto={aberto}
+          meuId={meuId}
+          onVoltar={() => setAberto(null)}
+        />
       ) : (
         <div className="hidden md:flex flex-1 items-center justify-center text-sm text-neutral-500">Escolha uma conversa.</div>
       )}
@@ -155,7 +160,7 @@ export function SuportePanel({ meuId }: { meuId: string }) {
   );
 }
 
-function Conversa({ aberto, meuId }: { aberto: Aberto; meuId: string }) {
+function Conversa({ aberto, meuId, onVoltar }: { aberto: Aberto; meuId: string; onVoltar: () => void }) {
   const query = aberto.tipo === "direta" ? `?empresa=${aberto.tenantId}&com=${aberto.userId}` : `?empresa=${aberto.tenantId}`;
   const { data: mensagens, mutate } = useSWR<Mensagem[]>(`/api/team-chat/messages${query}`, fetcherMensagens, { refreshInterval: MESSAGES_INTERVAL });
   const [texto, setTexto] = useState("");
@@ -198,7 +203,12 @@ function Conversa({ aberto, meuId }: { aberto: Aberto; meuId: string }) {
   return (
     <div className="flex-1 flex flex-col min-w-0">
       <div className="p-4 border-b border-neutral-800">
-        <h2 className="text-sm font-semibold">{aberto.titulo}</h2>
+        <div className="flex items-center gap-2">
+          <button onClick={onVoltar} className="md:hidden -ml-1 px-1 text-neutral-400 hover:text-neutral-100 text-lg leading-none" aria-label="Voltar para a lista">
+            ←
+          </button>
+          <h2 className="text-sm font-semibold">{aberto.titulo}</h2>
+        </div>
         <p className="text-xs text-neutral-500">
           {aberto.tipo === "direta"
             ? "Conversa privada: só a pessoa e o suporte veem."

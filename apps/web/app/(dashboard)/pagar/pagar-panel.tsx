@@ -98,7 +98,7 @@ export function PagarPanel() {
   return (
     <div>
       <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
-        <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:w-auto">
           {CARTOES.map((c) => (
             <button
               key={c.faixa}
@@ -106,14 +106,14 @@ export function PagarPanel() {
                 setStatus(["PENDENTE"]);
                 setFaixa((f) => (f === c.faixa ? "" : c.faixa));
               }}
-              className={`rounded-lg border px-3 py-2 text-left min-w-[140px] ${c.classe} ${faixa === c.faixa ? "ring-2 ring-accent" : ""}`}
+              className={`rounded-lg border px-3 py-2 text-left sm:min-w-[140px] ${c.classe} ${faixa === c.faixa ? "ring-2 ring-accent" : ""}`}
               title="Clique para filtrar a lista"
             >
               <p className="text-[11px]">{c.rotulo}</p>
               <p className="text-base font-semibold tabular-nums">{centsToBRL(data.resumo[c.faixa])}</p>
             </button>
           ))}
-          <div className="rounded-lg border border-neutral-300 bg-surface px-3 py-2 min-w-[140px]">
+          <div className="rounded-lg border border-neutral-300 bg-surface px-3 py-2 sm:min-w-[140px]">
             <p className="text-[11px] text-neutral-500">Total a pagar</p>
             <p className="text-base font-semibold tabular-nums">{centsToBRL(data.resumo.total)}</p>
           </div>
