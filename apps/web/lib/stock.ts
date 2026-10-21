@@ -26,10 +26,15 @@ export type MovimentoInput = {
   quantidade: number;
   motivo?: string;
   createdById?: string;
+  /**
+   * Custo unitário desta entrada (Compra). Informado, fica na movimentação e
+   * passa a ser o custo do cadastro — o "último custo de compra".
+   */
+  custoUnitCents?: number | null;
 };
 
 export async function registrarMovimento(entrada: MovimentoInput) {
-  const { tenantId, productId, tipo, motivo, createdById } = entrada;
+  const { tenantId, productId, tipo, motivo, createdById, custoUnitCents } = entrada;
 
   const delta =
     tipo === "AJUSTE"
@@ -47,7 +52,7 @@ export async function registrarMovimento(entrada: MovimentoInput) {
     // mesmo com o total certo.
     const produto = await tx.product.findFirst({
       where: { id: productId, tenantId },
-      select: { id: true, stockQty: true, tipo: true, name: true },
+      select: { id: true, stockQty: true, tipo: true, name: true, custoCents: true },
     });
     if (!produto) throw new Error("produto não encontrado");
 
@@ -61,9 +66,10 @@ export async function registrarMovimento(entrada: MovimentoInput) {
 
     // O incremento é atômico no banco (stockQty = stockQty + delta), então o
     // total nunca se perde numa corrida. É daqui que sai o saldo real.
+    const custoDaCompra = tipo === "COMPRA" && custoUnitCents != null ? custoUnitCents : null;
     const atualizado = await tx.product.update({
       where: { id: produto.id },
-      data: { stockQty: { increment: delta } },
+      data: { stockQty: { increment: delta }, ...(custoDaCompra !== null ? { custoCents: custoDaCompra } : {}) },
       select: { stockQty: true },
     });
 
@@ -75,6 +81,7 @@ export async function registrarMovimento(entrada: MovimentoInput) {
         quantidade: delta,
         motivo: motivo?.trim() || null,
         saldoDepois: atualizado.stockQty,
+        custoUnitCents: custoDaCompra ?? produto.custoCents ?? null,
         createdById: createdById ?? null,
       },
     });

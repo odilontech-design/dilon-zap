@@ -9,6 +9,8 @@ type Product = {
   sku: string | null;
   categoria: string | null;
   priceCents: number;
+  /** Valor de compra. Só vem para a gestão; nulo = não informado. */
+  custoCents?: number | null;
   isActive: boolean;
   // Serviço não tem estoque de verdade. O campo vem preenchido do banco
   // (default 0) e é ignorado quando tipo é SERVICO — mostrar "0" ali faria
@@ -28,9 +30,27 @@ type Movimento = {
   quantidade: number;
   motivo: string | null;
   saldoDepois: number;
+  custoUnitCents?: number | null;
   createdAt: string;
   createdBy: { name: string } | null;
 };
+
+/** Margem sobre o preço de venda, em %. Nulo sem custo ou sem preço. */
+function margem(precoCents: number, custoCents: number | null | undefined): number | null {
+  if (custoCents == null || precoCents <= 0) return null;
+  return ((precoCents - custoCents) / precoCents) * 100;
+}
+
+function TextoMargem({ precoCents, custoCents }: { precoCents: number; custoCents: number | null | undefined }) {
+  const m = margem(precoCents, custoCents);
+  if (m === null) return <span className="text-neutral-300">—</span>;
+  const markup = custoCents ? precoCents / custoCents : null;
+  return (
+    <span className={m < 0 ? "text-red-600" : m < 20 ? "text-amber-700" : "text-neutral-700"} title={markup ? `Markup ${markup.toFixed(2).replace(".", ",")}×` : undefined}>
+      {m.toFixed(1).replace(".", ",")}%
+    </span>
+  );
+}
 
 const TIPO_LABEL: Record<Movimento["tipo"], string> = {
   COMPRA: "Compra",
@@ -166,21 +186,23 @@ export function ProductsPanel({
     // jeito de aceitar planilha com e sem cabeçalho sem perguntar nada.
     const separador = linhas[0].includes(";") ? ";" : ",";
     const primeira = linhas[0].split(separador);
-    const temCabecalho = parsePreco(primeira[primeira.length - 1] ?? "") === null;
+    // A coluna do preço (a segunda) decide: a última pode ser categoria, texto.
+    const temCabecalho = parsePreco(primeira[1] ?? "") === null;
 
     const rows = linhas
       .slice(temCabecalho ? 1 : 0)
       .map((linha) => {
         const c = linha.split(separador).map((x) => x.trim().replace(/^"|"$/g, ""));
-        // Ordem esperada: nome, preço [, código [, categoria]]
+        // Ordem esperada: nome, preço [, código [, categoria [, valor de compra]]]
         const priceCents = parsePreco(c[1] ?? "");
         if (!c[0] || priceCents === null) return null;
-        return { name: c[0], priceCents, sku: c[2] || undefined, categoria: c[3] || undefined };
+        const custoCents = c[4] ? parsePreco(c[4]) : null;
+        return { name: c[0], priceCents, sku: c[2] || undefined, categoria: c[3] || undefined, custoCents: custoCents ?? undefined };
       })
       .filter((r): r is NonNullable<typeof r> => r !== null);
 
     if (rows.length === 0) {
-      setAviso("Não consegui ler nenhuma linha. O formato esperado é: nome, preço, código, categoria.");
+      setAviso("Não consegui ler nenhuma linha. O formato esperado é: nome, preço, código, categoria, valor de compra.");
       return;
     }
 
@@ -270,6 +292,8 @@ export function ProductsPanel({
               <th className="text-left font-medium px-4 py-2.5">Categoria</th>
               {temEstoque && <th className="text-right font-medium px-4 py-2.5">Estoque</th>}
               <th className="text-right font-medium px-4 py-2.5">Preço</th>
+              {podeEditar && <th className="text-right font-medium px-4 py-2.5">Custo</th>}
+              {podeEditar && <th className="text-right font-medium px-4 py-2.5">Margem</th>}
               {podeEditar && <th className="text-right font-medium px-4 py-2.5">Ações</th>}
             </tr>
           </thead>
@@ -324,6 +348,16 @@ export function ProductsPanel({
                 )}
                 <td className="px-4 py-2.5 text-right tabular-nums">{centsToBRL(p.priceCents)}</td>
                 {podeEditar && (
+                  <td className="px-4 py-2.5 text-right tabular-nums text-neutral-600">
+                    {p.custoCents == null ? <span className="text-neutral-300">—</span> : centsToBRL(p.custoCents)}
+                  </td>
+                )}
+                {podeEditar && (
+                  <td className="px-4 py-2.5 text-right tabular-nums">
+                    <TextoMargem precoCents={p.priceCents} custoCents={p.custoCents} />
+                  </td>
+                )}
+                {podeEditar && (
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     {temMateriais && (
                       <button onClick={() => setMateriaisDe(p)} className="text-neutral-600 hover:text-accent mr-3">
@@ -356,8 +390,8 @@ export function ProductsPanel({
       </div>
 
       <p className="mt-3 text-xs text-neutral-500">
-        CSV na ordem: <code className="font-mono">nome, preço, código, categoria</code>. Código e categoria são
-        opcionais. Reimportar a mesma planilha atualiza os preços em vez de duplicar.
+        CSV na ordem: <code className="font-mono">nome, preço, código, categoria, valor de compra</code>. Só nome e
+        preço são obrigatórios. Reimportar a mesma planilha atualiza preço e valor de compra em vez de duplicar.
       </p>
 
       {estoqueDe && (
@@ -493,6 +527,7 @@ function PainelEstoque({
   const [tipo, setTipo] = useState<"COMPRA" | "PRODUCAO" | "DEVOLUCAO" | "AJUSTE">("COMPRA");
   const [qtd, setQtd] = useState("");
   const [motivo, setMotivo] = useState("");
+  const [custoCompra, setCustoCompra] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -505,11 +540,21 @@ function PainelEstoque({
       return;
     }
 
+    // Custo da compra é opcional; informado, vira o valor de compra do cadastro.
+    let custoUnitCents: number | null = null;
+    if (tipo === "COMPRA" && custoCompra.trim()) {
+      custoUnitCents = parsePreco(custoCompra);
+      if (custoUnitCents === null) {
+        setErro("Custo inválido. Use por exemplo 12,50.");
+        return;
+      }
+    }
+
     setSalvando(true);
     const res = await fetch(`/api/products/${produto.id}/stock`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ tipo, quantidade, motivo }),
+      body: JSON.stringify({ tipo, quantidade, motivo, custoUnitCents }),
     });
     setSalvando(false);
 
@@ -520,6 +565,7 @@ function PainelEstoque({
     }
     setQtd("");
     setMotivo("");
+    setCustoCompra("");
     mutate();
     onMudou();
   }
@@ -584,6 +630,19 @@ function PainelEstoque({
                 Lançar
               </button>
             </div>
+            {tipo === "COMPRA" && (
+              <label className="flex items-center gap-2 text-xs text-neutral-500">
+                Custo unitário desta compra
+                <input
+                  value={custoCompra}
+                  onChange={(e) => setCustoCompra(e.target.value)}
+                  inputMode="decimal"
+                  placeholder={produto.custoCents != null ? (produto.custoCents / 100).toFixed(2).replace(".", ",") : "12,50"}
+                  className="w-28 rounded-md border border-neutral-300 bg-surface px-2 py-1 text-sm tabular-nums"
+                />
+                <span>opcional — atualiza o valor de compra do produto</span>
+              </label>
+            )}
             {tipo === "AJUSTE" && (
               <p className="text-xs text-neutral-500">
                 No ajuste, use número negativo para tirar do estoque (ex: <code className="font-mono">-3</code>).
@@ -610,6 +669,9 @@ function PainelEstoque({
                 </span>
                 <span className="text-neutral-700">{TIPO_LABEL[m.tipo]}</span>
                 {m.motivo && <span className="text-neutral-500 truncate">· {m.motivo}</span>}
+                {m.tipo === "COMPRA" && m.custoUnitCents != null && (
+                  <span className="text-neutral-500 whitespace-nowrap">· custo {centsToBRL(m.custoUnitCents)}</span>
+                )}
                 <span className="ml-auto text-xs text-neutral-400 whitespace-nowrap tabular-nums">
                   saldo {m.saldoDepois} · {new Date(m.createdAt).toLocaleDateString("pt-BR")}
                   {m.createdBy && ` · ${m.createdBy.name}`}
@@ -645,6 +707,11 @@ function EditorProduto({
   const [preco, setPreco] = useState(
     existente ? ((inicial as Product).priceCents / 100).toFixed(2).replace(".", ",") : ""
   );
+  const [custo, setCusto] = useState(
+    existente && (inicial as Product).custoCents != null
+      ? ((inicial as Product).custoCents! / 100).toFixed(2).replace(".", ",")
+      : ""
+  );
   const [tipo, setTipo] = useState<"PRODUTO" | "SERVICO">(
     existente ? ((inicial as Product).tipo ?? "PRODUTO") : "PRODUTO"
   );
@@ -673,6 +740,12 @@ function EditorProduto({
       onErro("Preço inválido. Use por exemplo 19,90.");
       return;
     }
+    // Vazio = não informado (nulo), que é diferente de custo zero.
+    const custoCents = custo.trim() ? parsePreco(custo) : null;
+    if (custo.trim() && custoCents === null) {
+      onErro("Valor de compra inválido. Use por exemplo 12,50.");
+      return;
+    }
     let ajusteEstoque = 0;
     if (mostraEstoque && podeMexerEstoque) {
       const novoEstoque = parseInt(estoque, 10);
@@ -692,6 +765,7 @@ function EditorProduto({
         sku,
         categoria,
         priceCents,
+        custoCents,
         tipo,
         cobranca,
         // Duração só acompanha serviço. Em produto vai null de propósito:
@@ -801,6 +875,35 @@ function EditorProduto({
               />
             </label>
           )}
+        </div>
+        <div className="grid grid-cols-2 gap-3 mb-3">
+          <label className="block text-sm">
+            <span className="text-neutral-700">Valor de compra (opcional)</span>
+            <input
+              value={custo}
+              onChange={(e) => setCusto(e.target.value)}
+              inputMode="decimal"
+              placeholder="12,50"
+              className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 tabular-nums"
+            />
+          </label>
+          <div className="text-sm">
+            <span className="text-neutral-700">Margem</span>
+            <p className="mt-1 px-1 py-2 tabular-nums">
+              {(() => {
+                const p = parsePreco(preco);
+                const c = custo.trim() ? parsePreco(custo) : null;
+                if (p === null || c === null) return <span className="text-neutral-400">informe preço e custo</span>;
+                const m = margem(p, c);
+                return (
+                  <>
+                    <TextoMargem precoCents={p} custoCents={c} />
+                    {m !== null && c > 0 && <span className="text-xs text-neutral-500"> · markup {(p / c).toFixed(2).replace(".", ",")}×</span>}
+                  </>
+                );
+              })()}
+            </p>
+          </div>
         </div>
         {mostraEstoque && podeMexerEstoque && (
           <p className="-mt-2 mb-4 text-xs text-neutral-500">

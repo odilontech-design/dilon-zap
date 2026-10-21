@@ -35,11 +35,14 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       quantidade: true,
       motivo: true,
       saldoDepois: true,
+      custoUnitCents: true,
       createdAt: true,
       createdBy: { select: { name: true } },
     },
   });
 
+  // Custo é da gestão: quem só consulta o saldo não vê o valor de compra.
+  if (!podeMexer(user.role)) return NextResponse.json({ produto, movimentos: movimentos.map(({ custoUnitCents: _c, ...m }) => m) });
   return NextResponse.json({ produto, movimentos });
 }
 
@@ -50,6 +53,8 @@ const bodySchema = z.object({
   // convidar a dar baixa por fora e o estoque parar de bater com as vendas.
   quantidade: z.number().int(),
   motivo: z.string().trim().max(200).optional(),
+  // Só na Compra: custo unitário pago ao fornecedor, em centavos.
+  custoUnitCents: z.number().int().min(0).nullable().optional(),
 });
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -61,7 +66,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const parsed = bodySchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { tipo, quantidade, motivo } = parsed.data;
+  const { tipo, quantidade, motivo, custoUnitCents } = parsed.data;
   if (quantidade === 0) return NextResponse.json({ error: "quantidade não pode ser zero" }, { status: 400 });
   if (tipo !== "AJUSTE" && quantidade < 0) {
     return NextResponse.json({ error: "quantidade deve ser positiva — para tirar do estoque, use Ajuste" }, { status: 400 });
@@ -80,12 +85,13 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     quantidade,
     motivo,
     createdById: user.id,
+    custoUnitCents: tipo === "COMPRA" ? (custoUnitCents ?? null) : null,
   });
 
   await logAudit({
     actor: user,
     action: "stock.movement",
-    metadata: { productId: produto.id, produto: produto.name, tipo, quantidade, saldo: r?.saldo },
+    metadata: { productId: produto.id, produto: produto.name, tipo, quantidade, saldo: r?.saldo, custoUnitCents: custoUnitCents ?? undefined },
   });
 
   return NextResponse.json({ saldo: r?.saldo ?? 0 }, { status: 201 });

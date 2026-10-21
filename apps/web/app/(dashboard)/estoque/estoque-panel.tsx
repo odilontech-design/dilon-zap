@@ -23,6 +23,10 @@ type LinhaResumo = {
   vendas: number;
   saldoFinal: number;
   valorFinalCents: number;
+  custoCents: number | null;
+  valorCustoCents: number;
+  cmvCents: number;
+  vendasSemCusto: number;
 };
 
 type LinhaMovimento = {
@@ -33,9 +37,15 @@ type LinhaMovimento = {
   tipo: Tipo;
   quantidade: number;
   saldoDepois: number;
+  custoUnitCents: number | null;
   motivo: string | null;
   por: string | null;
 };
+
+function margem(precoCents: number, custoCents: number | null): string {
+  if (custoCents === null || precoCents <= 0) return "—";
+  return `${(((precoCents - custoCents) / precoCents) * 100).toFixed(1).replace(".", ",")}%`;
+}
 
 const primeiroDoMes = () => `${hojeISO().slice(0, 8)}01`;
 
@@ -95,9 +105,13 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
       saidas: t.saidas + l.vendas + Math.max(-l.ajustes, 0),
       unidades: t.unidades + Math.max(l.saldoFinal, 0),
       valor: t.valor + l.valorFinalCents,
+      valorCusto: t.valorCusto + l.valorCustoCents,
+      cmv: t.cmv + l.cmvCents,
+      vendasSemCusto: t.vendasSemCusto + l.vendasSemCusto,
+      semCusto: t.semCusto + (l.custoCents === null ? 1 : 0),
       negativos: t.negativos + (l.saldoFinal < 0 ? 1 : 0),
     }),
-    { entradas: 0, saidas: 0, unidades: 0, valor: 0, negativos: 0 }
+    { entradas: 0, saidas: 0, unidades: 0, valor: 0, valorCusto: 0, cmv: 0, vendasSemCusto: 0, semCusto: 0, negativos: 0 }
   );
 
   const carregando = visao === "resumo" ? resumo.isLoading : movs.isLoading;
@@ -204,6 +218,16 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
             <Cartao titulo="Saídas no período" valor={`${totais.saidas} un.`} />
             <Cartao titulo="Unidades em estoque" valor={`${totais.unidades} un.`} nota={`em ${ate.split("-").reverse().join("/")}`} />
             <Cartao titulo="Valor do estoque" valor={centsToBRL(totais.valor)} nota="a preço de venda" />
+            <Cartao
+              titulo="Valor do estoque a custo"
+              valor={centsToBRL(totais.valorCusto)}
+              nota={totais.semCusto ? `${totais.semCusto} produto(s) sem valor de compra` : "pelo valor de compra"}
+            />
+            <Cartao
+              titulo="CMV no período"
+              valor={centsToBRL(totais.cmv)}
+              nota={totais.vendasSemCusto ? `${totais.vendasSemCusto} un. vendidas sem custo ficaram fora` : "custo das vendas, menos devoluções"}
+            />
           </div>
           <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-surface">
             <table className="w-full text-sm">
@@ -219,7 +243,11 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
                   <th className={`${th} text-right`}>Vendas</th>
                   <th className={`${th} text-right`}>Saldo final</th>
                   <th className={`${th} text-right`}>Preço</th>
+                  <th className={`${th} text-right`}>Custo</th>
+                  <th className={`${th} text-right`}>Margem</th>
                   <th className={`${th} text-right`}>Valor do saldo</th>
+                  <th className={`${th} text-right`}>Saldo a custo</th>
+                  <th className={`${th} text-right`}>CMV</th>
                 </tr>
               </thead>
               <tbody className="tabular-nums">
@@ -239,12 +267,19 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
                     <td className="px-3 py-2 text-right">{l.vendas ? `-${l.vendas}` : <span className="text-neutral-300">0</span>}</td>
                     <td className={`px-3 py-2 text-right font-medium ${l.saldoFinal < 0 ? "text-red-600" : ""}`}>{l.saldoFinal}</td>
                     <td className="px-3 py-2 text-right text-neutral-500">{centsToBRL(l.precoCents)}</td>
+                    <td className="px-3 py-2 text-right text-neutral-500">{l.custoCents === null ? "—" : centsToBRL(l.custoCents)}</td>
+                    <td className="px-3 py-2 text-right text-neutral-500">{margem(l.precoCents, l.custoCents)}</td>
                     <td className="px-3 py-2 text-right">{centsToBRL(l.valorFinalCents)}</td>
+                    <td className="px-3 py-2 text-right">{l.custoCents === null ? "—" : centsToBRL(l.valorCustoCents)}</td>
+                    <td className="px-3 py-2 text-right" title={l.vendasSemCusto ? `${l.vendasSemCusto} un. vendidas sem custo conhecido` : undefined}>
+                      {l.cmvCents ? centsToBRL(l.cmvCents) : <span className="text-neutral-300">—</span>}
+                      {l.vendasSemCusto > 0 && <span className="text-amber-700"> *</span>}
+                    </td>
                   </tr>
                 ))}
                 {linhasResumo.length === 0 && (
                   <tr>
-                    <td colSpan={11} className="px-3 py-8 text-center text-neutral-400">Nenhum produto com esse filtro.</td>
+                    <td colSpan={15} className="px-3 py-8 text-center text-neutral-400">Nenhum produto com esse filtro.</td>
                   </tr>
                 )}
               </tbody>
@@ -268,6 +303,7 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
                   <th className={th}>Tipo de operação</th>
                   <th className={`${th} text-right`}>Quantidade</th>
                   <th className={`${th} text-right`}>Saldo depois</th>
+                  <th className={`${th} text-right`}>Custo unit.</th>
                   <th className={th}>Motivo</th>
                   <th className={th}>Lançado por</th>
                 </tr>
@@ -281,13 +317,14 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
                     <td className="px-3 py-2">{ROTULO_TIPO[m.tipo]}</td>
                     <td className="px-3 py-2 text-right">{sinal(m.quantidade)}</td>
                     <td className="px-3 py-2 text-right">{m.saldoDepois}</td>
+                    <td className="px-3 py-2 text-right text-neutral-500">{m.custoUnitCents === null ? "—" : centsToBRL(m.custoUnitCents)}</td>
                     <td className="px-3 py-2 text-neutral-500">{m.motivo ?? ""}</td>
                     <td className="px-3 py-2 text-neutral-500">{m.por ?? "Sistema"}</td>
                   </tr>
                 ))}
                 {linhasMovs.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-3 py-8 text-center text-neutral-400">Nenhuma movimentação nesse período.</td>
+                    <td colSpan={9} className="px-3 py-8 text-center text-neutral-400">Nenhuma movimentação nesse período.</td>
                   </tr>
                 )}
               </tbody>

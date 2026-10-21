@@ -87,7 +87,7 @@ export async function fecharPedido(input: FecharInput) {
       // produtos, como se algo estivesse errado no cadastro.
       const cadastro = await tx.product.findUnique({
         where: { id: item.productId },
-        select: { tipo: true },
+        select: { tipo: true, custoCents: true },
       });
       if (cadastro?.tipo === "SERVICO") continue;
 
@@ -105,6 +105,8 @@ export async function fecharPedido(input: FecharInput) {
           quantidade: -item.quantidade,
           motivo: `Pedido #${pedido.numero}`,
           saldoDepois: produto.stockQty,
+          // Custo de agora: é o que entra no CMV deste mês, mesmo que mude depois.
+          custoUnitCents: cadastro?.custoCents ?? null,
           createdById: input.userId,
         },
       });
@@ -269,8 +271,14 @@ export async function cancelarPedido(input: CancelarInput) {
       // Estoque de volta.
       for (const item of pedido.items) {
         if (!item.productId) continue;
-        const cadastro = await tx.product.findUnique({ where: { id: item.productId }, select: { tipo: true } });
+        const cadastro = await tx.product.findUnique({ where: { id: item.productId }, select: { tipo: true, custoCents: true } });
         if (!cadastro || cadastro.tipo === "SERVICO") continue;
+        // A devolução desfaz o CMV da venda: usa o custo com que ela saiu.
+        const venda = await tx.stockMovement.findFirst({
+          where: { productId: item.productId, tipo: "VENDA", motivo: `Pedido #${pedido.numero}` },
+          orderBy: { createdAt: "desc" },
+          select: { custoUnitCents: true },
+        });
         const produto = await tx.product.update({
           where: { id: item.productId },
           data: { stockQty: { increment: item.quantidade } },
@@ -284,6 +292,7 @@ export async function cancelarPedido(input: CancelarInput) {
             quantidade: item.quantidade,
             motivo: `Cancelamento do pedido #${pedido.numero}`,
             saldoDepois: produto.stockQty,
+            custoUnitCents: venda?.custoUnitCents ?? cadastro.custoCents ?? null,
             createdById: input.userId,
           },
         });

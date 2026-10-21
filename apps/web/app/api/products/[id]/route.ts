@@ -11,6 +11,8 @@ const patchSchema = z.object({
   sku: z.string().trim().max(40).optional(),
   categoria: z.string().trim().max(40).optional(),
   priceCents: z.number().int().min(0).optional(),
+  // Valor de compra (custo unitário). Nulo limpa.
+  custoCents: z.number().int().min(0).nullable().optional(),
   isActive: z.boolean().optional(),
   tipo: z.enum(["PRODUTO", "SERVICO"]).optional(),
   cobranca: z.enum(["UNICA", "MENSAL"]).optional(),

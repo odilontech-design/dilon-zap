@@ -1028,6 +1028,12 @@ model Product {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name     String
 
+  // Valor de compra (custo unitário), para margem e CMV — pedido da Believe
+  // (20/10). Opcional: serviço e produto ainda sem custo informado ficam nulo,
+  // e nulo é "não sei", não "custo zero". Só a gestão vê (a rota tira o campo
+  // para o atendente). Uma Compra lançada com custo atualiza este valor.
+  custoCents Int?
+
   // Produto ou serviço. A diferença que importa é UMA: serviço não tem
   // estoque. Não é "estoque infinito" nem "estoque zero" — é que a pergunta
   // não se aplica, e tratar como número faria uma consultoria aparecer como
@@ -1323,6 +1329,11 @@ model StockMovement {
   // registrado aqui não bate com a soma até este ponto, alguém escreveu por
   // fora.
   saldoDepois Int
+
+  // Custo unitário do produto NO MOMENTO da movimentação. É o que faz o CMV de
+  // um mês antigo não mudar quando o custo do cadastro muda depois. Nulo nas
+  // movimentações de antes de existir o campo (o relatório usa o custo atual).
+  custoUnitCents Int?
 
   createdById String?
   createdBy   User?    @relation("StockMovementBy", fields: [createdById], references: [id], onDelete: SetNull)
