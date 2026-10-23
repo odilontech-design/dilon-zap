@@ -13,6 +13,10 @@ const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 const bodySchema = z.object({
   outOfHoursMessage: z.string().max(4096).nullable(),
+  // Intervalo de almoço: os dois horários ou nenhum.
+  almocoInicio: z.string().regex(HORA, "use HH:MM").nullable().optional(),
+  almocoFim: z.string().regex(HORA, "use HH:MM").nullable().optional(),
+  almocoMensagem: z.string().max(4096).nullable().optional(),
   days: z
     .array(
       z.object({
@@ -40,7 +44,7 @@ export async function GET() {
   const [tenant, horarios] = await Promise.all([
     prisma.tenant.findUniqueOrThrow({
       where: { id: user.tenantId },
-      select: { timezone: true, outOfHoursMessage: true },
+      select: { timezone: true, outOfHoursMessage: true, almocoInicio: true, almocoFim: true, almocoMensagem: true },
     }),
     prisma.businessHour.findMany({
       where: { tenantId: user.tenantId },
@@ -61,6 +65,9 @@ export async function GET() {
   return NextResponse.json({
     timezone: tenant.timezone,
     outOfHoursMessage: tenant.outOfHoursMessage,
+    almocoInicio: tenant.almocoInicio,
+    almocoFim: tenant.almocoFim,
+    almocoMensagem: tenant.almocoMensagem,
     days,
   });
 }
@@ -83,11 +90,20 @@ export async function PUT(req: Request) {
   }
 
   const mensagem = parsed.data.outOfHoursMessage?.trim() || null;
+  const { almocoInicio = null, almocoFim = null } = parsed.data;
+  if (!!almocoInicio !== !!almocoFim || (almocoInicio && almocoFim && almocoFim <= almocoInicio)) {
+    return NextResponse.json({ error: "o almoço precisa de início e fim, com o fim depois do início" }, { status: 400 });
+  }
 
   await prisma.$transaction([
     prisma.tenant.update({
       where: { id: user.tenantId },
-      data: { outOfHoursMessage: mensagem },
+      data: {
+        outOfHoursMessage: mensagem,
+        ...(parsed.data.almocoInicio !== undefined
+          ? { almocoInicio, almocoFim, almocoMensagem: parsed.data.almocoMensagem?.trim() || null }
+          : {}),
+      },
     }),
     ...parsed.data.days.map((d) =>
       prisma.businessHour.upsert({

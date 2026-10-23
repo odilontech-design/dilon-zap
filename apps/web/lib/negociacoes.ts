@@ -1,3 +1,4 @@
+import { exigeNegociacaoCompleta, faltandoNaNegociacao, origemCanonica } from "@/lib/origens";
 import { prisma } from "@dilon-zap/db";
 import type { CurrentUser } from "@/lib/session";
 
@@ -266,6 +267,9 @@ export async function aplicarEtapaEValorDoContato(args: {
   contato: { id: string; name: string | null; phoneNumber: string | null; waJid: string };
   stageId?: string | null;
   dealValueCents?: number;
+  /** Só ao ABRIR uma negociação por aqui (empresas que exigem os dados). */
+  responsavelId?: string | null;
+  origem?: string | null;
 }) {
   const { tenantId, quem, contato } = args;
 
@@ -283,6 +287,14 @@ export async function aplicarEtapaEValorDoContato(args: {
     if (aberta) {
       await moverNegociacao(aberta, etapa.id, quem);
     } else {
+      if (await exigeNegociacaoCompleta(tenantId)) {
+        const falta = faltandoNaNegociacao({ responsavelId: args.responsavelId, valorCents: args.dealValueCents, origem: args.origem });
+        if (falta.length) throw new ErroDeNegocio(`Para abrir a negociação, informe ${falta.join(", ")}.`, 422);
+        if (args.responsavelId) {
+          const resp = await prisma.user.findFirst({ where: { id: args.responsavelId, tenantId }, select: { id: true } });
+          if (!resp) throw new ErroDeNegocio("responsável inválido", 400);
+        }
+      }
       await criarNegociacao({
         tenantId,
         quem,
@@ -292,10 +304,12 @@ export async function aplicarEtapaEValorDoContato(args: {
         titulo: contato.name?.trim() || contato.phoneNumber || contato.waJid.split("@")[0],
         valorCents: args.dealValueCents ?? 0,
         recorrencia: "UNICA",
-        responsavelId: null,
-        origem: null,
+        responsavelId: args.responsavelId ?? null,
+        origem: await origemCanonica(tenantId, args.origem),
         previsaoFechamento: null,
       });
+      // O valor já entrou na negociação nova; não precisa do passo seguinte.
+      return;
     }
   }
 
@@ -543,6 +557,9 @@ export async function duplicarEmOutroFunil(
     origem: original.origem,
     previsaoFechamento: original.previsaoFechamento,
   });
+
+  // A cópia sabe de onde veio: relatórios de "todos os funis" não a contam de novo.
+  await prisma.negociacao.update({ where: { id: copia.id }, data: { duplicadaDeId: original.id } });
 
   // A condição de pagamento combinada vai junto com a cópia.
   if (original.pagForma) {

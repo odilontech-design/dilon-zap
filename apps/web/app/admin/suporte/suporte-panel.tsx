@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { rolarParaOFim } from "@/lib/rolagem";
 import useSWR from "swr";
 import { LISTING_INTERVAL, MESSAGES_INTERVAL } from "@/lib/polling";
 
@@ -169,7 +170,7 @@ function Conversa({ aberto, meuId, onVoltar }: { aberto: Aberto; meuId: string; 
   const fimRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: "auto" });
+    rolarParaOFim(fimRef.current?.parentElement ?? null);
   }, [mensagens?.length]);
 
   async function enviar(e: React.FormEvent) {

@@ -13,6 +13,7 @@ const schema = z.object({
   restringirFilaGeral: z.boolean().optional(),
   termoPedido: z.enum(["Pedido", "Orçamento"]).optional(),
   pedidosSoGerencia: z.boolean().optional(),
+  negociacaoCompleta: z.boolean().optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -23,7 +24,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: params.id },
-    select: { id: true, name: true, conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true, pedidosSoGerencia: true },
+    select: { id: true, name: true, conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true, pedidosSoGerencia: true, negociacaoCompleta: true },
   });
   if (!tenant) return NextResponse.json({ error: "empresa não encontrada" }, { status: 404 });
 
@@ -33,10 +34,11 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       ...(d.conversasAbertasATodos !== undefined ? { conversasAbertasATodos: d.conversasAbertasATodos } : {}),
       ...(d.restringirFilaGeral !== undefined ? { restringirFilaGeral: d.restringirFilaGeral } : {}),
       ...(d.pedidosSoGerencia !== undefined ? { pedidosSoGerencia: d.pedidosSoGerencia } : {}),
+      ...(d.negociacaoCompleta !== undefined ? { negociacaoCompleta: d.negociacaoCompleta } : {}),
       // "Pedido" é o padrão: guarda nulo, para o padrão poder mudar no código.
       ...(d.termoPedido !== undefined ? { termoPedido: d.termoPedido === "Pedido" ? null : d.termoPedido } : {}),
     },
-    select: { conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true, pedidosSoGerencia: true },
+    select: { conversasAbertasATodos: true, restringirFilaGeral: true, termoPedido: true, pedidosSoGerencia: true, negociacaoCompleta: true },
   });
 
   await logAudit({
@@ -50,6 +52,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         restringirFilaGeral: tenant.restringirFilaGeral,
         termoPedido: tenant.termoPedido,
         pedidosSoGerencia: tenant.pedidosSoGerencia,
+        negociacaoCompleta: tenant.negociacaoCompleta,
       },
       para: atualizado,
     },

@@ -24,7 +24,7 @@ import { avisarMensagemNova } from "./aviso-mensagem";
 import { registrarPresenca } from "./presenca";
 import { lerNotaDeVoz } from "./ogg-audio";
 import { abrirEdicaoSecreta, textoDoContato } from "./contato-e-edicao";
-import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
+import { dentroDoHorario, noIntervaloDeAlmoco, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
 import { decidirAutoResposta, avaliarAutomacao, equipeFalou, numeroTemRobo, type OpcaoUra } from "./auto-reply-decisao";
 import {
@@ -1352,13 +1352,15 @@ async function recordMessage(params: {
         });
       }
 
+      const noAlmoco = noIntervaloDeAlmoco(atendimento.dias, atendimento.timezone, atendimento.almocoInicio, atendimento.almocoFim);
       await maybeAutoReply({
         tenantId: session.tenantId,
         sessionId: params.sessionId,
         conversationId: conversation.id,
         inboundText: params.text,
-        foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone),
-        mensagemAusencia: atendimento.outOfHoursMessage,
+        // Almoço conta como fora do horário, com a mensagem própria dele.
+        foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone) || noAlmoco,
+        mensagemAusencia: noAlmoco ? atendimento.almocoMensagem || atendimento.outOfHoursMessage : atendimento.outOfHoursMessage,
         ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
         contactId: contact.id,
         saudacaoEnviadaEm: contact.saudacaoEnviadaEm,
@@ -1694,6 +1696,9 @@ const cacheAtendimento = new Map<
     dados: {
       timezone: string;
       outOfHoursMessage: string | null;
+      almocoInicio: string | null;
+      almocoFim: string | null;
+      almocoMensagem: string | null;
       dias: DiaDeAtendimento[];
       uraAtiva: boolean;
       uraMensagem: string | null;
@@ -1713,6 +1718,9 @@ async function carregarAtendimento(tenantId: string) {
       select: {
         timezone: true,
         outOfHoursMessage: true,
+        almocoInicio: true,
+        almocoFim: true,
+        almocoMensagem: true,
         uraAtiva: true,
         uraMensagem: true,
         uraReinicioAposMinutos: true,
@@ -1750,6 +1758,9 @@ async function carregarAtendimento(tenantId: string) {
   const dados = {
     timezone: tenant.timezone,
     outOfHoursMessage: tenant.outOfHoursMessage,
+    almocoInicio: tenant.almocoInicio,
+    almocoFim: tenant.almocoFim,
+    almocoMensagem: tenant.almocoMensagem,
     dias,
     uraAtiva: tenant.uraAtiva,
     uraMensagem: tenant.uraMensagem,

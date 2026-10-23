@@ -39,7 +39,11 @@ export async function GET(req: Request) {
     etapaSqlId = etapas[1]?.id ?? null;
   }
 
-  const brutas = await prisma.negociacao.findMany({ where: { tenantId: user.tenantId, ...(funilId ? { funilId } : {}) } });
+  // Em "todos os funis", a cópia do pós-venda não é um lead nem uma venda nova:
+  // é a continuação de uma negociação que já conta no funil de origem.
+  const brutas = await prisma.negociacao.findMany({
+    where: { tenantId: user.tenantId, ...(funilId ? { funilId } : { duplicadaDeId: null }) },
+  });
   const negociacoes: NegociacaoIn[] = brutas.map((n) => ({
     id: n.id,
     funilId: n.funilId,

@@ -457,6 +457,8 @@ export function FunnelBoard({ podeGerir, funilInicial }: { podeGerir: boolean; f
           usuarios={quadro.usuarios}
           origens={quadro.origens}
           etapaInicial={criando.etapaId}
+          exigirDados={quadro.exigirDados}
+          meuId={quadro.meuId}
           onFechar={() => setCriando(null)}
           onCriada={() => {
             setCriando(null);

@@ -92,6 +92,7 @@ type TenantDetailResponse = {
     restringirFilaGeral?: boolean;
     termoPedido?: string | null;
     pedidosSoGerencia?: boolean;
+    negociacaoCompleta?: boolean;
     suspensoEm?: string | null;
   };
   recentAudit: AuditEntry[];
@@ -207,6 +208,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
           restringirFilaGeral: !!tenant.restringirFilaGeral,
           termoPedido: tenant.termoPedido ?? null,
           pedidosSoGerencia: !!tenant.pedidosSoGerencia,
+          negociacaoCompleta: !!tenant.negociacaoCompleta,
         }}
         suspensoEm={tenant.suspensoEm ?? null}
         onSalvo={mutate}

@@ -176,14 +176,15 @@ export async function fecharPedido(input: FecharInput) {
           primeiroVencimento: plano.primeiroVencimento,
         });
 
-        if (plano.entradaPaga && plano.entradaCents > 0) {
+        if (plano.entradaPaga && plano.entradaMeio && plano.entradaCents > 0) {
           const entrada = await tx.parcela.findFirst({ where: { contaId: conta.id, tipo: "ENTRADA" }, select: { id: true } });
           await receberNaConta(tx, {
             tenantId: input.tenantId,
             contaId: conta.id,
             parcelaId: entrada?.id,
             valorCents: plano.entradaCents,
-            meio: plano.entradaMeio ?? "DINHEIRO",
+            // Sem forma informada a entrada não é dada como recebida (ver a rota).
+            meio: plano.entradaMeio,
             recebidoEm: agora,
             observacao: "Entrada paga no fechamento",
             userId: input.userId,

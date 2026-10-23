@@ -73,3 +73,25 @@ export function dentroDoHorario(
 
   return minutos >= abre && minutos < fecha;
 }
+
+/**
+ * Dentro do intervalo de almoço: dia de atendimento aberto e o relógio da
+ * empresa entre o início e o fim do intervalo. Intervalo malformado ou vazio
+ * nunca conta (melhor não avisar que avisar fora de hora).
+ */
+export function noIntervaloDeAlmoco(
+  dias: DiaDeAtendimento[],
+  fuso: string,
+  inicio: string | null | undefined,
+  fim: string | null | undefined,
+  quando = new Date()
+): boolean {
+  if (!inicio || !fim) return false;
+  const de = paraMinutos(inicio);
+  const ate = paraMinutos(fim);
+  if (de === null || ate === null || ate <= de) return false;
+  const { weekday, minutos } = agoraNoFuso(fuso, quando);
+  const hoje = dias.find((d) => d.weekday === weekday);
+  if (!hoje || !hoje.isOpen) return false;
+  return minutos >= de && minutos < ate;
+}

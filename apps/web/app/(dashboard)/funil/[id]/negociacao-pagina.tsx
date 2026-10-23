@@ -10,6 +10,7 @@ import { Avatar } from "@/components/avatar";
 import { ContactCard } from "@/components/contact-card";
 import { SeloPendencia } from "@/components/selo-pendencia";
 import { ItensNegociacao } from "../itens-negociacao";
+import { CampoOrigem } from "@/components/campo-origem";
 import { TarefasNegociacao } from "../tarefas-negociacao";
 import { ROTULO_RESULTADO, type ResultadoLigacao } from "../concluir-tarefa";
 import {
@@ -634,12 +635,7 @@ function DadosNegociacao({
         </div>
         <div>
           <label className={rotulo}>Origem</label>
-          <input value={origem} onChange={(e) => setOrigem(e.target.value)} list="origens-negociacao" className={campo} />
-          <datalist id="origens-negociacao">
-            {origens.map((o) => (
-              <option key={o} value={o} />
-            ))}
-          </datalist>
+          <CampoOrigem value={origem} onChange={setOrigem} origens={origens} className={campo} />
         </div>
       </div>
       <dl className="grid grid-cols-2 gap-1 text-[11px] text-neutral-500">

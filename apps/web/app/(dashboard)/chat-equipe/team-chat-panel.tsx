@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { rolarParaOFim } from "@/lib/rolagem";
 import useSWR from "swr";
 import { MESSAGES_INTERVAL, LISTING_INTERVAL } from "@/lib/polling";
 import { EmojiPicker, SavedTextPicker } from "../inbox/inbox-view";
@@ -206,7 +207,8 @@ function CanalAberto({
   const fimRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fimRef.current?.scrollIntoView({ behavior: "auto" });
+    // A caixa, não a página: scrollIntoView fazia a tela subir no celular.
+    rolarParaOFim(fimRef.current?.parentElement ?? null);
   }, [mensagens?.length]);
 
   async function enviarTexto(e: React.FormEvent) {

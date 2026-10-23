@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-type Ajustes = { conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string | null; pedidosSoGerencia: boolean };
+type Ajustes = { conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string | null; pedidosSoGerencia: boolean; negociacaoCompleta: boolean };
 
 /**
  * Ajustes que antes só mudavam direto no banco. Cada mudança salva na hora e
@@ -23,7 +23,7 @@ export function AjustesEmpresa({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  async function salvar(mudanca: Partial<{ conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string; pedidosSoGerencia: boolean }>) {
+  async function salvar(mudanca: Partial<{ conversasAbertasATodos: boolean; restringirFilaGeral: boolean; termoPedido: string; pedidosSoGerencia: boolean; negociacaoCompleta: boolean }>) {
     setErro(null);
     setSalvando(true);
     const res = await fetch(`/api/admin/tenants/${tenantId}/ajustes`, {
@@ -86,6 +86,20 @@ export function AjustesEmpresa({
             onChange={(e) => salvar({ pedidosSoGerencia: e.target.checked })}
             className="mt-1 h-4 w-4"
             aria-label="Pedidos e valores devidos só para responsável e financeiro"
+          />
+        </div>
+        <div className={linha}>
+          <div>
+            <p className="text-sm text-neutral-200">Negociação exige responsável, valor e origem</p>
+            <p className="text-xs text-neutral-500">Vale para o CRM e para a etapa escolhida no Inbox. Origem vira lista.</p>
+          </div>
+          <input
+            type="checkbox"
+            checked={ajustes.negociacaoCompleta}
+            disabled={salvando}
+            onChange={(e) => salvar({ negociacaoCompleta: e.target.checked })}
+            className="mt-1 h-4 w-4"
+            aria-label="Negociação exige responsável, valor e origem"
           />
         </div>
         <div className={linha}>

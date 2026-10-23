@@ -93,6 +93,21 @@ model Tenant {
   // sessão do WhatsApp ficam intactos; reativar é limpar o campo.
   suspensoEm DateTime?
 
+  // Toda negociação nova precisa de responsável, valor e origem (Believe,
+  // reunião de 23/10): sem isso não há previsão de vendas nem relatório de
+  // origem. Vale para o CRM e para a etapa escolhida pelo Inbox. Desligado por
+  // padrão — empresa que abre negociação pelo Inbox sem saber o valor ainda
+  // (Hemoderi) seria travada.
+  negociacaoCompleta Boolean @default(false)
+
+  // Intervalo de almoço nos dias de atendimento ("12:00"–"13:00", no fuso da
+  // empresa). Quem escreve nele recebe almocoMensagem (ou, sem ela, a de
+  // ausência), com a mesma trava de uma vez a cada 6 horas. Pedido da Believe
+  // (23/10). Nulo = sem intervalo.
+  almocoInicio   String?
+  almocoFim      String?
+  almocoMensagem String?
+
   // Cabeçalho do recibo impresso. Separado de `name` de propósito: o nome
   // que a equipe vê no sistema ("Believe Cosméticos") não é o que vai no
   // comprovante — ali vai a razão social ou o nome do MEI, que é o que
@@ -629,6 +644,11 @@ model Negociacao {
   /// Quando entrou na etapa atual. É o que diz há quantos dias a negociação
   /// está parada — o sinal mais barato de que um negócio está esfriando.
   etapaDesde DateTime @default(now())
+
+  // Cópia feita por "Outro funil → Duplicar" (a venda ganha que vira um ciclo
+  // de pós-venda): aponta a original. Sem isso, "Todos os funis" nos relatórios
+  // contava a mesma venda duas vezes — a divergência que a Believe viu (23/10).
+  duplicadaDeId String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

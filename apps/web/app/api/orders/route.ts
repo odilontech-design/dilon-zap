@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { prisma } from "@dilon-zap/db";
+import { prisma, type Prisma } from "@dilon-zap/db";
+import { listarPedidos } from "@/lib/pedidos-lista";
+import { fimDoDiaBR, inicioDoDiaBR } from "@/lib/guarda-financeiro";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
@@ -25,6 +27,23 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: "sem permissão" }, { status: 403 });
   }
 
+  // Tela Pedidos: busca, filtros e totais de todos os pedidos do recorte.
+  if (url.searchParams.get("formato") === "lista") {
+    const r = await listarPedidos(
+      user.tenantId,
+      {
+        status,
+        q: url.searchParams.get("q"),
+        de: inicioDoDiaBR(url.searchParams.get("de")),
+        ate: fimDoDiaBR(url.searchParams.get("ate")),
+        forma: url.searchParams.get("forma"),
+        pagamento: (url.searchParams.get("pagamento") as "pago" | "aberto" | null) || null,
+      },
+      SELECT_PEDIDO
+    );
+    return NextResponse.json(r);
+  }
+
   const pedidos = await prisma.order.findMany({
     where: {
       tenantId: user.tenantId,
@@ -36,7 +55,13 @@ export async function GET(req: Request) {
     },
     orderBy: { createdAt: "desc" },
     take: 100,
-    select: {
+    select: SELECT_PEDIDO,
+  });
+
+  return NextResponse.json(pedidos);
+}
+
+const SELECT_PEDIDO = {
       id: true,
       numero: true,
       status: true,
@@ -75,11 +100,7 @@ export async function GET(req: Request) {
           productId: true,
         },
       },
-    },
-  });
-
-  return NextResponse.json(pedidos);
-}
+    } satisfies Prisma.OrderSelect;
 
 const criarSchema = z.object({
   conversationId: z.string().min(1),

@@ -6,6 +6,7 @@ import { TextoWhatsApp, semMarcacao } from "@/components/texto-whatsapp";
 import { lerVcards } from "@/lib/vcard";
 import { casaComBusca } from "@/lib/busca";
 import { useRouter, useSearchParams } from "next/navigation";
+import { rolarAte, rolarParaOFim } from "@/lib/rolagem";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import {
@@ -804,7 +805,7 @@ export function ConversationThread({
       alert("A mensagem original não está nesta conversa (pode ter sido apagada).");
       return;
     }
-    alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+    rolarAte(messagesContainerRef.current, alvo);
     setDestacada(id);
     window.setTimeout(() => setDestacada((atual) => (atual === id ? null : atual)), 2000);
   }
@@ -900,7 +901,7 @@ export function ConversationThread({
   // Leva a tela até o resultado atual.
   useEffect(() => {
     if (!resultadoAtual) return;
-    document.getElementById(`msg-${resultadoAtual}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+    rolarAte(messagesContainerRef.current, document.getElementById(`msg-${resultadoAtual}`));
   }, [resultadoAtual, indiceBusca]);
   // As imagens desta conversa, em ordem, pra navegar entre elas no
   // visualizador. Apagada fica de fora: o conteúdo já não existe mais.
@@ -1013,7 +1014,7 @@ export function ConversationThread({
   // via onLoad, porque termina de carregar bem depois desse efeito rodar.
   function scrollToBottom(behavior: ScrollBehavior = "auto") {
     if (isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior });
+      rolarParaOFim(messagesContainerRef.current, behavior === "smooth");
     }
   }
 
@@ -3240,7 +3241,8 @@ function ContactPanel({
         <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone</label>
         <p className="text-sm text-neutral-600">{formatPhoneDisplay(contact)}</p>
       </div>
-      <EtapasPorFunil contactId={contact.id} onSalvo={onSaved} compacto />
+      {/* Tarefas na própria conversa (Believe, 23/10): o próximo passo nasce aqui. */}
+      <EtapasPorFunil contactId={contact.id} onSalvo={onSaved} compacto comTarefas />
       <div>
         <label className="block text-xs font-medium text-neutral-700 mb-1">Anotações</label>
         <textarea

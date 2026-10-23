@@ -46,6 +46,9 @@ export type Quadro = {
   negociacoes: Negociacao[];
   indicadores: Indicadores;
   origens: string[];
+  /** Empresa exige responsável, valor e origem em negociação nova. */
+  exigirDados?: boolean;
+  meuId?: string;
   motivos: Motivo[];
   usuarios: Usuario[];
 };

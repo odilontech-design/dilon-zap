@@ -16,6 +16,9 @@ import { CAMPOS_ENDERECO, formatarCep, montarEndereco } from "@/lib/cadastro-cli
 const bodySchema = z.object({
   stageId: z.string().nullable().optional(),
   dealValueCents: z.number().int().min(0).optional(),
+  // Ao abrir a negociação pela etapa (empresas que exigem os dados).
+  responsavelId: z.string().nullable().optional(),
+  origem: z.string().trim().max(60).nullable().optional(),
   name: z.string().max(120).nullable().optional(),
   notes: z.string().max(4000).nullable().optional(),
   documento: z.string().max(40).nullable().optional(),
@@ -130,6 +133,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     endereco,
     stageId,
     dealValueCents,
+    responsavelId,
+    origem,
     email,
     nascimento,
     rgIe,
@@ -148,7 +153,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // da Believe pra uma etapa cadastrada por outro negócio.
   try {
     if (stageId !== undefined || dealValueCents !== undefined) {
-      await aplicarEtapaEValorDoContato({ tenantId: user.tenantId, quem: user, contato: contact, stageId, dealValueCents });
+      await aplicarEtapaEValorDoContato({ tenantId: user.tenantId, quem: user, contato: contact, stageId, dealValueCents, responsavelId, origem });
     }
   } catch (e) {
     if (e instanceof ErroDeNegocio) return NextResponse.json({ error: e.message }, { status: e.status });

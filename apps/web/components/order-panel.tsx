@@ -191,8 +191,11 @@ export function OrderPanel({
   const [entrada, setEntrada] = useState(
     pedido.planoEntradaCents ? (pedido.planoEntradaCents / 100).toFixed(2).replace(".", ",") : ""
   );
-  const [entradaPaga, setEntradaPaga] = useState(true);
-  const [entradaMeio, setEntradaMeio] = useState<"PIX" | "DINHEIRO" | "CARTAO">("DINHEIRO");
+  // A entrada só vira recebimento quando o financeiro confirma que entrou, e
+  // por qual forma (Believe, 23/10): antes vinha marcada como paga em dinheiro
+  // e caía no caixa sozinha, mesmo em venda faturada que o cliente ia pagar depois.
+  const [entradaPaga, setEntradaPaga] = useState(false);
+  const [entradaMeio, setEntradaMeio] = useState<"" | "PIX" | "DINHEIRO" | "CARTAO">("");
   const [numParcelas, setNumParcelas] = useState(String(pedido.planoNumParcelas ?? 4));
   const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">(
     pedido.planoPeriodicidade === "QUINZENAL" || pedido.planoPeriodicidade === "MENSAL" ? pedido.planoPeriodicidade : "SEMANAL"
@@ -324,6 +327,7 @@ export function OrderPanel({
   async function fechar(liberarPendencia = false) {
     if (aPrazo && parcelar && previaParcelas.erro) return setErro(previaParcelas.erro);
     if (aPrazo && !parcelar && !vencimento) return setErro("informe quando o cliente vai pagar");
+    if (aPrazo && parcelar && entradaCents > 0 && entradaPaga && !entradaMeio) return setErro("informe a forma de pagamento da entrada");
     if ((await salvarItens()) === null) return;
 
     setErro(null);
@@ -343,7 +347,7 @@ export function OrderPanel({
               parcelamento: {
                 entradaCents,
                 entradaPaga: entradaCents > 0 && entradaPaga,
-                entradaMeio,
+                entradaMeio: entradaPaga && entradaMeio ? entradaMeio : undefined,
                 numParcelas: Number(numParcelas),
                 periodicidade,
                 primeiroVencimento,
@@ -733,12 +737,18 @@ export function OrderPanel({
                   {entradaCents > 0 && (
                     <label className="flex flex-wrap items-center gap-2">
                       <input type="checkbox" checked={entradaPaga} onChange={(e) => setEntradaPaga(e.target.checked)} />
-                      Entrada paga agora, em
+                      Entrada já recebida, em
                       <select value={entradaMeio} onChange={(e) => setEntradaMeio(e.target.value as typeof entradaMeio)} disabled={!entradaPaga} className="rounded-md border border-neutral-300 bg-surface px-2 py-1">
+                        <option value="">forma de pagamento…</option>
                         <option value="DINHEIRO">Dinheiro</option>
                         <option value="PIX">PIX</option>
                         <option value="CARTAO">Cartão</option>
                       </select>
+                      {!entradaPaga && (
+                        <span className="basis-full text-xs text-neutral-500">
+                          Sem marcar, a entrada fica no A receber vencendo hoje, para registrar quando o dinheiro entrar.
+                        </span>
+                      )}
                     </label>
                   )}
                   {previaParcelas.linhas.length > 0 && (

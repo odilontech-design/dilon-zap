@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { funilDaEmpresa, garantirMotivosDePerda } from "@/lib/funis";
+import { exigeNegociacaoCompleta, faltandoNaNegociacao, origemCanonica, origensDoTenant } from "@/lib/origens";
 import { criarNegociacao, ErroDeNegocio } from "@/lib/negociacoes";
 import { pendenciasPorContato } from "@/lib/contas-receber";
 import { podeVerPendencia } from "@/lib/plano";
@@ -126,7 +127,8 @@ export async function GET(req: Request) {
   }
 
   // Sugestões de origem: o que a empresa já usou, pra não nascerem "insta" e "Instagram".
-  const origens = [...new Set(brutas.map((n) => n.origem).filter((o): o is string => !!o))].sort();
+  // Lista padronizada (sugestões + as já usadas), a mesma do formulário.
+  const [origens, exigirDados] = await Promise.all([origensDoTenant(user.tenantId), exigeNegociacaoCompleta(user.tenantId)]);
 
   return NextResponse.json({
     funil: { id: funil.id, nome: funil.nome },
@@ -164,6 +166,8 @@ export async function GET(req: Request) {
     })),
     indicadores,
     origens,
+    exigirDados,
+    meuId: user.id,
     motivos,
     usuarios,
   });
@@ -197,6 +201,10 @@ export async function POST(req: Request) {
     const resp = await prisma.user.findFirst({ where: { id: d.responsavelId, tenantId: user.tenantId }, select: { id: true } });
     if (!resp) return NextResponse.json({ error: "responsável inválido" }, { status: 400 });
   }
+  if (await exigeNegociacaoCompleta(user.tenantId)) {
+    const falta = faltandoNaNegociacao(d);
+    if (falta.length) return NextResponse.json({ error: `Informe ${falta.join(", ")} para criar a negociação.` }, { status: 422 });
+  }
 
   // Sem etapa informada, entra na primeira do funil.
   let stageId = d.stageId;
@@ -219,7 +227,7 @@ export async function POST(req: Request) {
       valorCents: d.valorCents,
       recorrencia: d.recorrencia,
       responsavelId: d.responsavelId ?? null,
-      origem: d.origem || null,
+      origem: await origemCanonica(user.tenantId, d.origem),
       previsaoFechamento: previsao,
     });
     return NextResponse.json({ id: n.id });

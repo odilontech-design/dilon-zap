@@ -272,6 +272,12 @@ function Origens({ desde, ate, campo }: { desde?: string; ate?: string; campo: s
         </select>
       </div>
 
+      <p className="text-xs text-neutral-500 -mt-2">
+        Conta as negociações <b>criadas</b> no período e o que elas já fecharam (ganhas a qualquer momento depois).
+        Por isso o valor ganho aqui pode diferir do total de vendas fechadas no mês.
+        {data.funilId === "todos" && " Em todos os funis, a cópia para o pós-venda não conta de novo."}
+      </p>
+
       <div className="flex gap-2 overflow-x-auto pb-1">
         <Cartao titulo="Leads no período" valor={String(data.total.leads)} nota="negociações criadas" />
         <Cartao titulo="Viraram cliente" valor={String(data.total.ganhas)} nota={formatarTaxa(data.total.conversaoLeadCliente)} />

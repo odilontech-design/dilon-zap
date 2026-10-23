@@ -7,6 +7,9 @@ type Dia = { weekday: number; isOpen: boolean; opensAt: string; closesAt: string
 type Config = {
   timezone: string;
   outOfHoursMessage: string | null;
+  almocoInicio: string | null;
+  almocoFim: string | null;
+  almocoMensagem: string | null;
   days: Dia[];
   configurado: boolean;
 };
@@ -19,6 +22,11 @@ export function BusinessHoursPanel({ podeEditar }: { podeEditar: boolean }) {
   const { data, mutate } = useSWR<Config>("/api/business-hours", fetcher);
   const [dias, setDias] = useState<Dia[] | null>(null);
   const [mensagem, setMensagem] = useState("");
+  // Intervalo de almoço (Believe, 23/10): quem escreve nele recebe um aviso.
+  const [comAlmoco, setComAlmoco] = useState(false);
+  const [almocoInicio, setAlmocoInicio] = useState("12:00");
+  const [almocoFim, setAlmocoFim] = useState("13:00");
+  const [almocoMensagem, setAlmocoMensagem] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
@@ -30,6 +38,10 @@ export function BusinessHoursPanel({ podeEditar }: { podeEditar: boolean }) {
     if (data && dias === null) {
       setDias(data.days);
       setMensagem(data.outOfHoursMessage ?? "");
+      setComAlmoco(!!(data.almocoInicio && data.almocoFim));
+      if (data.almocoInicio) setAlmocoInicio(data.almocoInicio);
+      if (data.almocoFim) setAlmocoFim(data.almocoFim);
+      setAlmocoMensagem(data.almocoMensagem ?? "");
     }
   }, [data, dias]);
 
@@ -45,7 +57,13 @@ export function BusinessHoursPanel({ podeEditar }: { podeEditar: boolean }) {
     const res = await fetch("/api/business-hours", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ days: dias, outOfHoursMessage: mensagem }),
+      body: JSON.stringify({
+        days: dias,
+        outOfHoursMessage: mensagem,
+        almocoInicio: comAlmoco ? almocoInicio : null,
+        almocoFim: comAlmoco ? almocoFim : null,
+        almocoMensagem: comAlmoco ? almocoMensagem : null,
+      }),
     });
     setSalvando(false);
     if (!res.ok) {
@@ -131,6 +149,63 @@ export function BusinessHoursPanel({ podeEditar }: { podeEditar: boolean }) {
             ? "Deixe em branco pra desligar o aviso de ausência."
             : "Em branco: nenhum aviso de ausência é enviado."}
         </p>
+      </div>
+
+      <div className="flex flex-col gap-2 rounded-md border border-neutral-200 p-3">
+        <label className="flex items-center gap-2 text-sm font-medium text-neutral-800">
+          <input
+            type="checkbox"
+            checked={comAlmoco}
+            disabled={!podeEditar}
+            onChange={(e) => {
+              setComAlmoco(e.target.checked);
+              setSalvo(false);
+            }}
+          />
+          Intervalo de almoço
+        </label>
+        {comAlmoco && (
+          <>
+            <div className="flex items-center gap-2 text-sm">
+              <input
+                type="time"
+                value={almocoInicio}
+                disabled={!podeEditar}
+                onChange={(e) => {
+                  setAlmocoInicio(e.target.value);
+                  setSalvo(false);
+                }}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+              <span className="text-neutral-400 text-xs">às</span>
+              <input
+                type="time"
+                value={almocoFim}
+                disabled={!podeEditar}
+                onChange={(e) => {
+                  setAlmocoFim(e.target.value);
+                  setSalvo(false);
+                }}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-accent"
+              />
+              <span className="text-xs text-neutral-500">nos dias de atendimento</span>
+            </div>
+            <textarea
+              value={almocoMensagem}
+              disabled={!podeEditar}
+              onChange={(e) => {
+                setAlmocoMensagem(e.target.value);
+                setSalvo(false);
+              }}
+              rows={3}
+              placeholder="Ex: Olá! Nossa equipe está no horário de almoço, das 12h às 13h. Já já respondemos você 😊"
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm disabled:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            <p className="text-xs text-neutral-500">
+              Em branco, usa a mensagem de ausência. Mesma trava: uma vez a cada 6 horas por cliente.
+            </p>
+          </>
+        )}
       </div>
 
       {erro && <p className="text-xs text-red-600">{erro}</p>}

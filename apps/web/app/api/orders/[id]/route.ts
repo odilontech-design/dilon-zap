@@ -40,6 +40,9 @@ const patchSchema = z.object({
       periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]),
       primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     })
+    // Entrada dada como recebida precisa dizer por onde entrou: é isso que
+    // decide se ela cai no caixa (dinheiro) ou não (Believe, 23/10).
+    .refine((v) => !v.entradaPaga || v.entradaCents === 0 || !!v.entradaMeio, { message: "informe a forma de pagamento da entrada" })
     .nullable()
     .optional(),
   // O responsável libera venda a prazo para quem tem parcela pendente.
