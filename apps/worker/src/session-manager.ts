@@ -22,6 +22,7 @@ import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/stor
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { avisarMensagemNova } from "./aviso-mensagem";
 import { registrarPresenca } from "./presenca";
+import { lerNotaDeVoz } from "./ogg-audio";
 import { abrirEdicaoSecreta, textoDoContato } from "./contato-e-edicao";
 import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
@@ -2152,6 +2153,20 @@ async function maybeAutoReply(params: {
   wakeOutboxForTenant(params.tenantId);
 }
 
+/** Miniatura JPEG (32px de largura, como o Baileys faria) e as dimensões. */
+async function miniaturaDaImagem(buffer: Buffer): Promise<{ jpegThumbnail: string; width?: number; height?: number } | null> {
+  try {
+    const { default: sharp } = await import("sharp");
+    const img = sharp(buffer);
+    const meta = await img.metadata();
+    // Em base64, como o Baileys guarda a que ele mesmo gera.
+    const jpegThumbnail = (await img.resize(32).jpeg({ quality: 50 }).toBuffer()).toString("base64");
+    return { jpegThumbnail, width: meta.width, height: meta.height };
+  } catch {
+    return null; // sem miniatura a imagem ainda chega; só sem a prévia borrada
+  }
+}
+
 // Baixa a mídia do R2 e manda pro WhatsApp no formato certo pro tipo. Áudio
 // sempre como nota de voz (ptt) — é o formato que casa com o player estilo
 // WhatsApp que a gente mostra no inbox.
@@ -2172,14 +2187,29 @@ async function sendOutboundMedia(
   const mimetype = message.mediaMimeType ?? undefined;
 
   if (message.mediaType === "AUDIO") {
+    // Duração e onda prontas: o cálculo do próprio Baileys lê um arquivo
+    // temporário que não existe mais e falhava sempre (ENOENT), e a nota de
+    // voz chegava sem duração — o celular do cliente recusava tocar (23/10).
+    const nota = lerNotaDeVoz(buffer);
     return socket.sendMessage(
       jid,
-      { audio: buffer, mimetype: mimetype ?? "audio/ogg; codecs=opus", ptt: true },
+      {
+        audio: buffer,
+        mimetype: mimetype ?? "audio/ogg; codecs=opus",
+        ptt: true,
+        ...(nota ? { seconds: nota.seconds, waveform: nota.waveform } : {}),
+      },
       options
     );
   }
   if (message.mediaType === "IMAGE") {
-    return socket.sendMessage(jid, { image: buffer, mimetype, caption: message.body || undefined }, options);
+    // Mesma falha do áudio na miniatura: a imagem ia sem prévia. Gerada aqui.
+    const miniatura = await miniaturaDaImagem(buffer);
+    return socket.sendMessage(
+      jid,
+      { image: buffer, mimetype, caption: message.body || undefined, ...(miniatura ?? {}) },
+      options
+    );
   }
   if (message.mediaType === "VIDEO") {
     return socket.sendMessage(jid, { video: buffer, mimetype: mimetype ?? "video/mp4", caption: message.body || undefined }, options);
