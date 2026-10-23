@@ -16,7 +16,7 @@ import makeWASocket, {
 import { Boom } from "@hapi/boom";
 import QRCode from "qrcode";
 import pino from "pino";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
@@ -2153,6 +2153,26 @@ async function maybeAutoReply(params: {
   wakeOutboxForTenant(params.tenantId);
 }
 
+async function conferirMidiaEnviada(enviada: WAMessage, original: Buffer) {
+  const audio = enviada.message?.audioMessage;
+  const resumo = {
+    id: enviada.key.id,
+    host: audio?.url ? new URL(audio.url).hostname : null,
+    directPath: !!audio?.directPath,
+    fileLength: Number(audio?.fileLength ?? 0),
+    tamanhoOriginal: original.length,
+    seconds: audio?.seconds,
+    mimetype: audio?.mimetype,
+  };
+  try {
+    const baixado = (await downloadMediaMessage(enviada, "buffer", {})) as Buffer;
+    const igual = createHash("sha256").update(baixado).digest("hex") === createHash("sha256").update(original).digest("hex");
+    logger.warn({ ...resumo, baixadoBytes: baixado.length, igual }, igual ? "audio enviado conferido: baixa e bate com o original" : "audio enviado NAO bate com o original");
+  } catch (err) {
+    logger.warn({ ...resumo, erro: (err as Error).message }, "audio enviado NAO baixa do WhatsApp");
+  }
+}
+
 /** Miniatura JPEG (32px de largura, como o Baileys faria) e as dimensões. */
 async function miniaturaDaImagem(buffer: Buffer): Promise<{ jpegThumbnail: string; width?: number; height?: number } | null> {
   try {
@@ -2191,7 +2211,7 @@ async function sendOutboundMedia(
     // temporário que não existe mais e falhava sempre (ENOENT), e a nota de
     // voz chegava sem duração — o celular do cliente recusava tocar (23/10).
     const nota = lerNotaDeVoz(buffer);
-    return socket.sendMessage(
+    const enviada = await socket.sendMessage(
       jid,
       {
         audio: buffer,
@@ -2201,6 +2221,11 @@ async function sendOutboundMedia(
       },
       options
     );
+    // Diagnóstico (23/10, "não foi possível baixar o áudio" no cliente): baixa
+    // de volta do WhatsApp o que acabou de subir, como o celular do cliente
+    // faria, e compara com o original. Só leitura, em segundo plano.
+    if (enviada) void conferirMidiaEnviada(enviada, buffer);
+    return enviada;
   }
   if (message.mediaType === "IMAGE") {
     // Mesma falha do áudio na miniatura: a imagem ia sem prévia. Gerada aqui.
