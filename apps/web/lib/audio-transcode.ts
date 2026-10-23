@@ -52,6 +52,18 @@ function executarFfmpeg(entrada: Buffer, saidaPath: string): Promise<void> {
       "-y",
       "-i",
       "pipe:0",
+      // Só o áudio e NENHUMA etiqueta da origem (23/10): gravação vinda em MP4
+      // (Safari/iPhone e Chrome recente) trazia handler "Core Media Audio" e um
+      // vendor_id com caracteres nulos para dentro do .ogg, e o WhatsApp do
+      // cliente recusava ("algo errado com o arquivo" / "não foi possível baixar").
+      "-map",
+      "0:a:0",
+      "-map_metadata",
+      "-1",
+      "-map_metadata:s:a",
+      "-1",
+      "-map_chapters",
+      "-1",
       "-avoid_negative_ts",
       "make_zero",
       "-vn", // descarta qualquer capa/thumbnail embutido — só interessa o áudio

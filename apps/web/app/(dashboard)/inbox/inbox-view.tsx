@@ -1346,7 +1346,8 @@ export function ConversationThread({
     recorder.onstop = () => {
       stream.getTracks().forEach((track) => track.stop());
       const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-      const ext = blob.type.includes("ogg") ? "ogg" : "webm";
+      // O nome segue o formato real: Safari e o Chrome recente gravam em MP4.
+      const ext = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm";
       const file = new File([blob], `audio.${ext}`, { type: blob.type });
       setAudioPendente({ file, url: URL.createObjectURL(blob) });
     };
