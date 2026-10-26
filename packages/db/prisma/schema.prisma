@@ -1407,6 +1407,10 @@ model ScheduledMessage {
 
   createdAt DateTime @default(now())
 
+  // Idem Message.referenciaExterna, para o que veio com data futura.
+  referenciaExterna String?
+
+  @@unique([tenantId, referenciaExterna])
   @@index([tenantId, status, scheduledFor])
   @@index([conversationId])
 }
@@ -1498,6 +1502,7 @@ model Message {
   // um id que ainda não estava no banco e era descartado calado.
   waMessageId     String?
   errorMessage    String?
+  referenciaExterna String?
   createdAt       DateTime         @default(now())
   readAt          DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
 
@@ -1586,6 +1591,9 @@ model Message {
   // não conflita com NULL no Postgres, então mensagens sem waMessageId
   // (auto-resposta antiga etc.) não são afetadas.
   @@unique([conversationId, waMessageId])
+  // "Id do agendamento no sistema externo" (API de integração): enviar a mesma
+  // referência duas vezes não gera duas mensagens. Nulo na enorme maioria.
+  @@unique([sessionId, referenciaExterna])
   @@index([conversationId, createdAt])
   @@index([sessionId, status]) // worker consulta PENDING por sessão
   @@index([conversationId, direction, readAt]) // contagem de não lidas
