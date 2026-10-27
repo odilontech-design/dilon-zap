@@ -11,9 +11,11 @@ import makeWASocket, {
   // sync que chega sozinho ao parear.
   proto,
   type WAMessage,
+  type CacheStore,
   type GroupMetadata,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
+import NodeCache from "@cacheable/node-cache";
 import QRCode from "qrcode";
 import pino from "pino";
 import { createHash, randomUUID } from "node:crypto";
@@ -295,6 +297,18 @@ export async function startSession(sessionId: string) {
   // e tanto pollOutbox quanto getSocketForTenant ficam "cegos" pra uma
   // conexão que continua viva, podendo até duplicar envio de mensagem.
   let stopped = false;
+  // Esta conexão caiu (e outra vai ser aberta no lugar). Diferente de
+  // `stopped` (a sessão foi parada de vez): aqui só ESTA instância termina.
+  //
+  // Vazamento de 27/10: a cada reconexão o laço da fila de saída da conexão
+  // antiga seguia rodando para sempre — consultando o banco a cada 1–5s,
+  // tentando enviar pelo socket fechado ("Connection Closed" aos milhares) e
+  // segurando o socket inteiro na memória (~25 MB/h, até travar o worker).
+  let encerrada = false;
+  // Cache das chaves de criptografia desta conexão. Criado aqui (e não dentro
+  // do Baileys) para poder ser FECHADO quando ela cai: o temporizador interno
+  // do NodeCache o mantém vivo para sempre se ninguém chamar close().
+  const cacheDeChaves = new NodeCache({ stdTTL: 5 * 60, useClones: false, deleteOnExpire: true });
   const entry: ActiveSession = { stop: () => (stopped = true), socket: null, tenantId: "" };
   activeSessions.set(sessionId, entry);
 
@@ -316,7 +330,7 @@ export async function startSession(sessionId: string) {
       // ao mesmo tempo), isso alarga a janela de corrida entre operações
       // concorrentes de criptografia e pode corromper o estado da sessão do
       // Signal Protocol (erros "Bad MAC" / "No matching sessions found").
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger) },
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger, cacheDeChaves as unknown as CacheStore) },
       logger: baileysLogger,
       printQRInTerminal: false,
       // Pede o histórico mais completo que o WhatsApp aceitar mandar no
@@ -380,6 +394,7 @@ export async function startSession(sessionId: string) {
     // sempre, sem socket de verdade e sem nunca chegar no pollOutbox, e
     // syncSessions() nunca mais tentava de novo — só reiniciando o worker
     // inteiro destravava. Agora tenta de novo sozinho em 3s, igual reconexão normal.
+    cacheDeChaves.close();
     activeSessions.delete(sessionId);
     logger.error({ err, sessionId }, "falha ao iniciar sessão — tentando de novo em 3s");
     if (!stopped) setTimeout(() => startSession(sessionId), 3_000);
@@ -413,7 +428,11 @@ export async function startSession(sessionId: string) {
     }
 
     if (connection === "close") {
-      activeSessions.delete(sessionId);
+      // Encerra o que é DESTA conexão antes de qualquer outra coisa: o laço
+      // da fila de saída para na próxima volta e o cache de chaves é solto.
+      encerrada = true;
+      cacheDeChaves.close();
+      if (activeSessions.get(sessionId) === entry) activeSessions.delete(sessionId);
 
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
@@ -747,7 +766,7 @@ export async function startSession(sessionId: string) {
     }
   });
 
-  pollOutbox(sessionId, socket, () => stopped);
+  pollOutbox(sessionId, socket, () => stopped || encerrada);
 }
 
 // Ordem de progresso de uma mensagem enviada. Existe pra que o status só
