@@ -343,6 +343,19 @@ export async function startSession(sessionId: string) {
     if (connection === "close") {
       activeSessions.delete(sessionId);
 
+      // Encerra ESTA geração antes de qualquer coisa.
+      //
+      // entry.stop() nunca foi chamado por ninguém, então `stopped` ficava
+      // false pra sempre e o pollOutbox criado por esta chamada de
+      // startSession continuava rodando depois da queda — com o socket morto
+      // nas mãos. Cada reconexão deixava mais um ciclo vivo em cima da mesma
+      // sessão, e dois ciclos lendo a mesma mensagem PENDING é o que fazia o
+      // id da mensagem ser sobrescrito depois de ela já ter saído: a entrega
+      // acontecia, mas o recibo não achava mais a linha e a atendente ficava
+      // olhando "sem confirmação" pra sempre.
+      const paradaPedida = stopped;
+      stopped = true;
+
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
 
@@ -356,7 +369,7 @@ export async function startSession(sessionId: string) {
 
       // Reconecta sozinho a menos que o usuário tenha deslogado pelo celular
       // — nesse caso precisa de um QR novo, então não adianta insistir.
-      if (!loggedOut && !stopped) {
+      if (!loggedOut && !paradaPedida) {
         setTimeout(() => startSession(sessionId), 3_000);
       }
     }
@@ -1499,12 +1512,30 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
           // Numa retentativa reaproveita o id já gravado: mesmo id significa
           // que o WhatsApp trata como a mesma mensagem, em vez de o cliente
           // receber duas.
-          const waMessageId = message.waMessageId ?? generateMessageID();
-          if (!message.waMessageId) {
-            await prisma.message.update({
-              where: { id: message.id },
-              data: { waMessageId },
+          // O update é condicionado a waMessageId ainda nulo: se outro ciclo
+          // de polling já gravou um id pra esta mensagem, adotamos o dele em
+          // vez de sobrescrever. Sobrescrever era o que deixava a mensagem
+          // "sem confirmação" pra sempre — ela saía no WhatsApp com um id e
+          // ficava gravada com outro, e aí o recibo de entrega procurava uma
+          // linha que não existia mais. Os dois ciclos mandarem o MESMO id é
+          // inofensivo: é a mesma propriedade que faz a retentativa logo
+          // acima não duplicar a mensagem no aparelho do cliente.
+          let waMessageId = message.waMessageId;
+          if (!waMessageId) {
+            const novoId = generateMessageID();
+            const { count } = await prisma.message.updateMany({
+              where: { id: message.id, waMessageId: null },
+              data: { waMessageId: novoId },
             });
+            waMessageId =
+              count === 1
+                ? novoId
+                : ((
+                    await prisma.message.findUnique({
+                      where: { id: message.id },
+                      select: { waMessageId: true },
+                    })
+                  )?.waMessageId ?? novoId);
           }
 
           if (message.mediaType && message.mediaKey) {
