@@ -7,7 +7,7 @@ const ABAS: { id: Aba; href: string; rotulo: string }[] = [
   { id: "receber", href: "/receber", rotulo: "A receber" },
   { id: "pagar", href: "/pagar", rotulo: "A pagar" },
   { id: "caixa", href: "/caixa", rotulo: "Caixa" },
-  { id: "categorias", href: "/categorias", rotulo: "Por categoria" },
+  { id: "categorias", href: "/categorias", rotulo: "Fluxo por categoria" },
   { id: "estoque", href: "/estoque", rotulo: "Estoque" },
 ];
 

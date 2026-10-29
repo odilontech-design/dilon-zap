@@ -46,7 +46,7 @@ export function CategoriasPanel() {
     const csv = "﻿" + linhas.map((l) => l.map((x) => `"${x.replace(/"/g, '""')}"`).join(";")).join("\r\n");
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    a.download = `financeiro-por-categoria-${de}-a-${ate}.csv`;
+    a.download = `fluxo-por-categoria-${de}-a-${ate}.csv`;
     a.click();
     URL.revokeObjectURL(a.href);
   }
