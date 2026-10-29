@@ -8,6 +8,7 @@ import { registrarPagamento } from "@/lib/receivables";
 import { logAudit } from "@/lib/audit";
 import { ehGerencia } from "@/lib/papeis";
 import { pendenciaDoContato } from "@/lib/contas-receber";
+import { valorDosPedidos, vincularPedidoANegociacao } from "@/lib/negociacoes";
 
 function ehFinanceiro(role: string) {
   return ehGerencia(role);
@@ -36,6 +37,12 @@ const patchSchema = z.object({
       entradaCents: z.number().int().min(0),
       entradaPaga: z.boolean(),
       entradaMeio: z.enum(["PIX", "CARTAO", "DINHEIRO"]).optional(),
+      // Entrada dividida: as partes, com data e valor. Somam entradaCents.
+      entradas: z
+        .array(z.object({ vencimento: z.string().regex(/^d{4}-d{2}-d{2}$/), valorCents: z.number().int().min(1) }))
+        .min(2)
+        .max(12)
+        .optional(),
       numParcelas: z.number().int().min(1).max(60),
       periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]),
       primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -43,6 +50,7 @@ const patchSchema = z.object({
     // Entrada dada como recebida precisa dizer por onde entrou: é isso que
     // decide se ela cai no caixa (dinheiro) ou não (Believe, 23/10).
     .refine((v) => !v.entradaPaga || v.entradaCents === 0 || !!v.entradaMeio, { message: "informe a forma de pagamento da entrada" })
+    .refine((v) => !v.entradas || v.entradas.reduce((s, p) => s + p.valorCents, 0) === v.entradaCents, { message: "as partes da entrada precisam somar a entrada" })
     .nullable()
     .optional(),
   // O responsável libera venda a prazo para quem tem parcela pendente.
@@ -98,6 +106,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         data: { observacao: parsed.data.observacao ?? undefined },
       }),
     ]);
+    await vincularPedidoANegociacao(pedido.id);
     return NextResponse.json({ ok: true });
   }
 
@@ -140,6 +149,9 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           copia: r.copia?.numero ?? null,
         },
       });
+      // O cancelado sai da soma da negociação; a cópia refeita entra nela.
+      const neg = await prisma.order.findUnique({ where: { id: pedido.id }, select: { negociacaoId: true } });
+      if (neg?.negociacaoId) await valorDosPedidos(neg.negociacaoId).catch((e) => console.error("[negociacao] valor após cancelar", e));
       return NextResponse.json({ ok: true, ...r });
     } catch (e) {
       return NextResponse.json({ error: (e as Error).message }, { status: 400 });
@@ -236,6 +248,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
             entradaCents: plano.entradaCents,
             entradaPaga: plano.entradaPaga,
             entradaMeio: plano.entradaMeio,
+            entradas: plano.entradas?.map((p) => ({ vencimento: new Date(`${p.vencimento}T12:00:00Z`), valorCents: p.valorCents })),
             numParcelas: plano.numParcelas,
             periodicidade: plano.periodicidade,
             primeiroVencimento: new Date(`${plano.primeiroVencimento}T12:00:00Z`),
@@ -255,6 +268,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       });
     }
 
+    await vincularPedidoANegociacao(pedido.id);
     return NextResponse.json({ ok: true, jaEstavaFechado: r.jaEstavaFechado, total: r.pedido.totalCents });
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });

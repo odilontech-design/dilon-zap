@@ -611,3 +611,79 @@ export async function duplicarEmOutroFunil(
 
   return copia;
 }
+
+/* ------------------------------------------------------------------------ *
+ * Valor vindo dos pedidos
+ * ------------------------------------------------------------------------ */
+
+/** Até quantos dias depois de ganha uma negociação ainda recebe o pedido do cliente. */
+const DIAS_GANHA_RECEBE_PEDIDO = 15;
+
+/**
+ * Liga o pedido montado na conversa à negociação do cliente e leva o valor
+ * para o CRM (reunião Believe, 29/10). Antes, só o pedido gerado DENTRO da
+ * negociação ficava ligado — e a equipe monta tudo pela conversa, então
+ * nenhuma negociação recebia valor e o funil mostrava R$ 0.
+ *
+ * Escolhe a negociação em andamento mais recente do cliente; sem nenhuma, a
+ * ganha há pouco tempo (é comum marcar ganha e o pedido fechar depois). Sem
+ * nenhuma das duas, o pedido fica solto — não inventa negociação.
+ *
+ * Nunca derruba o fluxo do pedido: falhar aqui só deixa o CRM sem o valor.
+ */
+export async function vincularPedidoANegociacao(orderId: string) {
+  try {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, tenantId: true, contactId: true, negociacaoId: true, status: true },
+    });
+    if (!o) return;
+    let negociacaoId = o.negociacaoId;
+    if (!negociacaoId && o.status !== "CANCELADO") {
+      const aberta = await prisma.negociacao.findFirst({
+        where: { tenantId: o.tenantId, contactId: o.contactId, status: "ABERTA" },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true },
+      });
+      const ganha = aberta
+        ? null
+        : await prisma.negociacao.findFirst({
+            where: {
+              tenantId: o.tenantId,
+              contactId: o.contactId,
+              status: "GANHA",
+              fechadaEm: { gte: new Date(Date.now() - DIAS_GANHA_RECEBE_PEDIDO * 86_400_000) },
+            },
+            orderBy: { fechadaEm: "desc" },
+            select: { id: true },
+          });
+      negociacaoId = aberta?.id ?? ganha?.id ?? null;
+      if (!negociacaoId) return;
+      await prisma.order.update({ where: { id: o.id }, data: { negociacaoId } });
+    }
+    if (negociacaoId) await valorDosPedidos(negociacaoId);
+  } catch (e) {
+    console.error("[negociacao] falha ao levar o pedido para o CRM", orderId, e);
+  }
+}
+
+/**
+ * O valor da negociação passa a ser a soma dos pedidos dela que não foram
+ * cancelados: o fechado vale o total (com desconto), o em montagem vale a
+ * soma dos itens. Negociação com itens próprios não muda — lá os itens mandam.
+ */
+export async function valorDosPedidos(negociacaoId: string) {
+  const n = await prisma.negociacao.findUnique({ where: { id: negociacaoId }, select: { _count: { select: { itens: true } } } });
+  if (!n || n._count.itens > 0) return;
+  const pedidos = await prisma.order.findMany({
+    where: { negociacaoId, status: { not: "CANCELADO" } },
+    select: { status: true, totalCents: true, items: { select: { precoUnitCents: true, quantidade: true } } },
+  });
+  if (pedidos.length === 0) return;
+  const total = pedidos.reduce(
+    (s, p) => s + (p.status === "FECHADO" ? p.totalCents : p.items.reduce((t, i) => t + i.precoUnitCents * i.quantidade, 0)),
+    0
+  );
+  await prisma.negociacao.update({ where: { id: negociacaoId }, data: { valorCents: total } });
+  await recalcularValores(negociacaoId);
+}

@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
 import { TrocarCategoria } from "@/components/campo-categoria";
+import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
 import { reaisParaCentavos } from "../funil/tipos";
 import {
   chamar,
@@ -417,14 +418,17 @@ function ReparcelarModal({
   const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("SEMANAL");
   const [primeiro, setPrimeiro] = useState(hojeISO());
   const [vencEntrada, setVencEntrada] = useState(hojeISO());
+  const [partesEntrada, setPartesEntrada] = useState<ParteDaEntrada[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const entradaCents = entrada.trim() ? reaisParaCentavos(entrada) : 0;
   const n = Number(numParcelas);
+  const entradaDividida = entradasDoPlano(partesEntrada, entradaCents ?? 0);
 
   const previa = useMemo(() => {
     if (entradaCents === null || !Number.isInteger(n) || n < 1) return { erro: null as string | null, linhas: [] };
+    if (entradaDividida.erro) return { erro: entradaDividida.erro, linhas: [] };
     try {
       return {
         erro: null,
@@ -435,12 +439,13 @@ function ReparcelarModal({
           periodicidade,
           primeiroVencimento: new Date(`${primeiro}T12:00:00Z`),
           vencimentoEntrada: new Date(`${vencEntrada}T12:00:00Z`),
+          entradas: entradaDividida.entradas?.map((p) => ({ vencimento: new Date(`${p.vencimento}T12:00:00Z`), valorCents: p.valorCents })),
         }),
       };
     } catch (e) {
       return { erro: (e as Error).message, linhas: [] };
     }
-  }, [entradaCents, n, periodicidade, primeiro, vencEntrada, totalRestanteCents]);
+  }, [entradaCents, n, periodicidade, primeiro, vencEntrada, totalRestanteCents, entradaDividida.entradas, entradaDividida.erro]);
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -451,6 +456,7 @@ function ReparcelarModal({
       acao: "reparcelar",
       entradaCents: entradaCents || undefined,
       vencimentoEntrada: entradaCents ? vencEntrada : undefined,
+      ...(entradaDividida.entradas ? { entradas: entradaDividida.entradas } : {}),
       numParcelas: n,
       periodicidade,
       primeiroVencimento: primeiro,
@@ -489,12 +495,15 @@ function ReparcelarModal({
             1º vencimento
             <input type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} className={`${campo} mt-1`} />
           </label>
-          {entradaCents ? (
+          {entradaCents && !partesEntrada ? (
             <label className="text-xs font-medium text-neutral-700">
               Vence a entrada
               <input type="date" value={vencEntrada} onChange={(e) => setVencEntrada(e.target.value)} className={`${campo} mt-1`} />
             </label>
           ) : null}
+        </div>
+        <div className="mt-3 flex flex-col">
+          <DividirEntrada entradaCents={entradaCents ?? 0} diaInicial={vencEntrada} partes={partesEntrada} onChange={setPartesEntrada} />
         </div>
 
         {previa.linhas.length > 0 && (

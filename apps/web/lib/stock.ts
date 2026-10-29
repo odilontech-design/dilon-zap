@@ -1,5 +1,5 @@
 import { prisma } from "@dilon-zap/db";
-import type { StockMovementType } from "@prisma/client";
+import type { Prisma, StockMovementType } from "@prisma/client";
 
 /**
  * Única porta de escrita do estoque.
@@ -34,6 +34,15 @@ export type MovimentoInput = {
 };
 
 export async function registrarMovimento(entrada: MovimentoInput) {
+  return prisma.$transaction((tx) => movimentarNaTransacao(tx, entrada));
+}
+
+/**
+ * O mesmo, dentro de uma transação de quem chama: a importação da nota fiscal
+ * dá entrada em vários produtos e lança a conta a pagar de uma vez só — ou
+ * entra tudo, ou nada.
+ */
+export async function movimentarNaTransacao(tx: Prisma.TransactionClient, entrada: MovimentoInput) {
   const { tenantId, productId, tipo, motivo, createdById, custoUnitCents } = entrada;
 
   const delta =
@@ -45,7 +54,7 @@ export async function registrarMovimento(entrada: MovimentoInput) {
 
   if (delta === 0) return null;
 
-  return prisma.$transaction(async (tx) => {
+  {
     // Confere o produto DENTRO da transação e travando a linha: sem isso,
     // duas vendas do mesmo item ao mesmo tempo leriam o mesmo saldo e
     // gravariam saldoDepois iguais, deixando o histórico inconsistente
@@ -87,7 +96,7 @@ export async function registrarMovimento(entrada: MovimentoInput) {
     });
 
     return { movimento, saldo: atualizado.stockQty };
-  });
+  }
 }
 
 /**

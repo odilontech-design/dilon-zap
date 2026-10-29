@@ -187,6 +187,7 @@ model Tenant {
   saidasPagamento       SaidaPagamento[]
   movimentosCaixa       MovimentoCaixa[]
   categoriasFinanceiras CategoriaFinanceira[]
+  notasFiscaisEntrada   NotaFiscalEntrada[]
   tags                  Tag[]
   stages                Stage[]
   uraOpcoes             UraOpcao[]
@@ -2080,8 +2081,10 @@ model TarefaNegociacao {
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  negociacaoId String
-  negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
+  /// Nulo = tarefa geral, sem cliente (reunião Believe, 29/10: "conferir o
+  /// estoque", "pagar o contador" também são tarefas da equipe).
+  negociacaoId String?
+  negociacao   Negociacao? @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
 
   tipo    TipoTarefa @default(TAREFA)
   titulo  String
@@ -2438,4 +2441,29 @@ model CategoriaFinanceira {
 
   @@unique([tenantId, grupo, nome])
   @@index([tenantId, ordem])
+}
+
+/// Nota fiscal de compra importada pelo XML (reunião Believe, 29/10). Guarda a
+/// chave de acesso para a mesma nota não entrar duas vezes no estoque — o
+/// segundo clique dobraria o saldo e a conta a pagar.
+model NotaFiscalEntrada {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// 44 dígitos.
+  chave         String
+  numero        String
+  serie         String?
+  emitenteNome  String
+  emitenteCnpj  String?
+  emitidaEm     DateTime?
+  valorCents    Int
+  itensLancados Int
+  contaPagarId  String?
+
+  importadaPorId String?
+  importadaEm    DateTime @default(now())
+
+  @@unique([tenantId, chave])
 }

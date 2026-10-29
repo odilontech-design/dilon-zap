@@ -378,7 +378,16 @@ export async function cancelarConta(
  */
 export async function reparcelarConta(
   db: Db,
-  input: { tenantId: string; contaId: string; entradaCents?: number; numParcelas: number; periodicidade: PlanoDeParcelas["periodicidade"]; primeiroVencimento: Date; vencimentoEntrada?: Date }
+  input: {
+    tenantId: string;
+    contaId: string;
+    entradaCents?: number;
+    entradas?: PlanoDeParcelas["entradas"];
+    numParcelas: number;
+    periodicidade: PlanoDeParcelas["periodicidade"];
+    primeiroVencimento: Date;
+    vencimentoEntrada?: Date;
+  }
 ) {
   const conta = await carregarConta(db, input.tenantId, input.contaId);
   const intocadas = conta.parcelas.filter((p) => !p.canceladaEm && !p.reembolsadaEm && situacao(p).pagoCents === 0);
@@ -391,6 +400,7 @@ export async function reparcelarConta(
       totalCents: total,
       entradaCents: input.entradaCents,
       vencimentoEntrada: input.vencimentoEntrada,
+      entradas: input.entradas,
       numParcelas: input.numParcelas,
       periodicidade: input.periodicidade,
       primeiroVencimento: input.primeiroVencimento,

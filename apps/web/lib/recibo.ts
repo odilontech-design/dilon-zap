@@ -437,11 +437,14 @@ function montarReciboBase({ empresa, pedido, cliente }: ReciboEntrada): Recibo {
       const regulares = parcelas.filter((p) => p.tipo !== "ENTRADA");
       const tipo = regulares[0]?.tipo;
       const intervalo = tipo === "SEMANAL" ? "semanais" : tipo === "QUINZENAL" ? "quinzenais" : tipo === "MENSAL" ? "mensais" : "";
+      // Entrada dividida (29/10) numera as partes; a entrada única fica só "Entrada".
+      const qtdEntradas = parcelas.filter((p) => p.tipo === "ENTRADA").length;
+      let entradaN = 0;
       for (const p of parcelas) {
         const quando = p.vencimento ? formatar(p.vencimento, tz, false) : "sem data";
         const paga = p.pagoCents >= p.valorCents;
         pagamento.push({
-          rotulo: p.tipo === "ENTRADA" ? `Entrada · ${quando}` : `Parcela ${p.numero}/${p.totalParcelas} · ${quando}`,
+          rotulo: p.tipo === "ENTRADA" ? `Entrada${qtdEntradas > 1 ? ` ${++entradaN}/${qtdEntradas}` : ""} · ${quando}` : `Parcela ${p.numero}/${p.totalParcelas} · ${quando}`,
           valor: `${centsToBRL(p.valorCents)}${paga ? " (pago)" : ""}`,
         });
       }

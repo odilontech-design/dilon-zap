@@ -66,7 +66,9 @@ export async function listarPedidos<S extends Prisma.OrderSelect>(tenantId: stri
   const [pedidos, todos] = await Promise.all([
     prisma.order.findMany({ where, orderBy: { createdAt: "desc" }, take: LIMITE, select }),
     // Para os totais: só o necessário de TODOS os que batem com o filtro.
-    prisma.order.findMany({ where, select: { id: true, status: true, totalCents: true, pago: true, subtotalCents: true } }),
+    // subtotalCents só é gravado no fechamento: antes disso o valor é a soma dos
+    // itens (Believe, 29/10: rascunhos apareciam zerados no total).
+    prisma.order.findMany({ where, select: { id: true, status: true, totalCents: true, pago: true, items: { select: { precoUnitCents: true, quantidade: true } } } }),
   ]);
 
   const fechados = todos.filter((p) => p.status === "FECHADO");
@@ -85,7 +87,7 @@ export async function listarPedidos<S extends Prisma.OrderSelect>(tenantId: stri
   let qtdAReceber = 0;
   for (const p of filtrados) {
     // Rascunho e aguardando ainda não têm total fechado: vale o subtotal dos itens.
-    totalCents += p.status === "FECHADO" ? p.totalCents : p.subtotalCents;
+    totalCents += p.status === "FECHADO" ? p.totalCents : p.items.reduce((s, i) => s + i.precoUnitCents * i.quantidade, 0);
   }
   for (const p of filtrados.filter((x) => x.status === "FECHADO")) {
     // Pedido marcado como pago (Pix, cartão, dinheiro no ato) vale como recebido.

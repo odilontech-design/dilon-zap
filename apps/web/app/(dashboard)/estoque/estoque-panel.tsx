@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
 import { dataHoraBR, fetcher, hojeISO } from "../receber/formatos";
+import { ImportarNota } from "./importar-nota";
 
 type Tipo = "COMPRA" | "PRODUCAO" | "DEVOLUCAO" | "AJUSTE" | "VENDA";
 const ROTULO_TIPO: Record<Tipo, string> = { COMPRA: "Compra", PRODUCAO: "Produção", DEVOLUCAO: "Devolução", AJUSTE: "Ajuste", VENDA: "Venda" };
@@ -72,6 +73,8 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
   const [tipo, setTipo] = useState<"" | Tipo>("");
   const [busca, setBusca] = useState("");
   const [situacao, setSituacao] = useState<"todos" | "com_saldo" | "zerados" | "negativos" | "movimentados">("todos");
+  const [importando, setImportando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const base = `de=${de}&ate=${ate}${produto ? `&produto=${produto}` : ""}`;
   const urlResumo = `/api/estoque?visao=resumo&${base}`;
@@ -137,6 +140,30 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
           @page { size: A4 landscape; margin: 10mm; }
         }
       `}</style>
+
+      <div className="so-tela flex flex-wrap items-center justify-between gap-2 mb-3">
+        {aviso ? <p className="text-sm text-green-700">{aviso}</p> : <span />}
+        <button
+          onClick={() => {
+            setAviso(null);
+            setImportando(true);
+          }}
+          className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        >
+          Importar nota (XML)
+        </button>
+      </div>
+      {importando && (
+        <ImportarNota
+          onFechar={() => setImportando(false)}
+          onImportada={(msg) => {
+            setImportando(false);
+            setAviso(msg);
+            resumo.mutate();
+            movs.mutate();
+          }}
+        />
+      )}
 
       <div className="so-tela flex flex-wrap items-end gap-3 mb-4">
         <div className="flex gap-1 mr-2">

@@ -201,9 +201,13 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
                   <span className="font-medium">
                     #{p.numero} · {p.contact.name ?? p.contact.phoneNumber ?? "Cliente"}
                   </span>
-                  <span className="tabular-nums font-semibold">
-                    {centsToBRL(p.status === "FECHADO" ? p.totalCents : p.items.reduce((s, i) => s + i.precoUnitCents * i.quantidade, 0))}
-                  </span>
+                  {p.status !== "FECHADO" && p.items.length === 0 ? (
+                    <span className="text-xs text-neutral-400">sem itens</span>
+                  ) : (
+                    <span className="tabular-nums font-semibold">
+                      {centsToBRL(p.status === "FECHADO" ? p.totalCents : p.items.reduce((s, i) => s + i.precoUnitCents * i.quantidade, 0))}
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-neutral-500 mt-0.5 flex flex-wrap gap-x-2 gap-y-1 items-center">
                   <span>{p.status === "FECHADO" ? `fechado em ${dataBR(p.fechadoEm)}` : p.status === "CANCELADO" ? `cancelado em ${dataBR(p.canceladoEm)}` : `criado em ${dataBR(p.createdAt)}`}</span>

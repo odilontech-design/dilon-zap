@@ -1167,7 +1167,7 @@ function CondicaoPagamento({
           {previa.map((p, i) => (
             <li key={i} className="flex justify-between px-3 py-1.5">
               <span>
-                {p.tipo === "ENTRADA" ? "Entrada" : `${p.numero} de ${p.totalParcelas}`} ·{" "}
+                {p.tipo === "ENTRADA" ? (p.totalParcelas > 1 ? `Entrada ${p.numero} de ${p.totalParcelas}` : "Entrada") : `${p.numero} de ${p.totalParcelas}`} ·{" "}
                 {p.vencimento.toISOString().slice(0, 10).split("-").reverse().join("/")}
               </span>
               <span>{centsToBRL(p.valorCents)}</span>

@@ -46,6 +46,8 @@ export type FecharInput = {
     /** A entrada foi paga agora, no balcão: entra como recebimento. */
     entradaPaga: boolean;
     entradaMeio?: PaymentMethod;
+    /** Entrada dividida em partes com data própria. A paga no fechamento é a primeira. */
+    entradas?: { vencimento: Date; valorCents: number }[];
     numParcelas: number;
     periodicidade: "SEMANAL" | "QUINZENAL" | "MENSAL";
     primeiroVencimento: Date;
@@ -171,18 +173,24 @@ export async function fecharPedido(input: FecharInput) {
           contaId: conta.id,
           entradaCents: plano.entradaCents || undefined,
           vencimentoEntrada: agora,
+          entradas: plano.entradas?.length ? plano.entradas : undefined,
           numParcelas: plano.numParcelas,
           periodicidade: plano.periodicidade,
           primeiroVencimento: plano.primeiroVencimento,
         });
 
         if (plano.entradaPaga && plano.entradaMeio && plano.entradaCents > 0) {
-          const entrada = await tx.parcela.findFirst({ where: { contaId: conta.id, tipo: "ENTRADA" }, select: { id: true } });
+          // Com a entrada dividida, o que se paga no balcão é a primeira parte.
+          const entrada = await tx.parcela.findFirst({
+            where: { contaId: conta.id, tipo: "ENTRADA" },
+            orderBy: [{ vencimento: "asc" }, { numero: "asc" }],
+            select: { id: true, valorCents: true },
+          });
           await receberNaConta(tx, {
             tenantId: input.tenantId,
             contaId: conta.id,
             parcelaId: entrada?.id,
-            valorCents: plano.entradaCents,
+            valorCents: plano.entradas?.length && entrada ? entrada.valorCents : plano.entradaCents,
             // Sem forma informada a entrada não é dada como recebida (ver a rota).
             meio: plano.entradaMeio,
             recebidoEm: agora,

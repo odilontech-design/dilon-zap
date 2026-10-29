@@ -86,6 +86,13 @@ export type PlanoDeParcelas = {
   entradaCents?: number;
   /** Quando vence a entrada. Padrão: o mesmo dia da primeira parcela. */
   vencimentoEntrada?: Date;
+  /**
+   * Entrada dividida (reunião Believe, 29/10): a cliente dá R$ 50 hoje e o
+   * resto da entrada daqui a uma semana. Quando vem, substitui entradaCents e
+   * vencimentoEntrada: a entrada é a soma das partes, cada uma vira uma
+   * parcela ENTRADA com a própria data.
+   */
+  entradas?: { vencimento: Date; valorCents: number }[];
   numParcelas: number;
   periodicidade: Periodicidade;
   primeiroVencimento: Date;
@@ -139,7 +146,10 @@ export function vencimentoDaParcela(primeiro: Date, periodicidade: Periodicidade
  */
 export function gerarParcelas(plano: PlanoDeParcelas): ParcelaPlanejada[] {
   const { totalCents, numParcelas } = plano;
-  const entrada = plano.entradaCents ?? 0;
+  const partes = plano.entradas?.length ? plano.entradas : null;
+  if (partes && partes.some((p) => !Number.isInteger(p.valorCents) || p.valorCents <= 0)) throw new Error("toda parte da entrada precisa de valor");
+  if (partes && partes.length > 12) throw new Error("a entrada vai em até 12 partes");
+  const entrada = partes ? partes.reduce((s, p) => s + p.valorCents, 0) : (plano.entradaCents ?? 0);
 
   if (!Number.isInteger(totalCents) || totalCents <= 0) throw new Error("o valor total precisa ser maior que zero");
   if (!Number.isInteger(entrada) || entrada < 0) throw new Error("entrada inválida");
@@ -154,7 +164,12 @@ export function gerarParcelas(plano: PlanoDeParcelas): ParcelaPlanejada[] {
 
   const lista: ParcelaPlanejada[] = [];
 
-  if (entrada > 0) {
+  if (partes) {
+    const ordenadas = [...partes].sort((a, b) => a.vencimento.getTime() - b.vencimento.getTime());
+    ordenadas.forEach((p, i) =>
+      lista.push({ numero: i + 1, totalParcelas: ordenadas.length, tipo: "ENTRADA", vencimento: diaAoMeioDia(p.vencimento), valorCents: p.valorCents })
+    );
+  } else if (entrada > 0) {
     lista.push({
       numero: 1,
       totalParcelas: 1,

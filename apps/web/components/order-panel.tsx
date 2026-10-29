@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 import { useTermoPedido } from "@/components/recursos-context";
+import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
 
 /**
  * Painel do pedido — o mesmo dos dois lados.
@@ -196,6 +197,7 @@ export function OrderPanel({
   // e caía no caixa sozinha, mesmo em venda faturada que o cliente ia pagar depois.
   const [entradaPaga, setEntradaPaga] = useState(false);
   const [entradaMeio, setEntradaMeio] = useState<"" | "PIX" | "DINHEIRO" | "CARTAO">("");
+  const [partesEntrada, setPartesEntrada] = useState<ParteDaEntrada[] | null>(null);
   const [numParcelas, setNumParcelas] = useState(String(pedido.planoNumParcelas ?? 4));
   const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">(
     pedido.planoPeriodicidade === "QUINZENAL" || pedido.planoPeriodicidade === "MENSAL" ? pedido.planoPeriodicidade : "SEMANAL"
@@ -214,11 +216,13 @@ export function OrderPanel({
   const total = Math.max(subtotal - Math.min(descontoCents, subtotal), 0);
   const aPrazo = A_PRAZO.includes(pagamento);
   const entradaCents = parseValor(entrada) ?? 0;
+  const entradaDividida = entradasDoPlano(partesEntrada, entradaCents);
 
   const previaParcelas = useMemo(() => {
     if (!aPrazo || !parcelar || total <= 0) return { erro: null as string | null, linhas: [] as ReturnType<typeof gerarParcelas> };
     const n = Number(numParcelas);
     if (!Number.isInteger(n) || n < 1) return { erro: "informe o número de parcelas", linhas: [] };
+    if (entradaDividida.erro) return { erro: entradaDividida.erro, linhas: [] };
     try {
       return {
         erro: null,
@@ -229,12 +233,13 @@ export function OrderPanel({
           periodicidade,
           primeiroVencimento: new Date(`${primeiroVencimento}T12:00:00Z`),
           vencimentoEntrada: new Date(`${diaDaquiA(0)}T12:00:00Z`),
+          entradas: entradaDividida.entradas?.map((p) => ({ vencimento: new Date(`${p.vencimento}T12:00:00Z`), valorCents: p.valorCents })),
         }),
       };
     } catch (e) {
       return { erro: (e as Error).message, linhas: [] };
     }
-  }, [aPrazo, parcelar, total, entradaCents, numParcelas, periodicidade, primeiroVencimento]);
+  }, [aPrazo, parcelar, total, entradaCents, numParcelas, periodicidade, primeiroVencimento, entradaDividida.entradas, entradaDividida.erro]);
 
   const sugestoes = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -328,6 +333,7 @@ export function OrderPanel({
     if (aPrazo && parcelar && previaParcelas.erro) return setErro(previaParcelas.erro);
     if (aPrazo && !parcelar && !vencimento) return setErro("informe quando o cliente vai pagar");
     if (aPrazo && parcelar && entradaCents > 0 && entradaPaga && !entradaMeio) return setErro("informe a forma de pagamento da entrada");
+    if (aPrazo && parcelar && entradaDividida.erro) return setErro(entradaDividida.erro);
     if ((await salvarItens()) === null) return;
 
     setErro(null);
@@ -348,6 +354,7 @@ export function OrderPanel({
                 entradaCents,
                 entradaPaga: entradaCents > 0 && entradaPaga,
                 entradaMeio: entradaPaga && entradaMeio ? entradaMeio : undefined,
+                ...(entradaDividida.entradas ? { entradas: entradaDividida.entradas } : {}),
                 numParcelas: Number(numParcelas),
                 periodicidade,
                 primeiroVencimento,
@@ -734,10 +741,11 @@ export function OrderPanel({
                       <input type="date" value={primeiroVencimento} onChange={(e) => setPrimeiroVencimento(e.target.value)} className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5" />
                     </label>
                   </div>
+                  <DividirEntrada entradaCents={entradaCents} diaInicial={diaDaquiA(0)} partes={partesEntrada} onChange={setPartesEntrada} />
                   {entradaCents > 0 && (
                     <label className="flex flex-wrap items-center gap-2">
                       <input type="checkbox" checked={entradaPaga} onChange={(e) => setEntradaPaga(e.target.checked)} />
-                      Entrada já recebida, em
+                      {partesEntrada ? "1ª parte da entrada já recebida, em" : "Entrada já recebida, em"}
                       <select value={entradaMeio} onChange={(e) => setEntradaMeio(e.target.value as typeof entradaMeio)} disabled={!entradaPaga} className="rounded-md border border-neutral-300 bg-surface px-2 py-1">
                         <option value="">forma de pagamento…</option>
                         <option value="DINHEIRO">Dinheiro</option>
@@ -756,7 +764,7 @@ export function OrderPanel({
                       {previaParcelas.linhas.map((p, i) => (
                         <li key={i} className="flex justify-between px-3 py-1.5">
                           <span>
-                            {p.tipo === "ENTRADA" ? "Entrada" : `${p.numero} de ${p.totalParcelas}`} ·{" "}
+                            {p.tipo === "ENTRADA" ? (p.totalParcelas > 1 ? `Entrada ${p.numero} de ${p.totalParcelas}` : "Entrada") : `${p.numero} de ${p.totalParcelas}`} ·{" "}
                             {p.vencimento.toISOString().slice(0, 10).split("-").reverse().join("/")}
                           </span>
                           <span>{centsToBRL(p.valorCents)}</span>

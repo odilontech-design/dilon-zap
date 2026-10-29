@@ -19,8 +19,9 @@ type Tarefa = {
   resultado: ResultadoLigacao | null;
   anotacao: string | null;
   responsavel: { id: string; name: string } | null;
-  negociacao: { id: string; titulo: string; funil: string };
-  contato: { id: string; nome: string | null; telefone: string | null };
+  /** Nulos na tarefa geral, sem cliente. */
+  negociacao: { id: string; titulo: string; funil: string } | null;
+  contato: { id: string; nome: string | null; telefone: string | null } | null;
 };
 
 type Resposta = {
@@ -51,6 +52,7 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
   const [responsavel, setResponsavel] = useState(meuId);
   const [tipo, setTipo] = useState("");
   const [concluindo, setConcluindo] = useState<Tarefa | null>(null);
+  const [nova, setNova] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   const q = new URLSearchParams({ quando });
@@ -63,6 +65,7 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
   });
 
   async function abrirConversa(t: Tarefa) {
+    if (!t.contato) return;
     setErro(null);
     const res = await fetch(`/api/contacts/${t.contato.id}/start-conversation?assumir=0`, { method: "POST" });
     const body = await res.json().catch(() => ({}));
@@ -111,6 +114,12 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
             </option>
           ))}
         </select>
+        <button
+          onClick={() => setNova(true)}
+          className="ml-auto rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+        >
+          Nova tarefa
+        </button>
       </div>
 
       <div className="flex gap-1 mb-4 border-b border-neutral-200">
@@ -142,18 +151,22 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
         <ul className="flex flex-col gap-2">
           {data.tarefas.map((t) => {
             const atrasada = !t.concluidaEm && new Date(t.venceEm).getTime() < agora;
-            const fone = t.contato.telefone;
+            const fone = t.contato?.telefone ?? null;
             return (
               <li key={t.id} className="rounded-lg border border-neutral-200 bg-surface p-3 flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1 basis-64">
                   <p className={`text-sm font-medium ${t.concluidaEm ? "line-through text-neutral-400" : ""}`}>{t.titulo}</p>
-                  <p className="text-xs text-neutral-500 truncate">
-                    {t.contato.nome || "Sem nome"}
-                    {fone && <> · {formatarTelefone(fone)}</>} ·{" "}
-                    <Link href={`/funil/${t.negociacao.id}`} className="hover:text-accent hover:underline">
-                      {t.negociacao.titulo}
-                    </Link>
-                  </p>
+                  {t.negociacao && t.contato ? (
+                    <p className="text-xs text-neutral-500 truncate">
+                      {t.contato.nome || "Sem nome"}
+                      {fone && <> · {formatarTelefone(fone)}</>} ·{" "}
+                      <Link href={`/funil/${t.negociacao.id}`} className="hover:text-accent hover:underline">
+                        {t.negociacao.titulo}
+                      </Link>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-neutral-400">Tarefa geral</p>
+                  )}
                   <p className={`text-[11px] ${atrasada ? "text-red-600 font-medium" : "text-neutral-400"}`}>
                     {ROTULO_TAREFA[t.tipo]} · {quandoBR(t.venceEm)}
                     {atrasada && " · atrasada"}
@@ -174,9 +187,11 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
                       Ligar
                     </a>
                   )}
-                  <button onClick={() => abrirConversa(t)} className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
-                    WhatsApp
-                  </button>
+                  {t.contato && (
+                    <button onClick={() => abrirConversa(t)} className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50">
+                      WhatsApp
+                    </button>
+                  )}
                   {t.concluidaEm ? (
                     <button onClick={() => reabrir(t)} className="text-xs text-neutral-500 hover:text-accent">
                       Reabrir
@@ -202,7 +217,7 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
             id: concluindo.id,
             tipo: concluindo.tipo,
             titulo: concluindo.titulo,
-            negociacaoId: concluindo.negociacao.id,
+            negociacaoId: concluindo.negociacao?.id ?? null,
             responsavelId: concluindo.responsavel?.id ?? null,
           }}
           onFechar={() => setConcluindo(null)}
@@ -212,6 +227,122 @@ export function TarefasPanel({ meuId }: { meuId: string }) {
           }}
         />
       )}
+
+      {nova && data && (
+        <NovaTarefaGeral
+          meuId={meuId}
+          usuarios={data.usuarios}
+          onFechar={() => setNova(false)}
+          onCriada={() => {
+            setNova(false);
+            mutate();
+          }}
+        />
+      )}
     </div>
   );
 }
+
+/** Valor padrão do campo de data: amanhã às 09:00, no formato do datetime-local. */
+function amanhaDeManha(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+/**
+ * Tarefa sem cliente (reunião Believe, 29/10): "conferir o estoque", "mandar
+ * os boletos ao contador". As de cliente continuam nascendo na negociação.
+ */
+function NovaTarefaGeral({
+  meuId,
+  usuarios,
+  onFechar,
+  onCriada,
+}: {
+  meuId: string;
+  usuarios: { id: string; name: string }[];
+  onFechar: () => void;
+  onCriada: () => void;
+}) {
+  const [titulo, setTitulo] = useState("");
+  const [tipo, setTipo] = useState<TipoTarefa>("TAREFA");
+  const [venceEm, setVenceEm] = useState(amanhaDeManha());
+  const [responsavelId, setResponsavelId] = useState(meuId);
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    if (!titulo.trim()) return setErro("descreva a tarefa");
+    if (!venceEm) return setErro("escolha a data");
+    setErro(null);
+    setSalvando(true);
+    const res = await fetch("/api/tarefas", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ titulo: titulo.trim(), tipo, venceEm: new Date(venceEm).toISOString(), responsavelId: responsavelId || null }),
+    });
+    setSalvando(false);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      return setErro(typeof body.error === "string" ? body.error : "não deu pra criar a tarefa");
+    }
+    onCriada();
+  }
+
+  const campo = "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent";
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={onFechar}>
+      <form onSubmit={salvar} onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
+        <h2 className="text-base font-semibold mb-1">Nova tarefa</h2>
+        <p className="text-xs text-neutral-500 mb-4">Tarefa da equipe, sem cliente. A de cliente se cria dentro da negociação.</p>
+        <div className="flex flex-col gap-3">
+          <label className="text-xs font-medium text-neutral-700">
+            O que fazer
+            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} autoFocus placeholder="ex: Conferir o estoque" className={`${campo} mt-1`} />
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="text-xs font-medium text-neutral-700">
+              Tipo
+              <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoTarefa)} className={`${campo} mt-1`}>
+                {Object.entries(ROTULO_TAREFA).map(([k, v]) => (
+                  <option key={k} value={k}>
+                    {v}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-neutral-700">
+              Responsável
+              <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)} className={`${campo} mt-1`}>
+                <option value="">Sem responsável</option>
+                {usuarios.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.id === meuId ? `${u.name} (eu)` : u.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+          <label className="text-xs font-medium text-neutral-700">
+            Quando
+            <input type="datetime-local" value={venceEm} onChange={(e) => setVenceEm(e.target.value)} className={`${campo} mt-1`} />
+          </label>
+          {erro && <p className="text-sm text-red-600">{erro}</p>}
+        </div>
+        <div className="flex justify-end gap-2 mt-5">
+          <button type="button" onClick={onFechar} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-800">
+            Cancelar
+          </button>
+          <button type="submit" disabled={salvando} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+            Criar tarefa
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+

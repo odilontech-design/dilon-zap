@@ -122,6 +122,7 @@ export async function GET(req: Request) {
   const agora = new Date();
   const atrasadasDe = new Map<string, number>();
   for (const t of pendentes) {
+    if (!t.negociacaoId) continue;
     if (!proximaDe.has(t.negociacaoId)) proximaDe.set(t.negociacaoId, t);
     if (t.venceEm < agora) atrasadasDe.set(t.negociacaoId, (atrasadasDe.get(t.negociacaoId) ?? 0) + 1);
   }

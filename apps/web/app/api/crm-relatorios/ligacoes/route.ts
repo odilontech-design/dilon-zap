@@ -33,12 +33,12 @@ export async function GET(req: Request) {
   const encerradas = new Set(
     (
       await prisma.negociacao.findMany({
-        where: { tenantId: user.tenantId, status: { not: "ABERTA" }, id: { in: [...new Set(tarefas.map((t) => t.negociacaoId))] } },
+        where: { tenantId: user.tenantId, status: { not: "ABERTA" }, id: { in: [...new Set(tarefas.map((t) => t.negociacaoId).filter((x): x is string => !!x))] } },
         select: { id: true },
       })
     ).map((n) => n.id)
   );
-  const ligacoes = tarefas.filter((t) => t.concluidaEm || !encerradas.has(t.negociacaoId));
+  const ligacoes = tarefas.filter((t) => t.concluidaEm || !t.negociacaoId || !encerradas.has(t.negociacaoId));
 
   const relatorio = calcularLigacoes({
     ligacoes,
