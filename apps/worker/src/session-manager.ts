@@ -454,11 +454,22 @@ export async function startSession(sessionId: string) {
   });
 
   socket.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
+    // "append" é o que o WhatsApp entrega de uma vez quando o aparelho
+    // vinculado volta a conectar: tudo o que chegou enquanto o worker estava
+    // fora (reconexão, reinício, deploy). Ignorar esse tipo fazia a mensagem
+    // aparecer no WhatsApp Web e nunca no Inbox — Hemoderi, 29/10, tráfego
+    // pago, em que chega lead a qualquer hora e toda queda perde alguns.
+    if (type !== "notify" && type !== "append") return;
+    const atrasada = type === "append";
+    let repetidas = 0;
+    let processadas = 0;
 
     for (const msg of messages) {
       const waJid = msg.key.remoteJid;
       if (!waJid) continue;
+      // Status de contato entregue em atraso não interessa: só marcava a data
+      // do último Status, e isso o próximo Status já refaz.
+      if (atrasada && waJid === "status@broadcast") continue;
       // status@broadcast = atualização de Status de QUALQUER contato, não uma
       // conversa de verdade — remoteJid é sempre esse valor fixo, quem postou
       // é msg.key.participant (mesmo padrão de mensagem de grupo). Só marca
@@ -495,6 +506,18 @@ export async function startSession(sessionId: string) {
         continue;
       }
 
+      // Entrega em atraso pode repetir mensagem que já gravamos (o worker caiu
+      // antes de confirmar). A gravação já ignora a repetida, mas só depois de
+      // atualizar a conversa — o que reabriria um atendimento já resolvido — e
+      // de baixar a mídia de novo. Confere antes.
+      if (atrasada && msg.key.id) {
+        const jaTem = await prisma.message.findFirst({ where: { sessionId, waMessageId: msg.key.id }, select: { id: true } });
+        if (jaTem) {
+          repetidas++;
+          continue;
+        }
+      }
+
       const content = await extractInboundContent(msg, socket).catch((err) => {
         logger.error({ err }, "falha ao processar mensagem");
         return null;
@@ -526,8 +549,18 @@ export async function startSession(sessionId: string) {
         quotedWaMessageId: content.quotedWaMessageId,
         waSecret: segredoDe(msg),
         contatoVcard: content.contatoVcard,
+        // Entregue em atraso: vale a hora em que o cliente mandou, não a de agora.
+        momento: atrasada ? momentoDaMensagem(msg) : undefined,
         socket,
-      }).catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
+      })
+        .then(() => {
+          processadas++;
+        })
+        .catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
+    }
+
+    if (atrasada && messages.length > 0) {
+      logger.info({ sessionId, recebidas: messages.length, processadas, repetidas }, "mensagens entregues após reconexão tratadas");
     }
   });
 
@@ -878,6 +911,35 @@ export function prefixoRespostaDeStatus(m: proto.IMessage): string | null {
   return tipo ? `↩️ Respondeu ao seu Status (${tipo})` : "↩️ Respondeu ao seu Status";
 }
 
+/** Hora em que o WhatsApp diz que a mensagem foi mandada (nunca no futuro). */
+function momentoDaMensagem(msg: WAMessage): Date | undefined {
+  const ts = Number(msg.messageTimestamp ?? 0);
+  return ts > 0 ? new Date(Math.min(ts * 1000, Date.now())) : undefined;
+}
+
+/**
+ * Texto das mensagens com botão, lista e modelo, e das respostas a elas. Até
+ * aqui eram descartadas como "tipo sem suporte" — sumiam do Inbox e só
+ * apareciam no celular. Pega o texto visível; se for só imagem ou botão sem
+ * texto, continua ignorada (e registrada no log).
+ */
+function textoInterativo(m: proto.IMessage): string {
+  const partes = [
+    m.buttonsResponseMessage?.selectedDisplayText,
+    m.listResponseMessage?.title,
+    m.templateButtonReplyMessage?.selectedDisplayText,
+    m.interactiveResponseMessage?.body?.text,
+    m.buttonsMessage?.contentText,
+    m.listMessage?.description,
+    m.templateMessage?.hydratedTemplate?.hydratedContentText,
+    m.interactiveMessage?.body?.text,
+  ];
+  return partes
+    .map((p) => p?.trim())
+    .filter((p): p is string => !!p)
+    .join("\n");
+}
+
 function comPrefixoDeStatus(m: proto.IMessage, texto: string): string {
   const prefixo = prefixoRespostaDeStatus(m);
   if (!prefixo) return texto;
@@ -990,7 +1052,7 @@ async function extractInboundContent(
     }
   }
 
-  const texto = comPrefixoDeStatus(m, plainText);
+  const texto = comPrefixoDeStatus(m, plainText || textoInterativo(m));
   if (!texto) {
     // Tipo que ainda não tratamos (localização, contato, enquete...). Fica no
     // log com o tipo, para a próxima reclamação de "não chegou" ter resposta.
@@ -1130,6 +1192,12 @@ async function recordMessage(params: {
   /** messageSecret da mensagem (base64) — ver Message.waSecret. */
   waSecret?: string;
   contatoVcard?: string;
+  /**
+   * Hora em que a mensagem foi mandada, quando ela chega depois (entrega após
+   * reconexão). Sem isso, vale agora. Nunca faz a conversa "voltar no tempo":
+   * a última atividade só avança.
+   */
+  momento?: Date;
   socket: ReturnType<typeof makeWASocket>;
   // Mensagem de grupo: o contato da conversa é o grupo, e o autor vai na
   // própria mensagem. autorJid/autorNome nulos = mandada pela empresa.
@@ -1213,14 +1281,22 @@ async function recordMessage(params: {
   // Mensagem OUTBOUND vinda do celular (fora do Inbox) só atualiza a data —
   // não força status "OPEN" como faz uma mensagem nova do cliente, porque
   // não é uma demanda nova que precisa de atendimento.
+  let ultimaAtividade = new Date();
+  if (params.momento) {
+    const atual = await prisma.conversation.findUnique({
+      where: { contactId_sessionId: { contactId: contact.id, sessionId: params.sessionId } },
+      select: { lastMessageAt: true },
+    });
+    ultimaAtividade = atual && atual.lastMessageAt > params.momento ? atual.lastMessageAt : params.momento;
+  }
   const conversation = await prisma.conversation.upsert({
     where: { contactId_sessionId: { contactId: contact.id, sessionId: params.sessionId } },
-    update: isInbound ? { lastMessageAt: new Date(), status: "OPEN" } : { lastMessageAt: new Date() },
+    update: isInbound ? { lastMessageAt: ultimaAtividade, status: "OPEN" } : { lastMessageAt: ultimaAtividade },
     create: {
       tenantId: session.tenantId,
       sessionId: params.sessionId,
       contactId: contact.id,
-      lastMessageAt: new Date(),
+      lastMessageAt: ultimaAtividade,
       // Grupo não tem ciclo de atendimento: fica sempre aberto.
       status: isInbound || params.grupo ? "OPEN" : "RESOLVED",
       // Número com setor dono entrega a conversa já na fila dele — quem
@@ -1297,6 +1373,7 @@ async function recordMessage(params: {
     deCelular: !isInbound && !params.grupo,
     waSecret: params.waSecret,
     contatoVcard: params.contatoVcard,
+    ...(params.momento ? { createdAt: params.momento } : {}),
     ...mediaFields,
   };
 
@@ -1339,7 +1416,12 @@ async function recordMessage(params: {
   //
   // Número marcado "sem automações" (o pessoal) também cala tudo — menu,
   // saudação, ausência e palavra-chave. Ver numeroTemRobo.
-  if (isInbound && !params.grupo && numeroTemRobo(session)) {
+  // Mensagem entregue com mais de 10 minutos de atraso (o worker estava fora)
+  // também não recebe resposta automática: "estamos fora do horário" horas
+  // depois, ou um menu de triagem fora de hora, só confunde quem já esperou.
+  // A equipe vê a mensagem no Inbox e responde.
+  const defasada = !!params.momento && Date.now() - params.momento.getTime() > 10 * 60_000;
+  if (isInbound && !params.grupo && !defasada && numeroTemRobo(session)) {
     const atendimento = await carregarAtendimento(session.tenantId);
     const menuLigado = atendimento.uraAtiva && atendimento.uraOpcoes.length > 0;
     const decisao = avaliarAutomacao(
