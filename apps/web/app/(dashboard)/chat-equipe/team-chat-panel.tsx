@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { rotuloDeData } from "@/lib/rotulo-data";
 import { rolarParaOFim } from "@/lib/rolagem";
 import useSWR from "swr";
 import { MESSAGES_INTERVAL, LISTING_INTERVAL } from "@/lib/polling";
@@ -348,10 +349,17 @@ function CanalAberto({
         ) : mensagens.length === 0 ? (
           <p className="text-sm text-neutral-400">Nenhuma mensagem ainda — comece a conversa.</p>
         ) : (
-          mensagens.map((m) => {
+          mensagens.map((m, i) => {
             const minha = m.authorId === meuId;
+            // Faixa de data quando o dia muda (reunião Believe, 29/10): só a
+            // hora não dizia de que dia era a conversa.
+            const novoDia = i === 0 || new Date(mensagens[i - 1].createdAt).toDateString() !== new Date(m.createdAt).toDateString();
             return (
-              <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
+              <Fragment key={m.id}>
+              {novoDia && (
+                <div className="self-center my-1 rounded-md bg-neutral-100 px-3 py-1 text-[11px] font-medium text-neutral-600">{rotuloDeData(m.createdAt)}</div>
+              )}
+              <div className={`flex ${minha ? "justify-end" : "justify-start"}`}>
                 <div
                   className={`max-w-[75%] rounded-lg px-3 py-2 group relative ${
                     minha ? "bg-accent text-white" : "bg-neutral-100 text-neutral-900"
@@ -422,6 +430,7 @@ function CanalAberto({
                   )}
                 </div>
               </div>
+              </Fragment>
             );
           })
         )}
