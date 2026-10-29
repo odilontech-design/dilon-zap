@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { guardaFinanceiro, parseDia, inicioDoDiaBR, fimDoDiaBR } from "@/lib/guarda-financeiro";
+import { ErroDeCategoria } from "@/lib/categorias-financeiras";
 import { criarContaManual, ErroDeConta, listarParcelas, resumoDoAReceber } from "@/lib/contas-receber";
 import type { StatusParcela } from "@dilon-zap/receivables";
 
@@ -45,6 +46,7 @@ export async function GET(req: Request) {
       cliente: q.get("cliente")?.trim() || undefined,
       status: status.length ? status : ["PENDENTE"],
       tipo,
+      categoria: q.get("categoria")?.trim() || undefined,
     }),
     resumoDoAReceber(user.tenantId),
   ]);
@@ -65,6 +67,7 @@ const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "data inválida");
 const novaSchema = z.object({
   contactId: z.string().min(1),
   descricao: z.string().trim().max(200).nullable().optional(),
+  categoriaId: z.string().min(1).nullable().optional(),
   totalCents: z.number().int().min(1).max(10_000_000_000),
   entradaCents: z.number().int().min(0).optional(),
   vencimentoEntrada: dia.optional(),
@@ -89,6 +92,7 @@ export async function POST(req: Request) {
         tenantId: user.tenantId,
         contactId: d.contactId,
         descricao: d.descricao,
+        categoriaId: d.categoriaId,
         userId: user.id,
         plano: {
           totalCents: d.totalCents,
@@ -103,7 +107,7 @@ export async function POST(req: Request) {
     await logAudit({ actor: user, action: "conta_receber.criada", metadata: { contaId: conta.id, totalCents: d.totalCents, parcelas: d.numParcelas } });
     return NextResponse.json(conta, { status: 201 });
   } catch (e) {
-    if (e instanceof ErroDeConta) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof ErroDeConta || e instanceof ErroDeCategoria) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;
   }
 }

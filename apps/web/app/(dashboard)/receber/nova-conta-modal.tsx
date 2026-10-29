@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
 import { reaisParaCentavos } from "../funil/tipos";
+import { CampoCategoria } from "@/components/campo-categoria";
 import { chamar, dataVencimento, hojeISO, ROTULO_TIPO } from "./formatos";
 
 type Contato = { id: string; nome: string | null; telefone: string | null };
@@ -23,6 +24,7 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
   const [telefoneNovo, setTelefoneNovo] = useState("");
 
   const [descricao, setDescricao] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [total, setTotal] = useState("");
   const [entrada, setEntrada] = useState("");
   const [numParcelas, setNumParcelas] = useState("1");
@@ -94,6 +96,7 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
       const r = await chamar("/api/contas-receber", "POST", {
         contactId,
         descricao: descricao.trim() || null,
+        categoriaId: categoriaId || null,
         totalCents,
         entradaCents: entradaCents || undefined,
         vencimentoEntrada: entradaCents ? vencEntrada : undefined,
@@ -151,6 +154,11 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
           <label className="text-xs font-medium text-neutral-700">
             Descrição (opcional)
             <input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="ex: Venda de coloração, outubro" className={`${campo} mt-1`} />
+          </label>
+
+          <label className="text-xs font-medium text-neutral-700">
+            Categoria
+            <CampoCategoria tipo="RECEITA" value={categoriaId} onChange={setCategoriaId} className={`${campo} mt-1`} />
           </label>
 
           <div className="grid grid-cols-2 gap-3">

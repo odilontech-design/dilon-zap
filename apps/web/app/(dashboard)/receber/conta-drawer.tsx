@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
+import { TrocarCategoria } from "@/components/campo-categoria";
 import { reaisParaCentavos } from "../funil/tipos";
 import {
   chamar,
@@ -43,6 +44,7 @@ type Detalhe = {
   id: string;
   origem: "MANUAL" | "PEDIDO";
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   canceladaEm: string | null;
   createdAt: string;
   contato: { id: string; name: string | null; waJid: string; phoneNumber: string | null };
@@ -161,6 +163,7 @@ export function ContaDrawer({
         <h2 className="text-base font-semibold break-words">{nomeDoContato(data.contato)}</h2>
         {data.descricao && <p className="text-sm text-neutral-600">{data.descricao}</p>}
         <p className="text-xs text-neutral-400">Criada em {dataHoraBR(data.createdAt)}</p>
+        <TrocarCategoria tipo="RECEITA" url={`/api/contas-receber/${contaId}`} atual={data.categoria?.id ?? null} disabled={cancelada} onMudou={recarregar} />
         {cancelada && <p className="text-sm text-red-600 font-medium">Conta cancelada</p>}
       </div>
 

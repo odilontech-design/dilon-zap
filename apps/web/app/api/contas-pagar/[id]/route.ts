@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { guardaFinanceiro, parseDia } from "@/lib/guarda-financeiro";
+import { ErroDeCategoria, validarCategoria } from "@/lib/categorias-financeiras";
 import { cancelarContaPagar, detalheDaContaPagar, ErroDePagar, pagarNaConta, reparcelarContaPagar } from "@/lib/contas-pagar";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -20,6 +21,7 @@ const FORMAS = ["BOLETO", "PIX", "TRANSFERENCIA", "CARTAO", "DINHEIRO", "CHEQUE"
 
 const schema = z.discriminatedUnion("acao", [
   z.object({ acao: z.literal("cancelar") }),
+  z.object({ acao: z.literal("categoria"), categoriaId: z.string().min(1).nullable() }),
   z.object({ acao: z.literal("reparcelar"), numParcelas: z.number().int().min(1).max(60), periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]), primeiroVencimento: dia }),
   z.object({ acao: z.literal("pagar"), valorCents: z.number().int().min(1), meio: z.enum(FORMAS).optional(), pagoEm: dia.optional(), observacao: z.string().trim().max(300).optional() }),
 ]);
@@ -36,6 +38,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   try {
     const r = await prisma.$transaction(async (tx) => {
       if (d.acao === "cancelar") return cancelarContaPagar(tx, { tenantId: user.tenantId, contaId: params.id });
+      if (d.acao === "categoria") {
+        const categoriaId = await validarCategoria(tx, user.tenantId, d.categoriaId, "DESPESA");
+        const r = await tx.contaPagar.updateMany({ where: { id: params.id, tenantId: user.tenantId }, data: { categoriaId } });
+        if (r.count === 0) throw new ErroDePagar("conta não encontrada", 404);
+        return { ok: true };
+      }
       if (d.acao === "reparcelar") {
         return reparcelarContaPagar(tx, { tenantId: user.tenantId, contaId: params.id, numParcelas: d.numParcelas, periodicidade: d.periodicidade, primeiroVencimento: parseDia(d.primeiroVencimento)! });
       }
@@ -52,7 +60,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     await logAudit({ actor: user, action: `conta_pagar.${d.acao}`, metadata: { contaId: params.id } });
     return NextResponse.json(r);
   } catch (e) {
-    if (e instanceof ErroDePagar) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof ErroDePagar || e instanceof ErroDeCategoria) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;
   }
 }

@@ -112,7 +112,7 @@ const NAV_ITEMS = [
     // Um item só: A receber, A pagar e Caixa trocam pelas abas do topo da
     // própria página (pedido do Felipe, 11/10 — o menu estava comprido).
     href: "/receber",
-    tambemAtivoEm: ["/pagar", "/caixa", "/estoque"],
+    tambemAtivoEm: ["/pagar", "/caixa", "/categorias", "/estoque"],
     recurso: "CONTAS_RECEBER" as Recurso,
     label: "Financeiro",
     icon: icon(<><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3" /><path d="M3 7h16a2 2 0 0 1 2 2v3h-5a2 2 0 0 0 0 4h5" /><path d="M16.5 14h.01" /></>),

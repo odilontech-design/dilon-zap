@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { LISTING_INTERVAL } from "@/lib/polling";
 import { centsToBRL } from "@/lib/billing";
+import { CampoCategoria } from "@/components/campo-categoria";
 import { ContaDrawer, EditarParcelaModal } from "./conta-drawer";
 import { NovaContaModal } from "./nova-conta-modal";
 import { ReceberModal } from "./receber-modal";
@@ -56,6 +57,7 @@ export function ContasPanel() {
   const [cliente, setCliente] = useState("");
   const [status, setStatus] = useState<StatusParcela[]>(["PENDENTE"]);
   const [tipo, setTipo] = useState("");
+  const [categoria, setCategoria] = useState("");
   const [faixa, setFaixa] = useState<Faixa | "">("");
 
   const [nova, setNova] = useState(false);
@@ -70,8 +72,9 @@ export function ContasPanel() {
     if (ate) q.set("ate", ate);
     if (cliente.trim()) q.set("cliente", cliente.trim());
     if (tipo) q.set("tipo", tipo);
+    if (categoria) q.set("categoria", categoria);
     return `/api/contas-receber?${q}`;
-  }, [desde, ate, tipoData, cliente, status, tipo]);
+  }, [desde, ate, tipoData, cliente, status, tipo, categoria]);
 
   const { data, error, mutate } = useSWR<Resposta>(url, fetcher, { refreshInterval: LISTING_INTERVAL, keepPreviousData: true });
 
@@ -157,6 +160,10 @@ export function ContasPanel() {
             ))}
           </select>
         </label>
+        <label className="text-[11px] text-neutral-500">
+          Categoria
+          <CampoCategoria tipo="RECEITA" filtro value={categoria} onChange={setCategoria} className={`${campo} block mt-0.5 max-w-[220px]`} />
+        </label>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
           {STATUS_OPCOES.map((s) => (
             <label key={s} className="flex items-center gap-1.5">
@@ -165,13 +172,14 @@ export function ContasPanel() {
             </label>
           ))}
         </div>
-        {(desde || ate || cliente || tipo || faixa || status.join() !== "PENDENTE") && (
+        {(desde || ate || cliente || tipo || categoria || faixa || status.join() !== "PENDENTE") && (
           <button
             onClick={() => {
               setDesde("");
               setAte("");
               setCliente("");
               setTipo("");
+              setCategoria("");
               setFaixa("");
               setStatus(["PENDENTE"]);
               setTipoData("vencimento");
@@ -212,6 +220,7 @@ export function ContasPanel() {
                 <td className="px-4 py-2.5">
                   <p className="font-medium truncate max-w-[220px]">{nomeDoContato(l.contato)}</p>
                   <p className="text-[11px] text-neutral-400">{l.origem === "PEDIDO" ? `Pedido #${l.pedidoNumero}` : (l.descricao ?? "Conta avulsa")}</p>
+                  {l.categoria && <p className="text-[11px] text-neutral-500">{l.categoria.grupo} › {l.categoria.nome}</p>}
                 </td>
                 <td className="px-3 py-2.5">
                   {dataVencimento(l.vencimento)}

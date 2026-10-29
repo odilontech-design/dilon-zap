@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { recursosDoUsuario } from "@/lib/plano";
 
-type Aba = "receber" | "pagar" | "caixa" | "estoque";
+type Aba = "receber" | "pagar" | "caixa" | "categorias" | "estoque";
 
 const ABAS: { id: Aba; href: string; rotulo: string }[] = [
   { id: "receber", href: "/receber", rotulo: "A receber" },
   { id: "pagar", href: "/pagar", rotulo: "A pagar" },
   { id: "caixa", href: "/caixa", rotulo: "Caixa" },
+  { id: "categorias", href: "/categorias", rotulo: "Por categoria" },
   { id: "estoque", href: "/estoque", rotulo: "Estoque" },
 ];
 

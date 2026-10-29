@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { guardaFinanceiro } from "@/lib/guarda-financeiro";
+import { ErroDeCategoria } from "@/lib/categorias-financeiras";
 import { dadosDoCaixa, ErroDeCaixa, excluirMovimento, fecharCaixa, registrarMovimento } from "@/lib/caixa";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -21,6 +22,7 @@ const schema = z.discriminatedUnion("acao", [
     tipo: z.enum(["SUPRIMENTO", "SANGRIA", "DESPESA"]),
     valorCents: z.number().int().min(1).max(10_000_000_000),
     descricao: z.string().trim().min(1).max(200),
+    categoriaId: z.string().min(1).nullable().optional(),
   }),
   z.object({
     acao: z.literal("excluirMovimento"),
@@ -44,7 +46,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   try {
     if (d.acao === "movimento") {
-      const m = await registrarMovimento(user.tenantId, user.id, params.id, { tipo: d.tipo, valorCents: d.valorCents, descricao: d.descricao });
+      const m = await registrarMovimento(user.tenantId, user.id, params.id, { tipo: d.tipo, valorCents: d.valorCents, descricao: d.descricao, categoriaId: d.categoriaId });
       await logAudit({ actor: user, action: `caixa.${d.tipo.toLowerCase()}`, metadata: { caixaId: params.id, valorCents: d.valorCents } });
       return NextResponse.json(m, { status: 201 });
     }
@@ -57,7 +59,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await logAudit({ actor: user, action: "caixa.fechado", metadata: { caixaId: params.id, ...r } });
     return NextResponse.json(r);
   } catch (e) {
-    if (e instanceof ErroDeCaixa) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof ErroDeCaixa || e instanceof ErroDeCategoria) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;
   }
 }

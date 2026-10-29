@@ -161,44 +161,45 @@ model Tenant {
   // ou deixa uma faixa em branco.
   reciboLarguraMm       Int     @default(80)
 
-  users             User[]
-  sessions          WhatsAppSession[]
-  contacts          Contact[]
-  conversations     Conversation[]
-  orders            Order[]
-  contactBlocks     ContactBlock[]
-  autoReplies       AutoReply[]
-  subscription      Subscription?
-  invoices          Invoice[]
-  solicitacoes      SolicitacaoDeAcesso[]
-  funis             Funil[]
-  negociacoes       Negociacao[]
-  motivosDePerda    MotivoDePerda[]
-  tarefasNegociacao TarefaNegociacao[]
-  notasNegociacao   NegociacaoNota[]
-  anexosNegociacao  NegociacaoAnexo[]
-  metricasMensais   MetricaMensal[]
-  contasReceber     ContaReceber[]
-  parcelas          Parcela[]
-  caixas            Caixa[]
-  fornecedores      Fornecedor[]
-  contasPagar       ContaPagar[]
-  parcelasPagar     ParcelaPagar[]
-  saidasPagamento   SaidaPagamento[]
-  movimentosCaixa   MovimentoCaixa[]
-  tags              Tag[]
-  stages            Stage[]
-  uraOpcoes         UraOpcao[]
-  setores           Setor[]
-  apiKeys           ApiKey[]
-  recursos          TenantRecurso[]
-  businessHours     BusinessHour[]
-  savedTexts        SavedText[]
-  scheduledMessages ScheduledMessage[]
-  products          Product[]
-  stockMovements    StockMovement[]
-  produtoMateriais  ProdutoMaterial[]
-  teamMessages      TeamMessage[]
+  users                 User[]
+  sessions              WhatsAppSession[]
+  contacts              Contact[]
+  conversations         Conversation[]
+  orders                Order[]
+  contactBlocks         ContactBlock[]
+  autoReplies           AutoReply[]
+  subscription          Subscription?
+  invoices              Invoice[]
+  solicitacoes          SolicitacaoDeAcesso[]
+  funis                 Funil[]
+  negociacoes           Negociacao[]
+  motivosDePerda        MotivoDePerda[]
+  tarefasNegociacao     TarefaNegociacao[]
+  notasNegociacao       NegociacaoNota[]
+  anexosNegociacao      NegociacaoAnexo[]
+  metricasMensais       MetricaMensal[]
+  contasReceber         ContaReceber[]
+  parcelas              Parcela[]
+  caixas                Caixa[]
+  fornecedores          Fornecedor[]
+  contasPagar           ContaPagar[]
+  parcelasPagar         ParcelaPagar[]
+  saidasPagamento       SaidaPagamento[]
+  movimentosCaixa       MovimentoCaixa[]
+  categoriasFinanceiras CategoriaFinanceira[]
+  tags                  Tag[]
+  stages                Stage[]
+  uraOpcoes             UraOpcao[]
+  setores               Setor[]
+  apiKeys               ApiKey[]
+  recursos              TenantRecurso[]
+  businessHours         BusinessHour[]
+  savedTexts            SavedText[]
+  scheduledMessages     ScheduledMessage[]
+  products              Product[]
+  stockMovements        StockMovement[]
+  produtoMateriais      ProdutoMaterial[]
+  teamMessages          TeamMessage[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -1483,28 +1484,28 @@ enum MediaType {
 }
 
 model Message {
-  id              String           @id @default(cuid())
-  conversationId  String
-  conversation    Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sessionId       String
-  session         WhatsAppSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  direction       MessageDirection
-  status          MessageStatus    @default(SENT)
+  id                String           @id @default(cuid())
+  conversationId    String
+  conversation      Conversation     @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sessionId         String
+  session           WhatsAppSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  direction         MessageDirection
+  status            MessageStatus    @default(SENT)
   // Quando o status mudou pela última vez. Sem isso não dava pra responder
   // "essa mensagem está parada em SENT há quanto tempo?" — que é a diferença
   // entre um recibo que ainda vai chegar e um que nunca vem.
-  statusUpdatedAt DateTime?
-  body            String // legenda/texto — pode ser vazio quando é só mídia
+  statusUpdatedAt   DateTime?
+  body              String // legenda/texto — pode ser vazio quando é só mídia
   // Id da mensagem no WhatsApp. É por ele que os recibos de entrega e leitura
   // encontram a mensagem — por isso ele é GERADO POR NÓS e gravado ANTES do
   // envio. Quando era o WhatsApp que gerava, ele só existia aqui depois do
   // sendMessage resolver, e todo recibo que chegasse nessa janela procurava
   // um id que ainda não estava no banco e era descartado calado.
-  waMessageId     String?
-  errorMessage    String?
+  waMessageId       String?
+  errorMessage      String?
   referenciaExterna String?
-  createdAt       DateTime         @default(now())
-  readAt          DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
+  createdAt         DateTime         @default(now())
+  readAt            DateTime? // null = não lida ainda no dashboard (só importa pra INBOUND)
 
   // Quem mandou (OUTBOUND enviada por um atendente pelo Inbox) — null pra
   // auto-resposta, histórico importado e tudo que é INBOUND. O worker usa
@@ -2188,6 +2189,10 @@ model ContaReceber {
   origem    OrigemConta @default(MANUAL)
   descricao String?
 
+  /// Plano de contas (Believe, 29/10). Nulo = sem categoria.
+  categoriaId String?
+  categoria   CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
   createdById String?
   createdAt   DateTime  @default(now())
   canceladaEm DateTime?
@@ -2280,6 +2285,10 @@ model MovimentoCaixa {
   valorCents Int
   descricao  String
 
+  /// Só faz sentido na despesa: em que conta do plano ela entra.
+  categoriaId String?
+  categoria   CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
+
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
@@ -2333,6 +2342,9 @@ model ContaPagar {
   createdById String?
   createdAt   DateTime  @default(now())
   canceladaEm DateTime?
+
+  categoriaId String?
+  categoria   CategoriaFinanceira? @relation(fields: [categoriaId], references: [id], onDelete: SetNull)
 
   parcelas   ParcelaPagar[]
   pagamentos SaidaPagamento[]
@@ -2396,4 +2408,34 @@ model SaidaPagamento {
   @@index([contaId])
   @@index([parcelaId])
   @@index([tenantId, createdAt])
+}
+
+enum TipoCategoriaFinanceira {
+  RECEITA
+  DESPESA
+}
+
+/// Plano de contas da empresa (Believe, 29/10): "Despesas fixas › Aluguel".
+/// O grupo é texto, e não tabela, porque ele só serve para agrupar no
+/// relatório. A categoria nunca é apagada se já foi usada — fica inativa, e as
+/// contas antigas continuam dizendo onde entraram.
+model CategoriaFinanceira {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  tipo  TipoCategoriaFinanceira
+  grupo String
+  nome  String
+  ordem Int                     @default(0)
+  ativa Boolean                 @default(true)
+
+  createdAt DateTime @default(now())
+
+  contasReceber ContaReceber[]
+  contasPagar   ContaPagar[]
+  movimentos    MovimentoCaixa[]
+
+  @@unique([tenantId, grupo, nome])
+  @@index([tenantId, ordem])
 }

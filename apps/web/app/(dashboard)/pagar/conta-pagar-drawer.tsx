@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
+import { TrocarCategoria } from "@/components/campo-categoria";
 import { chamar, dataHoraBR, dataPagamento, dataVencimento, fetcher, ROTULO_STATUS, type StatusParcela } from "../receber/formatos";
 import { EditarParcelaPagarModal, PagarModal, ReparcelarPagarModal, ROTULO_FORMA, type FormaPagar } from "./pagar-modais";
 
@@ -26,6 +27,7 @@ type ParcelaDetalhe = {
 type Detalhe = {
   id: string;
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   canceladaEm: string | null;
   createdAt: string;
   fornecedor: { id: string; nome: string; telefone: string | null };
@@ -96,6 +98,7 @@ export function ContaPagarDrawer({ contaId, focoParcelaId, onFechar, onMudou }: 
         <h2 className="text-base font-semibold break-words">{data.fornecedor.nome}</h2>
         {data.descricao && <p className="text-sm text-neutral-600">{data.descricao}</p>}
         <p className="text-xs text-neutral-400">Criada em {dataHoraBR(data.createdAt)}</p>
+        <TrocarCategoria tipo="DESPESA" url={`/api/contas-pagar/${contaId}`} atual={data.categoria?.id ?? null} disabled={cancelada} onMudou={recarregar} />
         {cancelada && <p className="text-sm text-red-600 font-medium">Conta cancelada</p>}
       </div>
 

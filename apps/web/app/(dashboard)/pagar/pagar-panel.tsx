@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import useSWR from "swr";
 import { LISTING_INTERVAL } from "@/lib/polling";
 import { centsToBRL } from "@/lib/billing";
+import { CampoCategoria } from "@/components/campo-categoria";
 import { dataPagamento, dataVencimento, fetcher, ROTULO_STATUS, type Faixa, type StatusParcela } from "../receber/formatos";
 import { ContaPagarDrawer } from "./conta-pagar-drawer";
 import { EditarParcelaPagarModal, EscolherFornecedor, NovaContaPagarModal, PagarModal, ROTULO_FORMA, type FormaPagar } from "./pagar-modais";
@@ -12,6 +13,7 @@ type Linha = {
   id: string;
   contaId: string;
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   fornecedor: { id: string; nome: string };
   vencimento: string | null;
   pagoEm: string | null;
@@ -62,6 +64,7 @@ export function PagarPanel() {
   const [fornecedor, setFornecedor] = useState<{ id: string | null; nome: string }>({ id: null, nome: "" });
   const [status, setStatus] = useState<StatusParcela[]>(["PENDENTE"]);
   const [forma, setForma] = useState("");
+  const [categoria, setCategoria] = useState("");
   const [faixa, setFaixa] = useState<Faixa | "">("");
 
   const [nova, setNova] = useState(false);
@@ -75,8 +78,9 @@ export function PagarPanel() {
     if (ate) q.set("ate", ate);
     if (fornecedor.nome.trim()) q.set("fornecedor", fornecedor.nome.trim());
     if (forma) q.set("forma", forma);
+    if (categoria) q.set("categoria", categoria);
     return `/api/contas-pagar?${q}`;
-  }, [desde, ate, tipoData, fornecedor.nome, status, forma]);
+  }, [desde, ate, tipoData, fornecedor.nome, status, forma, categoria]);
 
   const { data, error, mutate } = useSWR<Resposta>(url, fetcher, { refreshInterval: LISTING_INTERVAL, keepPreviousData: true });
 
@@ -93,7 +97,7 @@ export function PagarPanel() {
   const linhas = faixa ? data.linhas.filter((l) => l.faixa === faixa) : data.linhas;
   const totalValor = linhas.reduce((s, l) => s + l.valorCents, 0);
   const campo = "text-sm rounded-md border border-neutral-300 px-2 py-1.5 bg-surface";
-  const filtrando = desde || ate || fornecedor.nome || forma || faixa || status.join() !== "PENDENTE" || tipoData !== "vencimento";
+  const filtrando = desde || ate || fornecedor.nome || forma || categoria || faixa || status.join() !== "PENDENTE" || tipoData !== "vencimento";
 
   return (
     <div>
@@ -163,6 +167,10 @@ export function PagarPanel() {
             ))}
           </select>
         </label>
+        <label className="text-[11px] text-neutral-500">
+          Categoria
+          <CampoCategoria tipo="DESPESA" filtro value={categoria} onChange={setCategoria} className={`${campo} block mt-0.5 max-w-[220px]`} />
+        </label>
         <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
           {STATUS_OPCOES.map((s) => (
             <label key={s} className="flex items-center gap-1.5">
@@ -178,6 +186,7 @@ export function PagarPanel() {
               setAte("");
               setFornecedor({ id: null, nome: "" });
               setForma("");
+              setCategoria("");
               setFaixa("");
               setStatus(["PENDENTE"]);
               setTipoData("vencimento");
@@ -216,6 +225,7 @@ export function PagarPanel() {
                 <td className="px-4 py-2.5">
                   <p className="font-medium truncate max-w-[220px]">{l.fornecedor.nome}</p>
                   {l.descricao && <p className="text-[11px] text-neutral-400 truncate max-w-[220px]">{l.descricao}</p>}
+                  {l.categoria && <p className="text-[11px] text-neutral-500 truncate max-w-[220px]">{l.categoria.grupo} › {l.categoria.nome}</p>}
                 </td>
                 <td className="px-3 py-2.5">
                   {dataVencimento(l.vencimento)}

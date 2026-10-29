@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
 import { reaisParaCentavos } from "../funil/tipos";
+import { CampoCategoria } from "@/components/campo-categoria";
 import { chamar, dataVencimento, hojeISO } from "../receber/formatos";
 
 export type FormaPagar = "BOLETO" | "PIX" | "TRANSFERENCIA" | "CARTAO" | "DINHEIRO" | "CHEQUE" | "OUTRO";
@@ -80,6 +81,7 @@ export function EscolherFornecedor({ valor, onChange }: { valor: { id: string | 
 export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => void; onCriada: () => void }) {
   const [fornecedor, setFornecedor] = useState<{ id: string | null; nome: string }>({ id: null, nome: "" });
   const [descricao, setDescricao] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [total, setTotal] = useState("");
   const [numParcelas, setNumParcelas] = useState("1");
   const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("MENSAL");
@@ -132,6 +134,7 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
     const r = await chamar("/api/contas-pagar", "POST", {
       ...(fornecedor.id ? { fornecedorId: fornecedor.id } : { fornecedorNome: fornecedor.nome.trim() }),
       descricao: descricao.trim() || null,
+      categoriaId: categoriaId || null,
       totalCents,
       numParcelas: n,
       periodicidade,
@@ -156,6 +159,10 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
           <label className="text-xs font-medium text-neutral-700">
             Descrição (opcional)
             <input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="ex: NF 1234, reposição de estoque" className={`${campo} mt-1`} />
+          </label>
+          <label className="text-xs font-medium text-neutral-700">
+            Categoria
+            <CampoCategoria tipo="DESPESA" value={categoriaId} onChange={setCategoriaId} className={`${campo} mt-1`} />
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <label className="text-xs font-medium text-neutral-700">

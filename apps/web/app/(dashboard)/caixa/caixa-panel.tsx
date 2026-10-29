@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
+import { CampoCategoria } from "@/components/campo-categoria";
 import { reaisParaCentavos } from "../funil/tipos";
 import { chamar, dataHoraBR, fetcher, ROTULO_MEIO } from "../receber/formatos";
 
@@ -35,7 +36,7 @@ type Dados = {
   resumo: Resumo;
   recebimentos: { id: string; valorCents: number; meio: string | null; lancadoEm: string; cliente: string; referencia: string; parcela: string | null; observacao: string | null; por: string | null }[];
   pagamentosAFornecedores: { id: string; valorCents: number; meio: string | null; lancadoEm: string; fornecedor: string; referencia: string; parcela: string | null; observacao: string | null; por: string | null }[];
-  movimentos: { id: string; tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; valorCents: number; descricao: string; createdAt: string; createdBy: { name: string } | null }[];
+  movimentos: { id: string; tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; valorCents: number; descricao: string; createdAt: string; createdBy: { name: string } | null; categoria: { nome: string } | null }[];
 };
 
 type Historico = {
@@ -305,6 +306,7 @@ function DetalheDoCaixa({
                 <li key={m.id} className="flex justify-between gap-3">
                   <span className="min-w-0 truncate">
                     {ROTULO_MOV[m.tipo]} · {m.descricao}
+                    {m.categoria && <span className="text-xs text-neutral-400"> · {m.categoria.nome}</span>}
                   </span>
                   <span className="shrink-0 flex items-center gap-2">
                     <span className={m.tipo === "SUPRIMENTO" ? "text-green-700" : "text-red-600"}>
@@ -414,6 +416,7 @@ function VerCaixa({ id, onFechar }: { id: string; onFechar: () => void }) {
 function MovimentoModal({ caixaId, tipo, onFechar, onFeito }: { caixaId: string; tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; onFechar: () => void; onFeito: () => void }) {
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -424,7 +427,7 @@ function MovimentoModal({ caixaId, tipo, onFechar, onFeito }: { caixaId: string;
     if (!descricao.trim()) return setErro("descreva o movimento");
     setErro(null);
     setSalvando(true);
-    const r = await chamar(`/api/caixa/${caixaId}`, "POST", { acao: "movimento", tipo, valorCents: cents, descricao: descricao.trim() });
+    const r = await chamar(`/api/caixa/${caixaId}`, "POST", { acao: "movimento", tipo, valorCents: cents, descricao: descricao.trim(), ...(tipo === "DESPESA" ? { categoriaId: categoriaId || null } : {}) });
     setSalvando(false);
     if (!r.ok) return setErro(r.erro ?? "não deu pra registrar");
     onFeito();
@@ -450,6 +453,12 @@ function MovimentoModal({ caixaId, tipo, onFechar, onFeito }: { caixaId: string;
             Descrição
             <input value={descricao} onChange={(e) => setDescricao(e.target.value)} className={`${campo} mt-1`} />
           </label>
+          {tipo === "DESPESA" && (
+            <label className="text-xs font-medium text-neutral-700">
+              Categoria
+              <CampoCategoria tipo="DESPESA" value={categoriaId} onChange={setCategoriaId} className={`${campo} mt-1`} />
+            </label>
+          )}
           {erro && <p className="text-sm text-red-600">{erro}</p>}
         </div>
         <div className="flex justify-end gap-2 mt-5">

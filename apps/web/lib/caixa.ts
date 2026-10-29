@@ -1,4 +1,5 @@
 import { prisma } from "@dilon-zap/db";
+import { validarCategoria } from "@/lib/categorias-financeiras";
 import type { Prisma, TipoMovimentoCaixa } from "@prisma/client";
 import { resumoDoCaixa } from "@dilon-zap/receivables";
 
@@ -96,7 +97,7 @@ export async function dadosDoCaixa(tenantId: string, caixaId: string) {
     prisma.movimentoCaixa.findMany({
       where: { caixaId: caixa.id },
       orderBy: { createdAt: "asc" },
-      select: { id: true, tipo: true, valorCents: true, descricao: true, createdAt: true, createdBy: { select: { name: true } } },
+      select: { id: true, tipo: true, valorCents: true, descricao: true, createdAt: true, createdBy: { select: { name: true } }, categoria: { select: { nome: true } } },
     }),
   ]);
 
@@ -155,7 +156,7 @@ export async function registrarMovimento(
   tenantId: string,
   userId: string,
   caixaId: string,
-  m: { tipo: TipoMovimentoCaixa; valorCents: number; descricao: string }
+  m: { tipo: TipoMovimentoCaixa; valorCents: number; descricao: string; categoriaId?: string | null }
 ) {
   if (!Number.isInteger(m.valorCents) || m.valorCents <= 0) throw new ErroDeCaixa("o valor precisa ser maior que zero");
   if (!m.descricao.trim()) throw new ErroDeCaixa("descreva o movimento");
@@ -164,7 +165,16 @@ export async function registrarMovimento(
   if (caixa.fechadoEm) throw new ErroDeCaixa("caixa já fechado", 409);
 
   return prisma.movimentoCaixa.create({
-    data: { tenantId, caixaId, tipo: m.tipo, valorCents: m.valorCents, descricao: m.descricao.trim(), createdById: userId },
+    data: {
+      tenantId,
+      caixaId,
+      tipo: m.tipo,
+      valorCents: m.valorCents,
+      descricao: m.descricao.trim(),
+      // Categoria só na despesa: suprimento e sangria não são receita nem gasto, só dinheiro mudando de lugar.
+      categoriaId: m.tipo === "DESPESA" ? await validarCategoria(prisma, tenantId, m.categoriaId, "DESPESA") : null,
+      createdById: userId,
+    },
     select: { id: true },
   });
 }

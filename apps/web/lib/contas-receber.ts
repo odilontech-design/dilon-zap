@@ -1,4 +1,5 @@
 import { prisma } from "@dilon-zap/db";
+import { categoriaDeVendas, validarCategoria } from "@/lib/categorias-financeiras";
 import type { PaymentMethod, Prisma, TipoParcela } from "@prisma/client";
 import {
   alocarRecebimento,
@@ -64,6 +65,7 @@ export type NovaContaInput = {
   tenantId: string;
   contactId: string;
   descricao?: string | null;
+  categoriaId?: string | null;
   plano: PlanoDeParcelas;
   userId?: string;
 };
@@ -86,6 +88,7 @@ export async function criarContaManual(db: Db, input: NovaContaInput) {
       contactId: contato.id,
       origem: "MANUAL",
       descricao: input.descricao?.trim() || null,
+      categoriaId: await validarCategoria(db, input.tenantId, input.categoriaId, "RECEITA"),
       createdById: input.userId,
       parcelas: {
         create: parcelas.map((p) => ({
@@ -119,6 +122,8 @@ export async function garantirContaDoPedido(db: Db, orderId: string, userId?: st
     select: { id: true, tenantId: true, contactId: true, totalCents: true, vencimento: true, numero: true },
   });
   if (pedido.totalCents <= 0) throw new ErroDeConta("pedido sem valor não gera conta a receber");
+  // Venda por pedido entra no plano de contas como venda, sem ninguém escolher.
+  const categoriaId = await categoriaDeVendas(db, pedido.tenantId);
 
   const conta = await db.contaReceber.create({
     data: {
@@ -127,6 +132,7 @@ export async function garantirContaDoPedido(db: Db, orderId: string, userId?: st
       orderId: pedido.id,
       origem: "PEDIDO",
       descricao: `Pedido #${pedido.numero}`,
+      categoriaId,
       createdById: userId,
       parcelas: {
         create: {
@@ -463,6 +469,8 @@ export type FiltrosDeContas = {
   cliente?: string;
   status: StatusParcela[];
   tipo?: TipoParcela;
+  /** Id da categoria, ou "sem" para as que não têm. */
+  categoria?: string;
 };
 
 export type LinhaDeParcela = {
@@ -473,6 +481,7 @@ export type LinhaDeParcela = {
   conversationId: string | null;
   origem: "MANUAL" | "PEDIDO";
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   contato: { id: string; name: string | null; waJid: string; phoneNumber: string | null };
   vencimento: Date | null;
   pagaEm: Date | null;
@@ -496,7 +505,7 @@ export async function listarParcelas(tenantId: string, f: FiltrosDeContas, agora
   const parcelas = await prisma.parcela.findMany({
     where: {
       tenantId,
-      conta: { canceladaEm: null, ...(f.cliente ? { contact: { OR: [{ name: { contains: f.cliente, mode: "insensitive" } }, { phoneNumber: { contains: f.cliente.replace(/\D/g, "") || "__x__" } }] } } : {}) },
+      conta: { canceladaEm: null, ...(f.categoria ? { categoriaId: f.categoria === "sem" ? null : f.categoria } : {}), ...(f.cliente ? { contact: { OR: [{ name: { contains: f.cliente, mode: "insensitive" } }, { phoneNumber: { contains: f.cliente.replace(/\D/g, "") || "__x__" } }] } } : {}) },
       ...(f.tipo ? { tipo: f.tipo } : {}),
       ...(janela
         ? porVencimento
@@ -511,6 +520,7 @@ export async function listarParcelas(tenantId: string, f: FiltrosDeContas, agora
           id: true,
           origem: true,
           descricao: true,
+          categoria: { select: { id: true, nome: true, grupo: true } },
           order: { select: { id: true, numero: true, conversationId: true } },
           contact: { select: { id: true, name: true, waJid: true, phoneNumber: true } },
         },
@@ -534,6 +544,7 @@ export async function listarParcelas(tenantId: string, f: FiltrosDeContas, agora
       conversationId: p.conta.order?.conversationId ?? null,
       origem: p.conta.origem,
       descricao: p.conta.descricao,
+      categoria: p.conta.categoria,
       contato: p.conta.contact,
       vencimento: p.vencimento,
       pagaEm: s.pagaEm,
@@ -570,6 +581,7 @@ export async function detalheDaConta(tenantId: string, contaId: string) {
     where: { id: contaId, tenantId },
     include: {
       contact: { select: { id: true, name: true, waJid: true, phoneNumber: true } },
+      categoria: { select: { id: true, nome: true, grupo: true } },
       order: { select: { id: true, numero: true, conversationId: true, totalCents: true, paymentMethod: true } },
       parcelas: { include: { pagamentos: { orderBy: { recebidoEm: "asc" }, include: { createdBy: { select: { name: true } } } } }, orderBy: [{ vencimento: { sort: "asc", nulls: "last" } }, { numero: "asc" }] },
     },
@@ -607,6 +619,7 @@ export async function detalheDaConta(tenantId: string, contaId: string) {
     id: conta.id,
     origem: conta.origem,
     descricao: conta.descricao,
+    categoria: conta.categoria,
     canceladaEm: conta.canceladaEm,
     createdAt: conta.createdAt,
     contato: conta.contact,

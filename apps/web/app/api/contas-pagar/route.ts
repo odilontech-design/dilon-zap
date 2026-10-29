@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { guardaFinanceiro, parseDia, inicioDoDiaBR, fimDoDiaBR } from "@/lib/guarda-financeiro";
+import { ErroDeCategoria } from "@/lib/categorias-financeiras";
 import { criarContaPagar, ErroDePagar, listarParcelasPagar, resumoAPagar } from "@/lib/contas-pagar";
 import type { StatusParcela } from "@dilon-zap/receivables";
 
@@ -36,6 +37,7 @@ export async function GET(req: Request) {
       fornecedor: q.get("fornecedor")?.trim() || undefined,
       status: status.length ? status : ["PENDENTE"],
       forma,
+      categoria: q.get("categoria")?.trim() || undefined,
     }),
     resumoAPagar(user.tenantId),
   ]);
@@ -59,6 +61,7 @@ const novaSchema = z
     periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]),
     primeiroVencimento: dia,
     forma: z.enum(FORMAS).default("BOLETO"),
+    categoriaId: z.string().min(1).nullable().optional(),
     // Data e valor de cada boleto, ajustados na prévia. Ver criarContaPagar.
     parcelas: z
       .array(z.object({ vencimento: dia, valorCents: z.number().int().min(1).max(10_000_000_000) }))
@@ -84,6 +87,7 @@ export async function POST(req: Request) {
         fornecedorId: d.fornecedorId,
         fornecedorNome: d.fornecedorNome,
         descricao: d.descricao,
+        categoriaId: d.categoriaId,
         forma: d.forma,
         userId: user.id,
         plano: { totalCents: d.totalCents, numParcelas: d.numParcelas, periodicidade: d.periodicidade, primeiroVencimento: parseDia(d.primeiroVencimento)! },
@@ -93,7 +97,7 @@ export async function POST(req: Request) {
     await logAudit({ actor: user, action: "conta_pagar.criada", metadata: { contaId: conta.id, totalCents: d.parcelas ? d.parcelas.reduce((s, p) => s + p.valorCents, 0) : d.totalCents, parcelas: d.parcelas?.length ?? d.numParcelas, manuais: !!d.parcelas } });
     return NextResponse.json(conta, { status: 201 });
   } catch (e) {
-    if (e instanceof ErroDePagar) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof ErroDePagar || e instanceof ErroDeCategoria) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;
   }
 }
