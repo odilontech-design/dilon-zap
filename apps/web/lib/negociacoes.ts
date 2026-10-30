@@ -1,4 +1,4 @@
-import { exigeNegociacaoCompleta, faltandoNaNegociacao, origemCanonica } from "@/lib/origens";
+import { exigeValorNaEtapa, origemCanonica } from "@/lib/origens";
 import { prisma } from "@dilon-zap/db";
 import type { CurrentUser } from "@/lib/session";
 
@@ -51,6 +51,8 @@ export async function criarNegociacao(args: {
   previsaoFechamento: Date | null;
 }) {
   const etapa = await etapaDoFunil(args.stageId, args.funilId);
+  const faltaValor = await exigeValorNaEtapa(etapa.id, args.valorCents);
+  if (faltaValor) throw new ErroDeNegocio(faltaValor, 422);
   return prisma.$transaction(async (tx) => {
     const negociacao = await tx.negociacao.create({
       data: {
@@ -103,6 +105,10 @@ export async function criarNegociacao(args: {
 export async function moverNegociacao(n: NegociacaoAtual, stageId: string, quem: Quem) {
   if (n.status !== "ABERTA") throw new ErroDeNegocio("reabra a negociação antes de mover", 409);
   if (n.stageId === stageId) return;
+
+  const atual = await prisma.negociacao.findUnique({ where: { id: n.id }, select: { valorCents: true } });
+  const faltaValor = await exigeValorNaEtapa(stageId, atual?.valorCents);
+  if (faltaValor) throw new ErroDeNegocio(faltaValor, 422);
 
   const [de, para] = await Promise.all([
     prisma.stage.findUnique({ where: { id: n.stageId }, select: { name: true } }),
@@ -285,15 +291,16 @@ export async function aplicarEtapaEValorDoContato(args: {
       orderBy: { updatedAt: "desc" },
     });
     if (aberta) {
+      // O valor digitado junto entra antes: a etapa pode exigi-lo.
+      if (args.dealValueCents !== undefined) {
+        await prisma.negociacao.update({ where: { id: aberta.id }, data: { valorCents: args.dealValueCents } });
+        await recalcularValores(aberta.id);
+      }
       await moverNegociacao(aberta, etapa.id, quem);
     } else {
-      if (await exigeNegociacaoCompleta(tenantId)) {
-        const falta = faltandoNaNegociacao({ responsavelId: args.responsavelId, valorCents: args.dealValueCents, origem: args.origem });
-        if (falta.length) throw new ErroDeNegocio(`Para abrir a negociação, informe ${falta.join(", ")}.`, 422);
-        if (args.responsavelId) {
-          const resp = await prisma.user.findFirst({ where: { id: args.responsavelId, tenantId }, select: { id: true } });
-          if (!resp) throw new ErroDeNegocio("responsável inválido", 400);
-        }
+      if (args.responsavelId) {
+        const resp = await prisma.user.findFirst({ where: { id: args.responsavelId, tenantId }, select: { id: true } });
+        if (!resp) throw new ErroDeNegocio("responsável inválido", 400);
       }
       await criarNegociacao({
         tenantId,
@@ -304,7 +311,7 @@ export async function aplicarEtapaEValorDoContato(args: {
         titulo: contato.name?.trim() || contato.phoneNumber || contato.waJid.split("@")[0],
         valorCents: args.dealValueCents ?? 0,
         recorrencia: "UNICA",
-        responsavelId: args.responsavelId ?? null,
+        responsavelId: args.responsavelId ?? quem.id,
         origem: await origemCanonica(tenantId, args.origem),
         previsaoFechamento: null,
       });

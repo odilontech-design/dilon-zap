@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { funilDaEmpresa, garantirMotivosDePerda } from "@/lib/funis";
-import { exigeNegociacaoCompleta, faltandoNaNegociacao, origemCanonica, origensDoTenant } from "@/lib/origens";
+import { origemCanonica, origensDoTenant } from "@/lib/origens";
 import { criarNegociacao, ErroDeNegocio } from "@/lib/negociacoes";
 import { pendenciasPorContato } from "@/lib/contas-receber";
 import { podeVerPendencia } from "@/lib/plano";
@@ -129,7 +129,9 @@ export async function GET(req: Request) {
 
   // Sugestões de origem: o que a empresa já usou, pra não nascerem "insta" e "Instagram".
   // Lista padronizada (sugestões + as já usadas), a mesma do formulário.
-  const [origens, exigirDados] = await Promise.all([origensDoTenant(user.tenantId), exigeNegociacaoCompleta(user.tenantId)]);
+  const origens = await origensDoTenant(user.tenantId);
+  // Abrir negociação não exige mais nada; o valor só é cobrado a partir do orçamento.
+  const exigirDados = false;
 
   return NextResponse.json({
     funil: { id: funil.id, nome: funil.nome },
@@ -201,10 +203,6 @@ export async function POST(req: Request) {
   if (d.responsavelId) {
     const resp = await prisma.user.findFirst({ where: { id: d.responsavelId, tenantId: user.tenantId }, select: { id: true } });
     if (!resp) return NextResponse.json({ error: "responsável inválido" }, { status: 400 });
-  }
-  if (await exigeNegociacaoCompleta(user.tenantId)) {
-    const falta = faltandoNaNegociacao(d);
-    if (falta.length) return NextResponse.json({ error: `Informe ${falta.join(", ")} para criar a negociação.` }, { status: 422 });
   }
 
   // Sem etapa informada, entra na primeira do funil.

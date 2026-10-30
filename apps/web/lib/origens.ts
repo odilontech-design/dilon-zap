@@ -43,6 +43,24 @@ export async function exigeNegociacaoCompleta(tenantId: string): Promise<boolean
   return !!t?.negociacaoCompleta;
 }
 
+/**
+ * Nas empresas com negociação completa, o valor só passa a ser exigido a
+ * partir da etapa "Orçamento enviado" (a primeira do funil cujo nome tem
+ * "orçamento") e das seguintes. Abrir e conversar não pedem nada.
+ */
+export async function exigeValorNaEtapa(stageId: string, valorCents: number | null | undefined): Promise<string | null> {
+  if (valorCents && valorCents > 0) return null;
+  const etapa = await prisma.stage.findUnique({
+    where: { id: stageId },
+    select: { name: true, position: true, funilId: true, tenant: { select: { negociacaoCompleta: true } } },
+  });
+  if (!etapa?.funilId || !etapa.tenant.negociacaoCompleta) return null;
+  const etapas = await prisma.stage.findMany({ where: { funilId: etapa.funilId }, orderBy: { position: "asc" }, select: { name: true, position: true } });
+  const marco = etapas.find((e) => /or[cç]amento/i.test(e.name));
+  if (!marco || etapa.position < marco.position) return null;
+  return `Informe o valor para levar a negociação a "${etapa.name}".`;
+}
+
 /** O que falta para uma negociação nova valer, nas empresas que exigem. Vazio = ok. */
 export function faltandoNaNegociacao(d: { responsavelId?: string | null; valorCents?: number | null; origem?: string | null }): string[] {
   const falta: string[] = [];

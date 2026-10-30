@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { deleteMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
-import { exigeNegociacaoCompleta, origemCanonica, origensDoTenant } from "@/lib/origens";
+import { origemCanonica, origensDoTenant } from "@/lib/origens";
 import { pendenciaDoContato } from "@/lib/contas-receber";
 import { podeVerPendencia, recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
@@ -150,10 +150,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     if (d.responsavelId) {
       const resp = await prisma.user.findFirst({ where: { id: d.responsavelId, tenantId: user.tenantId }, select: { id: true } });
       if (!resp) return NextResponse.json({ error: "responsável inválido" }, { status: 400 });
-    }
-    // Empresa que exige os dados: dá para trocar, não para apagar.
-    if ((d.responsavelId === null || d.origem === null || d.origem === "") && (await exigeNegociacaoCompleta(user.tenantId))) {
-      return NextResponse.json({ error: "Responsável e origem são obrigatórios nesta empresa." }, { status: 422 });
     }
     if (d.origem) d.origem = (await origemCanonica(user.tenantId, d.origem)) ?? d.origem;
 

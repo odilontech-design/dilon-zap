@@ -90,7 +90,7 @@ export function AjustesEmpresa({
         </div>
         <div className={linha}>
           <div>
-            <p className="text-sm text-neutral-200">Negociação exige responsável, valor e origem</p>
+            <p className="text-sm text-neutral-200">Negociação exige o valor a partir do orçamento</p>
             <p className="text-xs text-neutral-500">Vale para o CRM e para a etapa escolhida no Inbox. Origem vira lista.</p>
           </div>
           <input
@@ -99,7 +99,7 @@ export function AjustesEmpresa({
             disabled={salvando}
             onChange={(e) => salvar({ negociacaoCompleta: e.target.checked })}
             className="mt-1 h-4 w-4"
-            aria-label="Negociação exige responsável, valor e origem"
+            aria-label="Negociação exige o valor a partir do orçamento"
           />
         </div>
         <div className={linha}>

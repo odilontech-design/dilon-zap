@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
-import { CampoOrigem } from "@/components/campo-origem";
 import { TarefasNegociacao } from "@/app/(dashboard)/funil/tarefas-negociacao";
 
 type FunilDoContato = {
@@ -63,13 +62,11 @@ export function EtapasPorFunil({
   const { data: opcoes } = useSWR<Opcoes>("/api/negociacoes/opcoes", fetcher);
   const [salvando, setSalvando] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  // Abrindo negociação num funil, com os dados obrigatórios por preencher.
-  const [abrindo, setAbrindo] = useState<{ funilId: string; stageId: string } | null>(null);
+  // Etapa que exige o valor (a partir do orçamento) e ainda não tem: pede aqui.
+  const [abrindo, setAbrindo] = useState<{ funilId: string; stageId: string; aviso: string } | null>(null);
   const [valor, setValor] = useState("");
-  const [responsavelId, setResponsavelId] = useState("");
-  const [origem, setOrigem] = useState("");
 
-  async function enviar(funilId: string, corpo: Record<string, unknown>) {
+  async function enviar(funilId: string, corpo: Record<string, unknown>): Promise<boolean | "valor"> {
     setErro(null);
     setSalvando(funilId);
     const res = await fetch(`/api/contacts/${contactId}`, {
@@ -80,7 +77,13 @@ export function EtapasPorFunil({
     setSalvando(null);
     if (!res.ok) {
       const b = await res.json().catch(() => ({}));
-      setErro(typeof b.error === "string" ? b.error : "não deu pra salvar a etapa");
+      const msg = typeof b.error === "string" ? b.error : "não deu pra salvar a etapa";
+      if (res.status === 422 && /valor/i.test(msg)) {
+        setAbrindo({ funilId, stageId: String(corpo.stageId), aviso: msg });
+        setValor("");
+        return "valor";
+      }
+      setErro(msg);
       return false;
     }
     await mutate();
@@ -90,25 +93,18 @@ export function EtapasPorFunil({
 
   async function escolher(f: FunilDoContato, stageId: string) {
     if (!stageId) return;
-    if (!f.negociacao && opcoes?.exigirDados) {
-      setAbrindo({ funilId: f.id, stageId });
-      setResponsavelId(opcoes.meuId);
-      setValor("");
-      setOrigem("");
-      setErro(null);
-      return;
-    }
-    await enviar(f.id, { stageId });
+    setAbrindo(null);
+    await enviar(f.id, { stageId, ...(!f.negociacao && opcoes ? { responsavelId: opcoes.meuId } : {}) });
   }
 
   async function abrirNegociacao(e: React.FormEvent) {
     e.preventDefault();
     if (!abrindo) return;
     const valorCents = centavos(valor);
-    const falta = [!responsavelId && "responsável", !valorCents && "valor", !origem && "origem"].filter(Boolean);
-    if (falta.length) return setErro(`Informe ${falta.join(", ")}.`);
-    const ok = await enviar(abrindo.funilId, { stageId: abrindo.stageId, dealValueCents: valorCents, responsavelId, origem });
-    if (ok) setAbrindo(null);
+    if (!valorCents) return setErro("Informe o valor.");
+    const f = funis?.find((x) => x.id === abrindo.funilId);
+    const ok = await enviar(abrindo.funilId, { stageId: abrindo.stageId, dealValueCents: valorCents, ...(f && !f.negociacao && opcoes ? { responsavelId: opcoes.meuId } : {}) });
+    if (ok === true) setAbrindo(null);
   }
 
   if (!funis) return <p className="text-xs text-neutral-400">Carregando funis...</p>;
@@ -148,7 +144,7 @@ export function EtapasPorFunil({
           </select>
           {abrindo?.funilId === f.id && opcoes && (
             <form onSubmit={abrirNegociacao} className="mt-2 flex flex-col gap-2 rounded-md border border-accent/30 bg-accent/5 p-2">
-              <p className="text-[11px] text-neutral-600">Para abrir a negociação, informe:</p>
+              <p className="text-[11px] text-neutral-600">{abrindo.aviso}</p>
               <input
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
@@ -157,21 +153,12 @@ export function EtapasPorFunil({
                 aria-label="Valor"
                 className={campo}
               />
-              <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)} aria-label="Responsável" className={campo}>
-                <option value="">Responsável *</option>
-                {opcoes.usuarios.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name}
-                  </option>
-                ))}
-              </select>
-              <CampoOrigem value={origem} onChange={setOrigem} origens={opcoes.origens} obrigatorio className={campo} />
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setAbrindo(null)} className="px-2 py-1 text-xs text-neutral-500 hover:text-neutral-800">
                   Cancelar
                 </button>
                 <button type="submit" disabled={salvando === f.id} className="rounded-md bg-accent px-3 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50">
-                  Abrir negociação
+                  Salvar e mover
                 </button>
               </div>
             </form>
