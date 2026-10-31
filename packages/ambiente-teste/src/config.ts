@@ -16,6 +16,8 @@ export const BANCO_TESTE = {
 export const PREFIXO_PASTA = "dilon-zap-teste-";
 export const ARQUIVO_DA_PASTA = ".dilon-zap-teste";
 export const PORTA_TUNEL_PRODUCAO = 5433;
+export const PORTA_SITE = 3199;
+export const VARIAVEL_SENHA_USUARIOS = "DILON_TESTE_SENHA_USUARIOS";
 export const VARIAVEL_MARCA = "DILON_TESTE_MARCA";
 export const VARIAVEL_PASTA_DADOS = "DILON_TESTE_PASTA_DADOS";
 
@@ -60,7 +62,6 @@ const HERDADAS = [
 export const VARIAVEIS_ESVAZIADAS = [
   "DIRECT_URL",
   "ESQUADRIAS_DATABASE_URL",
-  "NEXTAUTH_SECRET",
   "WORKER_INTERNAL_URL",
   "WORKER_INTERNAL_SECRET",
   "R2_ACCOUNT_ID",

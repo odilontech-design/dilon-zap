@@ -7,7 +7,7 @@ import path from "node:path";
 import { after, before, describe, test } from "node:test";
 import dotenv from "dotenv";
 import { prisma, PrismaClient } from "@dilon-zap/db";
-import { motivoParaNaoRemover } from "../src/banco-teste";
+import { motivoParaNaoRemover } from "../src/riscos";
 import { ConexaoBloqueada } from "../src/bloquear-rede";
 import { ARQUIVO_DA_PASTA, BANCO_TESTE, PREFIXO_PASTA, VARIAVEIS_ESVAZIADAS, VARIAVEL_MARCA, VARIAVEL_PASTA_DADOS, ocultar, urlDoBancoDeTeste } from "../src/config";
 import { confirmarServidor, normalizarPasta, validarUrlDeTeste, type Consultar } from "../src/guarda-banco";

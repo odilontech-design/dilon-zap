@@ -66,6 +66,14 @@ const NAV_ITEMS = [
     icon: icon(<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m8.5 9.5 1.5 1.5 3-3.5" /><path d="M8.5 16h7" /></>),
   },
   {
+    href: "/sdr",
+    recurso: "SDR" as Recurso,
+    label: "SDR",
+    icon: icon(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>),
+    // Mesma regra de leitura de lib/sdr/regras. A barreira real é a rota.
+    somenteGestao: true,
+  },
+  {
     href: "/saas",
     recurso: "FUNIL_SAAS" as Recurso,
     label: "Indicadores SaaS",

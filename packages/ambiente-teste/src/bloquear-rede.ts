@@ -1,5 +1,5 @@
 import net from "node:net";
-import { BANCO_TESTE } from "./config";
+import { BANCO_TESTE, PORTA_SITE } from "./config";
 
 /**
  * Carregado antes de tudo nos processos de teste. Toda conexão TCP aberta pelo
@@ -7,7 +7,8 @@ import { BANCO_TESTE } from "./config";
  *
  * Não alcança o motor nativo do Prisma, que abre os próprios sockets. Para ele
  * valem a guarda do banco, o log de conexões do Postgres e a sentinela do
- * sistema operacional (ver sentinela.ts).
+ * sistema operacional (ver sentinela.ts). O site local também é permitido, para
+ * os testes de ponta a ponta.
  */
 
 export class ConexaoBloqueada extends Error {
@@ -18,7 +19,7 @@ export class ConexaoBloqueada extends Error {
 }
 
 export function destinoPermitido(host: string | undefined, porta: number | undefined): boolean {
-  return (host === BANCO_TESTE.host || host === "localhost") && porta === BANCO_TESTE.porta;
+  return (host === BANCO_TESTE.host || host === "localhost") && (porta === BANCO_TESTE.porta || porta === PORTA_SITE);
 }
 
 const original = net.Socket.prototype.connect;
@@ -44,11 +45,17 @@ net.Socket.prototype.connect = function connect(this: net.Socket, ...args: unkno
   return original.apply(this, args as never);
 } as typeof net.Socket.prototype.connect;
 
-globalThis.fetch = (async (entrada: unknown) => {
+const fetchOriginal = globalThis.fetch;
+
+globalThis.fetch = (async (entrada: unknown, opcoes?: RequestInit) => {
   const alvo = entrada instanceof URL ? entrada.href : entrada instanceof Request ? entrada.url : String(entrada);
   let destino = "URL inválida";
   try {
-    destino = new URL(alvo).host;
+    const u = new URL(alvo);
+    destino = u.host;
+    if (u.protocol === "http:" && destinoPermitido(u.hostname, Number(u.port)) && Number(u.port) === PORTA_SITE) {
+      return fetchOriginal(entrada as RequestInfo, opcoes);
+    }
   } catch {
     // mantém a descrição genérica
   }

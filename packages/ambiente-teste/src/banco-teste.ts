@@ -7,20 +7,9 @@ import path from "node:path";
 import { promisify } from "node:util";
 import EmbeddedPostgres from "embedded-postgres";
 import { ARQUIVO_DA_PASTA, BANCO_TESTE, PREFIXO_PASTA } from "./config";
-import { normalizarPasta } from "./guarda-banco";
+import { motivoParaNaoRemover } from "./riscos";
 
 const executar = promisify(execFile);
-
-/** Razão para NÃO apagar a pasta, ou null se for seguro. Só apaga o que este pacote criou. */
-export function motivoParaNaoRemover(pasta: string, base: string = os.tmpdir()): string | null {
-  const alvo = normalizarPasta(pasta);
-  const temporaria = normalizarPasta(base);
-  if (!alvo.startsWith(`${temporaria}/`)) return "a pasta está fora da pasta temporária";
-  if (!path.basename(pasta).startsWith(PREFIXO_PASTA)) return "a pasta não tem o prefixo do ambiente de teste";
-  if (!existsSync(path.join(pasta, ARQUIVO_DA_PASTA))) return "a pasta não tem o arquivo do ambiente de teste";
-  if (existsSync(path.join(pasta, "pgdata", "postmaster.pid"))) return "o Postgres ainda não encerrou (postmaster.pid presente)";
-  return null;
-}
 
 function portaAberta(porta: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -102,11 +91,9 @@ export class BancoTeste {
   async encerrar(ambiente: NodeJS.ProcessEnv): Promise<{ ok: boolean; detalhe: string }> {
     if (!this.iniciado) return { ok: true, detalhe: "o servidor não chegou a iniciar" };
     const { pg_ctl } = (await import("@embedded-postgres/windows-x64")) as unknown as { pg_ctl: string };
-    try {
-      await executar(pg_ctl, ["stop", "-D", this.pastaDados, "-m", "fast", "-w", "-t", "30"], { env: ambiente });
-    } catch {
-      return { ok: false, detalhe: "o pg_ctl não confirmou o encerramento" };
-    }
+    // Com Ctrl+C o Postgres pode já ter recebido o sinal e estar fechando. A falha
+    // aqui não decide nada: o que confirma o encerramento são as checagens abaixo.
+    await executar(pg_ctl, ["stop", "-D", this.pastaDados, "-m", "fast", "-w", "-t", "30"], { env: ambiente }).catch(() => undefined);
     // O stop() do pacote esperaria um evento de saída que já aconteceu e nunca
     // voltaria. Sem o processo registrado, o gancho de saída dele também não age.
     (this.pg as unknown as { process?: unknown }).process = undefined;

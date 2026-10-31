@@ -22,8 +22,8 @@ export function conexoesProibidas(amostra: Amostra): Conexao[] {
 }
 
 /** Local, só a porta do banco de teste: a 5433 é o túnel e a 5432 é outro banco. */
-export function conexoesLocaisInesperadas(amostra: Amostra): Conexao[] {
-  return amostra.conexoes.filter((c) => ehLocal(c.remoto) && c.porta !== BANCO_TESTE.porta && c.porta < 49152);
+export function conexoesLocaisInesperadas(amostra: Amostra, permitidas: number[] = [BANCO_TESTE.porta]): Conexao[] {
+  return amostra.conexoes.filter((c) => ehLocal(c.remoto) && !permitidas.includes(c.porta) && c.porta < 49152);
 }
 
 export function escutasProibidas(amostra: Amostra): Escuta[] {
@@ -70,7 +70,7 @@ export class Sentinela {
   private primeiraLeitura: (() => void) | null = null;
   readonly resumo: Resumo = { leituras: 0, conexoesAoBancoDeTeste: 0, pidsVistosNoBanco: 0, violacoes: [] };
 
-  constructor(private aoViolar: (descricao: string) => void) {}
+  constructor(private aoViolar: (descricao: string) => void, private portasPermitidas: number[] = [BANCO_TESTE.porta]) {}
 
   iniciar(ambiente: NodeJS.ProcessEnv, raiz: number): Promise<void> {
     this.processo = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", SCRIPT(raiz)], {
@@ -109,7 +109,7 @@ export class Sentinela {
 
     const violacoes = [
       ...conexoesProibidas(amostra).map((c) => `conexão externa na porta ${c.porta}`),
-      ...conexoesLocaisInesperadas(amostra).map((c) => `conexão local inesperada na porta ${c.porta}`),
+      ...conexoesLocaisInesperadas(amostra, this.portasPermitidas).map((c) => `conexão local inesperada na porta ${c.porta}`),
       ...escutasProibidas(amostra).map((e) => `escuta fora da máquina na porta ${e.porta}`),
     ];
     for (const v of violacoes) {

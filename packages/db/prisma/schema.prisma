@@ -201,6 +201,8 @@ model Tenant {
   stockMovements        StockMovement[]
   produtoMateriais      ProdutoMaterial[]
   teamMessages          TeamMessage[]
+  sdrIcps               SdrIcp[]
+  sdrCampanhas          SdrCampanha[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -1687,6 +1689,10 @@ enum Recurso {
   // ponta (visitantes → clientes). Sob demanda, como o multi-número: é a
   // régua de negócio da Dilon Tech, não algo que toda empresa precise.
   FUNIL_SAAS
+  // Prospecção comercial (Dilon SDR). Em validação na Dilon Tech: não entra em
+  // plano nenhum nem no painel de exceções (ver RECURSOS_RESTRITOS em
+  // lib/plano-regras). Só existe para a empresa com a linha em TenantRecurso.
+  SDR
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -2466,4 +2472,70 @@ model NotaFiscalEntrada {
   importadaEm    DateTime @default(now())
 
   @@unique([tenantId, chave])
+}
+
+enum StatusCampanhaSdr {
+  RASCUNHO
+  ATIVA
+  PAUSADA
+  ENCERRADA
+}
+
+/// Perfil de cliente ideal (ICP) da prospecção. Por enquanto é só cadastro:
+/// nada é pesquisado nem enviado a partir dele.
+model SdrIcp {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nome            String
+  descricao       String?
+  segmentos       String[]
+  /// Códigos CNAE, só dígitos.
+  cnaes           String[]
+  ufs             String[]
+  cidades         String[]
+  /// MEI, ME, EPP, MEDIA ou GRANDE. Lista fechada em lib/sdr/esquemas.
+  portes          String[]
+  caracteristicas String[]
+  /// [{ nome, descricao, peso, obrigatorio }]. Validado por zod ao gravar.
+  criterios       Json     @default("[]")
+
+  // Texto, e não relação com User: o cadastro continua dizendo quem criou mesmo
+  // depois de a pessoa sair da empresa.
+  criadoPorId   String?
+  criadoPorNome String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  campanhas SdrCampanha[]
+
+  @@unique([tenantId, nome])
+  // Alvo da chave composta de SdrCampanha.
+  @@unique([tenantId, id])
+}
+
+/// Campanha de prospecção. Por enquanto é só cadastro: o status não dispara nada.
+model SdrCampanha {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  nome      String
+  descricao String?
+  status    StatusCampanhaSdr @default(RASCUNHO)
+
+  // Chave composta com o tenantId: o próprio banco recusa uma campanha ligada ao
+  // perfil de outra empresa, mesmo que alguma rota esqueça de conferir.
+  icpId String
+  icp   SdrIcp @relation(fields: [tenantId, icpId], references: [tenantId, id], onDelete: Restrict)
+
+  criadoPorId   String?
+  criadoPorNome String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, nome])
+  @@index([tenantId, status])
+  @@index([tenantId, icpId])
 }
