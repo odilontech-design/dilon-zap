@@ -28,11 +28,13 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         paraUrl(path.join(aqui, "bloquear-rede.ts")),
         "--test",
         "--test-isolation=none",
+        "--test-timeout=180000",
         "--test-reporter=spec",
         "test/isolamento.test.ts",
         "test/sdr.test.ts",
         "test/csv-normalizacao.test.ts",
         "test/importacao.test.ts",
+        "test/compatibilidade-producao.test.ts",
       ],
       { env: pacote.ambiente, cwd: raizDoPacote, stdio: ["ignore", "pipe", "pipe"] }
     );

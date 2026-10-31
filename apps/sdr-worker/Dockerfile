@@ -16,4 +16,7 @@ COPY . .
 RUN npm run db:generate
 
 ENV NODE_ENV=production
-CMD ["npm", "run", "start", "-w", "apps/sdr-worker"]
+# Node direto, sem passar pelo npm: assim o Node é o processo principal do
+# contêiner e recebe o SIGTERM do "docker stop", terminando o lote com calma.
+# (O tsx fica na raiz do node_modules, instalado pelo workspace.)
+CMD ["node", "--import", "tsx", "apps/sdr-worker/src/index.ts"]
