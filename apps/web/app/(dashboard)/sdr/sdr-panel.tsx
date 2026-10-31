@@ -4,6 +4,9 @@ import { useState } from "react";
 import useSWR from "swr";
 import { PORTES, ROTULO_PORTE, ROTULO_STATUS_CAMPANHA, STATUS_CAMPANHA, UFS } from "@/lib/sdr/esquemas";
 import { chamar, fetcher } from "../receber/formatos";
+import { BloqueiosPanel } from "./bloqueios-panel";
+import { EmpresasPanel, type FiltroInicial } from "./empresas-panel";
+import { ImportacoesPanel } from "./importacoes-panel";
 
 type Criterio = { nome: string; descricao?: string; peso: number; obrigatorio: boolean };
 type Perfil = {
@@ -33,43 +36,54 @@ const CORES_STATUS: Record<Status, string> = {
 
 const paraLista = (texto: string) => [...new Set(texto.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))];
 
+type Aba = "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios";
+
 export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
-  const [aba, setAba] = useState<"campanhas" | "perfis">("campanhas");
+  const [aba, setAba] = useState<Aba>("campanhas");
+  // Ao vir de "Ver empresas bloqueadas", a aba de empresas já abre filtrada.
+  const [filtroEmpresas, setFiltroEmpresas] = useState<FiltroInicial | undefined>(undefined);
   const perfis = useSWR<{ perfis: Perfil[] }>("/api/sdr/icps", fetcher);
   const campanhas = useSWR<{ campanhas: Campanha[] }>("/api/sdr/campanhas", fetcher);
 
   const abaClasse = (ativa: boolean) =>
-    `px-3 py-2 text-sm border-b-2 -mb-px ${ativa ? "border-accent text-accent font-medium" : "border-transparent text-neutral-500 hover:text-neutral-800"}`;
+    `px-3 py-2 text-sm border-b-2 -mb-px whitespace-nowrap ${ativa ? "border-accent text-accent font-medium" : "border-transparent text-neutral-500 hover:text-neutral-800"}`;
+  const aba_ = (id: Aba, nome: string) => (
+    <button role="tab" aria-selected={aba === id} onClick={() => { setFiltroEmpresas(undefined); setAba(id); }} className={abaClasse(aba === id)}>
+      {nome}
+    </button>
+  );
+  const listaDeCampanhas = campanhas.data?.campanhas ?? [];
+  const listaDePerfis = perfis.data?.perfis ?? [];
 
   return (
-    <div className="flex flex-col gap-4 max-w-4xl">
+    <div className="flex flex-col gap-4 max-w-5xl">
       <div>
         <h1 className="text-xl font-semibold">SDR</h1>
-        <p className="text-sm text-neutral-500">Campanhas e perfis de cliente ideal da prospecção comercial.</p>
+        <p className="text-sm text-neutral-500">Campanhas, perfis de cliente ideal e as empresas importadas para prospecção.</p>
       </div>
       <p className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-        Nesta versão, campanhas e perfis são só cadastro. Nada é pesquisado nem enviado, mesmo com a campanha ativa.
+        Nada é pesquisado, enviado ou criado no CRM. As empresas vêm só do CSV que você importa, e os dados delas não foram verificados por ninguém.
       </p>
 
-      <div className="flex gap-1 border-b border-neutral-200" role="tablist">
-        <button role="tab" aria-selected={aba === "campanhas"} onClick={() => setAba("campanhas")} className={abaClasse(aba === "campanhas")}>
-          Campanhas {campanhas.data ? `(${campanhas.data.campanhas.length})` : ""}
-        </button>
-        <button role="tab" aria-selected={aba === "perfis"} onClick={() => setAba("perfis")} className={abaClasse(aba === "perfis")}>
-          Perfis de cliente {perfis.data ? `(${perfis.data.perfis.length})` : ""}
-        </button>
+      <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto" role="tablist">
+        {aba_("campanhas", `Campanhas ${campanhas.data ? `(${listaDeCampanhas.length})` : ""}`)}
+        {aba_("perfis", `Perfis de cliente ${perfis.data ? `(${listaDePerfis.length})` : ""}`)}
+        {aba_("empresas", "Empresas")}
+        {aba_("importacoes", "Importações")}
+        {aba_("bloqueios", "Bloqueios")}
       </div>
 
-      {aba === "campanhas" ? (
+      {aba === "campanhas" && (
         <Campanhas
           lista={campanhas.data?.campanhas}
           erro={campanhas.error}
-          perfis={perfis.data?.perfis ?? []}
+          perfis={listaDePerfis}
           podeEscrever={podeEscrever}
           onMudou={() => campanhas.mutate()}
           irParaPerfis={() => setAba("perfis")}
         />
-      ) : (
+      )}
+      {aba === "perfis" && (
         <Perfis
           lista={perfis.data?.perfis}
           erro={perfis.error}
@@ -77,6 +91,17 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
           onMudou={() => {
             perfis.mutate();
             campanhas.mutate();
+          }}
+        />
+      )}
+      {aba === "empresas" && <EmpresasPanel key={JSON.stringify(filtroEmpresas ?? {})} podeEscrever={podeEscrever} campanhas={listaDeCampanhas} perfis={listaDePerfis} filtroInicial={filtroEmpresas} />}
+      {aba === "importacoes" && <ImportacoesPanel podeEscrever={podeEscrever} campanhas={listaDeCampanhas} />}
+      {aba === "bloqueios" && (
+        <BloqueiosPanel
+          podeEscrever={podeEscrever}
+          verEmpresasBloqueadas={() => {
+            setFiltroEmpresas({ suprimida: "sim" });
+            setAba("empresas");
           }}
         />
       )}

@@ -8,7 +8,8 @@ import { after, before, describe, test } from "node:test";
 import { fileURLToPath } from "node:url";
 import dotenv from "dotenv";
 import { prisma } from "@dilon-zap/db";
-import { PORTA_SITE, PORTA_TUNEL_PRODUCAO, BANCO_TESTE, VARIAVEL_SENHA_USUARIOS } from "../src/config";
+import { PORTA_TUNEL_PRODUCAO, BANCO_TESTE } from "../src/config";
+import { BASE, Sessao, logado } from "./ajudantes";
 import { portasEmUso, testesAprovados } from "../src/riscos";
 import { SLUGS, USUARIOS } from "../src/semente";
 import { criarCampanhaSchema, criarPerfilSchema, editarCampanhaSchema, editarPerfilSchema } from "../../../apps/web/lib/sdr/esquemas";
@@ -19,8 +20,6 @@ import { PLANOS, RECURSOS_GERENCIAVEIS, RECURSOS_RESTRITOS, RECURSOS_SOB_DEMANDA
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const raizDoPacote = path.resolve(aqui, "..");
 const raizRepo = path.resolve(raizDoPacote, "../..");
-const BASE = `http://${BANCO_TESTE.host}:${PORTA_SITE}`;
-const senha = process.env[VARIAVEL_SENHA_USUARIOS]!;
 
 const autor = { id: "teste", name: "Teste" };
 let dilonId = "";
@@ -33,55 +32,6 @@ before(async () => {
   outraId = empresas.find((e) => e.slug === SLUGS.outra)!.id;
   externaId = empresas.find((e) => e.slug === SLUGS.externa)!.id;
 });
-
-/** Cliente HTTP com cookies. Faz login de verdade pelo NextAuth do site. */
-class Sessao {
-  private cookies = new Map<string, string>();
-
-  private guardarCookies(r: Response) {
-    for (const c of r.headers.getSetCookie()) {
-      const [par] = c.split(";");
-      const i = par.indexOf("=");
-      this.cookies.set(par.slice(0, i), par.slice(i + 1));
-    }
-  }
-
-  async chamar(caminho: string, metodo = "GET", corpo?: unknown) {
-    const r = await fetch(`${BASE}${caminho}`, {
-      method: metodo,
-      redirect: "manual",
-      headers: {
-        cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; "),
-        ...(corpo === undefined ? {} : { "content-type": "application/json" }),
-      },
-      body: corpo === undefined ? undefined : JSON.stringify(corpo),
-    });
-    this.guardarCookies(r);
-    return r;
-  }
-
-  async entrar(email: string, senhaUsada = senha): Promise<boolean> {
-    const csrf = await this.chamar("/api/auth/csrf");
-    const { csrfToken } = (await csrf.json()) as { csrfToken: string };
-    const r = await fetch(`${BASE}/api/auth/callback/credentials`, {
-      method: "POST",
-      redirect: "manual",
-      headers: {
-        cookie: [...this.cookies].map(([k, v]) => `${k}=${v}`).join("; "),
-        "content-type": "application/x-www-form-urlencoded",
-      },
-      body: new URLSearchParams({ csrfToken, email, password: senhaUsada, callbackUrl: BASE, json: "true" }),
-    });
-    this.guardarCookies(r);
-    return [...this.cookies.keys()].some((k) => k.includes("session-token"));
-  }
-}
-
-async function logado(email: string) {
-  const s = new Sessao();
-  assert.equal(await s.entrar(email), true, "login recusado");
-  return s;
-}
 
 const perfilValido = (nome: string) => ({
   nome,
@@ -292,7 +242,7 @@ describe("acesso autorizado ao SDR", () => {
   test("a tela /sdr abre para o responsável", async () => {
     const r = await dono.chamar("/sdr");
     assert.equal(r.status, 200);
-    assert.equal((await r.text()).includes("Campanhas e perfis de cliente ideal"), true);
+    assert.equal((await r.text()).includes("as empresas importadas para prospecção"), true);
   });
   test("cria perfil com segmento, região, porte, características e critérios", async () => {
     const r = await dono.chamar("/api/sdr/icps", "POST", perfilValido("API perfil"));

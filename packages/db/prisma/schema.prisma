@@ -203,6 +203,12 @@ model Tenant {
   teamMessages          TeamMessage[]
   sdrIcps               SdrIcp[]
   sdrCampanhas          SdrCampanha[]
+  sdrEmpresas           SdrEmpresa[]
+  sdrProspectos         SdrProspecto[]
+  sdrImportacoes        SdrImportacao[]
+  sdrImportacaoLinhas   SdrImportacaoLinha[]
+  sdrSupressoes         SdrSupressao[]
+  sdrTrabalhos          SdrTrabalho[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -2508,10 +2514,11 @@ model SdrIcp {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  campanhas SdrCampanha[]
+  campanhas  SdrCampanha[]
+  prospectos SdrProspecto[]
 
   @@unique([tenantId, nome])
-  // Alvo da chave composta de SdrCampanha.
+  // Alvo da chave composta de SdrCampanha e SdrProspecto.
   @@unique([tenantId, id])
 }
 
@@ -2535,7 +2542,280 @@ model SdrCampanha {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  prospectos SdrProspecto[]
+
   @@unique([tenantId, nome])
+  // Alvo da chave composta de SdrProspecto.
+  @@unique([tenantId, id])
   @@index([tenantId, status])
   @@index([tenantId, icpId])
+}
+
+/// Organização pesquisada. Não é um contato do CRM: nada aqui cria Contact, e o
+/// que veio do CSV fica marcado como informado, não verificado.
+model SdrEmpresa {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// 14 dígitos, com dígitos verificadores conferidos. Nulo quando o CSV não trouxe.
+  cnpj         String?
+  razaoSocial  String?
+  nomeFantasia String?
+  /// Só dígitos, com o 55 na frente. Primeiro número válido da célula.
+  telefone     String?
+  email        String?
+  /// Endereço normalizado (https://host/caminho).
+  site         String?
+  /// Domínio do site, sem www. Nulo para redes sociais e agregadores.
+  dominio      String?
+  /// Domínio do e-mail. Nulo para provedores genéricos (gmail e afins).
+  emailDominio String?
+  uf           String?
+  cidade       String?
+  segmento     String?
+  /// MEI, ME, EPP, MEDIA ou GRANDE.
+  porte        String?
+  /// 7 dígitos.
+  cnae         String?
+
+  /// Nome sem acento, pontuação nem sufixo societário: chave da deduplicação secundária.
+  chaveNome String
+
+  /// Sempre CSV por enquanto. Nada aqui foi pesquisado nem conferido.
+  origem      String    @default("CSV")
+  /// Quando alguém (ou uma etapa futura) conferir os dados. Nulo = só informado.
+  verificadaEm DateTime?
+
+  importacaoOrigemId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  prospectos SdrProspecto[]
+
+  @@unique([tenantId, cnpj])
+  // Alvo da chave composta de SdrProspecto.
+  @@unique([tenantId, id])
+  @@index([tenantId, chaveNome])
+  @@index([tenantId, dominio])
+  @@index([tenantId, emailDominio])
+  @@index([tenantId, email])
+  @@index([tenantId, telefone])
+  @@index([tenantId, uf])
+}
+
+enum StatusProspectoSdr {
+  /// Aguardando a qualificação.
+  PENDENTE
+  QUALIFICADO
+  NAO_QUALIFICADO
+  /// Há critério obrigatório que o CSV não permite confirmar.
+  VERIFICAR
+}
+
+/// Uma empresa numa campanha, com o resultado da qualificação pelo ICP dela.
+model SdrProspecto {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  empresaId String
+  empresa   SdrEmpresa @relation(fields: [tenantId, empresaId], references: [tenantId, id], onDelete: Cascade)
+
+  campanhaId String
+  campanha   SdrCampanha @relation(fields: [tenantId, campanhaId], references: [tenantId, id], onDelete: Cascade)
+
+  /// O ICP da campanha no momento da qualificação.
+  icpId String
+  icp   SdrIcp @relation(fields: [tenantId, icpId], references: [tenantId, id], onDelete: Cascade)
+
+  status        StatusProspectoSdr @default(PENDENTE)
+  /// 0 a 100, só sobre o que foi possível avaliar. Nulo se nada foi avaliável.
+  pontuacao     Int?
+  /// Quanto do peso do ICP foi de fato avaliado, de 0 a 100.
+  cobertura     Int?
+  /// [{ chave, nome, tipo, peso, obrigatorio, situacao, justificativa }]
+  criterios     Json?
+  qualificadoEm DateTime?
+
+  importacaoOrigemId String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@unique([tenantId, empresaId, campanhaId])
+  @@index([tenantId, campanhaId, status])
+  @@index([tenantId, icpId])
+}
+
+enum StatusImportacaoSdr {
+  PENDENTE
+  PROCESSANDO
+  CONCLUIDA
+  CONCLUIDA_COM_ERROS
+  FALHOU
+}
+
+/// Um arquivo CSV enviado. O histórico de cada linha fica em SdrImportacaoLinha.
+model SdrImportacao {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// Repetir o mesmo envio (duplo clique, nova tentativa) devolve esta importação.
+  chave        String
+  nomeArquivo  String
+  /// SHA-256 do conteúdo, para avisar que o arquivo já foi importado.
+  hashArquivo  String
+  campanhaId   String?
+  /// Campo do sistema para a coluna do arquivo.
+  mapeamento   Json
+  delimitador  String
+
+  status        StatusImportacaoSdr @default(PENDENTE)
+  totalLinhas   Int                 @default(0)
+  invalidas     Int                 @default(0)
+  importadas    Int                 @default(0)
+  atualizadas   Int                 @default(0)
+  duplicadas    Int                 @default(0)
+  falhas        Int                 @default(0)
+  pendentes     Int                 @default(0)
+  erro          String?
+
+  criadoPorId   String?
+  criadoPorNome String?
+  createdAt     DateTime  @default(now())
+  iniciadaEm    DateTime?
+  concluidaEm   DateTime?
+
+  linhas SdrImportacaoLinha[]
+
+  @@unique([tenantId, chave])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, hashArquivo])
+}
+
+enum StatusLinhaSdr {
+  PENDENTE
+  /// Empresa nova.
+  IMPORTADA
+  /// Empresa que já existia e recebeu campos que estavam vazios.
+  ATUALIZADA
+  /// Empresa que já existia, sem nada a acrescentar.
+  DUPLICADA
+  /// Rejeitada na validação. Nunca vira empresa.
+  INVALIDA
+  /// Erro inesperado ao processar. Pode ser reprocessada.
+  FALHOU
+}
+
+model SdrImportacaoLinha {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  importacaoId String
+  importacao   SdrImportacao @relation(fields: [importacaoId], references: [id], onDelete: Cascade)
+
+  /// Número da linha no arquivo (a primeira linha de dados é 2, depois do cabeçalho).
+  numero      Int
+  status      StatusLinhaSdr @default(PENDENTE)
+  /// O que veio no arquivo, por campo do sistema, sem alteração.
+  bruto       Json
+  /// O que foi aceito depois da normalização. Nulo nas inválidas.
+  normalizado Json?
+  erros       String[]
+  avisos      String[]
+
+  empresaId  String?
+  /// Como a duplicata foi achada: CNPJ, SITE ou NOME_UF, e se foi no próprio arquivo.
+  duplicadaPor String?
+  /// [{ campo, de, para }]: campos vazios preenchidos. Nunca sobrescreve valor existente.
+  mudancas   Json?
+  /// [{ campo, existente, arquivo }]: divergências que NÃO foram aplicadas.
+  conflitos  Json?
+  /// A empresa bate com a lista de supressão.
+  suprimida  Boolean @default(false)
+
+  tentativas       Int       @default(0)
+  erroProcessamento String?
+  processadaEm     DateTime?
+
+  @@unique([importacaoId, numero])
+  @@index([tenantId, importacaoId, status])
+}
+
+enum TipoSupressaoSdr {
+  CNPJ
+  DOMINIO
+  EMAIL
+  TELEFONE
+}
+
+enum MotivoSupressaoSdr {
+  EMPRESA_BLOQUEADA
+  SOLICITOU_NAO_CONTATO
+  OPOSICAO
+  RESTRICAO
+}
+
+/// Quem nunca deve ser prospectado. Consultada antes de qualquer contato.
+model SdrSupressao {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  tipo       TipoSupressaoSdr
+  /// Já normalizado: CNPJ e telefone só com dígitos, e-mail e domínio em minúsculas.
+  valor      String
+  motivo     MotivoSupressaoSdr
+  observacao String?
+
+  criadoPorId   String?
+  criadoPorNome String?
+  createdAt     DateTime @default(now())
+
+  @@unique([tenantId, tipo, valor])
+  @@index([tenantId, createdAt])
+}
+
+enum StatusTrabalhoSdr {
+  PENDENTE
+  EM_PROCESSAMENTO
+  CONCLUIDO
+  FALHOU
+}
+
+enum TipoTrabalhoSdr {
+  IMPORTAR
+  QUALIFICAR
+}
+
+/// Fila no Postgres, sem Redis. O worker reivindica com FOR UPDATE SKIP LOCKED.
+model SdrTrabalho {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  tipo    TipoTrabalhoSdr
+  /// Idempotência: o mesmo trabalho não entra duas vezes na fila da empresa.
+  chave   String
+  payload Json
+  status  StatusTrabalhoSdr @default(PENDENTE)
+
+  tentativas         Int      @default(0)
+  maxTentativas      Int      @default(3)
+  proximaTentativaEm DateTime @default(now())
+
+  /// Quem está processando e até quando vale a reserva. Reserva vencida volta à fila.
+  bloqueadoPor String?
+  leaseAte     DateTime?
+
+  erro        String?
+  createdAt   DateTime  @default(now())
+  iniciadoEm  DateTime?
+  concluidoEm DateTime?
+
+  @@unique([tenantId, chave])
+  @@index([status, proximaTentativaEm])
+  @@index([status, leaseAte])
 }

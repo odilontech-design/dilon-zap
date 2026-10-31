@@ -83,3 +83,53 @@ export type CriarPerfil = z.infer<typeof criarPerfilSchema>;
 export type EditarPerfil = z.infer<typeof editarPerfilSchema>;
 export type CriarCampanha = z.infer<typeof criarCampanhaSchema>;
 export type EditarCampanha = z.infer<typeof editarCampanhaSchema>;
+
+/* ------------------------------------------------- Importação e empresas ---- */
+
+const mapeamentoSchema = z.record(z.string().max(60), z.string().max(200).nullable());
+
+export const previaSchema = z.object({ conteudo: z.string().min(1), mapeamento: mapeamentoSchema.nullable().optional() }).strict();
+
+export const criarImportacaoSchema = z
+  .object({
+    nomeArquivo: z.string().trim().min(1).max(200),
+    conteudo: z.string().min(1),
+    mapeamento: mapeamentoSchema.nullable().optional(),
+    campanhaId: z.string().trim().min(1).max(60).nullable().optional(),
+    chave: z.string().trim().min(8).max(100).optional(),
+  })
+  .strict();
+
+export const associarSchema = z.object({ empresaIds: z.array(z.string().trim().min(1).max(60)).min(1).max(2000) }).strict();
+
+export const TIPOS_SUPRESSAO = ["CNPJ", "DOMINIO", "EMAIL", "TELEFONE"] as const;
+export const MOTIVOS_SUPRESSAO = ["EMPRESA_BLOQUEADA", "SOLICITOU_NAO_CONTATO", "OPOSICAO", "RESTRICAO"] as const;
+
+export const supressaoSchema = z
+  .object({
+    tipo: z.enum(TIPOS_SUPRESSAO),
+    valor: z.string().trim().min(1).max(200),
+    motivo: z.enum(MOTIVOS_SUPRESSAO),
+    observacao: z.string().trim().max(300).nullable().optional(),
+  })
+  .strict();
+
+const pagina = z.coerce.number().int().min(1).max(100_000).optional();
+
+export const filtroEmpresasSchema = z
+  .object({
+    campanhaId: z.string().trim().min(1).max(60).optional(),
+    icpId: z.string().trim().min(1).max(60).optional(),
+    status: z.enum(["PENDENTE", "QUALIFICADO", "NAO_QUALIFICADO", "VERIFICAR"]).optional(),
+    suprimida: z.enum(["sim", "nao"]).optional(),
+    busca: z.string().trim().max(100).optional(),
+    pagina,
+  })
+  .strict();
+
+export const filtroLinhasSchema = z
+  .object({
+    status: z.enum(["PENDENTE", "IMPORTADA", "ATUALIZADA", "DUPLICADA", "INVALIDA", "FALHOU", "SUPRIMIDA", "CONFLITO"]).optional(),
+    pagina,
+  })
+  .strict();

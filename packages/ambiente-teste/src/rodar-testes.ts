@@ -31,6 +31,8 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         "--test-reporter=spec",
         "test/isolamento.test.ts",
         "test/sdr.test.ts",
+        "test/csv-normalizacao.test.ts",
+        "test/importacao.test.ts",
       ],
       { env: pacote.ambiente, cwd: raizDoPacote, stdio: ["ignore", "pipe", "pipe"] }
     );
@@ -56,19 +58,27 @@ async function evidencias(pacote: Ambiente) {
     const { rows: [i] } = await c.query(
       `select current_database()::text as banco, host(inet_server_addr()) as host, inet_server_port() as porta,
               split_part(version(), ' ', 2) as versao,
+              current_setting('TimeZone') as fuso,
               (select count(*)::int from pg_tables where schemaname = 'public') as tabelas,
               (select count(*)::int from "Tenant") as empresas,
               (select count(*)::int from "SdrIcp") as perfis,
               (select count(*)::int from "SdrCampanha") as campanhas,
+              (select count(*)::int from "SdrEmpresa") as empresas_sdr,
+              (select count(*)::int from "SdrProspecto") as prospectos,
+              (select count(*)::int from "SdrImportacao") as importacoes,
+              (select count(*)::int from "SdrTrabalho") as trabalhos,
+              (select count(*)::int from "Contact") as contatos,
+              (select count(*)::int from "Conversation") as conversas,
               (select count(*)::int from "Message") as mensagens,
               (select count(*)::int from "ScheduledMessage") as agendadas,
               (select count(*)::int from "TenantRecurso" where recurso = 'SDR' and ativo) as empresas_com_sdr`
     );
     log("Evidências do banco usado:");
-    log(`  banco ${i.banco} em ${i.host}:${i.porta}, Postgres ${i.versao}`);
+    log(`  banco ${i.banco} em ${i.host}:${i.porta}, Postgres ${i.versao}, fuso do servidor ${i.fuso}`);
     log(`  marca desta execução: ${pacote.banco.marca.slice(0, 8)}...`);
     log(`  tabelas ${i.tabelas}, empresas ${i.empresas}, com SDR ${i.empresas_com_sdr}, perfis ${i.perfis}, campanhas ${i.campanhas}`);
-    log(`  mensagens ${i.mensagens}, agendadas ${i.agendadas}`);
+    log(`  SDR: empresas ${i.empresas_sdr}, prospectos ${i.prospectos}, importações ${i.importacoes}, trabalhos registrados ${i.trabalhos}`);
+    log(`  CRM e WhatsApp: contatos ${i.contatos}, conversas ${i.conversas}, mensagens ${i.mensagens}, agendadas ${i.agendadas}`);
     log(`  origem das conexões (log do Postgres): ${[...pacote.banco.hostsConectados].map(([h, n]) => `${h}=${n}`).join(", ")}`);
   } finally {
     await c.end();

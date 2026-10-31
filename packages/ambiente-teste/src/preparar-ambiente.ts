@@ -180,6 +180,23 @@ export async function subirSite(pacote: Ambiente, aoEscrever: (texto: string) =>
   throw new Error("o site não respondeu a tempo");
 }
 
+/**
+ * Sobe o apps/sdr-worker de verdade, no mesmo ambiente local do site (banco de
+ * teste, variáveis esvaziadas, guarda de processo). É o que faz as importações
+ * da tela andarem. Encerrar com encerrarSite(), que mata a árvore de processos.
+ */
+export function subirWorkerSdr(pacote: Ambiente, aoEscrever: (texto: string) => void): ChildProcess {
+  const tsx = requerer.resolve("tsx");
+  const worker = spawn(process.execPath, ["--import", new URL(`file:///${tsx.replace(/\\/g, "/")}`).href, "src/index.ts"], {
+    env: { ...pacote.ambiente, SDR_INTERVALO_MS: "1000" },
+    cwd: path.join(raizDoRepositorio, "apps/sdr-worker"),
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  worker.stdout.on("data", (d) => aoEscrever(ocultar(String(d), pacote.segredos)));
+  worker.stderr.on("data", (d) => aoEscrever(ocultar(String(d), pacote.segredos)));
+  return worker;
+}
+
 /** O Next abre processos filhos, e child.kill no Windows só alcança o primeiro. */
 export async function encerrarSite(site: ChildProcess | null) {
   if (!site?.pid || site.exitCode !== null) return;

@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import type { ChildProcess } from "node:child_process";
 import { BANCO_TESTE, PORTA_SITE, ocultar } from "./config";
-import { encerrarAmbiente, encerrarSite, log, prepararAmbiente, registrarAcessoLocal, riscoDeExecucao, subirSite } from "./preparar-ambiente";
+import { encerrarAmbiente, encerrarSite, log, prepararAmbiente, registrarAcessoLocal, riscoDeExecucao, subirSite, subirWorkerSdr } from "./preparar-ambiente";
 
 /**
  * Sobe o site só com o banco local, para ver as telas no navegador. O banco é
@@ -27,6 +27,7 @@ async function principal(): Promise<number> {
   process.removeAllListeners("SIGTERM");
 
   let site: ChildProcess | null = null;
+  let worker: ChildProcess | null = null;
   let codigo = 0;
   try {
     const parou = new Promise<void>((resolve) => {
@@ -40,10 +41,15 @@ async function principal(): Promise<number> {
         }
       }, 1_000);
     });
-    pacote.aoViolar(() => void encerrarSite(site));
+    pacote.aoViolar(() => {
+      void encerrarSite(site);
+      void encerrarSite(worker);
+    });
 
     site = await subirSite(pacote, (t) => process.stdout.write(t));
-    log(`Site local: http://${BANCO_TESTE.host}:${PORTA_SITE}`);
+    // O worker do SDR sobe junto, para as importações feitas na tela andarem.
+    worker = subirWorkerSdr(pacote, (t) => process.stdout.write(t));
+    log(`Site local: http://${BANCO_TESTE.host}:${PORTA_SITE}, com o worker do SDR`);
     log(`Usuários fictícios e senha: ${registrarAcessoLocal(pacote)}`);
     log(`Para encerrar: Ctrl+C, ou crie o arquivo ${path.join(pacote.banco.pasta, "parar")}`);
     await parou;
@@ -52,6 +58,7 @@ async function principal(): Promise<number> {
     log(`Falha: ${ocultar(e instanceof Error ? e.message : String(e), pacote.segredos)}`);
     codigo = 1;
   } finally {
+    await encerrarSite(worker);
     await encerrarSite(site);
     if ((await encerrarAmbiente(pacote)) !== 0) codigo = 1;
   }
