@@ -16,6 +16,9 @@ export { enfileirar, reivindicar, renovarReserva, concluir, falhar, devolver, fa
 export { processarProximoTrabalho } from "./trabalhos";
 export type { OpcoesDoCiclo, ResultadoDoCiclo } from "./trabalhos";
 export { analisarArquivo, previa, criarImportacao, processarImportacao, reprocessarImportacao } from "./importacao";
+export { PREFIXO_AVISO_TELEFONE_DESCARTADO } from "./painel";
+export type { Indicadores, Destaque } from "./painel";
+export { motivoDoVerificar } from "./empresas";
 export { associarEmpresas, requalificarCampanha, processarQualificacao } from "./prospectos";
 
 /** Tudo do SDR que lê ou grava dados, preso a uma organização. O tenant nunca é argumento dos métodos. */

@@ -123,7 +123,24 @@ export const filtroEmpresasSchema = z
     status: z.enum(["PENDENTE", "QUALIFICADO", "NAO_QUALIFICADO", "VERIFICAR"]).optional(),
     suprimida: z.enum(["sim", "nao"]).optional(),
     busca: z.string().trim().max(100).optional(),
+    uf: z.enum(UFS).optional(),
+    cidade: z.string().trim().min(1).max(80).optional(),
+    segmento: z.string().trim().min(1).max(80).optional(),
+    telefone: z.enum(["sim", "nao"]).optional(),
+    email: z.enum(["sim", "nao"]).optional(),
+    ordem: z.enum(["pontuacao", "data", "prontas"]).optional(),
     pagina,
+  })
+  .strict();
+
+/** O painel só aceita os filtros que mudam a leitura dos números. */
+export const filtroPainelSchema = z
+  .object({
+    campanhaId: z.string().trim().min(1).max(60).optional(),
+    icpId: z.string().trim().min(1).max(60).optional(),
+    uf: z.enum(UFS).optional(),
+    cidade: z.string().trim().min(1).max(80).optional(),
+    segmento: z.string().trim().min(1).max(80).optional(),
   })
   .strict();
 

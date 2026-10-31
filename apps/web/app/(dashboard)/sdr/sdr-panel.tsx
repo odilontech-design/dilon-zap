@@ -7,6 +7,7 @@ import { chamar, fetcher } from "../receber/formatos";
 import { BloqueiosPanel } from "./bloqueios-panel";
 import { EmpresasPanel, type FiltroInicial } from "./empresas-panel";
 import { ImportacoesPanel } from "./importacoes-panel";
+import { PainelIndicadores } from "./painel-indicadores";
 
 type Criterio = { nome: string; descricao?: string; peso: number; obrigatorio: boolean };
 type Perfil = {
@@ -64,6 +65,15 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
       <p className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
         Nada é pesquisado, enviado ou criado no CRM. As empresas vêm só do CSV que você importa, e os dados delas não foram verificados por ninguém.
       </p>
+
+      <PainelIndicadores
+        campanhas={listaDeCampanhas}
+        perfis={listaDePerfis}
+        abrir={(filtro) => {
+          setFiltroEmpresas(filtro);
+          setAba("empresas");
+        }}
+      />
 
       <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto" role="tablist">
         {aba_("campanhas", `Campanhas ${campanhas.data ? `(${listaDeCampanhas.length})` : ""}`)}

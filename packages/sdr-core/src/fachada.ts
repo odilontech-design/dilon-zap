@@ -9,6 +9,8 @@ import {
   type FiltroDeLinhas,
   type NovaImportacao,
 } from "./importacao";
+import { indicadoresDoPainel, opcoesDeFiltro } from "./painel";
+import type { FiltroDoPainel } from "./consulta";
 import { associarEmpresas, requalificarCampanha } from "./prospectos";
 import { supressoesDoTenant } from "./supressao";
 
@@ -33,6 +35,10 @@ export function empresasDoTenantFacade(tenantId: string) {
       obter: (id: string) => obterEmpresa(tenantId, id),
       associarACampanha: (campanhaId: string, empresaIds: string[]) => associarEmpresas(tenantId, campanhaId, empresaIds),
       requalificarCampanha: (campanhaId: string) => requalificarCampanha(tenantId, campanhaId),
+    },
+    painel: {
+      indicadores: (filtro?: FiltroDoPainel) => indicadoresDoPainel(tenantId, filtro),
+      opcoes: () => opcoesDeFiltro(tenantId),
     },
     supressoes: supressoesDoTenant(tenantId),
   };

@@ -22,7 +22,7 @@ import {
 } from "./formatos-sdr";
 
 type Bloqueio = { tipo: string; valor: string; motivo: string };
-type ProspectoLinha = { id: string; campanhaId: string; campanhaNome: string; icpId: string; status: StatusProspecto; pontuacao: number | null; cobertura: number | null };
+type ProspectoLinha = { id: string; campanhaId: string; campanhaNome: string; icpId: string; status: StatusProspecto; pontuacao: number | null; cobertura: number | null; motivo?: string | null };
 type EmpresaLinha = {
   id: string;
   cnpj: string | null;
@@ -30,6 +30,8 @@ type EmpresaLinha = {
   nomeFantasia: string | null;
   uf: string | null;
   cidade: string | null;
+  telefone: string | null;
+  email: string | null;
   segmento: string | null;
   porte: string | null;
   verificada: boolean;
@@ -37,10 +39,24 @@ type EmpresaLinha = {
   prospectos: ProspectoLinha[];
 };
 type Lista = { itens: EmpresaLinha[]; total: number; pagina: number; tamanho: number; resumo: Record<string, number>; podeEscrever: boolean };
+type Opcao = { valor: string; empresas: number };
+type Opcoes = { ufs: Opcao[]; cidades: Opcao[]; segmentos: Opcao[] };
 
-export type FiltroInicial = { suprimida?: "sim" | "nao" };
+/** O que o painel de indicadores pode pedir ao abrir a lista já filtrada. */
+export type FiltroInicial = {
+  campanhaId?: string;
+  icpId?: string;
+  status?: StatusProspecto;
+  suprimida?: "sim" | "nao";
+  telefone?: "sim" | "nao";
+  email?: "sim" | "nao";
+  uf?: string;
+  cidade?: string;
+  segmento?: string;
+  ordem?: "pontuacao" | "data" | "prontas";
+};
 
-const RESUMO: StatusProspecto[] = ["QUALIFICADO", "VERIFICAR", "NAO_QUALIFICADO", "PENDENTE"];
+const SITUACOES: StatusProspecto[] = ["QUALIFICADO", "VERIFICAR", "NAO_QUALIFICADO", "PENDENTE"];
 
 export function EmpresasPanel({
   podeEscrever,
@@ -53,10 +69,16 @@ export function EmpresasPanel({
   perfis: { id: string; nome: string }[];
   filtroInicial?: FiltroInicial;
 }) {
-  const [campanhaId, setCampanhaId] = useState("");
-  const [icpId, setIcpId] = useState("");
-  const [status, setStatus] = useState("");
+  const [campanhaId, setCampanhaId] = useState(filtroInicial?.campanhaId ?? "");
+  const [icpId, setIcpId] = useState(filtroInicial?.icpId ?? "");
+  const [status, setStatus] = useState<string>(filtroInicial?.status ?? "");
   const [suprimida, setSuprimida] = useState<string>(filtroInicial?.suprimida ?? "");
+  const [telefone, setTelefone] = useState<string>(filtroInicial?.telefone ?? "");
+  const [email, setEmail] = useState<string>(filtroInicial?.email ?? "");
+  const [uf, setUf] = useState(filtroInicial?.uf ?? "");
+  const [cidade, setCidade] = useState(filtroInicial?.cidade ?? "");
+  const [segmento, setSegmento] = useState(filtroInicial?.segmento ?? "");
+  const [ordem, setOrdem] = useState<string>(filtroInicial?.ordem ?? "pontuacao");
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -79,9 +101,16 @@ export function EmpresasPanel({
   if (icpId) q.set("icpId", icpId);
   if (status) q.set("status", status);
   if (suprimida) q.set("suprimida", suprimida);
+  if (telefone) q.set("telefone", telefone);
+  if (email) q.set("email", email);
+  if (uf) q.set("uf", uf);
+  if (cidade) q.set("cidade", cidade);
+  if (segmento) q.set("segmento", segmento);
+  if (ordem !== "pontuacao") q.set("ordem", ordem);
   if (buscaAplicada) q.set("busca", buscaAplicada);
   if (pagina > 1) q.set("pagina", String(pagina));
   const { data, error, mutate } = useSWR<Lista>(`/api/sdr/empresas?${q}`, fetcher, { keepPreviousData: true, refreshInterval: 8_000 });
+  const { data: opcoes } = useSWR<Opcoes>("/api/sdr/empresas/opcoes", fetcher);
 
   const totalDePaginas = data ? Math.max(1, Math.ceil(data.total / data.tamanho)) : 1;
   const mudarFiltro = (fn: () => void) => {
@@ -144,7 +173,7 @@ export function EmpresasPanel({
           Situação
           <select id="filtro-status" value={status} onChange={(e) => mudarFiltro(() => setStatus(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
             <option value="">Todas</option>
-            {RESUMO.map((s) => (
+            {SITUACOES.map((s) => (
               <option key={s} value={s}>
                 {ROTULO_STATUS_PROSPECTO[s]}
               </option>
@@ -165,13 +194,68 @@ export function EmpresasPanel({
         </label>
       </div>
 
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[11px] text-neutral-500">
+          UF
+          <select id="filtro-uf" value={uf} onChange={(e) => mudarFiltro(() => setUf(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
+            <option value="">Todas</option>
+            {(opcoes?.ufs ?? []).map((o) => (
+              <option key={o.valor} value={o.valor}>
+                {o.valor} ({o.empresas})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[11px] text-neutral-500">
+          Cidade
+          <select id="filtro-cidade" value={cidade} onChange={(e) => mudarFiltro(() => setCidade(e.target.value))} className={`${campoPequeno} block mt-0.5 max-w-[180px]`}>
+            <option value="">Todas</option>
+            {(opcoes?.cidades ?? []).map((o) => (
+              <option key={o.valor} value={o.valor}>
+                {o.valor} ({o.empresas})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[11px] text-neutral-500">
+          Segmento
+          <select id="filtro-segmento" value={segmento} onChange={(e) => mudarFiltro(() => setSegmento(e.target.value))} className={`${campoPequeno} block mt-0.5 max-w-[180px]`}>
+            <option value="">Todos</option>
+            {(opcoes?.segmentos ?? []).map((o) => (
+              <option key={o.valor} value={o.valor}>
+                {o.valor} ({o.empresas})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[11px] text-neutral-500">
+          Telefone
+          <select id="filtro-telefone" value={telefone} onChange={(e) => mudarFiltro(() => setTelefone(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
+            <option value="">Tanto faz</option>
+            <option value="sim">Com telefone</option>
+            <option value="nao">Sem telefone</option>
+          </select>
+        </label>
+        <label className="text-[11px] text-neutral-500">
+          E-mail
+          <select id="filtro-email" value={email} onChange={(e) => mudarFiltro(() => setEmail(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
+            <option value="">Tanto faz</option>
+            <option value="sim">Com e-mail</option>
+            <option value="nao">Sem e-mail</option>
+          </select>
+        </label>
+        <label className="text-[11px] text-neutral-500 sm:ml-auto">
+          Ordenar por
+          <select id="filtro-ordem" value={ordem} onChange={(e) => mudarFiltro(() => setOrdem(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
+            <option value="pontuacao">Maior pontuação</option>
+            <option value="prontas">Qualificadas primeiro</option>
+            <option value="data">Mais recentes</option>
+          </select>
+        </label>
+      </div>
+
       {data && (
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {RESUMO.map((s) => (
-            <span key={s} className={`rounded-full px-2 py-0.5 ${COR_STATUS_PROSPECTO[s]}`}>
-              {ROTULO_STATUS_PROSPECTO[s]}: {data.resumo[s] ?? 0}
-            </span>
-          ))}
           <span className="text-neutral-500">{data.total} empresa(s) neste filtro</span>
           {podeEscrever && campanhaId && (
             <button onClick={requalificar} className={`${botaoSecundario} ml-auto py-1 text-xs`}>
@@ -210,6 +294,7 @@ export function EmpresasPanel({
                 {podeEscrever && <th className="w-8 px-3 py-2" />}
                 <th className="text-left font-medium px-3 py-2">Empresa</th>
                 <th className="text-left font-medium px-3 py-2">Local</th>
+                <th className="text-left font-medium px-3 py-2">Contato</th>
                 <th className="text-left font-medium px-3 py-2">Campanhas</th>
                 <th className="text-left font-medium px-3 py-2">Bloqueio</th>
               </tr>
@@ -226,15 +311,25 @@ export function EmpresasPanel({
                     <p className="font-medium">{nomeDaEmpresa(e)}</p>
                     <p className="text-[11px] text-neutral-500">{e.cnpj ? formatarCnpj(e.cnpj) : "sem CNPJ"}</p>
                   </td>
-                  <td className="px-3 py-2.5 text-neutral-600">{[e.cidade, e.uf].filter(Boolean).join(" / ") || "—"}</td>
+                  <td className="px-3 py-2.5 text-neutral-600">
+                    <p>{[e.cidade, e.uf].filter(Boolean).join(" / ") || "—"}</p>
+                    <p className="text-[11px] text-neutral-400">{e.segmento ?? ""}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs text-neutral-600">
+                    <p className={e.telefone ? "" : "text-neutral-400"}>{e.telefone ? formatarTelefone(e.telefone) : "sem telefone"}</p>
+                    <p className={e.email ? "break-all" : "text-neutral-400"}>{e.email ?? "sem e-mail"}</p>
+                  </td>
                   <td className="px-3 py-2.5">
                     {e.prospectos.length === 0 && <span className="text-xs text-neutral-400">fora de campanha</span>}
                     <div className="flex flex-col gap-1">
                       {e.prospectos.map((p) => (
-                        <span key={p.id} className="flex items-center gap-1.5 text-xs">
-                          <span className={`rounded-full px-2 py-0.5 ${COR_STATUS_PROSPECTO[p.status]}`}>{ROTULO_STATUS_PROSPECTO[p.status]}</span>
-                          <span className="text-neutral-600">{p.campanhaNome}</span>
-                          {p.pontuacao !== null && <span className="tabular-nums text-neutral-500">{p.pontuacao} pts</span>}
+                        <span key={p.id} className="flex flex-col gap-0.5 text-xs">
+                          <span className="flex items-center gap-1.5">
+                            <span className={`rounded-full px-2 py-0.5 ${COR_STATUS_PROSPECTO[p.status]}`}>{ROTULO_STATUS_PROSPECTO[p.status]}</span>
+                            <span className="text-neutral-600">{p.campanhaNome}</span>
+                            {p.pontuacao !== null && <span className="tabular-nums text-neutral-500">{p.pontuacao} pts</span>}
+                          </span>
+                          {p.motivo && <span className="text-[11px] text-amber-700">{p.motivo}</span>}
                         </span>
                       ))}
                     </div>

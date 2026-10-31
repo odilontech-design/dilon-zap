@@ -34,6 +34,7 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         "test/sdr.test.ts",
         "test/csv-normalizacao.test.ts",
         "test/importacao.test.ts",
+        "test/lista-painel.test.ts",
         "test/compatibilidade-producao.test.ts",
       ],
       { env: pacote.ambiente, cwd: raizDoPacote, stdio: ["ignore", "pipe", "pipe"] }
