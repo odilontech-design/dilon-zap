@@ -363,7 +363,7 @@ const fase = process.argv[2];
       assert.equal(v[0].n, 1);
     });
 
-    test("o código novo faz o fluxo inteiro com a empresa fictícia e com uma de controle, sem criar contato nem negociação", async () => {
+    test("o código novo faz o fluxo inteiro com a empresa fictícia e com uma de controle e leva as duas ao CRM, uma negociação e um contato para cada", async () => {
       const antes = await totais();
       const { stdout } = await executar(process.execPath, ["--import", "tsx", path.join(aqui, "ensaio-pos-push.ts")], {
         cwd: path.resolve(aqui, ".."),
@@ -374,7 +374,9 @@ const fase = process.argv[2];
       assert.equal(r.erro, undefined, r.erro);
       // IA desligada: a tentativa só registra a recusa, sem chamar ninguém.
       assert.deepEqual([r.fict.iaOk, r.fict.iaMotivo], [false, "desligada"]);
-      assert.deepEqual(await totais(), antes);
+      assert.deepEqual([r.fict.crmOk, r.real.crmOk], [true, true]);
+      const depois = await totais();
+      assert.deepEqual({ ...depois, contatos: depois.contatos - 2, negociacoes: depois.negociacoes - 2 }, antes);
       const f = await consultar(BANCO_ENSAIO, `SELECT (SELECT etapa::text FROM "SdrAcompanhamento" WHERE "empresaId" = $1) AS etapa, (SELECT count(*)::int FROM "SdrAbordagem" WHERE "empresaId" = $1) AS abordagens, (SELECT count(*)::int FROM "SdrInteracao" WHERE "empresaId" = $1) AS interacoes`, [r.fict.empresaId]);
       assert.deepEqual([f[0].etapa, f[0].abordagens, f[0].interacoes > 3], ["RESPONDEU", 1, true]);
       (globalThis as Record<string, unknown>).__ensaio = r;
@@ -394,12 +396,21 @@ const fase = process.argv[2];
       assert.equal(iaAntes, 2); // uma recusa por empresa (a fictícia e a de controle)
 
       const desde = new Date(Date.now() - 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+      // Primeiro o CRM (o vínculo mora no acompanhamento, que o roteiro da empresa apaga); a empresa de controle fica com o contato e a negociação dela.
+      assert.equal((await sql(BANCO_ENSAIO, substituir(docs("sdr-limpar-teste-crm.sql"), { tid: tidEnsaio, marcador: "Zz Teste Sdr Ensaio", desde }))).erro, null);
+      const semCrm = await totais();
+      assert.deepEqual([semCrm.contatos, semCrm.negociacoes], [totaisAntes.contatos - 1, totaisAntes.negociacoes - 1]);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "Negociacao" WHERE id = $1`, [r.fict.negociacaoId]))[0].n, 0);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "Negociacao" WHERE id = $1`, [r.real.negociacaoId]))[0].n, 1);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "NegociacaoNota" WHERE "negociacaoId" = $1`, [r.fict.negociacaoId]))[0].n, 0);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "TarefaNegociacao" WHERE "negociacaoId" = $1`, [r.fict.negociacaoId]))[0].n, 0);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "NegociacaoNota" WHERE "negociacaoId" = $1`, [r.real.negociacaoId]))[0].n > 0, true);
       const roteiro = substituir(docs("sdr-limpar-teste.sql"), { tid: tidEnsaio, marcador: "Zz Teste Sdr Ensaio", desde });
       assert.equal((await sql(BANCO_ENSAIO, roteiro)).erro, null);
 
       assert.deepEqual(await contagem(r.fict.empresaId), { empresa: 0, acomp: 0, abord: 0, inter: 0, linhas: 0 });
       assert.deepEqual(await contagem(r.real.empresaId), controleAntes);
-      assert.deepEqual(await totais(), totaisAntes);
+      assert.deepEqual(await totais(), semCrm);
       const imp = await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrImportacao" WHERE "tenantId" = $1`, [tidEnsaio]);
       assert.equal(imp[0].n, 1); // só a da empresa de controle
       // Como a IA ficou desligada nas duas, as duas recusas entram na limpeza do horário (é o que se espera no teste real, com uma empresa só).
@@ -421,6 +432,21 @@ const fase = process.argv[2];
       assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrEmpresa" WHERE "nomeFantasia" = 'Empresa Real De Controle'`))[0].n, 1);
       assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrImportacao" WHERE "tenantId" = $1`, [tidEnsaio]))[0].n, 1);
       await consultar(BANCO_ENSAIO, `DELETE FROM "SdrEmpresa" WHERE id IN ('dup-1','dup-2')`);
+      // Roteiro do CRM: sem o marcador, com negociação criada antes do início do teste ou que não é do SDR, ele para sem apagar nada.
+      const crm = (marcador: string, desdeX = desde) => sql(BANCO_ENSAIO, substituir(docs("sdr-limpar-teste-crm.sql"), { tid: tidEnsaio, marcador, desde: desdeX }));
+      const futuro = new Date(Date.now() + 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+      assert.match(String((await crm("Nome que não existe")).erro), /division by zero/);
+      assert.match(String((await crm("Empresa Real De Controle", futuro)).erro), /division by zero/);
+      await consultar(BANCO_ENSAIO, `UPDATE "Negociacao" SET origem = 'Instagram' WHERE id = $1`, [r.real.negociacaoId]);
+      assert.match(String((await crm("Empresa Real De Controle")).erro), /division by zero/);
+      await consultar(BANCO_ENSAIO, `UPDATE "Negociacao" SET origem = 'SDR' WHERE id = $1`, [r.real.negociacaoId]);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "Negociacao" WHERE id = $1`, [r.real.negociacaoId]))[0].n, 1);
+      // Contato com conversa não é apagado, mesmo que a negociação seja.
+      const contatoReal = (await consultar(BANCO_ENSAIO, `SELECT "contactId" AS id FROM "Negociacao" WHERE id = $1`, [r.real.negociacaoId]))[0].id;
+      assert.equal((await sql(BANCO_ENSAIO, `INSERT INTO "WhatsAppSession" (id, "tenantId", "updatedAt") VALUES ('sess-ens', '${tidEnsaio}', now()); INSERT INTO "Conversation" (id, "tenantId", "sessionId", "contactId") VALUES ('conv-ens', '${tidEnsaio}', 'sess-ens', '${contatoReal}')`)).erro, null);
+      assert.equal((await crm("Empresa Real De Controle")).erro, null);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "Contact" WHERE id = $1`, [contatoReal]))[0].n, 1);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "Negociacao" WHERE id = $1`, [r.real.negociacaoId]))[0].n, 0);
       assert.ok(r);
     });
 
