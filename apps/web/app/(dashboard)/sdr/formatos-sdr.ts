@@ -109,3 +109,46 @@ export const campoPequeno = "rounded-md border border-neutral-300 bg-surface px-
 export const rotulo = "block text-xs font-medium text-neutral-700 mb-1";
 export const botaoPrimario = "rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50";
 export const botaoSecundario = "rounded-md border border-neutral-300 px-3 py-2 text-sm hover:border-accent disabled:opacity-50";
+
+export type EtapaComercial = "NAO_CONTATADA" | "CONTATADA" | "RESPONDEU" | "INTERESSE" | "INFO_SOLICITADA" | "REUNIAO" | "SEM_INTERESSE" | "NAO_CONTATAR" | "CONVERTIDA";
+
+export const ROTULO_ETAPA: Record<EtapaComercial, string> = {
+  NAO_CONTATADA: "Não contatada",
+  CONTATADA: "Aguardando resposta",
+  RESPONDEU: "Respondeu",
+  INTERESSE: "Demonstrou interesse",
+  INFO_SOLICITADA: "Solicitou informações",
+  REUNIAO: "Solicitou reunião",
+  SEM_INTERESSE: "Sem interesse",
+  NAO_CONTATAR: "Não contatar novamente",
+  CONVERTIDA: "No CRM",
+};
+
+export const COR_ETAPA: Record<EtapaComercial, string> = {
+  NAO_CONTATADA: "bg-neutral-100 text-neutral-600",
+  CONTATADA: "bg-blue-50 text-blue-700",
+  RESPONDEU: "bg-accent/10 text-accent",
+  INTERESSE: "bg-accent/10 text-accent",
+  INFO_SOLICITADA: "bg-accent/10 text-accent",
+  REUNIAO: "bg-accent/10 text-accent",
+  SEM_INTERESSE: "bg-neutral-200 text-neutral-500",
+  NAO_CONTATAR: "bg-red-50 text-red-700",
+  CONVERTIDA: "bg-accent text-white",
+};
+
+/** As escolhas do registro de resposta, na ordem em que a pessoa pensa. */
+export const ETAPAS_DE_RESPOSTA: EtapaComercial[] = ["CONTATADA", "RESPONDEU", "INTERESSE", "INFO_SOLICITADA", "REUNIAO", "SEM_INTERESSE", "NAO_CONTATAR"];
+export const ETAPAS_COM_INTERESSE: EtapaComercial[] = ["INTERESSE", "INFO_SOLICITADA", "REUNIAO"];
+
+export const ROTULO_PRODUTO: Record<string, string> = { DILON_ZAP: "Dilon Zap", DILON_FACILITIES: "Dilon Facilities" };
+export const ROTULO_PRIORIDADE: Record<string, string> = { ALTA: "Alta", MEDIA: "Média", BAIXA: "Baixa" };
+export const ROTULO_CANAL: Record<string, string> = { EMAIL: "E-mail", LIGACAO: "Ligação", MENSAGEM: "Mensagem profissional", OUTRO: "Outro canal" };
+export const ROTULO_FINALIDADE: Record<string, string> = { PRIMEIRO_CONTATO: "Primeiro contato", FOLLOW_UP: "Follow-up", ROTEIRO: "Roteiro" };
+export const ROTULO_TIPO_INTERACAO: Record<string, string> = { CONTATO: "Contato realizado", RESPOSTA: "Resposta", NOTA: "Nota", DECISOR: "Decisor", ETAPA: "Situação", ABORDAGEM: "Abordagem", CRM: "CRM" };
+
+/** Datas de follow-up são dias de Brasília. Guardadas ao meio-dia, para nenhum fuso empurrar para o dia vizinho. */
+export const dataParaIso = (aaaaMmDd: string) => `${aaaaMmDd}T12:00:00-03:00`;
+export const isoParaData = (iso: string | null | undefined) => (iso ? new Date(new Date(iso).getTime() - 3 * 3_600_000).toISOString().slice(0, 10) : "");
+export const dataCurta = (iso: string | null | undefined) => (iso ? isoParaData(iso).split("-").reverse().join("/") : "—");
+export const hojeEmBrasilia = () => new Date(Date.now() - 3 * 3_600_000).toISOString().slice(0, 10);
+export const maisDias = (dias: number) => new Date(Date.now() - 3 * 3_600_000 + dias * 86_400_000).toISOString().slice(0, 10);

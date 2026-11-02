@@ -242,7 +242,7 @@ describe("acesso autorizado ao SDR", () => {
   test("a tela /sdr abre para o responsável", async () => {
     const r = await dono.chamar("/sdr");
     assert.equal(r.status, 200);
-    assert.equal((await r.text()).includes("as empresas importadas para prospecção"), true);
+    assert.equal((await r.text()).includes("Sua rotina de prospecção"), true);
   });
   test("cria perfil com segmento, região, porte, características e critérios", async () => {
     const r = await dono.chamar("/api/sdr/icps", "POST", perfilValido("API perfil"));

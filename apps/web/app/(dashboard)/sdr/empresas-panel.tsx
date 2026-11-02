@@ -3,13 +3,24 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { chamar, fetcher } from "../receber/formatos";
+import { FichaComercial } from "./ficha-comercial";
 import {
   botaoPrimario,
   botaoSecundario,
+  campo,
   campoPequeno,
+  COR_ETAPA,
   COR_SITUACAO_CRITERIO,
   COR_STATUS_PROSPECTO,
+  dataCurta,
   dataHora,
+  hojeEmBrasilia,
+  isoParaData,
+  ROTULO_ETAPA,
+  ROTULO_PRIORIDADE,
+  ROTULO_PRODUTO,
+  rotulo,
+  type EtapaComercial,
   formatarCnpj,
   formatarTelefone,
   nomeDaEmpresa,
@@ -37,6 +48,7 @@ type EmpresaLinha = {
   verificada: boolean;
   bloqueios: Bloqueio[];
   prospectos: ProspectoLinha[];
+  comercial: Comercial;
 };
 type Lista = { itens: EmpresaLinha[]; total: number; pagina: number; tamanho: number; resumo: Record<string, number>; podeEscrever: boolean };
 type Opcao = { valor: string; empresas: number };
@@ -53,8 +65,27 @@ export type FiltroInicial = {
   uf?: string;
   cidade?: string;
   segmento?: string;
-  ordem?: "pontuacao" | "data" | "prontas";
+  ordem?: "pontuacao" | "data" | "prontas" | "acao" | "prioridade";
+  visao?: string;
+  produto?: string;
+  prioridade?: string;
+  acaoAte?: string;
 };
+
+/** Os recortes da central de prospecção, na ordem do trabalho: do que falta fazer ao que já andou. */
+const VISOES: { id: string; nome: string }[] = [
+  { id: "", nome: "Todas" },
+  { id: "disponiveis", nome: "Disponíveis" },
+  { id: "preparadas", nome: "Aguardando aprovação" },
+  { id: "aprovadas", nome: "Contato a realizar" },
+  { id: "contatadas", nome: "Contatadas" },
+  { id: "responderam", nome: "Responderam" },
+  { id: "followup", nome: "Follow-up pendente" },
+  { id: "convertidas", nome: "No CRM" },
+  { id: "encerradas", nome: "Encerradas" },
+];
+
+type Comercial = { etapa: EtapaComercial; produto: string | null; prioridade: string; proximaAcao: string | null; proximaAcaoEm: string | null; decisorNome: string | null; decisorCargo: string | null; abordagem: "RASCUNHO" | "APROVADA" | null };
 
 const SITUACOES: StatusProspecto[] = ["QUALIFICADO", "VERIFICAR", "NAO_QUALIFICADO", "PENDENTE"];
 
@@ -78,7 +109,12 @@ export function EmpresasPanel({
   const [uf, setUf] = useState(filtroInicial?.uf ?? "");
   const [cidade, setCidade] = useState(filtroInicial?.cidade ?? "");
   const [segmento, setSegmento] = useState(filtroInicial?.segmento ?? "");
-  const [ordem, setOrdem] = useState<string>(filtroInicial?.ordem ?? "pontuacao");
+  const [ordem, setOrdem] = useState<string>(filtroInicial?.ordem ?? (filtroInicial?.visao === "followup" ? "acao" : "pontuacao"));
+  const [visao, setVisao] = useState(filtroInicial?.visao ?? "");
+  const [produto, setProduto] = useState(filtroInicial?.produto ?? "");
+  const [prioridade, setPrioridade] = useState(filtroInicial?.prioridade ?? "");
+  const [acaoAte, setAcaoAte] = useState(filtroInicial?.acaoAte ?? "");
+  const [adicionando, setAdicionando] = useState(false);
   const [busca, setBusca] = useState("");
   const [buscaAplicada, setBuscaAplicada] = useState("");
   const [pagina, setPagina] = useState(1);
@@ -107,6 +143,10 @@ export function EmpresasPanel({
   if (cidade) q.set("cidade", cidade);
   if (segmento) q.set("segmento", segmento);
   if (ordem !== "pontuacao") q.set("ordem", ordem);
+  if (visao) q.set("visao", visao);
+  if (produto) q.set("produto", produto);
+  if (prioridade) q.set("prioridade", prioridade);
+  if (acaoAte) q.set("acaoAte", acaoAte);
   if (buscaAplicada) q.set("busca", buscaAplicada);
   if (pagina > 1) q.set("pagina", String(pagina));
   const { data, error, mutate } = useSWR<Lista>(`/api/sdr/empresas?${q}`, fetcher, { keepPreviousData: true, refreshInterval: 8_000 });
@@ -146,6 +186,53 @@ export function EmpresasPanel({
 
   return (
     <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Recortes da prospecção">
+        {VISOES.map((v) => (
+          <button
+            key={v.id || "todas"}
+            type="button"
+            id={`visao-${v.id || "todas"}`}
+            aria-pressed={visao === v.id}
+            onClick={() => mudarFiltro(() => { setVisao(v.id); if (v.id === "followup") setOrdem("acao"); })}
+            className={`rounded-full border px-3 py-1 text-xs ${visao === v.id ? "border-accent bg-accent/10 text-accent font-medium" : "border-neutral-300 text-neutral-600 hover:border-accent"}`}
+          >
+            {v.nome}
+          </button>
+        ))}
+        {podeEscrever && (
+          <button id="adicionar-empresa" type="button" onClick={() => setAdicionando(true)} className={`${botaoSecundario} ml-auto py-1 text-xs`}>
+            + Adicionar empresa
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-[11px] text-neutral-500">
+          Produto
+          <select id="filtro-produto" value={produto} onChange={(e) => mudarFiltro(() => setProduto(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
+            <option value="">Todos</option>
+            {Object.entries(ROTULO_PRODUTO).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[11px] text-neutral-500">
+          Prioridade
+          <select id="filtro-prioridade" value={prioridade} onChange={(e) => mudarFiltro(() => setPrioridade(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
+            <option value="">Todas</option>
+            {Object.entries(ROTULO_PRIORIDADE).map(([k, v]) => (
+              <option key={k} value={k}>
+                {v}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[11px] text-neutral-500">
+          Próxima ação até
+          <input id="filtro-acao-ate" type="date" value={acaoAte} onChange={(e) => mudarFiltro(() => setAcaoAte(e.target.value))} className={`${campoPequeno} block mt-0.5`} />
+        </label>
+      </div>
       <div className="flex flex-wrap items-end gap-2">
         <label className="text-[11px] text-neutral-500">
           Campanha
@@ -249,6 +336,8 @@ export function EmpresasPanel({
           <select id="filtro-ordem" value={ordem} onChange={(e) => mudarFiltro(() => setOrdem(e.target.value))} className={`${campoPequeno} block mt-0.5`}>
             <option value="pontuacao">Maior pontuação</option>
             <option value="prontas">Qualificadas primeiro</option>
+            <option value="prioridade">Prioridade comercial</option>
+            <option value="acao">Próxima ação</option>
             <option value="data">Mais recentes</option>
           </select>
         </label>
@@ -295,6 +384,7 @@ export function EmpresasPanel({
                 <th className="text-left font-medium px-3 py-2">Empresa</th>
                 <th className="text-left font-medium px-3 py-2">Local</th>
                 <th className="text-left font-medium px-3 py-2">Contato</th>
+                <th className="text-left font-medium px-3 py-2">Comercial</th>
                 <th className="text-left font-medium px-3 py-2">Campanhas</th>
                 <th className="text-left font-medium px-3 py-2">Bloqueio</th>
               </tr>
@@ -314,6 +404,24 @@ export function EmpresasPanel({
                   <td className="px-3 py-2.5 text-neutral-600">
                     <p>{[e.cidade, e.uf].filter(Boolean).join(" / ") || "—"}</p>
                     <p className="text-[11px] text-neutral-400">{e.segmento ?? ""}</p>
+                  </td>
+                  <td className="px-3 py-2.5 text-xs cursor-pointer" onClick={() => setAberta(e.id)}>
+                    <span className={`rounded-full px-2 py-0.5 ${COR_ETAPA[e.comercial.etapa]}`}>{ROTULO_ETAPA[e.comercial.etapa]}</span>
+                    {e.comercial.abordagem && e.comercial.etapa === "NAO_CONTATADA" && (
+                      <p className="mt-1 text-[11px] text-neutral-500">{e.comercial.abordagem === "APROVADA" ? "abordagem aprovada" : "abordagem aguardando aprovação"}</p>
+                    )}
+                    {e.comercial.decisorNome && (
+                      <p className="mt-1 text-[11px] text-neutral-600">
+                        {e.comercial.decisorNome}
+                        {e.comercial.decisorCargo ? ` · ${e.comercial.decisorCargo}` : ""}
+                      </p>
+                    )}
+                    {e.comercial.proximaAcaoEm && (
+                      <p className={`mt-1 text-[11px] ${isoParaData(e.comercial.proximaAcaoEm) <= hojeEmBrasilia() ? "text-red-600" : "text-neutral-500"}`}>
+                        {dataCurta(e.comercial.proximaAcaoEm)} · {e.comercial.proximaAcao ?? "próxima ação"}
+                      </p>
+                    )}
+                    {e.comercial.prioridade === "ALTA" && <p className="mt-1 text-[11px] font-medium text-amber-700">prioridade alta</p>}
                   </td>
                   <td className="px-3 py-2.5 text-xs text-neutral-600">
                     <p className={e.telefone ? "" : "text-neutral-400"}>{e.telefone ? formatarTelefone(e.telefone) : "sem telefone"}</p>
@@ -362,7 +470,67 @@ export function EmpresasPanel({
           </button>
         </div>
       )}
-      {aberta && <FichaDaEmpresa id={aberta} onFechar={() => setAberta(null)} />}
+      {aberta && <FichaDaEmpresa id={aberta} podeEscrever={podeEscrever} aoMudar={() => mutate()} onFechar={() => setAberta(null)} />}
+      {adicionando && <AdicionarEmpresa onFechar={() => setAdicionando(false)} aoAdicionar={() => { setAdicionando(false); setMsg("Empresa enviada. Ela aparece na lista em instantes (se já existir, o sistema a reconhece como repetida)."); setTimeout(() => mutate(), 3000); }} />}
+    </div>
+  );
+}
+
+/** Cadastro manual: monta um CSV de uma linha e usa a mesma importação (deduplicação e bloqueios inclusos). */
+function AdicionarEmpresa({ onFechar, aoAdicionar }: { onFechar: () => void; aoAdicionar: () => void }) {
+  const [f, setF] = useState({ nome: "", telefone: "", email: "", site: "", cidade: "", uf: "", segmento: "" });
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const troca = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+  const celula = (v: string) => (/[;"\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v.trim());
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    if (!f.nome.trim()) return setErro("informe o nome da empresa");
+    setSalvando(true);
+    const conteudo = ["Nome Fantasia;Telefone;E-mail;Site;UF;Cidade;Segmento", [f.nome, f.telefone, f.email, f.site, f.uf, f.cidade, f.segmento].map(celula).join(";")].join("\n") + "\n";
+    const r = await chamar("/api/sdr/importacoes", "POST", { nomeArquivo: "cadastro-manual.csv", conteudo, chave: `manual-${crypto.randomUUID()}` });
+    setSalvando(false);
+    if (!r.ok) return setErro(r.erro ?? "não deu pra cadastrar");
+    aoAdicionar();
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onFechar}>
+      <form onSubmit={salvar} className="bg-surface rounded-lg shadow-lg w-full max-w-lg p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <h2 className="text-base font-semibold">Adicionar empresa</h2>
+          <button type="button" onClick={onFechar} className="text-neutral-400 hover:text-neutral-700 text-lg leading-none" aria-label="Fechar">
+            ×
+          </button>
+        </div>
+        {(
+          [
+            ["nome", "Nome da empresa *"],
+            ["segmento", "Segmento"],
+            ["cidade", "Cidade"],
+            ["uf", "UF"],
+            ["site", "Site"],
+            ["email", "E-mail da empresa"],
+            ["telefone", "Telefone da empresa"],
+          ] as const
+        ).map(([k, nome]) => (
+          <label key={k}>
+            <span className={rotulo}>{nome}</span>
+            <input id={`nova-${k}`} value={f[k]} onChange={troca(k)} maxLength={200} className={campo} />
+          </label>
+        ))}
+        {erro && <p className="text-sm text-red-600">{erro}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onFechar} className="px-3 py-2 text-sm text-neutral-500">
+            Cancelar
+          </button>
+          <button id="nova-salvar" type="submit" disabled={salvando} className={botaoPrimario}>
+            Adicionar
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -377,8 +545,8 @@ type Ficha = Omit<EmpresaLinha, "prospectos"> & {
   prospectos: (ProspectoLinha & { icpNome: string; qualificadoEm: string | null; criterios: { chave: string; nome: string; tipo: string; peso: number; obrigatorio: boolean; situacao: string; justificativa: string }[] | null })[];
 };
 
-function FichaDaEmpresa({ id, onFechar }: { id: string; onFechar: () => void }) {
-  const { data, error } = useSWR<Ficha>(`/api/sdr/empresas/${id}`, fetcher);
+export function FichaDaEmpresa({ id, onFechar, podeEscrever, aoMudar }: { id: string; onFechar: () => void; podeEscrever: boolean; aoMudar: () => void }) {
+  const { data, error, mutate: recarregar } = useSWR<Ficha>(`/api/sdr/empresas/${id}`, fetcher);
   const linha = (nome: string, valor: string | null | undefined) => (
     <div className="flex gap-2 text-sm">
       <span className="w-28 shrink-0 text-xs text-neutral-500">{nome}</span>
@@ -413,6 +581,14 @@ function FichaDaEmpresa({ id, onFechar }: { id: string; onFechar: () => void }) 
                 </ul>
               </div>
             )}
+            <FichaComercial
+              empresa={{ id: data.id, nome: nomeDaEmpresa(data), razaoSocial: data.razaoSocial, nomeFantasia: data.nomeFantasia, email: data.email, telefone: data.telefone, site: data.site, cidade: data.cidade, uf: data.uf, segmento: data.segmento }}
+              podeEscrever={podeEscrever}
+              aoMudar={() => {
+                recarregar();
+                aoMudar();
+              }}
+            />
             <div className="flex flex-col gap-1.5">
               {linha("Razão social", data.razaoSocial)}
               {linha("Nome fantasia", data.nomeFantasia)}

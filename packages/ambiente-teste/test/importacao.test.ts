@@ -860,9 +860,12 @@ describe("nada de CRM nem de WhatsApp", () => {
     const achados: string[] = [];
     const total = pastasDoServidor.flatMap(arquivos);
     assert.equal(total.length > 25, true, "a varredura precisa achar os arquivos");
+    // A única ponte autorizada com o CRM (a conversão em negociação, por ação humana) pode procurar e criar Contact; o resto continua proibido para ela.
+    const ponte = "apps/web/lib/sdr/converter.ts";
     for (const arquivo of total) {
       const texto = fs.readFileSync(path.join(raizRepo, arquivo), "utf8");
-      for (const regra of proibido) if (regra.test(texto)) achados.push(`${arquivo}: ${regra}`);
+      const ehPonte = arquivo.replace(/\\/g, "/") === ponte;
+      for (const regra of proibido.slice(0, ehPonte ? -2 : undefined)) if (regra.test(texto)) achados.push(`${arquivo}: ${regra}`);
     }
     assert.deepEqual(achados, []);
   });
@@ -874,9 +877,9 @@ describe("nada de CRM nem de WhatsApp", () => {
     }
     assert.deepEqual(achados, []);
   });
-  test("o pacote do SDR só depende do banco", () => {
+  test("o pacote do SDR só depende do banco e do zod (que valida as respostas da IA)", () => {
     const sdrCore = JSON.parse(fs.readFileSync(path.join(raizRepo, "packages/sdr-core/package.json"), "utf8"));
-    assert.deepEqual(Object.keys(sdrCore.dependencies), ["@dilon-zap/db"]);
+    assert.deepEqual(Object.keys(sdrCore.dependencies), ["@dilon-zap/db", "zod"]);
     const worker = JSON.parse(fs.readFileSync(path.join(raizRepo, "apps/sdr-worker/package.json"), "utf8"));
     assert.deepEqual(Object.keys(worker.dependencies).sort(), ["@dilon-zap/db", "@dilon-zap/sdr-core", "dotenv"]);
   });

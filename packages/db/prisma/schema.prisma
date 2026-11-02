@@ -209,6 +209,12 @@ model Tenant {
   sdrImportacaoLinhas   SdrImportacaoLinha[]
   sdrSupressoes         SdrSupressao[]
   sdrTrabalhos          SdrTrabalho[]
+  sdrIaConfig           SdrIaConfig?
+  sdrIaUsos             SdrIaUso[]
+  sdrIaCaches           SdrIaCache[]
+  sdrAcompanhamentos    SdrAcompanhamento[]
+  sdrAbordagens         SdrAbordagem[]
+  sdrInteracoes         SdrInteracao[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -2591,7 +2597,10 @@ model SdrEmpresa {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  prospectos SdrProspecto[]
+  prospectos     SdrProspecto[]
+  acompanhamento SdrAcompanhamento?
+  abordagens     SdrAbordagem[]
+  interacoes     SdrInteracao[]
 
   @@unique([tenantId, cnpj])
   // Alvo da chave composta de SdrProspecto.
@@ -2818,4 +2827,221 @@ model SdrTrabalho {
   @@unique([tenantId, chave])
   @@index([status, proximaTentativaEm])
   @@index([status, leaseAte])
+}
+
+enum StatusUsoIaSdr {
+  /// Reserva de orçamento feita antes da chamada. Vira OK, ERRO ou RESPOSTA_INVALIDA.
+  EM_ANDAMENTO
+  OK
+  ERRO
+  /// O provedor respondeu, mas fora do formato esperado. A resposta é descartada.
+  RESPOSTA_INVALIDA
+  /// Recusada antes de chamar: IA desligada, sem orçamento, sem preço, entrada grande demais...
+  BLOQUEADO
+  /// Resposta reaproveitada, sem custo.
+  CACHE
+}
+
+/// Controle da IA por empresa. Nasce desligada: sem linha, ativa=false ou sem orçamento, nada é chamado.
+/// Valores em micro-dólar (1 US$ = 1.000.000), inteiros, para o orçamento não sofrer erro de ponto flutuante.
+model SdrIaConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  ativa                Boolean @default(false)
+  orcamentoDiarioMicro Int?
+  orcamentoMensalMicro Int?
+  limiteTokensEntrada  Int     @default(8000)
+  limiteTokensSaida    Int     @default(1000)
+  cacheHoras           Int     @default(24)
+  /// { tarefa: { principal: "provedor:modelo", reserva?: "provedor:modelo" } }. Validado por zod ao gravar.
+  modelos              Json    @default("{}")
+  /// { "provedor:modelo": { entradaMicroPorMilTokens, saidaMicroPorMilTokens } }. Sem preço informado, o modelo não roda.
+  precos               Json    @default("{}")
+
+  atualizadoPorId   String?
+  atualizadoPorNome String?
+  updatedAt         DateTime @updatedAt
+}
+
+/// Cada chamada de IA, inclusive as recusadas e as respondidas pelo cache. Custo por empresa e campanha sai daqui.
+model SdrIaUso {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  campanhaId    String?
+  tarefa        String
+  provedor      String
+  modelo        String
+  versaoPrompt  String
+  status        StatusUsoIaSdr
+  tokensEntrada Int            @default(0)
+  tokensSaida   Int            @default(0)
+  /// Em EM_ANDAMENTO é o pior caso reservado; depois, o custo real.
+  custoMicro    Int            @default(0)
+  duracaoMs     Int            @default(0)
+  erro          String?
+  createdAt     DateTime       @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([tenantId, campanhaId, createdAt])
+  @@index([tenantId, status, createdAt])
+}
+
+/// Resposta já validada, por empresa. A chave inclui tarefa, versão do prompt, modelo e entrada.
+model SdrIaCache {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  chave     String
+  resposta  Json
+  createdAt DateTime @default(now())
+  expiraEm  DateTime
+
+  @@unique([tenantId, chave])
+  @@index([expiraEm])
+}
+
+enum EtapaComercialSdr {
+  /// Ainda sem contato registrado.
+  NAO_CONTATADA
+  /// Contato feito, aguardando resposta.
+  CONTATADA
+  RESPONDEU
+  INTERESSE
+  INFO_SOLICITADA
+  REUNIAO
+  SEM_INTERESSE
+  /// Pediu para não ser contatada: vai para a lista de bloqueio.
+  NAO_CONTATAR
+  /// Virou negociação no CRM.
+  CONVERTIDA
+}
+
+enum ProdutoSdr {
+  DILON_ZAP
+  DILON_FACILITIES
+}
+
+enum PrioridadeSdr {
+  ALTA
+  MEDIA
+  BAIXA
+}
+
+enum CanalSdr {
+  EMAIL
+  LIGACAO
+  /// Mensagem profissional enviada pela própria pessoa (ex.: LinkedIn). O sistema não envia nem acessa a plataforma.
+  MENSAGEM
+  OUTRO
+}
+
+enum StatusAbordagemSdr {
+  RASCUNHO
+  APROVADA
+  REJEITADA
+}
+
+enum TipoInteracaoSdr {
+  CONTATO
+  RESPOSTA
+  NOTA
+  DECISOR
+  ETAPA
+  ABORDAGEM
+  CRM
+}
+
+/// Situação comercial de uma empresa. Linha criada na primeira vez que alguém mexe; sem linha, vale o padrão (não contatada).
+model SdrAcompanhamento {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empresaId String
+  empresa   SdrEmpresa @relation(fields: [tenantId, empresaId], references: [tenantId, id], onDelete: Cascade)
+
+  produto    ProdutoSdr?
+  prioridade PrioridadeSdr      @default(MEDIA)
+  etapa      EtapaComercialSdr  @default(NAO_CONTATADA)
+
+  /// Só o que a pessoa digitou. Nada aqui é pesquisado pelo sistema.
+  decisorNome     String?
+  decisorCargo    String?
+  decisorEmail    String?
+  decisorTelefone String?
+  decisorLinkedin String?
+  observacoes     String?
+
+  proximaAcao    String?
+  proximaAcaoEm  DateTime?
+  ultimoContatoEm DateTime?
+  /// Negociação criada no CRM a partir desta empresa.
+  negociacaoId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, empresaId])
+  @@index([tenantId, etapa])
+  @@index([tenantId, proximaAcaoEm])
+}
+
+/// Texto de abordagem. Aprovar guarda o texto exato; editar depois de aprovada volta a rascunho e exige nova aprovação.
+model SdrAbordagem {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empresaId String
+  empresa   SdrEmpresa @relation(fields: [tenantId, empresaId], references: [tenantId, id], onDelete: Cascade)
+
+  produto  ProdutoSdr
+  canal    CanalSdr
+  /// PRIMEIRO_CONTATO, FOLLOW_UP ou ROTEIRO.
+  finalidade String             @default("PRIMEIRO_CONTATO")
+  assunto  String?
+  texto    String
+  /// Sobe a cada edição.
+  versao   Int                @default(1)
+  status   StatusAbordagemSdr @default(RASCUNHO)
+  /// IA ou MANUAL.
+  origem   String             @default("MANUAL")
+
+  aprovadaEm       DateTime?
+  aprovadaPorId    String?
+  aprovadaPorNome  String?
+  /// Cópia do texto no instante da aprovação. O contato só é registrado se o texto atual for idêntico a esta cópia.
+  textoAprovado    String?
+  assuntoAprovado  String?
+  versaoAprovada   Int?
+
+  criadoPorNome String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId, empresaId])
+  @@index([tenantId, status])
+}
+
+/// Histórico comercial da empresa: contatos registrados, respostas, notas e mudanças.
+model SdrInteracao {
+  id        String     @id @default(cuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empresaId String
+  empresa   SdrEmpresa @relation(fields: [tenantId, empresaId], references: [tenantId, id], onDelete: Cascade)
+
+  tipo        TipoInteracaoSdr
+  canal       CanalSdr?
+  abordagemId String?
+  resultado   String?
+  texto       String?
+  autorId     String?
+  autorNome   String?
+  createdAt   DateTime         @default(now())
+
+  @@index([tenantId, empresaId, createdAt])
 }

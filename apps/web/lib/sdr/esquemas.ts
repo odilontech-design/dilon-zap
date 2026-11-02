@@ -128,7 +128,12 @@ export const filtroEmpresasSchema = z
     segmento: z.string().trim().min(1).max(80).optional(),
     telefone: z.enum(["sim", "nao"]).optional(),
     email: z.enum(["sim", "nao"]).optional(),
-    ordem: z.enum(["pontuacao", "data", "prontas"]).optional(),
+    ordem: z.enum(["pontuacao", "data", "prontas", "acao", "prioridade"]).optional(),
+    etapa: z.enum(["NAO_CONTATADA", "CONTATADA", "RESPONDEU", "INTERESSE", "INFO_SOLICITADA", "REUNIAO", "SEM_INTERESSE", "NAO_CONTATAR", "CONVERTIDA"]).optional(),
+    produto: z.enum(["DILON_ZAP", "DILON_FACILITIES"]).optional(),
+    prioridade: z.enum(["ALTA", "MEDIA", "BAIXA"]).optional(),
+    visao: z.enum(["disponiveis", "preparadas", "aprovadas", "contatadas", "responderam", "followup", "convertidas", "encerradas"]).optional(),
+    acaoAte: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((d) => !Number.isNaN(Date.parse(d))).optional(),
     pagina,
   })
   .strict();

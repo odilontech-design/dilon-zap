@@ -43,6 +43,8 @@ export async function listarEmpresas(tenantId: string, filtro: FiltroDeEmpresas 
     ? await prisma.sdrEmpresa.findMany({
         where: { tenantId, id: { in: ids } },
         include: {
+          acompanhamento: { select: { etapa: true, produto: true, prioridade: true, proximaAcao: true, proximaAcaoEm: true, decisorNome: true, decisorCargo: true, ultimoContatoEm: true } },
+          abordagens: { where: { status: { not: "REJEITADA" } }, select: { status: true } },
           prospectos: {
             where: { tenantId, ...(filtro.campanhaId ? { campanhaId: filtro.campanhaId } : {}) },
             select: {
@@ -78,6 +80,17 @@ export async function listarEmpresas(tenantId: string, filtro: FiltroDeEmpresas 
           origem: x.origem,
           verificada: x.verificadaEm !== null,
           createdAt: x.createdAt,
+          comercial: {
+            etapa: x.acompanhamento?.etapa ?? "NAO_CONTATADA",
+            produto: x.acompanhamento?.produto ?? null,
+            prioridade: x.acompanhamento?.prioridade ?? "MEDIA",
+            proximaAcao: x.acompanhamento?.proximaAcao ?? null,
+            proximaAcaoEm: x.acompanhamento?.proximaAcaoEm ?? null,
+            decisorNome: x.acompanhamento?.decisorNome ?? null,
+            decisorCargo: x.acompanhamento?.decisorCargo ?? null,
+            ultimoContatoEm: x.acompanhamento?.ultimoContatoEm ?? null,
+            abordagem: x.abordagens.some((a) => a.status === "APROVADA") ? ("APROVADA" as const) : x.abordagens.some((a) => a.status === "RASCUNHO") ? ("RASCUNHO" as const) : null,
+          },
           bloqueios: bloqueiosDaEmpresa(x, listas),
           prospectos: x.prospectos.map((p) => ({
             id: p.id,

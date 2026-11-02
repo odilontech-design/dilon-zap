@@ -18,7 +18,7 @@ import { BANCO_TESTE } from "../src/config";
  */
 
 /** O commit que está em produção (último push). Mudar aqui quando a produção mudar. */
-const COMMIT_EM_PRODUCAO = "f57d844";
+const COMMIT_EM_PRODUCAO = "d2e5fff";
 
 const executar = promisify(execFile);
 const aqui = path.dirname(fileURLToPath(import.meta.url));
@@ -66,32 +66,35 @@ let antigo = "";
 describe("o SQL de referência do SDR", () => {
   const ddl = () => docs("sdr-ddl-referencia.sql");
 
-  test("é só aditivo: cria objetos do SDR, acrescenta um valor ao enum e nada mais", () => {
+  test("é só aditivo: cria objetos do SDR e nada mais", () => {
     const instrucoes = semComentarios(ddl()).split(/;\n/).map((s) => s.trim()).filter(Boolean);
-    assert.equal(instrucoes.length > 30, true);
+    assert.equal(instrucoes.length > 10, true);
     const permitidas = [
       /^CREATE TYPE "\w+Sdr" AS ENUM \(/,
       /^CREATE TABLE "Sdr\w+" \(/,
       /^CREATE (UNIQUE )?INDEX "Sdr\w+" ON "Sdr\w+"\(/,
-      /^ALTER TYPE "Recurso" ADD VALUE 'SDR'$/,
       /^ALTER TABLE "Sdr\w+" ADD CONSTRAINT "\w+" FOREIGN KEY /,
     ];
     const fora = instrucoes.filter((i) => !permitidas.some((p) => p.test(i)));
     assert.deepEqual(fora.map((i) => i.slice(0, 80)), []);
-    assert.equal(instrucoes.filter((i) => i.startsWith("ALTER TYPE")).length, 1);
+    assert.equal(instrucoes.filter((i) => i.startsWith("ALTER TYPE")).length, 0);
     // "ON DELETE CASCADE" e "ON UPDATE CASCADE" são regras das chaves novas, não comandos.
     const semRegrasDeChave = semComentarios(ddl()).replace(/ON (DELETE|UPDATE) (CASCADE|RESTRICT|SET NULL|NO ACTION)/g, "");
     assert.equal(/\b(DROP|RENAME|TRUNCATE|DELETE|UPDATE|INSERT|SET NOT NULL|ALTER COLUMN|DROP COLUMN)\b/i.test(semRegrasDeChave), false);
   });
   test("as chaves estrangeiras só apontam para Tenant ou para tabelas do SDR", () => {
     const alvos = [...semComentarios(ddl()).matchAll(/REFERENCES "(\w+)"/g)].map((m) => m[1]);
-    assert.equal(alvos.length > 8, true);
+    assert.equal(alvos.length >= 3, true);
     assert.deepEqual(alvos.filter((a) => a !== "Tenant" && !a.startsWith("Sdr")), []);
   });
-  test("cria exatamente as tabelas que o schema declara para o SDR", () => {
+  test("cria exatamente as tabelas do SDR que o schema atual tem a mais que a produção", async () => {
     const criadas = [...ddl().matchAll(/CREATE TABLE "(Sdr\w+)"/g)].map((m) => m[1]).sort();
-    const declaradas = [...fs.readFileSync(schemaAtual, "utf8").matchAll(/^model (Sdr\w+) /gm)].map((m) => m[1]).sort();
-    assert.deepEqual(criadas, declaradas);
+    const { stdout: producao } = await executar("git", ["show", `${COMMIT_EM_PRODUCAO}:packages/db/prisma/schema.prisma`], { cwd: raiz, maxBuffer: 16 * 1024 * 1024 });
+    const modelos = (texto: string) => [...texto.matchAll(/^model (Sdr\w+) /gm)].map((m) => m[1]);
+    const jaExistem = modelos(producao);
+    const novas = modelos(fs.readFileSync(schemaAtual, "utf8")).filter((m) => !jaExistem.includes(m)).sort();
+    assert.deepEqual(criadas, novas);
+    assert.deepEqual(novas, ["SdrAbordagem", "SdrAcompanhamento", "SdrIaCache", "SdrIaConfig", "SdrIaUso", "SdrInteracao"]);
   });
   test("está em dia com o schema atual (senão, regerar antes do deploy)", async () => {
     // Dentro de node_modules/.cache (ignorado pelo git): o Prisma acha o @prisma/client subindo as pastas e
@@ -183,12 +186,12 @@ const fase = process.argv[2];
     assert.equal(aplicado.erro, null);
     assert.deepEqual(await lerComCliente("ler"), antes);
   });
-  test("o valor SDR existe no enum depois do SQL e as tabelas novas nascem vazias", async () => {
+  test("o valor SDR segue no enum depois do SQL e as tabelas novas nascem vazias", async () => {
     const r = await sql(
       BANCO_ANTES,
       `DO $$ BEGIN
         IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'Recurso' AND e.enumlabel = 'SDR') THEN RAISE EXCEPTION 'sem SDR no enum'; END IF;
-        IF (SELECT count(*) FROM "SdrEmpresa") + (SELECT count(*) FROM "SdrTrabalho") + (SELECT count(*) FROM "SdrIcp") <> 0 THEN RAISE EXCEPTION 'tabelas não vazias'; END IF;
+        IF (SELECT count(*) FROM "SdrIaConfig") + (SELECT count(*) FROM "SdrIaUso") + (SELECT count(*) FROM "SdrIaCache") <> 0 THEN RAISE EXCEPTION 'tabelas não vazias'; END IF;
       END $$;`
     );
     assert.equal(r.erro, null);
@@ -198,12 +201,13 @@ const fase = process.argv[2];
     const saida = await prismaCli(["migrate", "diff", "--from-url", urlDe(BANCO_ANTES), "--to-schema-datamodel", schemaAtual, "--exit-code"], tmp);
     assert.match(saida, /No difference detected/);
   });
-  test("a ordem importa: com a linha SDR, o cliente antigo quebra; apagando a linha, volta", async () => {
+  test("com o SDR já no enum, o cliente de produção segue lendo com a linha SDR; apagando a linha, volta", async () => {
     const ativar = docs("sdr-ativar-recurso.sql");
     assert.equal((await sql(BANCO_ANTES, substituir(ativar, { tid, slug: "empresa-antiga" }))).erro, null);
 
-    const quebrado = await lerComCliente("ler");
-    assert.match(String(quebrado.erro), /SDR|enum/i); // é por isso que o recurso só liga depois do site novo
+    const lido = await lerComCliente("ler");
+    assert.equal(lido.erro, undefined);
+    assert.deepEqual([...(lido.recursos as string[])].sort(), ["SDR", "URA"]);
 
     const desativar = docs("sdr-desativar-recurso.sql");
     assert.equal((await sql(BANCO_ANTES, substituir(desativar, { tid }))).erro, null);

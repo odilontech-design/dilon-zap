@@ -6,6 +6,8 @@ import { PORTES, ROTULO_PORTE, ROTULO_STATUS_CAMPANHA, STATUS_CAMPANHA, UFS } fr
 import { chamar, fetcher } from "../receber/formatos";
 import { BloqueiosPanel } from "./bloqueios-panel";
 import { EmpresasPanel, type FiltroInicial } from "./empresas-panel";
+import { HojePanel } from "./hoje-panel";
+import { IaPanel } from "./ia-panel";
 import { ImportacoesPanel } from "./importacoes-panel";
 import { PainelIndicadores } from "./painel-indicadores";
 
@@ -37,10 +39,10 @@ const CORES_STATUS: Record<Status, string> = {
 
 const paraLista = (texto: string) => [...new Set(texto.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))];
 
-type Aba = "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios";
+type Aba = "hoje" | "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios" | "ia";
 
 export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
-  const [aba, setAba] = useState<Aba>("campanhas");
+  const [aba, setAba] = useState<Aba>("hoje");
   // Ao vir de "Ver empresas bloqueadas", a aba de empresas já abre filtrada.
   const [filtroEmpresas, setFiltroEmpresas] = useState<FiltroInicial | undefined>(undefined);
   const perfis = useSWR<{ perfis: Perfil[] }>("/api/sdr/icps", fetcher);
@@ -60,12 +62,13 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
     <div className="flex flex-col gap-4 max-w-5xl">
       <div>
         <h1 className="text-xl font-semibold">SDR</h1>
-        <p className="text-sm text-neutral-500">Campanhas, perfis de cliente ideal e as empresas importadas para prospecção.</p>
+        <p className="text-sm text-neutral-500">Sua rotina de prospecção: empresas, decisores, abordagens, contatos e follow-ups.</p>
       </div>
       <p className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-        Nada é pesquisado, enviado ou criado no CRM. As empresas vêm só do CSV que você importa, e os dados delas não foram verificados por ninguém.
+        O Dilon Zap não envia mensagens por você: você envia pelo seu e-mail ou telefone e registra aqui. As empresas vêm só do que você importa ou cadastra (nada é pesquisado na internet), e nada vai para o CRM sem a sua ação. Os dados não foram verificados por ninguém.
       </p>
 
+      {aba === "empresas" && (
       <PainelIndicadores
         campanhas={listaDeCampanhas}
         perfis={listaDePerfis}
@@ -74,15 +77,28 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
           setAba("empresas");
         }}
       />
+      )}
 
       <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto" role="tablist">
+        {aba_("hoje", "Meu Comercial de Hoje")}
+        {aba_("empresas", "Prospecção")}
         {aba_("campanhas", `Campanhas ${campanhas.data ? `(${listaDeCampanhas.length})` : ""}`)}
         {aba_("perfis", `Perfis de cliente ${perfis.data ? `(${listaDePerfis.length})` : ""}`)}
-        {aba_("empresas", "Empresas")}
         {aba_("importacoes", "Importações")}
         {aba_("bloqueios", "Bloqueios")}
+        {aba_("ia", "IA")}
       </div>
 
+      {aba === "hoje" && (
+        <HojePanel
+          podeEscrever={podeEscrever}
+          abrirCentral={(filtro) => {
+            setFiltroEmpresas(filtro);
+            setAba("empresas");
+          }}
+        />
+      )}
+      {aba === "ia" && <IaPanel podeEscrever={podeEscrever} />}
       {aba === "campanhas" && (
         <Campanhas
           lista={campanhas.data?.campanhas}

@@ -23,3 +23,13 @@ export { associarEmpresas, requalificarCampanha, processarQualificacao } from ".
 
 /** Tudo do SDR que lê ou grava dados, preso a uma organização. O tenant nunca é argumento dos métodos. */
 export const sdrDoTenant = empresasDoTenantFacade;
+
+export { configIaSchema, CONFIG_PADRAO } from "./ia/config";
+export type { ConfigIa } from "./ia/config";
+export { executarTarefaIa, extrairJson } from "./ia/executar";
+export type { PedidoDeTarefaIa, ResultadoDeTarefaIa, MotivoDaRecusa } from "./ia/executar";
+export { provedorAnthropic, provedorGemini, provedoresPadrao } from "./ia/provedores";
+export type { Provedor, Provedores } from "./ia/provedores";
+
+export { acompanhamentoSchema, empresaEditavelSchema, novaAbordagemSchema, edicaoDeAbordagemSchema, contatoSchema, resultadoSchema, modeloNeutro, NOME_DO_PRODUTO, TAREFA_DE_ABORDAGEM, ETAPAS, ETAPAS_DE_RESULTADO } from "./comercial";
+export type { EtapaComercial, VisaoDaCentral, Produto, Prioridade } from "./consulta";
