@@ -75,6 +75,15 @@ export const VARIAVEIS_ESVAZIADAS = [
   "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
   "GEMINI_API_KEY",
   "ANTHROPIC_API_KEY",
+  "SDR_SMTP_HOST",
+  "SDR_SMTP_PORT",
+  "SDR_SMTP_SECURE",
+  "SDR_SMTP_USER",
+  "SDR_SMTP_PASS",
+  "SDR_SMTP_FROM",
+  "SDR_EMAIL_LIMITE_DIARIO",
+  "SDR_WHATSAPP_LIMITE_DIARIO",
+  "SDR_WHATSAPP_INTERVALO_S",
 ];
 
 export function montarAmbiente(origem: NodeJS.ProcessEnv, extras: Record<string, string>): NodeJS.ProcessEnv {

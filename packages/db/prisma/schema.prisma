@@ -215,6 +215,7 @@ model Tenant {
   sdrAcompanhamentos    SdrAcompanhamento[]
   sdrAbordagens         SdrAbordagem[]
   sdrInteracoes         SdrInteracao[]
+  sdrEnviosEmail        SdrEnvioEmail[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -2937,6 +2938,8 @@ enum CanalSdr {
   LIGACAO
   /// Mensagem profissional enviada pela própria pessoa (ex.: LinkedIn). O sistema não envia nem acessa a plataforma.
   MENSAGEM
+  /// Conversa aberta no Inbox, uma por clique e com confirmação de quem envia. O sistema não dispara em lote.
+  WHATSAPP
   OUTRO
 }
 
@@ -3044,4 +3047,39 @@ model SdrInteracao {
   createdAt   DateTime         @default(now())
 
   @@index([tenantId, empresaId, createdAt])
+}
+
+enum StatusEnvioEmailSdr {
+  ENVIANDO
+  ENVIADO
+  FALHOU
+}
+
+/// Cada e-mail que o SDR mandou (ou tentou mandar) pela caixa SMTP configurada. É o que garante um envio por
+/// abordagem, versão e destinatário, e o que conta o limite diário. O texto enviado fica guardado.
+model SdrEnvioEmail {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  empresaId   String
+  abordagemId String
+  /// Versão da abordagem no momento do envio.
+  versao      Int
+  para        String
+  assunto     String
+  /// Corpo exatamente como saiu, com o rodapé de descadastro.
+  corpo       String
+  status      StatusEnvioEmailSdr @default(ENVIANDO)
+  messageId   String?
+  erro        String?
+
+  enviadoPorId   String?
+  enviadoPorNome String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([tenantId, abordagemId, versao, para])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, status, createdAt])
 }

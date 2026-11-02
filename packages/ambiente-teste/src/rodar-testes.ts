@@ -37,6 +37,7 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         "test/lista-painel.test.ts",
         "test/ia.test.ts",
         "test/comercial.test.ts",
+        "test/canais.test.ts",
         "test/compatibilidade-producao.test.ts",
       ],
       { env: pacote.ambiente, cwd: raizDoPacote, stdio: ["ignore", "pipe", "pipe"] }

@@ -18,7 +18,7 @@ import { BANCO_TESTE } from "../src/config";
  */
 
 /** O commit que está em produção (último push). Mudar aqui quando a produção mudar. */
-const COMMIT_EM_PRODUCAO = "d2e5fff";
+const COMMIT_EM_PRODUCAO = "100ee4f";
 
 const executar = promisify(execFile);
 const aqui = path.dirname(fileURLToPath(import.meta.url));
@@ -68,23 +68,24 @@ describe("o SQL de referência do SDR", () => {
 
   test("é só aditivo: cria objetos do SDR e nada mais", () => {
     const instrucoes = semComentarios(ddl()).split(/;\n/).map((s) => s.trim()).filter(Boolean);
-    assert.equal(instrucoes.length > 10, true);
+    assert.equal(instrucoes.length > 4, true);
     const permitidas = [
       /^CREATE TYPE "\w+Sdr" AS ENUM \(/,
       /^CREATE TABLE "Sdr\w+" \(/,
       /^CREATE (UNIQUE )?INDEX "Sdr\w+" ON "Sdr\w+"\(/,
+      /^ALTER TYPE "CanalSdr" ADD VALUE 'WHATSAPP'$/,
       /^ALTER TABLE "Sdr\w+" ADD CONSTRAINT "\w+" FOREIGN KEY /,
     ];
     const fora = instrucoes.filter((i) => !permitidas.some((p) => p.test(i)));
     assert.deepEqual(fora.map((i) => i.slice(0, 80)), []);
-    assert.equal(instrucoes.filter((i) => i.startsWith("ALTER TYPE")).length, 0);
+    assert.equal(instrucoes.filter((i) => i.startsWith("ALTER TYPE")).length, 1);
     // "ON DELETE CASCADE" e "ON UPDATE CASCADE" são regras das chaves novas, não comandos.
     const semRegrasDeChave = semComentarios(ddl()).replace(/ON (DELETE|UPDATE) (CASCADE|RESTRICT|SET NULL|NO ACTION)/g, "");
     assert.equal(/\b(DROP|RENAME|TRUNCATE|DELETE|UPDATE|INSERT|SET NOT NULL|ALTER COLUMN|DROP COLUMN)\b/i.test(semRegrasDeChave), false);
   });
   test("as chaves estrangeiras só apontam para Tenant ou para tabelas do SDR", () => {
     const alvos = [...semComentarios(ddl()).matchAll(/REFERENCES "(\w+)"/g)].map((m) => m[1]);
-    assert.equal(alvos.length >= 3, true);
+    assert.equal(alvos.length >= 1, true);
     assert.deepEqual(alvos.filter((a) => a !== "Tenant" && !a.startsWith("Sdr")), []);
   });
   test("cria exatamente as tabelas do SDR que o schema atual tem a mais que a produção", async () => {
@@ -94,7 +95,7 @@ describe("o SQL de referência do SDR", () => {
     const jaExistem = modelos(producao);
     const novas = modelos(fs.readFileSync(schemaAtual, "utf8")).filter((m) => !jaExistem.includes(m)).sort();
     assert.deepEqual(criadas, novas);
-    assert.deepEqual(novas, ["SdrAbordagem", "SdrAcompanhamento", "SdrIaCache", "SdrIaConfig", "SdrIaUso", "SdrInteracao"]);
+    assert.deepEqual(novas, ["SdrEnvioEmail"]);
   });
   test("está em dia com o schema atual (senão, regerar antes do deploy)", async () => {
     // Dentro de node_modules/.cache (ignorado pelo git): o Prisma acha o @prisma/client subindo as pastas e
@@ -336,7 +337,7 @@ const fase = process.argv[2];
     });
 
     test("o banco do ensaio está no schema de produção: não tem as tabelas novas", async () => {
-      const r = await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_name IN ('SdrAcompanhamento','SdrAbordagem','SdrInteracao','SdrIaConfig','SdrIaUso','SdrIaCache')`);
+      const r = await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_name = 'SdrEnvioEmail'`);
       assert.equal(r[0].n, 0);
     });
     test("o db push, sem aceitar perda de dados, termina em sincronia e sem alertas", async () => {
@@ -354,12 +355,12 @@ const fase = process.argv[2];
     test("os dados que já existiam seguem iguais", async () => {
       assert.deepEqual(await lerComCliente("ler", { URL_ANTES: urlEnsaio }), antesDoPush);
     });
-    test("as 6 tabelas novas nasceram vazias e todas têm tenantId", async () => {
-      const r = await consultar(BANCO_ENSAIO, `SELECT table_name, bool_or(column_name = 'tenantId') AS tem_tenant FROM information_schema.columns WHERE table_name IN ('SdrAcompanhamento','SdrAbordagem','SdrInteracao','SdrIaConfig','SdrIaUso','SdrIaCache') GROUP BY table_name ORDER BY 1`);
-      assert.equal(r.length, 6);
-      assert.equal(r.every((x) => x.tem_tenant === true), true);
-      const n = await consultar(BANCO_ENSAIO, `SELECT (SELECT count(*) FROM "SdrAcompanhamento") + (SELECT count(*) FROM "SdrAbordagem") + (SELECT count(*) FROM "SdrInteracao") + (SELECT count(*) FROM "SdrIaConfig") + (SELECT count(*) FROM "SdrIaUso") + (SELECT count(*) FROM "SdrIaCache") AS n`);
-      assert.equal(Number(n[0].n), 0);
+    test("a tabela nova nasceu vazia, com tenantId, e o valor novo do canal existe", async () => {
+      const r = await consultar(BANCO_ENSAIO, `SELECT table_name, bool_or(column_name = 'tenantId') AS tem_tenant FROM information_schema.columns WHERE table_name = 'SdrEnvioEmail' GROUP BY table_name`);
+      assert.deepEqual(r.map((x) => [x.table_name, x.tem_tenant]), [["SdrEnvioEmail", true]]);
+      assert.equal(Number((await consultar(BANCO_ENSAIO, `SELECT count(*) AS n FROM "SdrEnvioEmail"`))[0].n), 0);
+      const v = await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM pg_enum e JOIN pg_type t ON t.oid = e.enumtypid WHERE t.typname = 'CanalSdr' AND e.enumlabel = 'WHATSAPP'`);
+      assert.equal(v[0].n, 1);
     });
 
     test("o código novo faz o fluxo inteiro com a empresa fictícia e com uma de controle, sem criar contato nem negociação", async () => {

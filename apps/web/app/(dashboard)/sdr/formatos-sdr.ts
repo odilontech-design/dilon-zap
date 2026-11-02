@@ -142,7 +142,7 @@ export const ETAPAS_COM_INTERESSE: EtapaComercial[] = ["INTERESSE", "INFO_SOLICI
 
 export const ROTULO_PRODUTO: Record<string, string> = { DILON_ZAP: "Dilon Zap", DILON_FACILITIES: "Dilon Facilities" };
 export const ROTULO_PRIORIDADE: Record<string, string> = { ALTA: "Alta", MEDIA: "Média", BAIXA: "Baixa" };
-export const ROTULO_CANAL: Record<string, string> = { EMAIL: "E-mail", LIGACAO: "Ligação", MENSAGEM: "Mensagem profissional", OUTRO: "Outro canal" };
+export const ROTULO_CANAL: Record<string, string> = { EMAIL: "E-mail", LIGACAO: "Ligação", WHATSAPP: "WhatsApp", MENSAGEM: "Mensagem profissional", OUTRO: "Outro canal" };
 export const ROTULO_FINALIDADE: Record<string, string> = { PRIMEIRO_CONTATO: "Primeiro contato", FOLLOW_UP: "Follow-up", ROTEIRO: "Roteiro" };
 export const ROTULO_TIPO_INTERACAO: Record<string, string> = { CONTATO: "Contato realizado", RESPOSTA: "Resposta", NOTA: "Nota", DECISOR: "Decisor", ETAPA: "Situação", ABORDAGEM: "Abordagem", CRM: "CRM" };
 

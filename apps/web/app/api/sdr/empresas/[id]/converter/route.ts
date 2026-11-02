@@ -6,8 +6,8 @@ import { recusa, respostaDeErro, verificarAcessoSdr } from "@/lib/sdr/acesso";
 import { NOME_DO_FUNIL_DO_SDR, converterEmNegociacao } from "@/lib/sdr/converter";
 
 /**
- * Passa uma empresa com interesse para o CRM, no funil "Prospecção ativa". Uma ação humana por empresa: cria o
- * contato (sem consultar o WhatsApp) e uma negociação, e guarda o vínculo no SDR. Repetir devolve a mesma negociação.
+ * Marca como oportunidade uma empresa com interesse registrado. A negociação em "Prospecção ativa" já nasce no primeiro
+ * contato registrado; aqui ela é reaproveitada (ou criada, se faltar). Repetir devolve a mesma negociação.
  */
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const acesso = await verificarAcessoSdr("escrever");
@@ -15,7 +15,7 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
   try {
     const r = await converterEmNegociacao({ acesso, empresaId: params.id, prisma, criarNegociacao });
     if (!r.jaExistia) await logAudit({ actor: acesso.user, action: "sdr.convertida.crm", metadata: { empresaId: params.id, negociacaoId: r.negociacaoId, funil: NOME_DO_FUNIL_DO_SDR } });
-    return NextResponse.json(r, { status: r.jaExistia ? 200 : 201 });
+    return NextResponse.json(r, { status: r.criada ? 201 : 200 });
   } catch (e) {
     if (e instanceof ErroDeNegocio) return NextResponse.json({ error: e.message }, { status: e.status });
     return respostaDeErro(e);

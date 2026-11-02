@@ -26,7 +26,9 @@ import {
   rejeitarAbordagem,
   salvarAcompanhamento,
   type PedidoDeAbordagemIa,
+  vincularNegociacao,
 } from "./comercial";
+import { enviarEmailDaAbordagem, prepararConversaNoWhatsapp, situacaoDoEmail, type EnviadorDeEmail, type LimitesDoWhatsapp } from "./canais";
 import { obterConfigIa, salvarConfigIa, type ConfigIa } from "./ia/config";
 import { executarTarefaIa, type OpcoesDeExecucao, type PedidoDeTarefaIa } from "./ia/executar";
 import { resumoDeUsoIa } from "./ia/uso";
@@ -72,6 +74,10 @@ export function empresasDoTenantFacade(tenantId: string) {
       registrarContato: (abordagemId: string, dados: unknown, autor: { id: string; name: string }) => registrarContato(tenantId, abordagemId, dados, autor),
       registrarResultado: (empresaId: string, dados: unknown, autor: { id: string; name: string }) => registrarResultado(tenantId, empresaId, dados, autor),
       registrarNota: (empresaId: string, texto: string, autor: { id: string; name: string }) => registrarNota(tenantId, empresaId, texto, autor),
+      vincularNegociacao: (empresaId: string, negociacaoId: string, autor: { id: string; name: string }) => vincularNegociacao(tenantId, empresaId, negociacaoId, autor),
+      situacaoDoEmail: (enviador: EnviadorDeEmail, limiteDiario: number) => situacaoDoEmail(tenantId, enviador, limiteDiario),
+      enviarEmail: (abordagemId: string, dados: unknown, autor: { id: string; name: string }, enviador: EnviadorDeEmail, limiteDiario: number) => enviarEmailDaAbordagem(tenantId, abordagemId, dados, autor, enviador, limiteDiario),
+      abrirConversaNoWhatsapp: (abordagemId: string, autor: { id: string; name: string }, limites: LimitesDoWhatsapp) => prepararConversaNoWhatsapp(tenantId, abordagemId, autor, limites),
       marcarConvertida: (empresaId: string, negociacaoId: string, autor: { id: string; name: string }) => marcarConvertida(tenantId, empresaId, negociacaoId, autor),
     },
     ia: {

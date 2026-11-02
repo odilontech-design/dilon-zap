@@ -861,7 +861,7 @@ describe("nada de CRM nem de WhatsApp", () => {
     const total = pastasDoServidor.flatMap(arquivos);
     assert.equal(total.length > 25, true, "a varredura precisa achar os arquivos");
     // A única ponte autorizada com o CRM (a conversão em negociação, por ação humana) pode procurar e criar Contact; o resto continua proibido para ela.
-    const ponte = "apps/web/lib/sdr/converter.ts";
+    const ponte = "apps/web/lib/sdr/crm.ts";
     for (const arquivo of total) {
       const texto = fs.readFileSync(path.join(raizRepo, arquivo), "utf8");
       const ehPonte = arquivo.replace(/\\/g, "/") === ponte;

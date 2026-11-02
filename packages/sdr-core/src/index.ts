@@ -33,3 +33,6 @@ export type { Provedor, Provedores } from "./ia/provedores";
 
 export { acompanhamentoSchema, empresaEditavelSchema, novaAbordagemSchema, edicaoDeAbordagemSchema, contatoSchema, resultadoSchema, modeloNeutro, NOME_DO_PRODUTO, TAREFA_DE_ABORDAGEM, ETAPAS, ETAPAS_DE_RESULTADO } from "./comercial";
 export type { EtapaComercial, VisaoDaCentral, Produto, Prioridade } from "./consulta";
+
+export { RODAPE_DE_DESCADASTRO, corpoDoEmail, envioDeEmailSchema } from "./canais";
+export type { EnviadorDeEmail, MensagemDeEmail, LimitesDoWhatsapp } from "./canais";

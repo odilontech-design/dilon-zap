@@ -481,7 +481,7 @@ describe("abordagem com IA", () => {
     assert.equal(r.abordagens.every((a) => a.status === "RASCUNHO" && a.origem === "IA" && a.produto === "DILON_FACILITIES"), true);
     const [email, curta, ligacao, followup] = r.abordagens;
     assert.deepEqual([email.canal, email.finalidade, email.assunto], ["EMAIL", "PRIMEIRO_CONTATO", RESPOSTA.email.assunto]);
-    assert.deepEqual([curta.canal, ligacao.canal, ligacao.finalidade, followup.finalidade], ["MENSAGEM", "LIGACAO", "ROTEIRO", "FOLLOW_UP"]);
+    assert.deepEqual([curta.canal, ligacao.canal, ligacao.finalidade, followup.finalidade], ["WHATSAPP", "LIGACAO", "ROTEIRO", "FOLLOW_UP"]);
     assert.match(ligacao.texto, /Pergunta de diagnóstico: Como vocês comprovam/);
     assert.equal(followup.assunto, `Re: ${RESPOSTA.email.assunto}`);
     assert.equal(r.proximaAcao, "Ligar para o Marcos na quinta-feira");
@@ -722,7 +722,7 @@ describe("rotas do fluxo comercial", () => {
     // Repetir devolve a mesma negociação, sem criar outra.
     r = await dono.chamar(`/api/sdr/empresas/${empresaId}/converter`, "POST");
     assert.equal(r.status, 200);
-    assert.deepEqual(((await r.json()) as { negociacaoId: string; jaExistia: boolean }), { negociacaoId: criada.negociacaoId, jaExistia: true });
+    assert.deepEqual(((await r.json()) as { negociacaoId: string; jaExistia: boolean }), { negociacaoId: criada.negociacaoId, jaExistia: true, criada: false });
     assert.equal(await prisma.negociacao.count({ where: { tenantId: dilonId, origem: "SDR" } }), 1);
 
     const ficha = (await (await dono.chamar(`/api/sdr/empresas/${empresaId}/comercial`)).json()) as { acompanhamento: { etapa: string; negociacaoId: string } };
@@ -754,20 +754,23 @@ describe("guardas: o SDR não envia nada e não toca no WhatsApp", () => {
   test("nenhum código do SDR chama o worker do WhatsApp, resolve número no WhatsApp ou envia e-mail", () => {
     for (const p of codigoDoSdr()) {
       const t = fs.readFileSync(p, "utf8");
-      assert.equal(/WORKER_INTERNAL_(URL|SECRET)|resolveWhatsAppJid|upsertContactByPhone|\/internal\/(resolve-jid|messages|outbox)|nodemailer|sendMail|smtp/i.test(t), false, rel(p));
+      assert.equal(/WORKER_INTERNAL_(URL|SECRET)|resolveWhatsAppJid|upsertContactByPhone|\/internal\/(resolve-jid|messages|outbox)/i.test(t), false, rel(p));
     }
   });
-  test("a única ponte com o CRM é converter.ts, e ela não usa o WhatsApp", () => {
+  test("o CRM só é tocado por crm.ts e pelas rotas que o chamam, e nada disso usa o WhatsApp", () => {
     const comCrm = codigoDoSdr().filter((p) => /prisma\.(contact|negociacao|funil|stage)\b|criarNegociacao/.test(fs.readFileSync(p, "utf8"))).map(rel);
-    assert.deepEqual(comCrm.sort(), ["apps/web/app/api/sdr/empresas/[id]/converter/route.ts", "apps/web/lib/sdr/converter.ts"].sort());
+    assert.deepEqual(comCrm.sort(), ["apps/web/app/api/sdr/abordagens/[id]/contato/route.ts", "apps/web/app/api/sdr/abordagens/[id]/enviar-email/route.ts", "apps/web/app/api/sdr/empresas/[id]/converter/route.ts", "apps/web/app/api/sdr/empresas/[id]/resultado/route.ts", "apps/web/lib/sdr/crm.ts"].sort());
   });
   test("a ponte com o CRM só procura e cria contato: nunca altera nem apaga", () => {
-    const t = fs.readFileSync(path.join(raiz, "apps/web/lib/sdr/converter.ts"), "utf8");
+    const t = fs.readFileSync(path.join(raiz, "apps/web/lib/sdr/crm.ts"), "utf8");
     assert.equal(/contact\.(update|updateMany|upsert|delete|deleteMany|createMany)/.test(t), false);
   });
   test("a tela diz que o sistema não envia, e nunca chama 'enviada' uma mensagem só preparada", () => {
     const ficha = fs.readFileSync(path.join(raiz, "apps/web/app/(dashboard)/sdr/ficha-comercial.tsx"), "utf8");
     assert.match(ficha, /não envia esta mensagem/);
-    assert.equal(/Mensagem enviada|E-mail enviado|Enviar agora|Enviar e-mail/i.test(ficha), false);
+    assert.equal(/Mensagem enviada|Enviar para todos|Enviar em lote/i.test(ficha), false);
+    // O e-mail só sai pelo botão com confirmação, que chama a rota própria.
+    assert.match(ficha, /enviar-email/);
+    assert.match(ficha, /Enviar este e-mail agora\?/);
   });
 });

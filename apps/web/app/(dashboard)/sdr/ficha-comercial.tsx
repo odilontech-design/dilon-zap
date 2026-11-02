@@ -44,7 +44,7 @@ type Acomp = {
 type Abordagem = {
   id: string;
   produto: string;
-  canal: "EMAIL" | "LIGACAO" | "MENSAGEM" | "OUTRO";
+  canal: "EMAIL" | "LIGACAO" | "MENSAGEM" | "WHATSAPP" | "OUTRO";
   finalidade: string;
   assunto: string | null;
   texto: string;
@@ -102,7 +102,7 @@ export function FichaComercial({ empresa, podeEscrever, aoMudar }: { empresa: Da
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">Esta empresa está na lista de bloqueio ou pediu para não ser contatada. Nenhuma abordagem pode ser aprovada nem registrada.</p>
       )}
 
-      <Resumo a={a} leitura={leitura} id={empresa.id} podeConverter={ETAPAS_COM_INTERESSE.includes(a.etapa) && !a.negociacaoId && data.podeContatar} atualizar={atualizar} setAviso={setAviso} falhou={falhou} />
+      <Resumo a={a} leitura={leitura} id={empresa.id} podeConverter={ETAPAS_COM_INTERESSE.includes(a.etapa) && data.podeContatar} atualizar={atualizar} setAviso={setAviso} falhou={falhou} />
       <Decisor empresa={empresa} a={a} leitura={leitura} atualizar={atualizar} setAviso={setAviso} falhou={falhou} />
       <Abordagens empresa={empresa} a={a} abordagens={data.abordagens} podeContatar={data.podeContatar} leitura={leitura} atualizar={atualizar} setAviso={setAviso} falhou={falhou} />
       <Resposta id={empresa.id} a={a} leitura={leitura || !data.podeContatar} atualizar={atualizar} setAviso={setAviso} falhou={falhou} />
@@ -134,7 +134,7 @@ function Resumo({ a, leitura, id, podeConverter, atualizar, setAviso, falhou }: 
     setAviso(null);
     const r = await chamar(`/api/sdr/empresas/${id}/converter`, "POST");
     if (!r.ok) return falhou(r.erro);
-    setAviso({ tipo: "ok", texto: "Negociação criada no funil Prospecção ativa do CRM." });
+    setAviso({ tipo: "ok", texto: "Marcada como oportunidade no CRM (funil Prospecção ativa)." });
     atualizar();
   }
 
@@ -184,7 +184,7 @@ function Resumo({ a, leitura, id, podeConverter, atualizar, setAviso, falhou }: 
           </button>
           {podeConverter && (
             <button id="comercial-converter" onClick={converter} className={botaoPrimario}>
-              Enviar ao CRM (funil Prospecção ativa)
+              Marcar como oportunidade no CRM
             </button>
           )}
         </div>
@@ -207,8 +207,8 @@ function Decisor({ empresa, a, leitura, atualizar, setAviso, falhou }: { empresa
 
   return (
     <section className={secao}>
-      <h3 className={titulo}>Decisor</h3>
-      <p className="text-[11px] text-neutral-500">Preencha só o que você confirmou. O sistema não pesquisa nem acessa o LinkedIn: cole aqui o endereço do perfil, se já tiver.</p>
+      <h3 className={titulo}>Decisor da empresa (opcional)</h3>
+      <p className="text-[11px] text-neutral-500">Você é sempre o responsável pelo contato: remetente, aprovação e negociação no CRM ficam no seu nome. Aqui vai só quem decide na empresa-alvo, se você souber. Preencha só o que confirmou. O sistema não pesquisa nem acessa o LinkedIn: cole aqui o endereço do perfil, se já tiver.</p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label>
           <span className={rotulo}>Nome</span>
@@ -250,6 +250,7 @@ function Abordagens({ empresa, a, abordagens, podeContatar, leitura, atualizar, 
   const [gerando, setGerando] = useState(false);
   const [sugestao, setSugestao] = useState<{ proximaAcao: string; faltantes: string[] } | null>(null);
   const bloqueado = leitura || !podeContatar;
+  const { data: situacaoEmail } = useSWR<SituacaoEmail>("/api/sdr/email", fetcher);
 
   async function gerar() {
     setAviso(null);
@@ -305,6 +306,9 @@ function Abordagens({ empresa, a, abordagens, podeContatar, leitura, atualizar, 
             <button id="abordagem-modelo-ligacao" onClick={() => criar("LIGACAO", true)} className="text-accent hover:underline">
               modelo de roteiro de ligação
             </button>
+            <button id="abordagem-modelo-whatsapp" onClick={() => criar("WHATSAPP", true)} className="text-accent hover:underline">
+              mensagem curta de WhatsApp
+            </button>
             <button id="abordagem-manual" onClick={() => criar("EMAIL", false)} className="text-accent hover:underline">
               escrever à mão
             </button>
@@ -325,13 +329,16 @@ function Abordagens({ empresa, a, abordagens, podeContatar, leitura, atualizar, 
       )}
       {abordagens.length === 0 && <p className="text-sm text-neutral-500">Nenhuma abordagem ainda.</p>}
       {abordagens.map((ab) => (
-        <CartaoDeAbordagem key={`${ab.id}-${ab.versao}`} ab={ab} empresa={empresa} a={a} bloqueado={bloqueado} atualizar={atualizar} setAviso={setAviso} falhou={falhou} />
+        <CartaoDeAbordagem key={`${ab.id}-${ab.versao}`} ab={ab} empresa={empresa} a={a} bloqueado={bloqueado} situacaoEmail={situacaoEmail} atualizar={atualizar} setAviso={setAviso} falhou={falhou} />
       ))}
     </section>
   );
 }
 
-function CartaoDeAbordagem({ ab, empresa, a, bloqueado, atualizar, setAviso, falhou }: { ab: Abordagem; empresa: DadosDaEmpresa; a: Acomp; bloqueado: boolean } & Comuns) {
+type SituacaoEmail = { configurado: boolean; de: { email: string } | null; limiteDiario: number; enviadosHoje: number; whatsapp: { limiteDiario: number; intervaloMinimoSegundos: number } };
+
+function CartaoDeAbordagem({ ab, empresa, a, bloqueado, situacaoEmail, atualizar, setAviso, falhou }: { ab: Abordagem; empresa: DadosDaEmpresa; a: Acomp; bloqueado: boolean; situacaoEmail?: SituacaoEmail } & Comuns) {
+  const [enviandoEmail, setEnviandoEmail] = useState(false);
   const [texto, setTexto] = useState(ab.texto);
   const [assunto, setAssunto] = useState(ab.assunto ?? "");
   const [registrando, setRegistrando] = useState(false);
@@ -347,7 +354,18 @@ function CartaoDeAbordagem({ ab, empresa, a, bloqueado, atualizar, setAviso, fal
     setAviso(null);
     const r = await chamar(url, metodo, corpo);
     if (!r.ok) return falhou(r.erro);
-    if (mensagem) setAviso({ tipo: "ok", texto: mensagem });
+    const crm = (r.dados as { crm?: { ok: boolean; motivo?: string } | null } | undefined)?.crm;
+    const extra = crm ? (crm.ok ? " Registrado também no CRM." : ` Atenção: não foi para o CRM (${crm.motivo}).`) : "";
+    if (mensagem) setAviso({ tipo: crm && !crm.ok ? "atencao" : "ok", texto: mensagem + extra });
+    atualizar();
+  }
+  async function abrirWhatsapp() {
+    setAviso(null);
+    const r = await chamar(`/api/sdr/abordagens/${ab.id}/whatsapp`, "POST");
+    if (!r.ok) return falhou(r.erro);
+    const { url, restantesHoje } = r.dados as { url: string; restantesHoje: number };
+    window.open(url, "_blank", "noopener");
+    setAviso({ tipo: "atencao", texto: `A conversa abriu em outra aba com a mensagem pronta. O envio só acontece quando você clicar em Enviar lá. Depois volte e clique em “Registrei que fiz o contato”. Restam ${restantesHoje} conversas novas hoje.` });
     atualizar();
   }
   async function copiar() {
@@ -415,13 +433,46 @@ function CartaoDeAbordagem({ ab, empresa, a, bloqueado, atualizar, setAviso, fal
                 Ligar para {formatarTelefone(telefoneDestino)}
               </a>
             )}
+            {!bloqueado && ab.canal === "EMAIL" && situacaoEmail?.configurado && (
+              <button id={`ab-enviar-email-${ab.id}`} onClick={() => setEnviandoEmail(true)} className={botaoPrimario}>
+                Enviar por e-mail
+              </button>
+            )}
+            {!bloqueado && (ab.canal === "WHATSAPP" || ab.canal === "MENSAGEM") && telefoneDestino && (
+              <button id={`ab-whatsapp-${ab.id}`} onClick={abrirWhatsapp} className={botaoPrimario}>
+                Abrir conversa no WhatsApp
+              </button>
+            )}
             {!bloqueado && !registrando && (
               <button id={`ab-registrar-${ab.id}`} onClick={() => setRegistrando(true)} className={botaoPrimario}>
                 Registrei que fiz o contato
               </button>
             )}
           </div>
-          <p className="text-[11px] text-neutral-500">O Dilon Zap não envia esta mensagem. Você envia pelo seu canal e depois registra aqui.</p>
+          <p className="text-[11px] text-neutral-500">
+            {ab.canal === "EMAIL" && situacaoEmail?.configurado
+              ? "“Enviar por e-mail” manda agora, pela sua caixa, depois de você confirmar. Se preferir mandar você mesmo, use “Abrir no meu e-mail” e depois registre o contato."
+              : ab.canal === "WHATSAPP" || ab.canal === "MENSAGEM"
+                ? "O WhatsApp abre a conversa com a mensagem pronta e só envia quando você clicar em Enviar no Inbox. É uma conversa por clique, com limite por dia."
+                : "O Dilon Zap não envia esta mensagem. Você envia pelo seu canal e depois registra aqui."}
+          </p>
+          {enviandoEmail && (
+            <ModalDeEnvioDeEmail
+              ab={ab}
+              paraInicial={a.decisorEmail ?? empresa.email ?? ""}
+              situacao={situacaoEmail}
+              onFechar={() => setEnviandoEmail(false)}
+              onEnviado={(texto) => {
+                setEnviandoEmail(false);
+                setAviso({ tipo: texto.includes("Atenção") ? "atencao" : "ok", texto });
+                atualizar();
+              }}
+              onErro={(e) => {
+                setEnviandoEmail(false);
+                falhou(e);
+              }}
+            />
+          )}
           {registrando && (
             <div className="grid gap-2 rounded-md bg-neutral-50 p-3 sm:grid-cols-3">
               <label>
@@ -607,6 +658,59 @@ function EditarEmpresa({ empresa, atualizar, setAviso, falhou }: { empresa: Dado
         Salvar dados da empresa
       </button>
     </details>
+  );
+}
+
+/** Confirmação do envio: mostra de onde sai, para quem, o assunto e o texto que será enviado. Só envia no clique. */
+function ModalDeEnvioDeEmail({ ab, paraInicial, situacao, onFechar, onEnviado, onErro }: { ab: Abordagem; paraInicial: string; situacao?: SituacaoEmail; onFechar: () => void; onEnviado: (texto: string) => void; onErro: (e?: string) => void }) {
+  const [para, setPara] = useState(paraInicial);
+  const [seguimento, setSeguimento] = useState(maisDias(3));
+  const [enviando, setEnviando] = useState(false);
+  const restantes = situacao ? situacao.limiteDiario - situacao.enviadosHoje : null;
+
+  async function enviar() {
+    setEnviando(true);
+    const r = await chamar(`/api/sdr/abordagens/${ab.id}/enviar-email`, "POST", { para: para.trim() || undefined, proximaAcao: seguimento ? "Fazer follow-up" : null, proximaAcaoEm: seguimento ? dataParaIso(seguimento) : null });
+    setEnviando(false);
+    if (!r.ok) return onErro(r.erro);
+    const d = r.dados as { para: string; crm?: { ok: boolean; motivo?: string } | null };
+    onEnviado(`E-mail enviado para ${d.para}.${d.crm ? (d.crm.ok ? " Registrado também no CRM." : ` Atenção: não foi para o CRM (${d.crm.motivo}).`) : ""}`);
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onFechar}>
+      <div className="bg-surface rounded-lg shadow-lg w-full max-w-xl max-h-[92vh] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold">Enviar este e-mail agora?</h3>
+        <p className="text-xs text-neutral-600">
+          Sai de <strong>{situacao?.de?.email ?? "sua caixa"}</strong>, em seu nome, com o texto exatamente como você aprovou. Se o texto não tiver aviso de descadastro, o sistema acrescenta um rodapé.
+          {restantes !== null && ` Restam ${restantes} envios hoje.`}
+        </p>
+        <label>
+          <span className={rotulo}>Para</span>
+          <input id="envio-para" type="email" value={para} onChange={(e) => setPara(e.target.value)} className={input} />
+        </label>
+        <label>
+          <span className={rotulo}>Assunto</span>
+          <input readOnly value={ab.assunto ?? ""} className={`${input} bg-neutral-50`} />
+        </label>
+        <label>
+          <span className={rotulo}>Texto</span>
+          <textarea readOnly value={ab.texto} rows={8} className={`${campo} bg-neutral-50`} />
+        </label>
+        <label>
+          <span className={rotulo}>Fazer follow-up em</span>
+          <input id="envio-followup" type="date" value={seguimento} onChange={(e) => setSeguimento(e.target.value)} className={input} />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button onClick={onFechar} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-800">
+            Cancelar
+          </button>
+          <button id="envio-confirmar" onClick={enviar} disabled={enviando || !para.trim()} className={botaoPrimario}>
+            {enviando ? "Enviando…" : "Enviar agora"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
