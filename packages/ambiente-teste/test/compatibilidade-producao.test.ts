@@ -113,11 +113,11 @@ describe("o SQL de referência do SDR", () => {
 
 describe("compatibilidade com o schema e o Postgres de produção", () => {
   let clienteAntigo = "";
-  const lerComCliente = async (fase: string) => {
+  const lerComCliente = async (fase: string, extra: Record<string, string> = {}) => {
     const { stdout } = await executar(process.execPath, [path.join(tmp, "verificar.cjs"), fase], {
       cwd: tmp,
       // NODE_PATH: o cliente gerado fora do repositório precisa achar o @prisma/client.
-      env: { ...process.env, CLIENTE_ANTIGO: clienteAntigo, URL_ANTES: urlDe(BANCO_ANTES), NODE_PATH: path.join(raiz, "node_modules") },
+      env: { ...process.env, CLIENTE_ANTIGO: clienteAntigo, URL_ANTES: urlDe(BANCO_ANTES), NODE_PATH: path.join(raiz, "node_modules"), ...extra },
     });
     return JSON.parse(stdout.trim().split("\n").pop()!) as Record<string, any>;
   };
@@ -155,6 +155,15 @@ const fase = process.argv[2];
     r.recursos = (await prisma.tenantRecurso.findMany({ where: { tenantId: t.id } })).map((x) => x.recurso);
     r.contatos = await prisma.contact.count();
     r.tenants = await prisma.tenant.count();
+  }
+  if (fase === "sdr-antigo") {
+    // O que o site de produção (código antigo) faria com o SDR depois do db push: ler, criar, editar e apagar empresa.
+    r.antes = await prisma.sdrEmpresa.count();
+    const comFilhas = await prisma.sdrEmpresa.findUnique({ where: { id: process.env.EMP } });
+    const nova = await prisma.sdrEmpresa.create({ data: { tenantId: process.env.TID, razaoSocial: "Criada pelo cliente antigo", chaveNome: "criada pelo cliente antigo" } });
+    await prisma.sdrEmpresa.update({ where: { id: nova.id }, data: { cidade: "Niteroi" } });
+    await prisma.sdrEmpresa.delete({ where: { id: comFilhas.id } });
+    r.depois = await prisma.sdrEmpresa.count();
   }
   console.log(JSON.stringify(r));
 })()
@@ -274,6 +283,164 @@ const fase = process.argv[2];
       assert.equal((await linhasSdr()).length, 1); // a da outra empresa não existia; a de tid segue
       assert.equal((await sql(BANCO_ANTES, substituir(docs("sdr-desativar-recurso.sql"), { tid }))).erro, null);
       assert.deepEqual(await linhasSdr(), []);
+    });
+  });
+
+  /**
+   * Ensaio do deploy: um banco que nasce com o schema de PRODUÇÃO (o do commit em produção), com dados, recebe o
+   * `prisma db push` do schema novo exatamente como será feito na VPS (sem --accept-data-loss), e depois roda o
+   * código novo, o rollback para o código antigo e a limpeza da empresa fictícia.
+   */
+  describe("ensaio do deploy (db push sobre o schema de produção)", () => {
+    const BANCO_ENSAIO = "dilonzap_ensaio";
+    const urlEnsaio = urlDe(BANCO_ENSAIO);
+    // A guarda do ambiente de teste recusa processo com DATABASE_URL diferente da do banco de teste, e isso não se enfraquece:
+    // o db push usa uma cópia do MESMO schema com a URL do banco do ensaio escrita no lugar do env("DATABASE_URL").
+    const ambienteDoPush = { ...process.env, npm_config_offline: "true", CHECKPOINT_DISABLE: "1" };
+    let schemaDoEnsaio = "";
+    let tidEnsaio = "";
+    let antesDoPush: Record<string, any> = {};
+
+    const consultar = async (banco: string, texto: string, valores: unknown[] = []) => {
+      const c = new pg.Client({ host: BANCO_TESTE.host, port: BANCO_TESTE.porta, user: BANCO_TESTE.usuario, password: senha, database: banco });
+      await c.connect();
+      try {
+        return (await c.query(texto, valores)).rows as Record<string, any>[];
+      } finally {
+        await c.end();
+      }
+    };
+    const push = async () => {
+      const r = await executar(process.execPath, [cliPrisma, "db", "push", "--skip-generate", "--schema", schemaDoEnsaio], { cwd: tmp, env: ambienteDoPush, maxBuffer: 32 * 1024 * 1024, timeout: 120_000 });
+      return `${r.stdout}\n${r.stderr}`;
+    };
+    const diff = (de: string, para: string[]) => prismaCliComAmbiente(["migrate", "diff", "--from-url", de, ...para, "--exit-code"]);
+    const prismaCliComAmbiente = async (args: string[]) => (await executar(process.execPath, [cliPrisma, ...args], { cwd: tmp, env: ambienteDoPush, maxBuffer: 32 * 1024 * 1024, timeout: 120_000 })).stdout;
+    const totais = async () => (await consultar(BANCO_ENSAIO, `SELECT (SELECT count(*) FROM "Contact")::int AS contatos, (SELECT count(*) FROM "Negociacao")::int AS negociacoes, (SELECT count(*) FROM "Conversation")::int AS conversas, (SELECT count(*) FROM "Message")::int AS mensagens, (SELECT count(*) FROM "ScheduledMessage")::int AS agendadas, (SELECT count(*) FROM "SdrSupressao")::int AS supressoes`))[0];
+
+    before(async () => {
+      const original = fs.readFileSync(schemaAtual, "utf8");
+      assert.equal(original.split('env("DATABASE_URL")').length, 2);
+      schemaDoEnsaio = path.join(tmp, "schema-ensaio.prisma");
+      fs.writeFileSync(schemaDoEnsaio, original.replace('env("DATABASE_URL")', JSON.stringify(urlEnsaio)));
+      await prisma.$executeRawUnsafe(`drop database if exists ${BANCO_ENSAIO} with (force)`);
+      await prisma.$executeRawUnsafe(`create database ${BANCO_ENSAIO}`);
+      const ddlAntigo = await prismaCli(["migrate", "diff", "--from-empty", "--to-schema-datamodel", antigo, "--script"], tmp);
+      assert.equal((await sql(BANCO_ENSAIO, ddlAntigo)).erro, null);
+      const semeado = await lerComCliente("semear", { URL_ANTES: urlEnsaio });
+      tidEnsaio = semeado.tid;
+      antesDoPush = await lerComCliente("ler", { URL_ANTES: urlEnsaio });
+    });
+    after(async () => {
+      await prisma.$executeRawUnsafe(`drop database if exists ${BANCO_ENSAIO} with (force)`);
+    });
+
+    test("o banco do ensaio está no schema de produção: não tem as tabelas novas", async () => {
+      const r = await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM information_schema.tables WHERE table_name IN ('SdrAcompanhamento','SdrAbordagem','SdrInteracao','SdrIaConfig','SdrIaUso','SdrIaCache')`);
+      assert.equal(r[0].n, 0);
+    });
+    test("o db push, sem aceitar perda de dados, termina em sincronia e sem alertas", async () => {
+      const saida = await push();
+      assert.match(saida, /now in sync/i);
+      assert.equal(/data loss|warning|will be dropped|--accept-data-loss/i.test(saida), false, saida);
+    });
+    test("o que o db push aplicou é idêntico ao SQL de referência (mesmo schema do banco que recebeu o SQL à mão)", async () => {
+      assert.match(await diff(urlEnsaio, ["--to-url", urlDe(BANCO_ANTES)]), /No difference detected/);
+    });
+    test("depois do push, o banco bate com o schema novo e um segundo push não tem nada a fazer", async () => {
+      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]), /No difference detected/);
+      assert.match(await push(), /already in sync/i);
+    });
+    test("os dados que já existiam seguem iguais", async () => {
+      assert.deepEqual(await lerComCliente("ler", { URL_ANTES: urlEnsaio }), antesDoPush);
+    });
+    test("as 6 tabelas novas nasceram vazias e todas têm tenantId", async () => {
+      const r = await consultar(BANCO_ENSAIO, `SELECT table_name, bool_or(column_name = 'tenantId') AS tem_tenant FROM information_schema.columns WHERE table_name IN ('SdrAcompanhamento','SdrAbordagem','SdrInteracao','SdrIaConfig','SdrIaUso','SdrIaCache') GROUP BY table_name ORDER BY 1`);
+      assert.equal(r.length, 6);
+      assert.equal(r.every((x) => x.tem_tenant === true), true);
+      const n = await consultar(BANCO_ENSAIO, `SELECT (SELECT count(*) FROM "SdrAcompanhamento") + (SELECT count(*) FROM "SdrAbordagem") + (SELECT count(*) FROM "SdrInteracao") + (SELECT count(*) FROM "SdrIaConfig") + (SELECT count(*) FROM "SdrIaUso") + (SELECT count(*) FROM "SdrIaCache") AS n`);
+      assert.equal(Number(n[0].n), 0);
+    });
+
+    test("o código novo faz o fluxo inteiro com a empresa fictícia e com uma de controle, sem criar contato nem negociação", async () => {
+      const antes = await totais();
+      const { stdout } = await executar(process.execPath, ["--import", "tsx", path.join(aqui, "ensaio-pos-push.ts")], {
+        cwd: path.resolve(aqui, ".."),
+        env: { ...process.env, URL_ENSAIO: urlEnsaio, ENSAIO_TENANT: tidEnsaio },
+        timeout: 120_000,
+      });
+      const r = JSON.parse(stdout.trim().split("\n").pop()!);
+      assert.equal(r.erro, undefined, r.erro);
+      // IA desligada: a tentativa só registra a recusa, sem chamar ninguém.
+      assert.deepEqual([r.fict.iaOk, r.fict.iaMotivo], [false, "desligada"]);
+      assert.deepEqual(await totais(), antes);
+      const f = await consultar(BANCO_ENSAIO, `SELECT (SELECT etapa::text FROM "SdrAcompanhamento" WHERE "empresaId" = $1) AS etapa, (SELECT count(*)::int FROM "SdrAbordagem" WHERE "empresaId" = $1) AS abordagens, (SELECT count(*)::int FROM "SdrInteracao" WHERE "empresaId" = $1) AS interacoes`, [r.fict.empresaId]);
+      assert.deepEqual([f[0].etapa, f[0].abordagens, f[0].interacoes > 3], ["RESPONDEU", 1, true]);
+      (globalThis as Record<string, unknown>).__ensaio = r;
+    });
+
+    test("a limpeza remove a empresa fictícia e tudo que nasceu dela, e não encosta na de controle nem em contatos, negociações e bloqueios", async () => {
+      const r = (globalThis as Record<string, any>).__ensaio;
+      const contagem = (empresaId: string) =>
+        consultar(
+          BANCO_ENSAIO,
+          `SELECT (SELECT count(*)::int FROM "SdrEmpresa" WHERE id = $1) AS empresa, (SELECT count(*)::int FROM "SdrAcompanhamento" WHERE "empresaId" = $1) AS acomp, (SELECT count(*)::int FROM "SdrAbordagem" WHERE "empresaId" = $1) AS abord, (SELECT count(*)::int FROM "SdrInteracao" WHERE "empresaId" = $1) AS inter, (SELECT count(*)::int FROM "SdrImportacaoLinha" WHERE "empresaId" = $1) AS linhas`,
+          [empresaId]
+        ).then((x) => x[0]);
+      const controleAntes = await contagem(r.real.empresaId);
+      const totaisAntes = await totais();
+      const iaAntes = (await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrIaUso"`))[0].n;
+      assert.equal(iaAntes, 2); // uma recusa por empresa (a fictícia e a de controle)
+
+      const desde = new Date(Date.now() - 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+      const roteiro = substituir(docs("sdr-limpar-teste.sql"), { tid: tidEnsaio, marcador: "Zz Teste Sdr Ensaio", desde });
+      assert.equal((await sql(BANCO_ENSAIO, roteiro)).erro, null);
+
+      assert.deepEqual(await contagem(r.fict.empresaId), { empresa: 0, acomp: 0, abord: 0, inter: 0, linhas: 0 });
+      assert.deepEqual(await contagem(r.real.empresaId), controleAntes);
+      assert.deepEqual(await totais(), totaisAntes);
+      const imp = await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrImportacao" WHERE "tenantId" = $1`, [tidEnsaio]);
+      assert.equal(imp[0].n, 1); // só a da empresa de controle
+      // Como a IA ficou desligada nas duas, as duas recusas entram na limpeza do horário (é o que se espera no teste real, com uma empresa só).
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrIaUso"`))[0].n, 0);
+    });
+    test("a limpeza não roda se o marcador não existir, se houver duas empresas com ele, ou se a importação não for um cadastro manual", async () => {
+      const r = (globalThis as Record<string, any>).__ensaio;
+      const desde = new Date(Date.now() - 3_600_000).toISOString().slice(0, 19).replace("T", " ");
+      const roda = (marcador: string, tid = tidEnsaio) => sql(BANCO_ENSAIO, substituir(docs("sdr-limpar-teste.sql"), { tid, marcador, desde }));
+      assert.match(String((await roda("Nome que não existe")).erro), /division by zero/);
+      assert.match(String((await roda("Empresa Real De Controle", "outra-empresa")).erro), /division by zero/);
+      // Duas empresas com o mesmo nome: para sem apagar nada.
+      await consultar(BANCO_ENSAIO, `INSERT INTO "SdrEmpresa" (id, "tenantId", "nomeFantasia", "chaveNome", "updatedAt") VALUES ('dup-1', $1, 'Nome Repetido', 'repetido a', now()), ('dup-2', $1, 'Nome Repetido', 'repetido b', now())`, [tidEnsaio]);
+      assert.match(String((await roda("Nome Repetido")).erro), /division by zero/);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrEmpresa" WHERE "nomeFantasia" = 'Nome Repetido'`))[0].n, 2);
+      // Importação grande (não é cadastro manual): não pode ser apagada junto.
+      await consultar(BANCO_ENSAIO, `UPDATE "SdrImportacao" SET "totalLinhas" = 40, "nomeArquivo" = 'lista-real.csv' WHERE "tenantId" = $1`, [tidEnsaio]);
+      assert.match(String((await roda("Empresa Real De Controle")).erro), /division by zero/);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrEmpresa" WHERE "nomeFantasia" = 'Empresa Real De Controle'`))[0].n, 1);
+      assert.equal((await consultar(BANCO_ENSAIO, `SELECT count(*)::int AS n FROM "SdrImportacao" WHERE "tenantId" = $1`, [tidEnsaio]))[0].n, 1);
+      await consultar(BANCO_ENSAIO, `DELETE FROM "SdrEmpresa" WHERE id IN ('dup-1','dup-2')`);
+      assert.ok(r);
+    });
+
+    test("rollback da aplicação: o código antigo segue lendo, criando, editando e apagando empresa, inclusive uma com dados nas tabelas novas, e o banco não muda", async () => {
+      const semeadas = await sql(
+        BANCO_ENSAIO,
+        `INSERT INTO "SdrEmpresa" (id, "tenantId", "razaoSocial", "chaveNome", "updatedAt") VALUES ('ens-emp', '${tidEnsaio}', 'Empresa Ensaio', 'empresa ensaio', now());
+         INSERT INTO "SdrAcompanhamento" (id, "tenantId", "empresaId", "updatedAt") VALUES ('ens-ac', '${tidEnsaio}', 'ens-emp', now());
+         INSERT INTO "SdrAbordagem" (id, "tenantId", "empresaId", produto, canal, texto, "updatedAt") VALUES ('ens-ab', '${tidEnsaio}', 'ens-emp', 'DILON_ZAP', 'EMAIL', 'texto', now());
+         INSERT INTO "SdrInteracao" (id, "tenantId", "empresaId", tipo) VALUES ('ens-in', '${tidEnsaio}', 'ens-emp', 'NOTA');`
+      );
+      assert.equal(semeadas.erro, null);
+      const esquemaAntes = await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]);
+      const r = await lerComCliente("sdr-antigo", { URL_ANTES: urlEnsaio, TID: tidEnsaio, EMP: "ens-emp" });
+      assert.equal(r.erro, undefined, r.erro);
+      assert.equal(r.depois, r.antes); // criou uma e apagou outra
+      const sobra = await consultar(BANCO_ENSAIO, `SELECT (SELECT count(*)::int FROM "SdrAcompanhamento" WHERE id = 'ens-ac') + (SELECT count(*)::int FROM "SdrAbordagem" WHERE id = 'ens-ab') + (SELECT count(*)::int FROM "SdrInteracao" WHERE id = 'ens-in') AS n`);
+      assert.equal(sobra[0].n, 0); // a cascata do banco cuidou das tabelas que o código antigo nem conhece
+      assert.match(esquemaAntes, /No difference detected/);
+      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]), /No difference detected/);
+      assert.deepEqual((await lerComCliente("ler", { URL_ANTES: urlEnsaio })).recursos, antesDoPush.recursos);
     });
   });
 });
