@@ -234,14 +234,29 @@ const DESCRICAO_DO_PRODUTO: Record<Produto, string> = {
   DILON_FACILITIES: "Dilon Facilities é uma solução para empresas de serviços terceirizados, como limpeza e conservação, que ajuda a comprovar a execução dos serviços, acompanhar a produtividade operacional e centralizar as ocorrências.",
 };
 
+const PAGINA_DO_PRODUTO: Partial<Record<Produto, string>> = { DILON_ZAP: "https://dilontech.com.br/zap" };
+
+/** "Felipe (Dilon Tech)" vira "Felipe": a mensagem já diz de que empresa é. */
+export function primeiroNome(nome: string) {
+  return nome.replace(/\([^)]*\)/g, " ").trim().split(/\s+/)[0] || nome.trim();
+}
+
 /** Texto neutro: usa só o que está cadastrado e não afirma nada sobre a empresa. */
 export function modeloNeutro(p: { produto: Produto; canal: "EMAIL" | "LIGACAO" | "MENSAGEM" | "WHATSAPP" | "OUTRO"; empresa: string; decisor?: string | null; autor: string }) {
   const nome = NOME_DO_PRODUTO[p.produto];
+  const pagina = PAGINA_DO_PRODUTO[p.produto];
+  p = { ...p, autor: primeiroNome(p.autor) };
   const saudacao = p.decisor ? `Olá, ${p.decisor.split(" ")[0]}` : "Olá";
   if (p.canal === "LIGACAO") {
     return {
       assunto: null,
       texto: `Roteiro de ligação — ${nome}\n\n1. Apresentação: "${saudacao}, aqui é ${p.autor}, da Dilon Tech. Falo com quem cuida de ${p.produto === "DILON_ZAP" ? "o atendimento" : "a operação"} da ${p.empresa}?"\n2. Motivo: "Estamos apresentando o ${nome} a empresas do seu segmento e queria entender se faz sentido conversarmos."\n3. Pergunta de diagnóstico: "Hoje, como vocês ${p.produto === "DILON_ZAP" ? "organizam o atendimento e o acompanhamento de clientes" : "acompanham a execução dos serviços e as ocorrências"}?"\n4. Próximo passo: propor 15 minutos de conversa ou o envio de um material.\n5. Se a pessoa pedir para não ser contatada: agradecer, encerrar e registrar "Não contatar".`,
+    };
+  }
+  if ((p.canal === "WHATSAPP" || p.canal === "MENSAGEM") && p.produto === "DILON_ZAP" && pagina) {
+    return {
+      assunto: null,
+      texto: `${saudacao}, tudo bem? Aqui é o ${p.autor}, da Dilon Tech.\n\nCriamos o ${nome}: junta as conversas de WhatsApp da equipe em um só lugar, com funil de vendas e lembretes de retorno, para nenhum cliente ficar sem resposta.\n\nAcho que pode fazer sentido para a ${p.empresa}. Veja: ${pagina}\n\nTopa uma demonstração de 15 minutos? Se preferir não receber mensagens nossas, é só avisar.`,
     };
   }
   if (p.canal === "WHATSAPP" || p.canal === "MENSAGEM") {

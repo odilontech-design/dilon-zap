@@ -288,6 +288,14 @@ describe("WhatsApp: uma conversa por clique, sem envio pelo sistema", () => {
     assert.match(m.texto, /Zap Alvo/);
     assert.match(m.texto, /não receber mensagens/);
     assert.equal(m.texto.length < 400, true);
+    assert.match(m.texto, /https:\/\/dilontech\.com\.br\/zap/);
+    assert.match(m.texto, /Aqui é o Felipe,/);
+  });
+  test("o nome do autor entra só com o primeiro nome, sem o que vem entre parênteses", async () => {
+    const m = await W().criarAbordagem(emp, { produto: "DILON_ZAP", canal: "WHATSAPP", texto: "x", modelo: true }, { id: "u-teste", name: "Felipe (Dilon Tech)" });
+    assert.match(m.texto, /Aqui é o Felipe,/);
+    assert.doesNotMatch(m.texto, /\(Dilon Tech\)/);
+    assert.equal(m.texto.length < 400, true);
   });
   test("abre a conversa com a mensagem aprovada, o telefone certo e o nome, e registra a abertura", async () => {
     const id = await aprovada(t, emp, "WHATSAPP", "Olá, tudo bem? Posso te apresentar o Dilon Zap?");
