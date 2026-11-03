@@ -129,7 +129,7 @@ export async function enviarEmailDaAbordagem(tenantId: string, abordagemId: stri
 /* ------------------------------------------------------------- WhatsApp ---- */
 
 export type LimitesDoWhatsapp = { limiteDiario: number; intervaloMinimoSegundos: number };
-const PREFIXO_ABERTURA = "conversa aberta no WhatsApp";
+export const PREFIXO_ABERTURA = "conversa aberta no WhatsApp";
 
 /**
  * Autoriza abrir UMA conversa no Inbox com a mensagem aprovada. Não envia nada e não fala com o WhatsApp: devolve o

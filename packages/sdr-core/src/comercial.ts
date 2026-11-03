@@ -247,7 +247,7 @@ export function modeloNeutro(p: { produto: Produto; canal: "EMAIL" | "LIGACAO" |
   if (p.canal === "WHATSAPP" || p.canal === "MENSAGEM") {
     return { assunto: null, texto: `${saudacao}, aqui é ${p.autor}, da Dilon Tech. Estamos apresentando o ${nome} a empresas como a ${p.empresa}. Posso te explicar em 15 minutos? Se preferir não receber mensagens nossas, é só avisar.` };
   }
-  const corpo = `${saudacao},\n\nSou${p.autor}, da Dilon Tech. ${DESCRICAO_DO_PRODUTO[p.produto]}\n\nGostaria de entender se faz sentido conversarmos sobre a ${p.empresa}. Posso explicar em 15 minutos, no horário que for melhor para você?\n\nSe preferir não receber contato nosso, é só responder avisando que removemos o cadastro.\n\n${p.autor}\nDilon Tech`;
+  const corpo = `${saudacao},\n\nSou ${p.autor}, da Dilon Tech. ${DESCRICAO_DO_PRODUTO[p.produto]}\n\nGostaria de entender se faz sentido conversarmos sobre a ${p.empresa}. Posso explicar em 15 minutos, no horário que for melhor para você?\n\nSe preferir não receber contato nosso, é só responder avisando que removemos o cadastro.\n\n${p.autor}\nDilon Tech`;
   return { assunto: p.canal === "EMAIL" ? `${nome} — uma conversa rápida com a ${p.empresa}?` : null, texto: corpo };
 }
 

@@ -759,7 +759,7 @@ describe("guardas: o SDR não envia nada e não toca no WhatsApp", () => {
   });
   test("o CRM só é tocado por crm.ts e pelas rotas que o chamam, e nada disso usa o WhatsApp", () => {
     const comCrm = codigoDoSdr().filter((p) => /prisma\.(contact|negociacao|funil|stage)\b|criarNegociacao/.test(fs.readFileSync(p, "utf8"))).map(rel);
-    assert.deepEqual(comCrm.sort(), ["apps/web/app/api/sdr/abordagens/[id]/contato/route.ts", "apps/web/app/api/sdr/abordagens/[id]/enviar-email/route.ts", "apps/web/app/api/sdr/empresas/[id]/converter/route.ts", "apps/web/app/api/sdr/empresas/[id]/resultado/route.ts", "apps/web/lib/sdr/crm.ts"].sort());
+    assert.deepEqual(comCrm.sort(), ["apps/web/app/api/sdr/abordagens/[id]/contato/route.ts", "apps/web/app/api/sdr/abordagens/[id]/enviar-email/route.ts", "apps/web/app/api/sdr/empresas/[id]/converter/route.ts", "apps/web/app/api/sdr/fila/resultados/route.ts", "apps/web/app/api/sdr/empresas/[id]/resultado/route.ts", "apps/web/lib/sdr/crm.ts"].sort());
   });
   test("a ponte com o CRM só procura e cria contato: nunca altera nem apaga", () => {
     const t = fs.readFileSync(path.join(raiz, "apps/web/lib/sdr/crm.ts"), "utf8");

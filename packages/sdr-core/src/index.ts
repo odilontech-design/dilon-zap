@@ -36,3 +36,6 @@ export type { EtapaComercial, VisaoDaCentral, Produto, Prioridade } from "./cons
 
 export { RODAPE_DE_DESCADASTRO, corpoDoEmail, envioDeEmailSchema } from "./canais";
 export type { EnviadorDeEmail, MensagemDeEmail, LimitesDoWhatsapp } from "./canais";
+
+export { filtroDaFilaSchema, preparoSchema, resultadoEmLoteSchema, ETAPAS_EM_LOTE, FILA_PADRAO, FILA_MAXIMA } from "./fila-diaria";
+export type { EstadoNaFila } from "./fila-diaria";

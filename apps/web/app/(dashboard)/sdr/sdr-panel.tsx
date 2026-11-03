@@ -6,6 +6,7 @@ import { PORTES, ROTULO_PORTE, ROTULO_STATUS_CAMPANHA, STATUS_CAMPANHA, UFS } fr
 import { chamar, fetcher } from "../receber/formatos";
 import { BloqueiosPanel } from "./bloqueios-panel";
 import { EmpresasPanel, type FiltroInicial } from "./empresas-panel";
+import { FilaPanel } from "./fila-panel";
 import { HojePanel } from "./hoje-panel";
 import { IaPanel } from "./ia-panel";
 import { ImportacoesPanel } from "./importacoes-panel";
@@ -39,7 +40,7 @@ const CORES_STATUS: Record<Status, string> = {
 
 const paraLista = (texto: string) => [...new Set(texto.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))];
 
-type Aba = "hoje" | "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios" | "ia";
+type Aba = "hoje" | "fila" | "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios" | "ia";
 
 export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
   const [aba, setAba] = useState<Aba>("hoje");
@@ -81,6 +82,7 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
 
       <div className="flex gap-1 border-b border-neutral-200 overflow-x-auto" role="tablist">
         {aba_("hoje", "Meu Comercial de Hoje")}
+        {aba_("fila", "Fila do dia")}
         {aba_("empresas", "Prospecção")}
         {aba_("campanhas", `Campanhas ${campanhas.data ? `(${listaDeCampanhas.length})` : ""}`)}
         {aba_("perfis", `Perfis de cliente ${perfis.data ? `(${listaDePerfis.length})` : ""}`)}
@@ -89,8 +91,10 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
         {aba_("ia", "IA")}
       </div>
 
+      {aba === "fila" && <FilaPanel podeEscrever={podeEscrever} campanhas={listaDeCampanhas} />}
       {aba === "hoje" && (
         <HojePanel
+          abrirFila={() => setAba("fila")}
           podeEscrever={podeEscrever}
           abrirCentral={(filtro) => {
             setFiltroEmpresas(filtro);

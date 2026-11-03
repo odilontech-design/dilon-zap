@@ -16,6 +16,7 @@ type Item = {
   comercial: { etapa: EtapaComercial; produto: string | null; prioridade: string; proximaAcao: string | null; proximaAcaoEm: string | null; decisorNome: string | null; decisorCargo: string | null; abordagem: string | null };
 };
 type Bloco = { total: number; itens: Item[] };
+type Resumo = { prontas: number; aRevisar: number; aPreparar: number; contatosRegistradosHoje: number; whatsapp: { limiteDiario: number; restantesHoje: number } };
 type Hoje = Record<"prioritarias" | "decisoresAIdentificar" | "abordagensPendentes" | "contatosARealizar" | "followUpsDeHoje" | "reunioes" | "oportunidades", Bloco>;
 
 const BLOCOS: { id: keyof Hoje; titulo: string; vazio: string; filtro: FiltroInicial }[] = [
@@ -29,8 +30,9 @@ const BLOCOS: { id: keyof Hoje; titulo: string; vazio: string; filtro: FiltroIni
 ];
 
 /** A tela para começar o dia: o que fazer agora, sem navegar por várias áreas. */
-export function HojePanel({ podeEscrever, abrirCentral }: { podeEscrever: boolean; abrirCentral: (f: FiltroInicial) => void }) {
+export function HojePanel({ podeEscrever, abrirCentral, abrirFila }: { podeEscrever: boolean; abrirCentral: (f: FiltroInicial) => void; abrirFila: () => void }) {
   const { data, error, mutate } = useSWR<Hoje>("/api/sdr/comercial/hoje", fetcher, { refreshInterval: 20_000, keepPreviousData: true });
+  const resumo = useSWR<Resumo>("/api/sdr/fila/resumo", fetcher, { refreshInterval: 20_000, keepPreviousData: true });
   const [aberta, setAberta] = useState<string | null>(null);
   const hoje = hojeEmBrasilia();
 
@@ -40,6 +42,16 @@ export function HojePanel({ podeEscrever, abrirCentral }: { podeEscrever: boolea
 
   return (
     <div className="flex flex-col gap-4">
+      {resumo.data && resumo.data.prontas + resumo.data.aRevisar + resumo.data.aPreparar > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-neutral-200 bg-surface px-4 py-3">
+          <p className="text-sm text-neutral-700">
+            <span className="font-medium">Fila do dia:</span> {resumo.data.prontas} pronta(s) para contatar, {resumo.data.aRevisar} para revisar e {resumo.data.aPreparar} para preparar. {resumo.data.contatosRegistradosHoje} contato(s) registrado(s) hoje · WhatsApp: restam {resumo.data.whatsapp.restantesHoje} de {resumo.data.whatsapp.limiteDiario}.
+          </p>
+          <button onClick={abrirFila} className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90">
+            Abrir a fila do dia
+          </button>
+        </div>
+      )}
       {vazio && (
         <div className="rounded-lg border border-neutral-200 bg-surface px-4 py-6 text-sm text-neutral-600">
           <p className="font-medium">Ainda não há empresas para prospectar.</p>
