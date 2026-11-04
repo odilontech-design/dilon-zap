@@ -3,7 +3,7 @@
  * (mesmo padrão dos outros *.test-manual.ts do repositório). Sai com código 1 se algo falhar.
  */
 import assert from "node:assert/strict";
-import { acaoDeSincronizacao, decidirSuspensao, ERP_PLANOS, novoTotalDaAssinatura, PLANOS_ERP, proximoVencimento, reaisParaCentavos, sugerirCondicoes } from "./erp-regras";
+import { MODULOS_DO_PLANO, MODULOS_ERP, resumoDosModulos, acaoDeSincronizacao, decidirSuspensao, ERP_PLANOS, novoTotalDaAssinatura, PLANOS_ERP, proximoVencimento, reaisParaCentavos, sugerirCondicoes } from "./erp-regras";
 
 const agora = new Date("2026-10-20T12:00:00Z");
 const fatura = (status: string, dueDate: string) => ({ status, dueDate: new Date(`${dueDate}T00:00:00Z`) });
@@ -65,5 +65,13 @@ ok("condições sugeridas para o termo", () => {
   assert.deepEqual(c, { plano: "Profissional", valorMensalCents: 39_700, valorTabelaCents: 59_700, garantiaMeses: 12, primeiraCobranca: "2026-11-15", fimDoTeste: "2026-11-14", diaVencimento: 15 });
   assert.equal(sugerirCondicoes({ plano: "SOB_MEDIDA", mensalCents: 80_000 }, null, new Date("2026-11-04T12:00:00Z")).valorTabelaCents, 80_000, "sob medida usa o próprio valor como tabela");
   assert.equal(sugerirCondicoes({ plano: "ESSENCIAL", mensalCents: 29_700 }, 31, new Date("2026-11-04T12:00:00Z")).diaVencimento, 10, "dia inválido cai no padrão");
+});
+ok("módulos por plano", () => {
+  for (const p of PLANOS_ERP) for (const m of MODULOS_DO_PLANO[p]) assert.ok(MODULOS_ERP.includes(m), `${p}:${m}`);
+  assert.ok(MODULOS_DO_PLANO.ESSENCIAL.length < MODULOS_DO_PLANO.PROFISSIONAL.length && MODULOS_DO_PLANO.PROFISSIONAL.length < MODULOS_DO_PLANO.ESCRITORIO_PLUS.length);
+  assert.equal(resumoDosModulos(null), "Todos os módulos");
+  assert.equal(resumoDosModulos([...MODULOS_ERP]), "Todos os módulos");
+  assert.equal(resumoDosModulos([]), "Só o núcleo (nenhum módulo opcional)");
+  assert.equal(resumoDosModulos(["DOCUMENTOS", "FINANCEIRO"]), "2 de 7: Financeiro, Documentos");
 });
 console.log(`\n${n} verificações, todas passaram.`);

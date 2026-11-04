@@ -48,6 +48,7 @@ export async function GET() {
       aoVivo: Boolean(v),
       termo: v?.termo ?? null,
       aviso: v?.aviso ?? null,
+      modulos: v ? v.modulos : undefined,
     };
   });
 

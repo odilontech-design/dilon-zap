@@ -107,3 +107,38 @@ export function sugerirCondicoes(erp: { plano: ErpPlano; mensalCents: number }, 
     diaVencimento: dia,
   };
 }
+
+// ── Módulos por plano ────────────────────────────────────────────────────────
+// Os mesmos nomes que o ERP aceita (src/lib/modulos.ts de lá; ele recusa nomes desconhecidos).
+// Rotinas, tarefas, empresas-cliente e equipe são o núcleo e ficam sempre incluídos.
+
+export const MODULOS_ERP = ["FINANCEIRO", "FISCAL", "CONTABILIDADE", "PESSOAL", "DOCUMENTOS", "PRODUTIVIDADE", "HONORARIOS"] as const;
+export type ModuloErp = (typeof MODULOS_ERP)[number];
+
+export const ROTULO_MODULO_ERP: Record<ModuloErp, string> = {
+  FINANCEIRO: "Financeiro (BPO das empresas-cliente)",
+  FISCAL: "Fiscal",
+  CONTABILIDADE: "Contabilidade",
+  PESSOAL: "Pessoal",
+  DOCUMENTOS: "Documentos",
+  PRODUTIVIDADE: "Produtividade",
+  HONORARIOS: "Financeiro do escritório (honorários)",
+};
+
+/**
+ * Módulos que cada plano inclui por padrão. É uma decisão comercial: ajuste aqui. O Super Admin
+ * pode sempre marcar ou desmarcar módulos de um escritório específico (ex.: dar tudo a um cliente fundador).
+ */
+export const MODULOS_DO_PLANO: Record<ErpPlano, readonly ModuloErp[]> = {
+  ESSENCIAL: ["FINANCEIRO", "DOCUMENTOS", "PRODUTIVIDADE"],
+  PROFISSIONAL: ["FINANCEIRO", "DOCUMENTOS", "PRODUTIVIDADE", "HONORARIOS", "FISCAL", "PESSOAL"],
+  ESCRITORIO_PLUS: MODULOS_ERP,
+  SOB_MEDIDA: MODULOS_ERP,
+};
+
+/** Rótulo curto da seleção: "Todos os módulos" ou "3 de 7: Financeiro, …". */
+export function resumoDosModulos(modulos: readonly string[] | null): string {
+  if (modulos === null || MODULOS_ERP.every((m) => modulos.includes(m))) return "Todos os módulos";
+  if (modulos.length === 0) return "Só o núcleo (nenhum módulo opcional)";
+  return `${modulos.length} de ${MODULOS_ERP.length}: ${MODULOS_ERP.filter((m) => modulos.includes(m)).map((m) => ROTULO_MODULO_ERP[m].split(" (")[0]).join(", ")}`;
+}

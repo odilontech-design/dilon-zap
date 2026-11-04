@@ -37,6 +37,9 @@ export type ErpEscritorio = {
   uso: ErpUso;
   termo: ErpTermo;
   aviso: ErpAviso | null;
+  /** Módulos contratados; null = todos. */
+  modulos: string[] | null;
+  marca: { cor: string | null; temLogo: boolean };
 };
 
 export class ErpIndisponivelError extends Error {
@@ -100,6 +103,7 @@ export async function atualizarEscritorio(
     nome: string; limiteEmpresas: number | null; limiteUsuarios: number | null; ativo: boolean; motivo: string;
     termo: { versao: string; prazoEm: string; condicoes: ErpCondicoes } | null;
     aviso: { titulo: string; texto: string; tom: ErpTomAviso; ate?: string | null } | null;
+    modulos: string[] | null;
   }>,
 ): Promise<ErpEscritorio> {
   const r = await chamar<{ escritorio: ErpEscritorio }>("PATCH", `/escritorios/${encodeURIComponent(zapTenantId)}`, mudancas);

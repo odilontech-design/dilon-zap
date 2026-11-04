@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import { ERP_PLANOS, novoTotalDaAssinatura, PLANOS_ERP, sugerirCondicoes, type ErpPlano } from "@/lib/erp-regras";
+import { ERP_PLANOS, MODULOS_DO_PLANO, MODULOS_ERP, novoTotalDaAssinatura, PLANOS_ERP, sugerirCondicoes, type ErpPlano } from "@/lib/erp-regras";
 import { atualizarEscritorio, consultarEscritorio, criarEscritorio, erpConfigurado, ErpIndisponivelError, redefinirSenha, vincularEscritorio, versoesDeTermo } from "@/lib/erp-contabilidade";
 import { guardarUso, sincronizarErp } from "@/lib/erp-sync";
 
@@ -68,6 +68,8 @@ const corpoSchema = z.discriminatedUnion("acao", [
     ate: dia.optional().or(z.literal("")),
   }),
   z.object({ acao: z.literal("retirar-aviso") }),
+  /** Lista de módulos do escritório; null = todos. */
+  z.object({ acao: z.literal("modulos"), modulos: z.array(z.enum(MODULOS_ERP)).nullable() }),
 ]);
 
 const falha = (e: unknown) =>
@@ -83,7 +85,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (erp && erpConfigurado()) {
     [versoes, vivo] = await Promise.all([versoesDeTermo().catch(() => null), consultarEscritorio(params.id).catch(() => null)]);
   }
-  return NextResponse.json({ configurado: erpConfigurado(), erp, planos: ERP_PLANOS, sugestaoDeCondicoes: sugestao, versoesDeTermo: versoes, termo: vivo?.termo ?? null, aviso: vivo?.aviso ?? null });
+  return NextResponse.json({ configurado: erpConfigurado(), erp, planos: ERP_PLANOS, sugestaoDeCondicoes: sugestao, versoesDeTermo: versoes, termo: vivo?.termo ?? null, aviso: vivo?.aviso ?? null, modulos: vivo ? vivo.modulos : undefined, modulosDoPlano: MODULOS_DO_PLANO });
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -106,7 +108,9 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         zapTenantId: tenant.id, nome: d.escritorioNome, slug: d.codigo || undefined, adminNome: d.adminNome, adminEmail: d.adminEmail,
         limiteEmpresas: d.limiteEmpresas, limiteUsuarios: d.limiteUsuarios,
       });
-      const e = r.escritorio;
+      let e = r.escritorio;
+      // Escritório novo nasce só com os módulos do plano; o que já existia (vincular) fica como está.
+      if (r.criado && !d.vincularCodigo) e = await atualizarEscritorio(tenant.id, { modulos: [...MODULOS_DO_PLANO[d.plano]] });
       await prisma.$transaction(async (tx) => {
         await tx.tenantErpContabilidade.create({
           data: { tenantId: tenant.id, escritorioId: e.id, escritorioSlug: e.slug, loginUrl: e.urlLogin, plano: d.plano, mensalCents: d.mensalCents, limiteEmpresas: d.limiteEmpresas, limiteUsuarios: d.limiteUsuarios },
@@ -191,6 +195,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const e = await atualizarEscritorio(tenant.id, { aviso: { titulo: d.titulo, texto: d.texto, tom: d.tom, ate: d.ate || null } });
       await auditar("erp.publicar-aviso", { titulo: d.titulo, tom: d.tom, ate: d.ate || null });
       return NextResponse.json({ aviso: e.aviso });
+    }
+    if (d.acao === "modulos") {
+      const e = await atualizarEscritorio(tenant.id, { modulos: d.modulos });
+      await auditar("erp.modulos", { modulos: d.modulos === null ? "todos" : d.modulos.join(",") || "nenhum" });
+      return NextResponse.json({ modulos: e.modulos });
     }
     if (d.acao === "retirar-aviso") {
       await atualizarEscritorio(tenant.id, { aviso: null });

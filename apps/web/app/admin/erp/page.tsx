@@ -3,7 +3,7 @@
 import Link from "next/link";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
-import { ERP_PLANOS, type ErpPlano } from "@/lib/erp-regras";
+import { ERP_PLANOS, resumoDosModulos, type ErpPlano } from "@/lib/erp-regras";
 
 /**
  * Painel gerencial do ERP Dilon Contabilidade: todos os escritórios num só lugar,
@@ -17,7 +17,7 @@ type Linha = {
   statusLocal: "ATIVO" | "SUSPENSO"; suspensoMotivo: string | null; assinatura: string | null;
   limiteEmpresas: number | null; limiteUsuarios: number | null;
   empresasAtivas: number | null; usuariosEquipe: number | null; acessosPortal: number | null; ultimaAtividadeEm: string | null;
-  aoVivo: boolean; termo: Termo | null;
+  aoVivo: boolean; termo: Termo | null; modulos?: string[] | null;
 };
 type SemVinculo = { slug: string; nome: string; ativo: boolean; empresasAtivas: number; usuariosEquipe: number; ultimaAtividadeEm: string | null; zapTenantId: string | null };
 type Resposta = {
@@ -92,7 +92,7 @@ export default function PainelDoErp() {
                       <Link href={`/admin/tenants/${e.tenantId}`} className="font-medium text-emerald-400 hover:underline">{e.tenantNome}</Link>
                       <div className="text-neutral-500">código {e.slug}</div>
                     </td>
-                    <td className="p-3">{ERP_PLANOS[e.plano].nome}<div className="text-neutral-500">{centsToBRL(e.mensalCents)}/mês</div></td>
+                    <td className="p-3">{ERP_PLANOS[e.plano].nome}<div className="text-neutral-500">{centsToBRL(e.mensalCents)}/mês</div>{e.modulos !== undefined && <div className="mt-1 max-w-[16rem] text-neutral-500">{resumoDosModulos(e.modulos)}</div>}</td>
                     <td className="p-3"><Uso usado={e.empresasAtivas} limite={e.limiteEmpresas} /></td>
                     <td className="p-3"><Uso usado={e.usuariosEquipe} limite={e.limiteUsuarios} /></td>
                     <td className="p-3">{e.ultimaAtividadeEm ? dataBR(e.ultimaAtividadeEm) : "—"}{!e.aoVivo && <div className="text-neutral-600">desatualizado</div>}</td>

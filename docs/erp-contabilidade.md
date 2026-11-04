@@ -27,3 +27,8 @@ Mudar o preço altera o total da assinatura, mas cobranças recorrentes já cria
 - **Comprovantes**: "Ver comprovantes" lista cada decisão (aceite/recusa) com data, nome, e-mail, CPF mascarado, IP e o código (hash) do texto aceito. O texto completo fica guardado no ERP e não pode ser alterado.
 - **Aviso no painel**: o mesmo bloco publica um comunicado (informativo, alerta ou urgente) que aparece no topo do painel de todos os usuários do escritório, com data opcional para sumir.
 - O texto do termo é uma **minuta** (`src/lib/termos.ts` no repositório do ERP) e deve ser revisada por advogado antes de uso. Dados da prestadora: variáveis `EMPRESA_RAZAO_SOCIAL`, `EMPRESA_CNPJ` e `EMPRESA_FORO` no ERP.
+
+## Módulos por plano
+- Na ficha da empresa, bloco **Módulos do plano**: marque os módulos que o escritório pode usar (Financeiro, Fiscal, Contabilidade, Pessoal, Documentos, Produtividade e Financeiro do escritório). Rotinas, tarefas, empresas-cliente e equipe são o núcleo e ficam sempre incluídos. Tirar um módulo o esconde do escritório na hora; os dados ficam guardados.
+- **Padrão de cada plano** (`MODULOS_DO_PLANO` em `apps/web/lib/erp-regras.ts`, é decisão comercial e pode ser ajustada): Essencial = Financeiro, Documentos e Produtividade; Profissional = esses + Fin. do escritório, Fiscal e Pessoal; Escritório+ e Sob medida = todos. Um escritório **novo** nasce com os módulos do plano escolhido; um escritório **que já existia** (ligado pelo código) continua com todos. "Liberar tudo" tira a restrição.
+- **Marca própria** é do próprio escritório: o sócio envia o logotipo e escolhe a cor em *Configurações*; o Super Admin não precisa fazer nada.

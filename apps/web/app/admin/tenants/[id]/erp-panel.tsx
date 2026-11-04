@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { ERP_PLANOS, PLANOS_ERP, reaisParaCentavos, type ErpPlano } from "@/lib/erp-regras";
+import { ERP_PLANOS, MODULOS_ERP, PLANOS_ERP, ROTULO_MODULO_ERP, reaisParaCentavos, resumoDosModulos, type ErpPlano, type ModuloErp } from "@/lib/erp-regras";
 
 /**
  * ERP Dilon Contabilidade na ficha da empresa: ativar, ajustar plano/limites/preço,
@@ -26,6 +26,8 @@ type Aceite = { id: string; versao: string; decisao: "ACEITO" | "RECUSADO"; em: 
 type Resp = {
   configurado: boolean; erp: Erp | null; termo: Termo | null; aviso: Aviso | null;
   sugestaoDeCondicoes: Condicoes | null; versoesDeTermo: { atual: string; versoes: string[] } | null;
+  /** undefined = o ERP não respondeu; null = todos os módulos. */
+  modulos?: string[] | null; modulosDoPlano?: Record<ErpPlano, string[]>;
 };
 const ROTULO_TERMO = { NAO_EXIGIDO: "Não exigido", ACEITO: "Aceito", PENDENTE: "Aguardando aceite", VENCIDO: "Prazo vencido — bloqueado", RECUSADO: "Recusado — bloqueado" } as const;
 const COR_TERMO = { NAO_EXIGIDO: "bg-neutral-800 text-neutral-300", ACEITO: "bg-emerald-900/60 text-emerald-300", PENDENTE: "bg-amber-900/60 text-amber-300", VENCIDO: "bg-red-900/60 text-red-300", RECUSADO: "bg-red-900/60 text-red-300" } as const;
@@ -77,6 +79,7 @@ export function ErpPanel({ tenantId, tenantName, onSalvo }: { tenantId: string; 
         {erp ? (
           <>
             <Ativo erp={erp} ocupado={ocupado} enviar={enviar} />
+            <Modulos erp={erp} data={data} ocupado={ocupado} enviar={enviar} />
             <TermoEAviso tenantId={tenantId} data={data} ocupado={ocupado} enviar={enviar} />
           </>
         ) : (
@@ -320,6 +323,42 @@ function TermoEAviso({ tenantId, data, ocupado, enviar }: { tenantId: string; da
         <label className="text-xs sm:col-span-4">Mensagem<textarea className={campo} rows={2} maxLength={600} value={texto} onChange={(e) => setTexto(e.target.value)} /></label>
       </div>
       <button className={`${btn} mt-2`} disabled={ocupado || !titulo.trim() || !texto.trim()} onClick={() => enviar({ acao: "publicar-aviso", titulo, texto, tom, ate })}>Publicar aviso</button>
+    </div>
+  );
+}
+
+function Modulos({ erp, data, ocupado, enviar }: { erp: Erp; data: Resp; ocupado: boolean; enviar: (c: Record<string, unknown>) => Promise<unknown> }) {
+  const atuais = data.modulos;
+  const [sel, setSel] = useState<Set<string> | null>(null);
+  if (atuais === undefined) return <p className="mt-6 border-t border-neutral-800 pt-4 text-xs text-neutral-500">Módulos: o ERP não respondeu agora.</p>;
+  const escolha = sel ?? new Set<string>(atuais === null ? MODULOS_ERP : atuais);
+  const alterou = sel !== null;
+  const alternar = (m: ModuloErp) => {
+    const n = new Set(escolha);
+    if (n.has(m)) n.delete(m); else n.add(m);
+    setSel(n);
+  };
+  const doPlano = data.modulosDoPlano?.[erp.plano] ?? [];
+
+  return (
+    <div className="mt-6 border-t border-neutral-800 pt-4">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-400">Módulos do plano</h3>
+      <p className="mb-2 text-xs text-neutral-400">Agora: {resumoDosModulos(atuais)}. Rotinas, tarefas, empresas-cliente e equipe estão sempre incluídos.</p>
+      <div className="mb-3 grid gap-1 sm:grid-cols-2">
+        {MODULOS_ERP.map((m) => (
+          <label key={m} className="flex items-center gap-2 text-xs text-neutral-200">
+            <input type="checkbox" checked={escolha.has(m)} onChange={() => alternar(m)} />
+            {ROTULO_MODULO_ERP[m]}
+          </label>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button className={btn} disabled={ocupado || !alterou} onClick={() => enviar({ acao: "modulos", modulos: [...escolha] }).then(() => setSel(null))}>Salvar módulos</button>
+        <button className={btn} disabled={ocupado} onClick={() => setSel(new Set(doPlano))}>Usar os do plano {ERP_PLANOS[erp.plano].nome}</button>
+        <button className={btn} disabled={ocupado} onClick={() => setSel(new Set(MODULOS_ERP))}>Marcar todos</button>
+        {atuais !== null && <button className={btn} disabled={ocupado} onClick={() => window.confirm("Voltar a liberar todos os módulos, sem restrição de plano?") && enviar({ acao: "modulos", modulos: null }).then(() => setSel(null))}>Liberar tudo (sem restrição)</button>}
+      </div>
+      {alterou && <p className="mt-2 text-[11px] text-amber-300">Alterações ainda não salvas. Tirar um módulo esconde-o do escritório na hora (os dados ficam guardados).</p>}
     </div>
   );
 }
