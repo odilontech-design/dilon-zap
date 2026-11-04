@@ -48,3 +48,7 @@ Mudar o preço altera o total da assinatura, mas cobranças recorrentes já cria
 
 ## Exportar os dados de um escritório
 O termo promete devolver os dados a pedido (30 dias após o encerramento). Na ficha da empresa, bloco **Exportar os dados do escritório**: baixa o ZIP de **planilhas** (um CSV por tabela, abre no Excel) ou o de **documentos e entregas** (pastas por empresa). Funciona também com o escritório suspenso ou bloqueado pelo termo. Senhas e a senha gov.br não vão. Cada download fica na auditoria do Zap e na trilha do ERP. O próprio sócio também baixa em *Configurações* do ERP, mesmo bloqueado.
+
+## Teste gratuito → assinatura ativa
+
+Quando o primeiro pagamento é confirmado (webhook da Asaas: ativação do Pix Automático, `PAYMENT_RECEIVED`/`PAYMENT_CONFIRMED` do cartão/boleto), a assinatura em `TRIAL` passa sozinha a `ACTIVE` (`converterTesteAoPagar` em `app/api/webhooks/asaas/route.ts`). É idempotente: evento repetido, ou assinatura que já não está em teste, não é alterada. Antes isso era manual no Super Admin.
