@@ -36,9 +36,10 @@ export async function sincronizarErp(tenantId: string, agora = new Date()): Prom
 
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
-    select: { subscription: { select: { status: true } }, invoices: { where: { status: { in: ["PENDING", "OVERDUE"] } }, select: { status: true, dueDate: true } } },
+    select: { subscription: { select: { status: true, testeAte: true } }, invoices: { where: { status: { in: ["PENDING", "OVERDUE"] } }, select: { status: true, dueDate: true } } },
   });
-  const decisao = decidirSuspensao(tenant?.subscription ?? null, tenant?.invoices ?? [], agora, toleranciaEmDias());
+  const temFaturaPaga = tenant?.subscription ? (await prisma.invoice.count({ where: { tenantId, status: "PAID" } })) > 0 : false;
+  const decisao = decidirSuspensao(tenant?.subscription ?? null, tenant?.invoices ?? [], agora, toleranciaEmDias(), temFaturaPaga);
   const acao = acaoDeSincronizacao({ status: erp.status, suspensoPor: erp.suspensoPor }, decisao);
 
   try {

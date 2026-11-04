@@ -14,10 +14,14 @@ export const ERP_PLANOS: Record<ErpPlano, { nome: string; limiteEmpresas: number
 
 export const PLANOS_ERP = Object.keys(ERP_PLANOS) as ErpPlano[];
 
+/** Planos que se contratam sozinho na página pública; "Sob medida" é conversa com a Dilon Tech. */
+export const PLANOS_DE_AUTOATENDIMENTO = ["ESSENCIAL", "PROFISSIONAL", "ESCRITORIO_PLUS"] as const satisfies readonly ErpPlano[];
+export type PlanoDeAutoatendimento = (typeof PLANOS_DE_AUTOATENDIMENTO)[number];
+
 /** Dias de atraso da fatura mais antiga em aberto que o ERP tolera antes de ser suspenso. */
 export const TOLERANCIA_PADRAO_DIAS = 10;
 
-export type AssinaturaParaErp = { status: "TRIAL" | "ACTIVE" | "PAUSED" | "CANCELED" } | null;
+export type AssinaturaParaErp = { status: "TRIAL" | "ACTIVE" | "PAUSED" | "CANCELED"; testeAte?: Date | null } | null;
 export type FaturaParaErp = { status: string; dueDate: Date | string };
 
 export type DecisaoDeSuspensao = { suspender: false } | { suspender: true; motivo: string };
@@ -29,15 +33,22 @@ const DIA_MS = 86_400_000;
  *
  *  - Sem assinatura: nunca (empresa legada, sem cobrança cadastrada).
  *  - Cancelada ou pausada: sim.
- *  - Em teste: não — o teste do ERP segue o acordo com o cliente, e quem decide é uma pessoa.
+ *  - Em teste: só se o teste já acabou há mais que a tolerância e nada foi pago; antes disso, não.
  *  - Ativa: só se a fatura em aberto mais antiga passou da tolerância.
  *
  * Suspender nunca apaga nada no ERP: bloqueia o acesso, e reativar devolve tudo como estava.
  */
-export function decidirSuspensao(assinatura: AssinaturaParaErp, faturas: FaturaParaErp[], agora: Date, toleranciaDias = TOLERANCIA_PADRAO_DIAS): DecisaoDeSuspensao {
+export function decidirSuspensao(assinatura: AssinaturaParaErp, faturas: FaturaParaErp[], agora: Date, toleranciaDias = TOLERANCIA_PADRAO_DIAS, temFaturaPaga = false): DecisaoDeSuspensao {
   if (!assinatura) return { suspender: false };
   if (assinatura.status === "CANCELED") return { suspender: true, motivo: "Assinatura cancelada" };
   if (assinatura.status === "PAUSED") return { suspender: true, motivo: "Assinatura pausada" };
+  if (assinatura.status === "TRIAL") {
+    // Teste que acabou sem nenhum pagamento (quem contrata online entra assim): vence junto da tolerância.
+    // Com uma fatura paga, quem decide é uma pessoa (falta só passar a assinatura para ativa).
+    if (!assinatura.testeAte || temFaturaPaga) return { suspender: false };
+    const atraso = Math.floor((agora.getTime() - assinatura.testeAte.getTime()) / DIA_MS);
+    return atraso > toleranciaDias ? { suspender: true, motivo: `Teste encerrado há ${atraso} dias sem pagamento` } : { suspender: false };
+  }
   if (assinatura.status !== "ACTIVE") return { suspender: false };
 
   const vencimentos = faturas.filter((f) => f.status === "PENDING" || f.status === "OVERDUE").map((f) => new Date(f.dueDate).getTime());

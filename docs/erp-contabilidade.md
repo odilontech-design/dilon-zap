@@ -32,3 +32,16 @@ Mudar o preço altera o total da assinatura, mas cobranças recorrentes já cria
 - Na ficha da empresa, bloco **Módulos do plano**: marque os módulos que o escritório pode usar (Financeiro, Fiscal, Contabilidade, Pessoal, Documentos, Produtividade e Financeiro do escritório). Rotinas, tarefas, empresas-cliente e equipe são o núcleo e ficam sempre incluídos. Tirar um módulo o esconde do escritório na hora; os dados ficam guardados.
 - **Padrão de cada plano** (`MODULOS_DO_PLANO` em `apps/web/lib/erp-regras.ts`, é decisão comercial e pode ser ajustada): Essencial = Financeiro, Documentos e Produtividade; Profissional = esses + Fin. do escritório, Fiscal e Pessoal; Escritório+ e Sob medida = todos. Um escritório **novo** nasce com os módulos do plano escolhido; um escritório **que já existia** (ligado pelo código) continua com todos. "Liberar tudo" tira a restrição.
 - **Marca própria** é do próprio escritório: o sócio envia o logotipo e escolhe a cor em *Configurações*; o Super Admin não precisa fazer nada.
+
+## Contratação online (página pública)
+**Endereço:** `https://SEU-ZAP/contratar/contabilidade` (aceita `?plano=ESSENCIAL|PROFISSIONAL|ESCRITORIO_PLUS` para a página de vendas apontar direto para um plano). O plano Sob medida não se contrata online.
+
+**Fluxo:** plano → dados do escritório (CNPJ, responsável, CPF, e-mail, WhatsApp) → leitura e aceite do termo → **e-mail de confirmação** → clique em "Confirmar e criar" → o sistema cria a empresa no Zap (assinatura **em teste**, valor do plano), o escritório e o sócio no ERP (com módulos e limites do plano e o aceite do termo registrado), tenta gerar a cobrança (Asaas) e manda o e-mail de boas-vindas com o acesso e a senha provisória. O teste dura 14 dias sem cobrança; a primeira cobrança vence no 15º dia (dia do mês de 1 a 28) e fica no termo.
+
+**Segurança contra robô:** nada é criado antes de o e-mail ser confirmado; o link vale 24 h, só funciona uma vez e a criação acontece por clique (POST), então pré-visualização de e-mail não cria nada; campo-armadilha, teto de pedidos por endereço e por e-mail; CNPJ e CPF validados; o texto do termo é conferido por hash.
+
+**Só funciona com:** `ERP_CONTABILIDADE_URL` + `ERP_CONTABILIDADE_TOKEN` (ERP) e `SDR_SMTP_HOST/PORT/USER/PASS/FROM` (a mesma caixa do SDR; sem ela a página mostra "indisponível"). `NEXTAUTH_URL` precisa ser o endereço público do Zap (vai no link do e-mail). Para a primeira cobrança automática: `ASAAS_API_KEY` e `ASAAS_ENV` (sem eles o escritório é criado mesmo assim e a cobrança fica pendente no painel). Rode `prisma db push` (tabela `ContratacaoErp`).
+
+**No painel** (`/admin/erp`): lista "Contratações online" com a situação de cada pedido e o motivo de quem travou (ex.: cobrança não gerada). Um pedido que deu erro se resolve sozinho: a pessoa abre o mesmo link do e-mail de novo e a criação continua do ponto onde parou (sem duplicar empresa nem escritório; se o escritório já existia, é gerada uma nova senha provisória).
+
+**Teste que acabou sem pagamento:** o ERP é suspenso depois de `ERP_TOLERANCIA_DIAS` (padrão 10) dias do fim do teste, se nenhuma fatura foi paga. Ao receber o primeiro pagamento, passe a assinatura para *Ativa* na ficha.

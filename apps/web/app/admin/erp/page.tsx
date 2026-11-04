@@ -23,7 +23,14 @@ type SemVinculo = { slug: string; nome: string; ativo: boolean; empresasAtivas: 
 type Resposta = {
   resumo: { escritorios: number; ativos: number; suspensos: number; mrrCents: number; empresasCliente: number; usuarios: number; termosPendentes: number; termosBloqueados: number; semVinculo: number };
   escritorios: Linha[]; semVinculo: SemVinculo[]; aviso: string | null;
+  contratacoes: { id: string; status: "AGUARDANDO_EMAIL" | "CRIANDO" | "CONCLUIDA" | "ERRO"; plano: ErpPlano; escritorioNome: string; email: string; telefone: string; criadoEm: string; expiraEm: string; erro: string | null; tenantId: string | null }[];
 };
+const STATUS_CONTRATACAO = {
+  AGUARDANDO_EMAIL: { rotulo: "Aguardando e-mail", cor: "bg-amber-900/60 text-amber-300" },
+  CRIANDO: { rotulo: "Criando", cor: "bg-sky-900/60 text-sky-300" },
+  CONCLUIDA: { rotulo: "Concluída", cor: "bg-emerald-900/60 text-emerald-300" },
+  ERRO: { rotulo: "Erro", cor: "bg-red-900/60 text-red-300" },
+} as const;
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
 
@@ -111,6 +118,26 @@ export default function PainelDoErp() {
           </table>
         )}
       </section>
+
+      {data.contratacoes.length > 0 && (
+        <section className="overflow-x-auto rounded-lg border border-neutral-800 bg-neutral-900">
+          <h2 className="p-4 pb-2 text-sm font-medium text-neutral-200">Contratações online</h2>
+          <table className="w-full min-w-[760px] text-left text-xs">
+            <thead className="border-b border-neutral-800 text-neutral-500"><tr><th className="p-3">Quando</th><th className="p-3">Escritório</th><th className="p-3">Plano</th><th className="p-3">Contato</th><th className="p-3">Situação</th></tr></thead>
+            <tbody>
+              {data.contratacoes.map((c) => (
+                <tr key={c.id} className="border-t border-neutral-800 align-top">
+                  <td className="p-3">{new Date(c.criadoEm).toLocaleString("pt-BR")}</td>
+                  <td className="p-3">{c.tenantId ? <Link href={`/admin/tenants/${c.tenantId}`} className="font-medium text-emerald-400 hover:underline">{c.escritorioNome}</Link> : c.escritorioNome}</td>
+                  <td className="p-3">{ERP_PLANOS[c.plano].nome}</td>
+                  <td className="p-3">{c.email}<div className="text-neutral-500">{c.telefone}</div></td>
+                  <td className="p-3"><span className={`rounded px-2 py-0.5 ${STATUS_CONTRATACAO[c.status].cor}`}>{STATUS_CONTRATACAO[c.status].rotulo}</span>{c.erro && <div className="mt-1 max-w-[18rem] text-neutral-400">{c.erro}</div>}{c.status === "AGUARDANDO_EMAIL" && <div className="mt-1 text-neutral-500">link vale até {new Date(c.expiraEm).toLocaleString("pt-BR")}</div>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
 
       {data.semVinculo.length > 0 && (
         <section className="rounded-lg border border-amber-800 bg-amber-950/20 p-4">

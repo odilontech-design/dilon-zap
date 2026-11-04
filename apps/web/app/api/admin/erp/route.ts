@@ -70,5 +70,11 @@ export async function GET() {
     termosBloqueados: escritorios.filter((e) => e.termo?.bloqueado).length,
     semVinculo: semVinculo.length,
   };
-  return NextResponse.json({ resumo, escritorios, semVinculo, aviso });
+  // Contratações online recentes (as que travaram aparecem aqui com o motivo).
+  const contratacoes = await prisma.contratacaoErp.findMany({
+    orderBy: { criadoEm: "desc" },
+    take: 15,
+    select: { id: true, status: true, plano: true, escritorioNome: true, email: true, telefone: true, criadoEm: true, expiraEm: true, erro: true, tenantId: true },
+  });
+  return NextResponse.json({ resumo, escritorios, semVinculo, aviso, contratacoes });
 }

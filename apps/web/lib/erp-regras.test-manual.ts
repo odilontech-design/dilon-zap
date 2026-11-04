@@ -8,14 +8,22 @@ import { MODULOS_DO_PLANO, MODULOS_ERP, resumoDosModulos, acaoDeSincronizacao, d
 const agora = new Date("2026-10-20T12:00:00Z");
 const fatura = (status: string, dueDate: string) => ({ status, dueDate: new Date(`${dueDate}T00:00:00Z`) });
 let n = 0;
-const ok = (nome: string, fn: () => void) => { fn(); n++; console.log("OK  ", nome); };
+const ok = (nome: string, fn: () => void | Promise<void>) => { const r = fn(); if (r) pend.push(r.then(() => { n++; console.log("OK  ", nome); })); else { n++; console.log("OK  ", nome); } };
+const pend: Promise<void>[] = [];
 
 ok("sem assinatura nunca suspende (empresa legada)", () => assert.deepEqual(decidirSuspensao(null, [fatura("PENDING", "2020-01-01")], agora), { suspender: false }));
 ok("cancelada e pausada suspendem", () => {
   assert.deepEqual(decidirSuspensao({ status: "CANCELED" }, [], agora), { suspender: true, motivo: "Assinatura cancelada" });
   assert.deepEqual(decidirSuspensao({ status: "PAUSED" }, [], agora), { suspender: true, motivo: "Assinatura pausada" });
 });
-ok("teste gratuito não suspende, mesmo com fatura velha", () => assert.deepEqual(decidirSuspensao({ status: "TRIAL" }, [fatura("PENDING", "2020-01-01")], agora), { suspender: false }));
+ok("teste gratuito sem data de fim não suspende, mesmo com fatura velha", () => assert.deepEqual(decidirSuspensao({ status: "TRIAL" }, [fatura("PENDING", "2020-01-01")], agora), { suspender: false }));
+ok("teste vencido sem pagamento suspende depois da tolerância; com pagamento, não", () => {
+  const fim = new Date("2026-10-05T00:00:00Z");
+  assert.equal(decidirSuspensao({ status: "TRIAL", testeAte: fim }, [], agora).suspender, true);
+  assert.deepEqual(decidirSuspensao({ status: "TRIAL", testeAte: new Date("2026-10-15T00:00:00Z") }, [], agora), { suspender: false }, "5 dias: dentro da tolerância");
+  assert.deepEqual(decidirSuspensao({ status: "TRIAL", testeAte: new Date("2026-11-01T00:00:00Z") }, [], agora), { suspender: false }, "teste ainda em curso");
+  assert.deepEqual(decidirSuspensao({ status: "TRIAL", testeAte: fim }, [], agora, 10, true), { suspender: false }, "já pagou: decide uma pessoa");
+});
 ok("ativa sem fatura em aberto não suspende", () => assert.deepEqual(decidirSuspensao({ status: "ACTIVE" }, [fatura("PAID", "2020-01-01")], agora), { suspender: false }));
 ok("tolerância: 10 dias passa, 11 suspende", () => {
   assert.deepEqual(decidirSuspensao({ status: "ACTIVE" }, [fatura("PENDING", "2026-10-10")], agora), { suspender: false });
@@ -74,4 +82,30 @@ ok("módulos por plano", () => {
   assert.equal(resumoDosModulos([]), "Só o núcleo (nenhum módulo opcional)");
   assert.equal(resumoDosModulos(["DOCUMENTOS", "FINANCEIRO"]), "2 de 7: Financeiro, Documentos");
 });
-console.log(`\n${n} verificações, todas passaram.`);
+ok("contratação online: ciclo, condições e formulário", async () => {
+  const c = await import("./erp-contratacao");
+  // 29/10 (quinta): teste de 14 dias; primeira cobrança em 13/11, véspera = fim do teste
+  assert.deepEqual(c.ciclo(new Date("2026-10-29T15:00:00Z")), { primeiraCobranca: "2026-11-13", fimDoTeste: "2026-11-12", diaVencimento: 13 });
+  // pouco depois da meia-noite UTC ainda é "ontem" em São Paulo
+  assert.equal(c.ciclo(new Date("2026-10-30T01:00:00Z")).primeiraCobranca, "2026-11-13");
+  // dia do mês > 28 pula para o dia 1 (a assinatura só aceita 1 a 28)
+  assert.deepEqual(c.ciclo(new Date("2026-10-15T15:00:00Z")), { primeiraCobranca: "2026-11-01", fimDoTeste: "2026-10-31", diaVencimento: 1 });
+  const cond = c.condicoesDaContratacao("PROFISSIONAL", new Date("2026-10-29T15:00:00Z"));
+  assert.deepEqual([cond.plano, cond.valorMensalCents, cond.valorTabelaCents, cond.garantiaMeses], ["Profissional", 59_700, 59_700, 12]);
+  assert.deepEqual(c.limitesDoPlano("ESSENCIAL"), { limiteEmpresas: 30, limiteUsuarios: 3 });
+  assert.ok(c.modulosDoPlano("ESSENCIAL").length < c.modulosDoPlano("ESCRITORIO_PLUS").length);
+  const t = c.novoToken();
+  assert.ok(t.length >= 43 && c.hashDoToken(t) === c.hashDoToken(t) && c.hashDoToken(t) !== t);
+  const base = { plano: "PROFISSIONAL", escritorioNome: "Alfa Contabilidade", cnpj: "11.222.333/0001-81", responsavelNome: "Ana Paula Souza", responsavelCpf: "529.982.247-25", email: "ANA@alfa.com", telefone: "(21) 98072-2943", termoHash: "a".repeat(64), aceitei: true };
+  const ok1 = c.esquemaDoPedido.safeParse(base);
+  assert.ok(ok1.success, JSON.stringify(ok1.success ? "" : ok1.error.issues));
+  assert.equal(ok1.success && ok1.data.email, "ana@alfa.com");
+  for (const [campo, valor] of [["cnpj", "11.111.111/1111-11"], ["responsavelCpf", "111.111.111-11"], ["responsavelNome", "Ana"], ["telefone", "123"], ["aceitei", false], ["plano", "SOB_MEDIDA"], ["termoHash", "x"]] as const) assert.equal(c.esquemaDoPedido.safeParse({ ...base, [campo]: valor }).success, false, campo);
+  assert.match(c.emailDeBoasVindas({ nome: "Ana Paula", escritorio: "Alfa", loginUrl: "https://x/login?e=alfa", email: "a@a.com", senha: "S3nha", fimDoTeste: "2026-11-12", primeiraCobranca: "2026-11-13", valorMensalCents: 59_700, linkDePagamento: null }).texto, /Senha provisória: S3nha[\s\S]*12\/11\/2026[\s\S]*R\$\s?597,00/);
+});
+Promise.all(pend)
+  .then(() => console.log(`\n${n} verificações, todas passaram.`))
+  .catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });

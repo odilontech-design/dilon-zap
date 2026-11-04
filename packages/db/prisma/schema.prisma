@@ -195,6 +195,7 @@ model Tenant {
   apiKeys               ApiKey[]
   recursos              TenantRecurso[]
   erpContabilidade      TenantErpContabilidade?
+  contratacoesErp       ContratacaoErp[]
   businessHours         BusinessHour[]
   savedTexts            SavedText[]
   scheduledMessages     ScheduledMessage[]
@@ -3148,4 +3149,55 @@ model TenantErpContabilidade {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// Contratação online do ERP (página pública /contratar/contabilidade): o pedido só vira
+// empresa e escritório depois de confirmar o e-mail. Guarda o aceite do termo exatamente
+// como foi visto (versão + hash do texto) para o ERP registrar a prova.
+enum ContratacaoErpStatus {
+  AGUARDANDO_EMAIL
+  CRIANDO
+  CONCLUIDA
+  ERRO
+}
+
+model ContratacaoErp {
+  id     String               @id @default(cuid())
+  status ContratacaoErpStatus @default(AGUARDANDO_EMAIL)
+  plano  ErpPlano
+
+  escritorioNome  String
+  /// Só os dígitos.
+  cnpj            String
+  responsavelNome String
+  responsavelCpf  String
+  email           String
+  telefone        String
+  /// Código de acesso que a pessoa quer (opcional); sem ele, o ERP gera a partir do nome.
+  codigoDesejado  String?
+  /// Condições que a pessoa viu e aceitou (valor, datas do teste e da primeira cobrança). Valem na criação, mesmo que o link seja confirmado no dia seguinte.
+  condicoes       Json
+
+  /// SHA-256 do link enviado por e-mail; o link em si não é guardado.
+  tokenHash String   @unique
+  expiraEm  DateTime
+
+  termoVersao     String
+  termoHash       String
+  aceitoEm        DateTime
+  aceiteIp        String?
+  aceiteUserAgent String?
+
+  /// A empresa criada. SetNull: apagar a empresa não apaga o registro de quem pediu e aceitou.
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  /// O que deu errado, para a Dilon Tech ver no painel (nunca com senhas).
+  erro     String?
+
+  criadoEm    DateTime  @default(now())
+  concluidaEm DateTime?
+
+  @@index([status, criadoEm])
+  @@index([email])
+  @@index([cnpj])
 }

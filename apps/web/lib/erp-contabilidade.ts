@@ -142,3 +142,27 @@ export async function vincularEscritorio(slug: string, zapTenantId: string): Pro
   if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu vincular o escritório."), r.status);
   return r.json.escritorio;
 }
+
+export type ErpClausula = { titulo: string; paragrafos: string[] };
+export type ErpPreviaDoTermo = { versao: string; titulo: string; clausulas: ErpClausula[]; hash: string };
+
+/** Texto do termo com as condições, para mostrar antes do aceite. Não grava nada no ERP. */
+export async function previaDoTermo(d: { versao: string; escritorioNome: string; limiteEmpresas: number | null; limiteUsuarios: number | null; condicoes: ErpCondicoes }): Promise<ErpPreviaDoTermo> {
+  const r = await chamar<ErpPreviaDoTermo & { erro?: string }>("POST", "/termos/previa", d);
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu montar o termo."), r.status);
+  return r.json;
+}
+
+export type ContratacaoNoErp = {
+  zapTenantId: string; escritorioNome: string; slug?: string; limiteEmpresas: number | null; limiteUsuarios: number | null; modulos: string[] | null;
+  admin: { nome: string; cpf: string; email: string };
+  termo: { versao: string; hash: string; condicoes: ErpCondicoes };
+  aceite: { em: string; ip: string | null; userAgent: string | null };
+};
+
+/** Cria escritório + sócio + registro do aceite, de uma vez. Idempotente: sem `admin` na resposta, o escritório já existia. */
+export async function contratarNoErp(d: ContratacaoNoErp): Promise<{ criado: boolean; escritorio: ErpEscritorio; admin?: { email: string; nome: string; senhaProvisoria: string } }> {
+  const r = await chamar<{ criado: boolean; escritorio: ErpEscritorio; admin?: { email: string; nome: string; senhaProvisoria: string }; erro?: string }>("POST", "/contratacoes", d);
+  if (r.status !== 200 && r.status !== 201) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu criar o escritório."), r.status);
+  return r.json;
+}
