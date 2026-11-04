@@ -166,3 +166,27 @@ export async function contratarNoErp(d: ContratacaoNoErp): Promise<{ criado: boo
   if (r.status !== 200 && r.status !== 201) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu criar o escritório."), r.status);
   return r.json;
 }
+
+/**
+ * Exportação dos dados do escritório (ZIP). Devolve a resposta crua do ERP para a rota do painel repassar em
+ * fluxo, sem carregar o arquivo inteiro na memória (os ZIPs de documentos podem ser grandes).
+ */
+export async function baixarExportacao(zapTenantId: string, tipo: "planilhas" | "arquivos"): Promise<Response> {
+  const base = (process.env.ERP_CONTABILIDADE_URL ?? "").replace(/\/+$/, "");
+  const token = process.env.ERP_CONTABILIDADE_TOKEN ?? "";
+  if (!base || token.length < 32) throw new ErpIndisponivelError("A integração com o ERP não está configurada neste ambiente (ERP_CONTABILIDADE_URL / ERP_CONTABILIDADE_TOKEN).");
+  let resp: Response;
+  try {
+    resp = await fetch(`${base}/api/plataforma/escritorios/${encodeURIComponent(zapTenantId)}/exportacao?tipo=${tipo}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      // Só o tempo até o ERP começar a responder: o ZIP em si pode demorar mais.
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch {
+    throw new ErpIndisponivelError("Não foi possível falar com o ERP.");
+  }
+  if (resp.status === 404) throw new ErpIndisponivelError("Escritório não encontrado no ERP.", 404);
+  if (!resp.ok || !resp.body) throw new ErpIndisponivelError("O ERP não conseguiu gerar a exportação.", resp.status);
+  return resp;
+}

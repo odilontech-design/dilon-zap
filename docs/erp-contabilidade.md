@@ -45,3 +45,6 @@ Mudar o preço altera o total da assinatura, mas cobranças recorrentes já cria
 **No painel** (`/admin/erp`): lista "Contratações online" com a situação de cada pedido e o motivo de quem travou (ex.: cobrança não gerada). Um pedido que deu erro se resolve sozinho: a pessoa abre o mesmo link do e-mail de novo e a criação continua do ponto onde parou (sem duplicar empresa nem escritório; se o escritório já existia, é gerada uma nova senha provisória).
 
 **Teste que acabou sem pagamento:** o ERP é suspenso depois de `ERP_TOLERANCIA_DIAS` (padrão 10) dias do fim do teste, se nenhuma fatura foi paga. Ao receber o primeiro pagamento, passe a assinatura para *Ativa* na ficha.
+
+## Exportar os dados de um escritório
+O termo promete devolver os dados a pedido (30 dias após o encerramento). Na ficha da empresa, bloco **Exportar os dados do escritório**: baixa o ZIP de **planilhas** (um CSV por tabela, abre no Excel) ou o de **documentos e entregas** (pastas por empresa). Funciona também com o escritório suspenso ou bloqueado pelo termo. Senhas e a senha gov.br não vão. Cada download fica na auditoria do Zap e na trilha do ERP. O próprio sócio também baixa em *Configurações* do ERP, mesmo bloqueado.

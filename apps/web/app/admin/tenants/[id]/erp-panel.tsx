@@ -80,6 +80,7 @@ export function ErpPanel({ tenantId, tenantName, onSalvo }: { tenantId: string; 
           <>
             <Ativo erp={erp} ocupado={ocupado} enviar={enviar} />
             <Modulos erp={erp} data={data} ocupado={ocupado} enviar={enviar} />
+            <ExportarDados tenantId={tenantId} />
             <TermoEAviso tenantId={tenantId} data={data} ocupado={ocupado} enviar={enviar} />
           </>
         ) : (
@@ -359,6 +360,20 @@ function Modulos({ erp, data, ocupado, enviar }: { erp: Erp; data: Resp; ocupado
         {atuais !== null && <button className={btn} disabled={ocupado} onClick={() => window.confirm("Voltar a liberar todos os módulos, sem restrição de plano?") && enviar({ acao: "modulos", modulos: null }).then(() => setSel(null))}>Liberar tudo (sem restrição)</button>}
       </div>
       {alterou && <p className="mt-2 text-[11px] text-amber-300">Alterações ainda não salvas. Tirar um módulo esconde-o do escritório na hora (os dados ficam guardados).</p>}
+    </div>
+  );
+}
+
+function ExportarDados({ tenantId }: { tenantId: string }) {
+  const link = "rounded-md border border-neutral-700 px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800";
+  return (
+    <div className="mt-6 border-t border-neutral-800 pt-4">
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-neutral-400">Exportar os dados do escritório</h3>
+      <p className="mb-2 text-xs text-neutral-400">O termo promete devolver os dados a pedido. Funciona também com o escritório suspenso ou bloqueado. Senhas e a senha gov.br não vão. O ZIP de arquivos pode demorar.</p>
+      <div className="flex flex-wrap gap-2">
+        <a className={link} href={`/api/admin/tenants/${tenantId}/erp/exportacao?tipo=planilhas`}>Baixar planilhas (ZIP)</a>
+        <a className={link} href={`/api/admin/tenants/${tenantId}/erp/exportacao?tipo=arquivos`}>Baixar documentos e entregas (ZIP)</a>
+      </div>
     </div>
   );
 }
