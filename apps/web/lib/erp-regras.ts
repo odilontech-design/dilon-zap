@@ -72,3 +72,38 @@ export function reaisParaCentavos(texto: string): number | null {
   const c = Math.round(parseFloat(normal) * 100);
   return Number.isFinite(c) && c >= 0 && c <= 2_000_000_000 ? c : null;
 }
+
+// ── Termo de aceite ──────────────────────────────────────────────────────────
+
+const iso = (d: Date) => d.toISOString().slice(0, 10);
+
+/** Próximo dia `dia` do mês estritamente depois de `hoje` ("AAAA-MM-DD", em UTC). */
+export function proximoVencimento(dia: number, hoje: Date): string {
+  let ano = hoje.getUTCFullYear();
+  let mes = hoje.getUTCMonth();
+  if (hoje.getUTCDate() >= dia) {
+    mes += 1;
+    if (mes > 11) { mes = 0; ano += 1; }
+  }
+  return iso(new Date(Date.UTC(ano, mes, dia)));
+}
+
+/**
+ * Condições sugeridas para o termo a partir do que já está na ficha: o valor acordado do ERP,
+ * o valor de tabela do plano e o dia de vencimento da assinatura. A primeira cobrança é a
+ * próxima fatura e o teste vai até o dia anterior.
+ */
+export function sugerirCondicoes(erp: { plano: ErpPlano; mensalCents: number }, diaVencimento: number | null, hoje: Date) {
+  const dia = diaVencimento && diaVencimento >= 1 && diaVencimento <= 28 ? diaVencimento : 10;
+  const primeira = proximoVencimento(dia, hoje);
+  const fim = iso(new Date(new Date(`${primeira}T00:00:00Z`).getTime() - 86_400_000));
+  return {
+    plano: ERP_PLANOS[erp.plano].nome,
+    valorMensalCents: erp.mensalCents,
+    valorTabelaCents: ERP_PLANOS[erp.plano].sugestaoMensalCents || erp.mensalCents,
+    garantiaMeses: 12,
+    primeiraCobranca: primeira,
+    fimDoTeste: fim,
+    diaVencimento: dia,
+  };
+}

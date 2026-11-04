@@ -3,7 +3,7 @@
  * (mesmo padrão dos outros *.test-manual.ts do repositório). Sai com código 1 se algo falhar.
  */
 import assert from "node:assert/strict";
-import { acaoDeSincronizacao, decidirSuspensao, ERP_PLANOS, novoTotalDaAssinatura, PLANOS_ERP, reaisParaCentavos } from "./erp-regras";
+import { acaoDeSincronizacao, decidirSuspensao, ERP_PLANOS, novoTotalDaAssinatura, PLANOS_ERP, proximoVencimento, reaisParaCentavos, sugerirCondicoes } from "./erp-regras";
 
 const agora = new Date("2026-10-20T12:00:00Z");
 const fatura = (status: string, dueDate: string) => ({ status, dueDate: new Date(`${dueDate}T00:00:00Z`) });
@@ -54,5 +54,16 @@ ok("planos do ERP: limites crescentes e rótulos", () => {
   assert.deepEqual(PLANOS_ERP, ["ESSENCIAL", "PROFISSIONAL", "ESCRITORIO_PLUS", "SOB_MEDIDA"]);
   assert.ok(ERP_PLANOS.ESSENCIAL.limiteEmpresas! < ERP_PLANOS.PROFISSIONAL.limiteEmpresas! && ERP_PLANOS.PROFISSIONAL.limiteEmpresas! < ERP_PLANOS.ESCRITORIO_PLUS.limiteEmpresas!);
   assert.equal(ERP_PLANOS.SOB_MEDIDA.limiteEmpresas, null);
+});
+ok("próximo vencimento", () => {
+  assert.equal(proximoVencimento(15, new Date("2026-11-04T12:00:00Z")), "2026-11-15");
+  assert.equal(proximoVencimento(15, new Date("2026-11-15T12:00:00Z")), "2026-12-15", "no próprio dia, vai para o mês seguinte");
+  assert.equal(proximoVencimento(15, new Date("2026-12-20T12:00:00Z")), "2027-01-15", "vira o ano");
+});
+ok("condições sugeridas para o termo", () => {
+  const c = sugerirCondicoes({ plano: "PROFISSIONAL", mensalCents: 39_700 }, 15, new Date("2026-11-04T12:00:00Z"));
+  assert.deepEqual(c, { plano: "Profissional", valorMensalCents: 39_700, valorTabelaCents: 59_700, garantiaMeses: 12, primeiraCobranca: "2026-11-15", fimDoTeste: "2026-11-14", diaVencimento: 15 });
+  assert.equal(sugerirCondicoes({ plano: "SOB_MEDIDA", mensalCents: 80_000 }, null, new Date("2026-11-04T12:00:00Z")).valorTabelaCents, 80_000, "sob medida usa o próprio valor como tabela");
+  assert.equal(sugerirCondicoes({ plano: "ESSENCIAL", mensalCents: 29_700 }, 31, new Date("2026-11-04T12:00:00Z")).diaVencimento, 10, "dia inválido cai no padrão");
 });
 console.log(`\n${n} verificações, todas passaram.`);

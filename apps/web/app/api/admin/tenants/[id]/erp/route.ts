@@ -3,8 +3,8 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
-import { ERP_PLANOS, novoTotalDaAssinatura, PLANOS_ERP, type ErpPlano } from "@/lib/erp-regras";
-import { atualizarEscritorio, consultarEscritorio, criarEscritorio, erpConfigurado, ErpIndisponivelError, redefinirSenha } from "@/lib/erp-contabilidade";
+import { ERP_PLANOS, novoTotalDaAssinatura, PLANOS_ERP, sugerirCondicoes, type ErpPlano } from "@/lib/erp-regras";
+import { atualizarEscritorio, consultarEscritorio, criarEscritorio, erpConfigurado, ErpIndisponivelError, redefinirSenha, vincularEscritorio, versoesDeTermo } from "@/lib/erp-contabilidade";
 import { guardarUso, sincronizarErp } from "@/lib/erp-sync";
 
 /**
@@ -27,6 +27,20 @@ const ativarSchema = z.object({
   adminNome: z.string().trim().min(2).max(120),
   adminEmail: z.string().trim().toLowerCase().email().max(200),
   codigo: z.string().trim().max(40).optional(),
+  /** Escritório que já existe no ERP (ex.: o da Guttierres): liga ao tenant em vez de criar outro. */
+  vincularCodigo: z.string().trim().toLowerCase().max(64).optional(),
+});
+
+const dia = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use AAAA-MM-DD.");
+const condicoesSchema = z.object({
+  plano: z.string().trim().min(1).max(60),
+  valorMensalCents: z.number().int().min(0).max(2_000_000_000),
+  valorTabelaCents: z.number().int().min(0).max(2_000_000_000),
+  garantiaMeses: z.number().int().min(0).max(60),
+  primeiraCobranca: dia,
+  fimDoTeste: dia,
+  diaVencimento: z.number().int().min(1).max(28),
+  observacao: z.string().trim().max(300).optional(),
 });
 
 const alterarSchema = z.object({
@@ -44,6 +58,16 @@ const corpoSchema = z.discriminatedUnion("acao", [
   z.object({ acao: z.literal("reativar") }),
   z.object({ acao: z.literal("redefinir-senha"), email: z.string().trim().toLowerCase().email() }),
   z.object({ acao: z.literal("sincronizar") }),
+  z.object({ acao: z.literal("exigir-termo"), versao: z.string().trim().min(1).max(20), prazoEm: dia, condicoes: condicoesSchema }),
+  z.object({ acao: z.literal("retirar-termo") }),
+  z.object({
+    acao: z.literal("publicar-aviso"),
+    titulo: z.string().trim().min(1).max(120),
+    texto: z.string().trim().min(1).max(600),
+    tom: z.enum(["INFO", "ALERTA", "URGENTE"]),
+    ate: dia.optional().or(z.literal("")),
+  }),
+  z.object({ acao: z.literal("retirar-aviso") }),
 ]);
 
 const falha = (e: unknown) =>
@@ -52,7 +76,14 @@ const falha = (e: unknown) =>
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   await requireSuperAdmin();
   const erp = await prisma.tenantErpContabilidade.findUnique({ where: { tenantId: params.id } });
-  return NextResponse.json({ configurado: erpConfigurado(), erp, planos: ERP_PLANOS });
+  const sub = await prisma.subscription.findUnique({ where: { tenantId: params.id }, select: { cycleDay: true } });
+  const sugestao = erp ? sugerirCondicoes({ plano: erp.plano, mensalCents: erp.mensalCents }, sub?.cycleDay ?? null, new Date()) : null;
+  let versoes: { atual: string; versoes: string[] } | null = null;
+  let vivo = null;
+  if (erp && erpConfigurado()) {
+    [versoes, vivo] = await Promise.all([versoesDeTermo().catch(() => null), consultarEscritorio(params.id).catch(() => null)]);
+  }
+  return NextResponse.json({ configurado: erpConfigurado(), erp, planos: ERP_PLANOS, sugestaoDeCondicoes: sugestao, versoesDeTermo: versoes, termo: vivo?.termo ?? null, aviso: vivo?.aviso ?? null });
 }
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
@@ -69,6 +100,8 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   if (d.acao === "ativar") {
     if (existente) return NextResponse.json({ error: "Esta empresa já tem o ERP ativado." }, { status: 409 });
     try {
+      // Escritório já existente no ERP: liga ao tenant antes (a criação, idempotente, devolve o existente).
+      if (d.vincularCodigo) await vincularEscritorio(d.vincularCodigo, tenant.id);
       const r = await criarEscritorio({
         zapTenantId: tenant.id, nome: d.escritorioNome, slug: d.codigo || undefined, adminNome: d.adminNome, adminEmail: d.adminEmail,
         limiteEmpresas: d.limiteEmpresas, limiteUsuarios: d.limiteUsuarios,
@@ -141,6 +174,28 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       const r = await redefinirSenha(tenant.id, d.email);
       await auditar("erp.redefinir-senha", { email: d.email });
       return NextResponse.json({ admin: r });
+    }
+
+    if (d.acao === "exigir-termo") {
+      const e = await atualizarEscritorio(tenant.id, { termo: { versao: d.versao, prazoEm: d.prazoEm, condicoes: d.condicoes } });
+      await guardarUso(tenant.id, e);
+      await auditar("erp.exigir-termo", { versao: d.versao, prazoEm: d.prazoEm, valorMensalCents: d.condicoes.valorMensalCents });
+      return NextResponse.json({ termo: e.termo });
+    }
+    if (d.acao === "retirar-termo") {
+      const e = await atualizarEscritorio(tenant.id, { termo: null });
+      await auditar("erp.retirar-termo", {});
+      return NextResponse.json({ termo: e.termo });
+    }
+    if (d.acao === "publicar-aviso") {
+      const e = await atualizarEscritorio(tenant.id, { aviso: { titulo: d.titulo, texto: d.texto, tom: d.tom, ate: d.ate || null } });
+      await auditar("erp.publicar-aviso", { titulo: d.titulo, tom: d.tom, ate: d.ate || null });
+      return NextResponse.json({ aviso: e.aviso });
+    }
+    if (d.acao === "retirar-aviso") {
+      await atualizarEscritorio(tenant.id, { aviso: null });
+      await auditar("erp.retirar-aviso", {});
+      return NextResponse.json({ aviso: null });
     }
 
     // sincronizar

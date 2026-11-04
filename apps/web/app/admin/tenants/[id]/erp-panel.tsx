@@ -16,7 +16,20 @@ type Erp = {
   empresasAtivas: number | null; usuariosEquipe: number | null; acessosPortal: number | null;
   ultimaAtividadeEm: string | null; usoAtualizadoEm: string | null;
 };
-type Resp = { configurado: boolean; erp: Erp | null };
+type Termo = {
+  versao: string | null; prazoEm: string | null; situacao: "NAO_EXIGIDO" | "ACEITO" | "PENDENTE" | "VENCIDO" | "RECUSADO"; bloqueado: boolean; diasRestantes: number | null;
+  decisao: { decisao: "ACEITO" | "RECUSADO"; em: string; signatario: string; email: string; hash: string } | null;
+};
+type Aviso = { titulo: string; texto: string; tom: "INFO" | "ALERTA" | "URGENTE"; ate: string | null };
+type Condicoes = { plano: string; valorMensalCents: number; valorTabelaCents: number; garantiaMeses: number; primeiraCobranca: string; fimDoTeste: string; diaVencimento: number; observacao?: string };
+type Aceite = { id: string; versao: string; decisao: "ACEITO" | "RECUSADO"; em: string; signatario: string; cpf: string; email: string; ip: string | null; hash: string };
+type Resp = {
+  configurado: boolean; erp: Erp | null; termo: Termo | null; aviso: Aviso | null;
+  sugestaoDeCondicoes: Condicoes | null; versoesDeTermo: { atual: string; versoes: string[] } | null;
+};
+const ROTULO_TERMO = { NAO_EXIGIDO: "Não exigido", ACEITO: "Aceito", PENDENTE: "Aguardando aceite", VENCIDO: "Prazo vencido — bloqueado", RECUSADO: "Recusado — bloqueado" } as const;
+const COR_TERMO = { NAO_EXIGIDO: "bg-neutral-800 text-neutral-300", ACEITO: "bg-emerald-900/60 text-emerald-300", PENDENTE: "bg-amber-900/60 text-amber-300", VENCIDO: "bg-red-900/60 text-red-300", RECUSADO: "bg-red-900/60 text-red-300" } as const;
+const dataBR = (iso: string) => iso.split("-").reverse().join("/");
 type Senha = { email: string; nome: string; senhaProvisoria: string };
 
 const fetcher = (u: string) => fetch(u).then((r) => r.json());
@@ -61,7 +74,14 @@ export function ErpPanel({ tenantId, tenantName, onSalvo }: { tenantId: string; 
             <button className="ml-3 text-neutral-400 underline" onClick={() => setSenha(null)}>ocultar</button>
           </div>
         )}
-        {erp ? <Ativo erp={erp} ocupado={ocupado} enviar={enviar} /> : <Ativar nome={tenantName} ocupado={ocupado || !data.configurado} enviar={enviar} />}
+        {erp ? (
+          <>
+            <Ativo erp={erp} ocupado={ocupado} enviar={enviar} />
+            <TermoEAviso tenantId={tenantId} data={data} ocupado={ocupado} enviar={enviar} />
+          </>
+        ) : (
+          <Ativar nome={tenantName} ocupado={ocupado || !data.configurado} enviar={enviar} />
+        )}
       </div>
     </section>
   );
@@ -76,6 +96,7 @@ function Ativar({ nome, ocupado, enviar }: { nome: string; ocupado: boolean; env
   const [admNome, setAdmNome] = useState("");
   const [admEmail, setAdmEmail] = useState("");
   const [codigo, setCodigo] = useState("");
+  const [vincular, setVincular] = useState("");
   const [msg, setMsg] = useState<string | null>(null);
 
   function escolher(p: ErpPlano) {
@@ -90,7 +111,7 @@ function Ativar({ nome, ocupado, enviar }: { nome: string; ocupado: boolean; env
     const e = le.trim() ? Number(le) : null, u = lu.trim() ? Number(lu) : null;
     if ((e !== null && !(Number.isInteger(e) && e > 0)) || (u !== null && !(Number.isInteger(u) && u > 0))) return setMsg("Limites devem ser números inteiros positivos (vazio = ilimitado).");
     setMsg(null);
-    void enviar({ acao: "ativar", plano, mensalCents: mensal, limiteEmpresas: e, limiteUsuarios: u, escritorioNome: escNome, adminNome: admNome, adminEmail: admEmail, codigo: codigo || undefined });
+    void enviar({ acao: "ativar", plano, mensalCents: mensal, limiteEmpresas: e, limiteUsuarios: u, escritorioNome: escNome, adminNome: admNome, adminEmail: admEmail, codigo: codigo || undefined, vincularCodigo: vincular || undefined });
   }
 
   return (
@@ -111,6 +132,9 @@ function Ativar({ nome, ocupado, enviar }: { nome: string; ocupado: boolean; env
         <label className="text-xs">Nome do escritório<input className={campo} value={escNome} onChange={(e) => setEscNome(e.target.value)} /></label>
         <label className="text-xs">Código de acesso (opcional)<input className={campo} value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="gerado do nome" /></label>
         <span />
+        <label className="text-xs sm:col-span-3">Escritório que já existe no ERP? Informe o código dele para ligar em vez de criar outro
+          <input className={campo} value={vincular} onChange={(e) => setVincular(e.target.value)} placeholder="ex.: guttierres (deixe vazio para criar um novo)" />
+        </label>
         <label className="text-xs">Administrador — nome<input className={campo} value={admNome} onChange={(e) => setAdmNome(e.target.value)} /></label>
         <label className="text-xs">Administrador — e-mail<input className={campo} value={admEmail} onChange={(e) => setAdmEmail(e.target.value)} /></label>
       </div>
@@ -193,6 +217,109 @@ function Ativo({ erp, ocupado, enviar }: { erp: Erp; ocupado: boolean; enviar: (
         <label className="text-xs">Redefinir senha de (e-mail)<input className={`${campo} w-64`} value={email} onChange={(e) => setEmail(e.target.value)} /></label>
         <button className={btn} disabled={ocupado || !email} onClick={async () => { if (await enviar({ acao: "redefinir-senha", email })) setEmail(""); }}>Gerar senha provisória</button>
       </div>
+    </div>
+  );
+}
+
+function TermoEAviso({ tenantId, data, ocupado, enviar }: { tenantId: string; data: Resp; ocupado: boolean; enviar: (c: Record<string, unknown>) => Promise<unknown> }) {
+  const termo = data.termo;
+  const sug = data.sugestaoDeCondicoes;
+  const [prazo, setPrazo] = useState("");
+  const [versao, setVersao] = useState(data.versoesDeTermo?.atual ?? "");
+  const [cond, setCond] = useState<Condicoes | null>(null);
+  const [aberto, setAberto] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [aceites, setAceites] = useState<Aceite[] | null>(null);
+  // Aviso
+  const [titulo, setTitulo] = useState("");
+  const [texto, setTexto] = useState("");
+  const [tom, setTom] = useState<"INFO" | "ALERTA" | "URGENTE">("INFO");
+  const [ate, setAte] = useState("");
+
+  const c = cond ?? sug;
+  const edita = (k: keyof Condicoes, v: string) => c && setCond({ ...c, [k]: k === "valorMensalCents" || k === "valorTabelaCents" ? (reaisParaCentavos(v) ?? 0) : k === "garantiaMeses" || k === "diaVencimento" ? Number(v) : v });
+
+  async function verAceites() {
+    const r = await fetch(`/api/admin/tenants/${tenantId}/erp/aceites`).then((x) => x.json()).catch(() => null);
+    setAceites(r?.aceites ?? []);
+  }
+
+  function exigir() {
+    if (!c || !versao) return setMsg("Escolha a versão do termo.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(prazo)) return setMsg("Informe o prazo do aceite.");
+    setMsg(null);
+    void enviar({ acao: "exigir-termo", versao, prazoEm: prazo, condicoes: c }).then(() => setAberto(false));
+  }
+
+  return (
+    <div className="mt-6 border-t border-neutral-800 pt-4">
+      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">Termo de aceite</h3>
+      {termo && (
+        <div className="mb-3 space-y-1 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded px-2 py-0.5 ${COR_TERMO[termo.situacao]}`}>{ROTULO_TERMO[termo.situacao]}</span>
+            {termo.versao && <span>versão {termo.versao}</span>}
+            {termo.prazoEm && <span>prazo {dataBR(termo.prazoEm)}{termo.diasRestantes !== null ? ` (${termo.diasRestantes === 0 ? "vence hoje" : `${termo.diasRestantes} dia(s)`})` : ""}</span>}
+          </div>
+          {termo.decisao && (
+            <p className="text-neutral-400">
+              {termo.decisao.decisao === "ACEITO" ? "Aceito" : "Recusado"} por {termo.decisao.signatario} ({termo.decisao.email}) em {new Date(termo.decisao.em).toLocaleString("pt-BR")} · código {termo.decisao.hash.slice(0, 12)}
+            </p>
+          )}
+        </div>
+      )}
+      {!aberto ? (
+        <div className="flex flex-wrap gap-2">
+          <button className={btn} disabled={ocupado || !data.versoesDeTermo} onClick={() => setAberto(true)}>{termo?.versao ? "Exigir de novo / mudar prazo" : "Exigir aceite do termo"}</button>
+          {termo?.versao && <button className={btn} disabled={ocupado} onClick={() => window.confirm("Retirar a exigência? O escritório deixa de ver a faixa e de ser bloqueado por esse termo.") && enviar({ acao: "retirar-termo" })}>Retirar exigência</button>}
+          <button className={btn} onClick={verAceites}>Ver comprovantes</button>
+        </div>
+      ) : (
+        c && (
+          <div className="rounded-md border border-neutral-800 p-3">
+            <p className="mb-2 text-[11px] text-neutral-500">Estas condições entram no texto que o sócio lê e aceita. Sem aceite até o prazo — ou com recusa — o escritório (e o portal dos clientes dele) fica bloqueado; nada é apagado.</p>
+            <div className="mb-2 grid gap-2 sm:grid-cols-4">
+              <label className="text-xs">Versão do termo
+                <select className={campo} value={versao} onChange={(e) => setVersao(e.target.value)}>{(data.versoesDeTermo?.versoes ?? []).map((v) => <option key={v}>{v}</option>)}</select>
+              </label>
+              <label className="text-xs">Prazo para aceitar<input type="date" className={campo} value={prazo} onChange={(e) => setPrazo(e.target.value)} /></label>
+              <label className="text-xs">Valor acordado (R$/mês)<input className={campo} defaultValue={(c.valorMensalCents / 100).toFixed(2).replace(".", ",")} onChange={(e) => edita("valorMensalCents", e.target.value)} /></label>
+              <label className="text-xs">Valor de tabela (R$)<input className={campo} defaultValue={(c.valorTabelaCents / 100).toFixed(2).replace(".", ",")} onChange={(e) => edita("valorTabelaCents", e.target.value)} /></label>
+              <label className="text-xs">Garantia (meses)<input className={campo} defaultValue={c.garantiaMeses} onChange={(e) => edita("garantiaMeses", e.target.value)} /></label>
+              <label className="text-xs">Primeira cobrança<input type="date" className={campo} defaultValue={c.primeiraCobranca} onChange={(e) => edita("primeiraCobranca", e.target.value)} /></label>
+              <label className="text-xs">Fim do teste<input type="date" className={campo} defaultValue={c.fimDoTeste} onChange={(e) => edita("fimDoTeste", e.target.value)} /></label>
+              <label className="text-xs">Dia do vencimento<input className={campo} defaultValue={c.diaVencimento} onChange={(e) => edita("diaVencimento", e.target.value)} /></label>
+            </div>
+            <label className="mb-2 block text-xs">Observação que entra no texto (opcional)<input className={campo} maxLength={300} defaultValue={c.observacao ?? ""} onChange={(e) => edita("observacao", e.target.value)} placeholder="ex.: cobrado junto com o Dilon Zap, total de R$ 694,00/mês" /></label>
+            {msg && <p className="mb-2 text-xs text-red-300">{msg}</p>}
+            <button className={btn} disabled={ocupado} onClick={exigir}>Exigir aceite</button>
+            <button className={`${btn} ml-2`} onClick={() => setAberto(false)}>Cancelar</button>
+          </div>
+        )
+      )}
+      {aceites && (
+        <div className="mt-3 text-xs">
+          {aceites.length === 0 ? <p className="text-neutral-500">Nenhuma decisão registrada.</p> : (
+            <table className="w-full text-left"><thead className="text-neutral-500"><tr><th className="pr-3">Quando</th><th className="pr-3">Decisão</th><th className="pr-3">Quem</th><th className="pr-3">CPF</th><th className="pr-3">IP</th><th>Código</th></tr></thead>
+              <tbody>{aceites.map((a) => <tr key={a.id} className="border-t border-neutral-800"><td className="pr-3 py-1">{new Date(a.em).toLocaleString("pt-BR")}</td><td className="pr-3">{a.decisao === "ACEITO" ? "Aceito" : "Recusado"} (v{a.versao})</td><td className="pr-3">{a.signatario}<div className="text-neutral-500">{a.email}</div></td><td className="pr-3">{a.cpf}</td><td className="pr-3">{a.ip ?? "—"}</td><td><code>{a.hash.slice(0, 12)}</code></td></tr>)}</tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      <h3 className="mb-2 mt-5 text-xs font-medium uppercase tracking-wide text-neutral-400">Aviso no painel do escritório</h3>
+      {data.aviso && (
+        <p className="mb-2 text-xs text-neutral-300">No ar: <strong>{data.aviso.titulo}</strong> ({data.aviso.tom.toLowerCase()}){data.aviso.ate ? ` até ${dataBR(data.aviso.ate)}` : ""} <button className="ml-2 text-neutral-400 underline" disabled={ocupado} onClick={() => enviar({ acao: "retirar-aviso" })}>retirar</button></p>
+      )}
+      <div className="grid gap-2 sm:grid-cols-4">
+        <label className="text-xs sm:col-span-2">Título<input className={campo} maxLength={120} value={titulo} onChange={(e) => setTitulo(e.target.value)} /></label>
+        <label className="text-xs">Tipo
+          <select className={campo} value={tom} onChange={(e) => setTom(e.target.value as typeof tom)}><option value="INFO">Informativo</option><option value="ALERTA">Alerta</option><option value="URGENTE">Urgente</option></select>
+        </label>
+        <label className="text-xs">Some em (opcional)<input type="date" className={campo} value={ate} onChange={(e) => setAte(e.target.value)} /></label>
+        <label className="text-xs sm:col-span-4">Mensagem<textarea className={campo} rows={2} maxLength={600} value={texto} onChange={(e) => setTexto(e.target.value)} /></label>
+      </div>
+      <button className={`${btn} mt-2`} disabled={ocupado || !titulo.trim() || !texto.trim()} onClick={() => enviar({ acao: "publicar-aviso", titulo, texto, tom, ate })}>Publicar aviso</button>
     </div>
   );
 }

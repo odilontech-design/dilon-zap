@@ -30,6 +30,11 @@ const NAV_ITEMS = [
     icon: icon(<><path d="M3 21h18M5 21V7l7-4 7 4v14" /><path d="M9 21v-5h6v5" /></>),
   },
   {
+    href: "/admin/erp",
+    label: "ERP Contabilidade",
+    icon: icon(<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 7h8M8 11h8M8 15h4" /></>),
+  },
+  {
     // O atendimento da própria Dilon Tech. Mesmo login, outro lado do sistema.
     href: "/inbox",
     label: "Meu WhatsApp",
@@ -93,7 +98,8 @@ export function AdminSidebar({ name }: { name: string }) {
         <p className="text-[11px] text-neutral-400 mb-6">Painel Dilon Tech</p>
         <nav className="flex flex-col gap-1 text-sm">
           {NAV_ITEMS.map((item) => {
-            const active = pathname === item.href || pathname?.startsWith(item.href + "/");
+            // "/admin" é a lista de empresas: as outras telas do admin têm item próprio e não acendem este.
+            const active = item.href === "/admin" ? pathname === "/admin" || Boolean(pathname?.startsWith("/admin/tenants")) : pathname === item.href || pathname?.startsWith(item.href + "/");
             return (
               <Link
                 key={item.href}

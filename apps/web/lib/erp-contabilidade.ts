@@ -9,6 +9,20 @@
 
 export type ErpUso = { empresasAtivas: number; usuariosEquipe: number; acessosPortal: number; ultimaAtividadeEm: string | null };
 
+export type ErpSituacaoTermo = "NAO_EXIGIDO" | "ACEITO" | "PENDENTE" | "VENCIDO" | "RECUSADO";
+export type ErpCondicoes = {
+  plano: string; valorMensalCents: number; valorTabelaCents: number; garantiaMeses: number;
+  primeiraCobranca: string; fimDoTeste: string; diaVencimento: number; observacao?: string;
+};
+export type ErpTermo = {
+  versao: string | null; prazoEm: string | null; condicoes: ErpCondicoes | null;
+  situacao: ErpSituacaoTermo; bloqueado: boolean; diasRestantes: number | null;
+  decisao: { decisao: "ACEITO" | "RECUSADO"; em: string; signatario: string; email: string; hash: string } | null;
+};
+export type ErpTomAviso = "INFO" | "ALERTA" | "URGENTE";
+export type ErpAviso = { titulo: string; texto: string; tom: ErpTomAviso; ate: string | null };
+export type ErpAceite = { id: string; versao: string; decisao: "ACEITO" | "RECUSADO"; em: string; signatario: string; cpf: string; email: string; ip: string | null; hash: string };
+
 export type ErpEscritorio = {
   id: string;
   slug: string;
@@ -21,6 +35,8 @@ export type ErpEscritorio = {
   limiteUsuarios: number | null;
   urlLogin: string;
   uso: ErpUso;
+  termo: ErpTermo;
+  aviso: ErpAviso | null;
 };
 
 export class ErpIndisponivelError extends Error {
@@ -80,7 +96,11 @@ export async function consultarEscritorio(zapTenantId: string): Promise<ErpEscri
 
 export async function atualizarEscritorio(
   zapTenantId: string,
-  mudancas: Partial<{ nome: string; limiteEmpresas: number | null; limiteUsuarios: number | null; ativo: boolean; motivo: string }>,
+  mudancas: Partial<{
+    nome: string; limiteEmpresas: number | null; limiteUsuarios: number | null; ativo: boolean; motivo: string;
+    termo: { versao: string; prazoEm: string; condicoes: ErpCondicoes } | null;
+    aviso: { titulo: string; texto: string; tom: ErpTomAviso; ate?: string | null } | null;
+  }>,
 ): Promise<ErpEscritorio> {
   const r = await chamar<{ escritorio: ErpEscritorio }>("PATCH", `/escritorios/${encodeURIComponent(zapTenantId)}`, mudancas);
   if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não aceitou a alteração."), r.status);
@@ -91,4 +111,30 @@ export async function redefinirSenha(zapTenantId: string, email: string): Promis
   const r = await chamar<{ email: string; nome: string; senhaProvisoria: string }>("POST", `/escritorios/${encodeURIComponent(zapTenantId)}/redefinir-senha`, { email });
   if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não redefiniu a senha."), r.status);
   return r.json;
+}
+
+export async function listarEscritorios(): Promise<ErpEscritorio[]> {
+  const r = await chamar<{ escritorios: ErpEscritorio[] }>("GET", "/escritorios");
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não respondeu como esperado."), r.status);
+  return r.json.escritorios;
+}
+
+export async function listarAceites(zapTenantId: string): Promise<ErpAceite[]> {
+  const r = await chamar<{ aceites: ErpAceite[] }>("GET", `/escritorios/${encodeURIComponent(zapTenantId)}/aceites`);
+  if (r.status === 404) return [];
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não respondeu como esperado."), r.status);
+  return r.json.aceites;
+}
+
+export async function versoesDeTermo(): Promise<{ atual: string; versoes: string[] }> {
+  const r = await chamar<{ atual: string; versoes: string[] }>("GET", "/termos");
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não respondeu como esperado."), r.status);
+  return r.json;
+}
+
+/** Liga um escritório que já existia no ERP (pelo código) a esta empresa do Zap. */
+export async function vincularEscritorio(slug: string, zapTenantId: string): Promise<ErpEscritorio> {
+  const r = await chamar<{ escritorio: ErpEscritorio }>("POST", "/escritorios/vincular", { slug, zapTenantId });
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu vincular o escritório."), r.status);
+  return r.json.escritorio;
 }
