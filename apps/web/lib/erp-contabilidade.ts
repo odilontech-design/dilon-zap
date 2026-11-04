@@ -1,0 +1,192 @@
+/**
+ * Cliente da API de plataforma do Dilon Contabilidade (/api/plataforma/*).
+ *
+ * O ERP é outro sistema, em outro servidor e com outro banco; o Zap só conversa
+ * com ele por esta API, com um token longo guardado no ambiente. Falha de rede
+ * ou do ERP nunca é engolida em silêncio: vira um erro com mensagem que o painel
+ * mostra, e o estado local só muda depois que o ERP confirmou.
+ */
+
+export type ErpUso = { empresasAtivas: number; usuariosEquipe: number; acessosPortal: number; ultimaAtividadeEm: string | null };
+
+export type ErpSituacaoTermo = "NAO_EXIGIDO" | "ACEITO" | "PENDENTE" | "VENCIDO" | "RECUSADO";
+export type ErpCondicoes = {
+  plano: string; valorMensalCents: number; valorTabelaCents: number; garantiaMeses: number;
+  primeiraCobranca: string; fimDoTeste: string; diaVencimento: number; observacao?: string;
+};
+export type ErpTermo = {
+  versao: string | null; prazoEm: string | null; condicoes: ErpCondicoes | null;
+  situacao: ErpSituacaoTermo; bloqueado: boolean; diasRestantes: number | null;
+  decisao: { decisao: "ACEITO" | "RECUSADO"; em: string; signatario: string; email: string; hash: string } | null;
+};
+export type ErpTomAviso = "INFO" | "ALERTA" | "URGENTE";
+export type ErpAviso = { titulo: string; texto: string; tom: ErpTomAviso; ate: string | null };
+export type ErpAceite = { id: string; versao: string; decisao: "ACEITO" | "RECUSADO"; em: string; signatario: string; cpf: string; email: string; ip: string | null; hash: string };
+
+export type ErpEscritorio = {
+  id: string;
+  slug: string;
+  nome: string;
+  zapTenantId: string | null;
+  ativo: boolean;
+  suspensoEm: string | null;
+  suspensoMotivo: string | null;
+  limiteEmpresas: number | null;
+  limiteUsuarios: number | null;
+  urlLogin: string;
+  uso: ErpUso;
+  termo: ErpTermo;
+  aviso: ErpAviso | null;
+  /** Módulos contratados; null = todos. */
+  modulos: string[] | null;
+  marca: { cor: string | null; temLogo: boolean };
+};
+
+export class ErpIndisponivelError extends Error {
+  constructor(mensagem: string, readonly status?: number) {
+    super(mensagem);
+    this.name = "ErpIndisponivelError";
+  }
+}
+
+export function erpConfigurado(): boolean {
+  return Boolean(process.env.ERP_CONTABILIDADE_URL && (process.env.ERP_CONTABILIDADE_TOKEN ?? "").length >= 32);
+}
+
+async function chamar<T>(metodo: "GET" | "POST" | "PATCH", caminho: string, corpo?: unknown): Promise<{ status: number; json: T }> {
+  const base = (process.env.ERP_CONTABILIDADE_URL ?? "").replace(/\/+$/, "");
+  const token = process.env.ERP_CONTABILIDADE_TOKEN ?? "";
+  if (!base || token.length < 32) throw new ErpIndisponivelError("A integração com o ERP não está configurada neste ambiente (ERP_CONTABILIDADE_URL / ERP_CONTABILIDADE_TOKEN).");
+  let resp: Response;
+  try {
+    resp = await fetch(`${base}/api/plataforma${caminho}`, {
+      method: metodo,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: corpo === undefined ? undefined : JSON.stringify(corpo),
+      cache: "no-store",
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (e) {
+    throw new ErpIndisponivelError(e instanceof Error && e.name === "TimeoutError" ? "O ERP não respondeu a tempo." : "Não foi possível falar com o ERP.");
+  }
+  const json = (await resp.json().catch(() => null)) as T;
+  if (resp.status === 401) throw new ErpIndisponivelError("O ERP recusou o token de integração. Confira ERP_CONTABILIDADE_TOKEN.", 401);
+  if (resp.status === 503) throw new ErpIndisponivelError("A API de plataforma está desativada no ERP (falta PLATAFORMA_API_TOKEN lá).", 503);
+  return { status: resp.status, json };
+}
+
+const mensagemDe = (j: unknown, padrao: string) => (j && typeof j === "object" && "erro" in j && typeof (j as { erro: unknown }).erro === "string" ? (j as { erro: string }).erro : padrao);
+
+export async function testarLigacao(): Promise<void> {
+  const r = await chamar<{ ok?: boolean }>("GET", "/saude");
+  if (r.status !== 200 || !r.json?.ok) throw new ErpIndisponivelError("O ERP respondeu de forma inesperada.", r.status);
+}
+
+export async function criarEscritorio(dados: {
+  zapTenantId: string; nome: string; slug?: string; adminNome: string; adminEmail: string; limiteEmpresas: number | null; limiteUsuarios: number | null;
+}): Promise<{ criado: boolean; escritorio: ErpEscritorio; admin?: { email: string; nome: string; senhaProvisoria: string } }> {
+  const r = await chamar<{ criado: boolean; escritorio: ErpEscritorio; admin?: { email: string; nome: string; senhaProvisoria: string }; erro?: string }>("POST", "/escritorios", dados);
+  if (r.status !== 200 && r.status !== 201) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu criar o escritório."), r.status);
+  return r.json;
+}
+
+export async function consultarEscritorio(zapTenantId: string): Promise<ErpEscritorio | null> {
+  const r = await chamar<{ escritorio: ErpEscritorio }>("GET", `/escritorios/${encodeURIComponent(zapTenantId)}`);
+  if (r.status === 404) return null;
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não respondeu como esperado."), r.status);
+  return r.json.escritorio;
+}
+
+export async function atualizarEscritorio(
+  zapTenantId: string,
+  mudancas: Partial<{
+    nome: string; limiteEmpresas: number | null; limiteUsuarios: number | null; ativo: boolean; motivo: string;
+    termo: { versao: string; prazoEm: string; condicoes: ErpCondicoes } | null;
+    aviso: { titulo: string; texto: string; tom: ErpTomAviso; ate?: string | null } | null;
+    modulos: string[] | null;
+  }>,
+): Promise<ErpEscritorio> {
+  const r = await chamar<{ escritorio: ErpEscritorio }>("PATCH", `/escritorios/${encodeURIComponent(zapTenantId)}`, mudancas);
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não aceitou a alteração."), r.status);
+  return r.json.escritorio;
+}
+
+export async function redefinirSenha(zapTenantId: string, email: string): Promise<{ email: string; nome: string; senhaProvisoria: string }> {
+  const r = await chamar<{ email: string; nome: string; senhaProvisoria: string }>("POST", `/escritorios/${encodeURIComponent(zapTenantId)}/redefinir-senha`, { email });
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não redefiniu a senha."), r.status);
+  return r.json;
+}
+
+export async function listarEscritorios(): Promise<ErpEscritorio[]> {
+  const r = await chamar<{ escritorios: ErpEscritorio[] }>("GET", "/escritorios");
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não respondeu como esperado."), r.status);
+  return r.json.escritorios;
+}
+
+export async function listarAceites(zapTenantId: string): Promise<ErpAceite[]> {
+  const r = await chamar<{ aceites: ErpAceite[] }>("GET", `/escritorios/${encodeURIComponent(zapTenantId)}/aceites`);
+  if (r.status === 404) return [];
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não respondeu como esperado."), r.status);
+  return r.json.aceites;
+}
+
+export async function versoesDeTermo(): Promise<{ atual: string; versoes: string[] }> {
+  const r = await chamar<{ atual: string; versoes: string[] }>("GET", "/termos");
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não respondeu como esperado."), r.status);
+  return r.json;
+}
+
+/** Liga um escritório que já existia no ERP (pelo código) a esta empresa do Zap. */
+export async function vincularEscritorio(slug: string, zapTenantId: string): Promise<ErpEscritorio> {
+  const r = await chamar<{ escritorio: ErpEscritorio }>("POST", "/escritorios/vincular", { slug, zapTenantId });
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu vincular o escritório."), r.status);
+  return r.json.escritorio;
+}
+
+export type ErpClausula = { titulo: string; paragrafos: string[] };
+export type ErpPreviaDoTermo = { versao: string; titulo: string; clausulas: ErpClausula[]; hash: string };
+
+/** Texto do termo com as condições, para mostrar antes do aceite. Não grava nada no ERP. */
+export async function previaDoTermo(d: { versao: string; escritorioNome: string; limiteEmpresas: number | null; limiteUsuarios: number | null; condicoes: ErpCondicoes }): Promise<ErpPreviaDoTermo> {
+  const r = await chamar<ErpPreviaDoTermo & { erro?: string }>("POST", "/termos/previa", d);
+  if (r.status !== 200) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu montar o termo."), r.status);
+  return r.json;
+}
+
+export type ContratacaoNoErp = {
+  zapTenantId: string; escritorioNome: string; slug?: string; limiteEmpresas: number | null; limiteUsuarios: number | null; modulos: string[] | null;
+  admin: { nome: string; cpf: string; email: string };
+  termo: { versao: string; hash: string; condicoes: ErpCondicoes };
+  aceite: { em: string; ip: string | null; userAgent: string | null };
+};
+
+/** Cria escritório + sócio + registro do aceite, de uma vez. Idempotente: sem `admin` na resposta, o escritório já existia. */
+export async function contratarNoErp(d: ContratacaoNoErp): Promise<{ criado: boolean; escritorio: ErpEscritorio; admin?: { email: string; nome: string; senhaProvisoria: string } }> {
+  const r = await chamar<{ criado: boolean; escritorio: ErpEscritorio; admin?: { email: string; nome: string; senhaProvisoria: string }; erro?: string }>("POST", "/contratacoes", d);
+  if (r.status !== 200 && r.status !== 201) throw new ErpIndisponivelError(mensagemDe(r.json, "O ERP não conseguiu criar o escritório."), r.status);
+  return r.json;
+}
+
+/**
+ * Exportação dos dados do escritório (ZIP). Devolve a resposta crua do ERP para a rota do painel repassar em
+ * fluxo, sem carregar o arquivo inteiro na memória (os ZIPs de documentos podem ser grandes).
+ */
+export async function baixarExportacao(zapTenantId: string, tipo: "planilhas" | "arquivos"): Promise<Response> {
+  const base = (process.env.ERP_CONTABILIDADE_URL ?? "").replace(/\/+$/, "");
+  const token = process.env.ERP_CONTABILIDADE_TOKEN ?? "";
+  if (!base || token.length < 32) throw new ErpIndisponivelError("A integração com o ERP não está configurada neste ambiente (ERP_CONTABILIDADE_URL / ERP_CONTABILIDADE_TOKEN).");
+  let resp: Response;
+  try {
+    resp = await fetch(`${base}/api/plataforma/escritorios/${encodeURIComponent(zapTenantId)}/exportacao?tipo=${tipo}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+      // Só o tempo até o ERP começar a responder: o ZIP em si pode demorar mais.
+      signal: AbortSignal.timeout(60_000),
+    });
+  } catch {
+    throw new ErpIndisponivelError("Não foi possível falar com o ERP.");
+  }
+  if (resp.status === 404) throw new ErpIndisponivelError("Escritório não encontrado no ERP.", 404);
+  if (!resp.ok || !resp.body) throw new ErpIndisponivelError("O ERP não conseguiu gerar a exportação.", resp.status);
+  return resp;
+}

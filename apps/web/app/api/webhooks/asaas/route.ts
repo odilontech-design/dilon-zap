@@ -61,6 +61,15 @@ export async function POST(req: NextRequest) {
 }
 
 /**
+ * Primeiro pagamento confirmado = fim do teste: a assinatura em TRIAL vira ACTIVE.
+ * updateMany com o filtro de status deixa a operação idempotente (evento repetido, ou
+ * assinatura que já estava ativa/pausada/cancelada, não é tocada).
+ */
+async function converterTesteAoPagar(subscriptionId: string) {
+  await prisma.subscription.updateMany({ where: { id: subscriptionId, status: "TRIAL" }, data: { status: "ACTIVE" } });
+}
+
+/**
  * Atualiza o cache de status da autorização de Pix Automático.
  *
  * ACTIVATED é também o gatilho da PRIMEIRA fatura: a Asaas só ativa a
@@ -110,6 +119,7 @@ async function tratarAutorizacao(evento: string, authorization: Record<string, u
       paidAt: new Date(),
     },
   });
+  await converterTesteAoPagar(subscription.id);
 }
 
 /**
@@ -168,6 +178,7 @@ async function tratarEventoDePagamento(evento: string, pagamento: Record<string,
       where: { id: existente.id },
       data: { status: "PAID", paidAt: new Date(dataPagamento) },
     });
+    await converterTesteAoPagar(existente.subscriptionId);
     return;
   }
 
@@ -207,4 +218,5 @@ async function tratarEventoDePagamento(evento: string, pagamento: Record<string,
     where: { id: subscription.id },
     data: { asaasSubscriptionStatus: "ACTIVE" },
   });
+  await converterTesteAoPagar(subscription.id);
 }

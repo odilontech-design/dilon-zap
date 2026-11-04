@@ -194,6 +194,8 @@ model Tenant {
   setores               Setor[]
   apiKeys               ApiKey[]
   recursos              TenantRecurso[]
+  erpContabilidade      TenantErpContabilidade?
+  contratacoesErp       ContratacaoErp[]
   businessHours         BusinessHour[]
   savedTexts            SavedText[]
   scheduledMessages     ScheduledMessage[]
@@ -2590,7 +2592,7 @@ model SdrEmpresa {
   chaveNome String
 
   /// Sempre CSV por enquanto. Nada aqui foi pesquisado nem conferido.
-  origem      String    @default("CSV")
+  origem       String    @default("CSV")
   /// Quando alguém (ou uma etapa futura) conferir os dados. Nulo = só informado.
   verificadaEm DateTime?
 
@@ -2672,24 +2674,24 @@ model SdrImportacao {
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   /// Repetir o mesmo envio (duplo clique, nova tentativa) devolve esta importação.
-  chave        String
-  nomeArquivo  String
+  chave       String
+  nomeArquivo String
   /// SHA-256 do conteúdo, para avisar que o arquivo já foi importado.
-  hashArquivo  String
-  campanhaId   String?
+  hashArquivo String
+  campanhaId  String?
   /// Campo do sistema para a coluna do arquivo.
-  mapeamento   Json
-  delimitador  String
+  mapeamento  Json
+  delimitador String
 
-  status        StatusImportacaoSdr @default(PENDENTE)
-  totalLinhas   Int                 @default(0)
-  invalidas     Int                 @default(0)
-  importadas    Int                 @default(0)
-  atualizadas   Int                 @default(0)
-  duplicadas    Int                 @default(0)
-  falhas        Int                 @default(0)
-  pendentes     Int                 @default(0)
-  erro          String?
+  status      StatusImportacaoSdr @default(PENDENTE)
+  totalLinhas Int                 @default(0)
+  invalidas   Int                 @default(0)
+  importadas  Int                 @default(0)
+  atualizadas Int                 @default(0)
+  duplicadas  Int                 @default(0)
+  falhas      Int                 @default(0)
+  pendentes   Int                 @default(0)
+  erro        String?
 
   criadoPorId   String?
   criadoPorNome String?
@@ -2736,19 +2738,19 @@ model SdrImportacaoLinha {
   erros       String[]
   avisos      String[]
 
-  empresaId  String?
+  empresaId    String?
   /// Como a duplicata foi achada: CNPJ, SITE ou NOME_UF, e se foi no próprio arquivo.
   duplicadaPor String?
   /// [{ campo, de, para }]: campos vazios preenchidos. Nunca sobrescreve valor existente.
-  mudancas   Json?
+  mudancas     Json?
   /// [{ campo, existente, arquivo }]: divergências que NÃO foram aplicadas.
-  conflitos  Json?
+  conflitos    Json?
   /// A empresa bate com a lista de supressão.
-  suprimida  Boolean @default(false)
+  suprimida    Boolean @default(false)
 
-  tentativas       Int       @default(0)
+  tentativas        Int       @default(0)
   erroProcessamento String?
-  processadaEm     DateTime?
+  processadaEm      DateTime?
 
   @@unique([importacaoId, numero])
   @@index([tenantId, importacaoId, status])
@@ -2968,8 +2970,8 @@ model SdrAcompanhamento {
   empresa   SdrEmpresa @relation(fields: [tenantId, empresaId], references: [tenantId, id], onDelete: Cascade)
 
   produto    ProdutoSdr?
-  prioridade PrioridadeSdr      @default(MEDIA)
-  etapa      EtapaComercialSdr  @default(NAO_CONTATADA)
+  prioridade PrioridadeSdr     @default(MEDIA)
+  etapa      EtapaComercialSdr @default(NAO_CONTATADA)
 
   /// Só o que a pessoa digitou. Nada aqui é pesquisado pelo sistema.
   decisorNome     String?
@@ -2979,11 +2981,11 @@ model SdrAcompanhamento {
   decisorLinkedin String?
   observacoes     String?
 
-  proximaAcao    String?
-  proximaAcaoEm  DateTime?
+  proximaAcao     String?
+  proximaAcaoEm   DateTime?
   ultimoContatoEm DateTime?
   /// Negociação criada no CRM a partir desta empresa.
-  negociacaoId   String?
+  negociacaoId    String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3001,25 +3003,25 @@ model SdrAbordagem {
   empresaId String
   empresa   SdrEmpresa @relation(fields: [tenantId, empresaId], references: [tenantId, id], onDelete: Cascade)
 
-  produto  ProdutoSdr
-  canal    CanalSdr
+  produto    ProdutoSdr
+  canal      CanalSdr
   /// PRIMEIRO_CONTATO, FOLLOW_UP ou ROTEIRO.
   finalidade String             @default("PRIMEIRO_CONTATO")
-  assunto  String?
-  texto    String
+  assunto    String?
+  texto      String
   /// Sobe a cada edição.
-  versao   Int                @default(1)
-  status   StatusAbordagemSdr @default(RASCUNHO)
+  versao     Int                @default(1)
+  status     StatusAbordagemSdr @default(RASCUNHO)
   /// IA ou MANUAL.
-  origem   String             @default("MANUAL")
+  origem     String             @default("MANUAL")
 
-  aprovadaEm       DateTime?
-  aprovadaPorId    String?
-  aprovadaPorNome  String?
+  aprovadaEm      DateTime?
+  aprovadaPorId   String?
+  aprovadaPorNome String?
   /// Cópia do texto no instante da aprovação. O contato só é registrado se o texto atual for idêntico a esta cópia.
-  textoAprovado    String?
-  assuntoAprovado  String?
-  versaoAprovada   Int?
+  textoAprovado   String?
+  assuntoAprovado String?
+  versaoAprovada  Int?
 
   criadoPorNome String?
   createdAt     DateTime @default(now())
@@ -3082,4 +3084,120 @@ model SdrEnvioEmail {
   @@unique([tenantId, abordagemId, versao, para])
   @@index([tenantId, createdAt])
   @@index([tenantId, status, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ERP Dilon Contabilidade — produto vendido à mesma empresa (tenant)
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Os planos do ERP. Quem define o que cada um permite (limites) é o Zap, que os
+// envia ao ERP; o ERP só aplica o limite recebido. Preço sugerido na lib, mas
+// o valor combinado fica em mensalCents (negociado por cliente, como a assinatura).
+enum ErpPlano {
+  ESSENCIAL
+  PROFISSIONAL
+  ESCRITORIO_PLUS
+  SOB_MEDIDA
+}
+
+enum ErpStatus {
+  ATIVO
+  SUSPENSO
+}
+
+// Quem suspendeu: AUTO = a regra de cobrança (assinatura cancelada/pausada ou
+// fatura vencida há muito); MANUAL = o Super Admin. Só a suspensão AUTO é
+// desfeita sozinha quando a cobrança se regulariza — a manual espera uma pessoa.
+enum ErpSuspensoPor {
+  AUTO
+  MANUAL
+}
+
+// Uma linha por tenant que contratou o ERP. A chave com o ERP é o id do tenant
+// (o ERP guarda como zapTenantId); escritorioSlug é o código que a equipe do
+// escritório digita no login.
+//
+// O valor do ERP faz parte do total em Subscription.amountCents (a cobrança
+// continua uma só, nas mesmas faturas). mensalCents registra a PARTE do ERP
+// para o painel mostrar a composição e para ajustar o total sem erro.
+model TenantErpContabilidade {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  escritorioId   String
+  escritorioSlug String
+  loginUrl       String
+
+  plano          ErpPlano
+  mensalCents    Int      @default(0)
+  // Nulo = sem limite. Enviados ao ERP em toda alteração.
+  limiteEmpresas Int?
+  limiteUsuarios Int?
+
+  status         ErpStatus       @default(ATIVO)
+  suspensoPor    ErpSuspensoPor?
+  suspensoMotivo String?
+  suspensoEm     DateTime?
+
+  // Último uso informado pelo ERP (cache para a tela e para o painel SaaS).
+  empresasAtivas    Int?
+  usuariosEquipe    Int?
+  acessosPortal     Int?
+  ultimaAtividadeEm DateTime?
+  usoAtualizadoEm   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Contratação online do ERP (página pública /contratar/contabilidade): o pedido só vira
+// empresa e escritório depois de confirmar o e-mail. Guarda o aceite do termo exatamente
+// como foi visto (versão + hash do texto) para o ERP registrar a prova.
+enum ContratacaoErpStatus {
+  AGUARDANDO_EMAIL
+  CRIANDO
+  CONCLUIDA
+  ERRO
+}
+
+model ContratacaoErp {
+  id     String               @id @default(cuid())
+  status ContratacaoErpStatus @default(AGUARDANDO_EMAIL)
+  plano  ErpPlano
+
+  escritorioNome  String
+  /// Só os dígitos.
+  cnpj            String
+  responsavelNome String
+  responsavelCpf  String
+  email           String
+  telefone        String
+  /// Código de acesso que a pessoa quer (opcional); sem ele, o ERP gera a partir do nome.
+  codigoDesejado  String?
+  /// Condições que a pessoa viu e aceitou (valor, datas do teste e da primeira cobrança). Valem na criação, mesmo que o link seja confirmado no dia seguinte.
+  condicoes       Json
+
+  /// SHA-256 do link enviado por e-mail; o link em si não é guardado.
+  tokenHash String   @unique
+  expiraEm  DateTime
+
+  termoVersao     String
+  termoHash       String
+  aceitoEm        DateTime
+  aceiteIp        String?
+  aceiteUserAgent String?
+
+  /// A empresa criada. SetNull: apagar a empresa não apaga o registro de quem pediu e aceitou.
+  tenantId String?
+  tenant   Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  /// O que deu errado, para a Dilon Tech ver no painel (nunca com senhas).
+  erro     String?
+
+  criadoEm    DateTime  @default(now())
+  concluidaEm DateTime?
+
+  @@index([status, criadoEm])
+  @@index([email])
+  @@index([cnpj])
 }
