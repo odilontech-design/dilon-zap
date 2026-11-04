@@ -18,3 +18,12 @@ O ERP é um produto da empresa (tenant) no Super Admin: **/admin/tenants/[id] �
 
 ## Atenção de cobrança
 Mudar o preço altera o total da assinatura, mas cobranças recorrentes já criadas no Mercado Pago/Asaas mantêm o valor antigo até gerar novo link de pagamento (o painel avisa).
+
+## Painel gerencial e termo de aceite
+
+- **/admin/erp** (menu "ERP Contabilidade"): todos os escritórios num só lugar — receita mensal do ERP, empresas e usuários em uso (com o limite do plano), última atividade, situação do termo e se o escritório está bloqueado. Abaixo, os escritórios que existem no ERP mas ainda não estão ligados a uma empresa do Zap.
+- **Ligar um escritório que já existe** (ex.: Guttierres): na ficha da empresa, ative o ERP informando o *código do escritório* no campo "Escritório que já existe no ERP?". O Zap liga o escritório à empresa em vez de criar outro.
+- **Exigir aceite do termo**: na ficha, bloco "Termo de aceite". As condições (plano, valor acordado e de tabela, garantia, primeira cobrança, fim do teste, dia de vencimento) vêm sugeridas a partir do plano e do dia de vencimento da assinatura e entram no texto que o sócio lê. O escritório vê uma faixa com a contagem regressiva; sem aceite até o prazo, **ou com recusa**, o acesso do escritório (equipe e portal dos clientes) é bloqueado — nada é apagado — e um novo aceite reabre na hora.
+- **Comprovantes**: "Ver comprovantes" lista cada decisão (aceite/recusa) com data, nome, e-mail, CPF mascarado, IP e o código (hash) do texto aceito. O texto completo fica guardado no ERP e não pode ser alterado.
+- **Aviso no painel**: o mesmo bloco publica um comunicado (informativo, alerta ou urgente) que aparece no topo do painel de todos os usuários do escritório, com data opcional para sumir.
+- O texto do termo é uma **minuta** (`src/lib/termos.ts` no repositório do ERP) e deve ser revisada por advogado antes de uso. Dados da prestadora: variáveis `EMPRESA_RAZAO_SOCIAL`, `EMPRESA_CNPJ` e `EMPRESA_FORO` no ERP.
