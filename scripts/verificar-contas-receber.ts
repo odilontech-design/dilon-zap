@@ -20,7 +20,7 @@ import {
   reembolsarParcela,
   reparcelarConta,
 } from "../apps/web/lib/contas-receber";
-import { fecharPedido } from "../apps/web/lib/orders";
+import { cancelarPedido, fecharPedido } from "../apps/web/lib/orders";
 import { criarContaPagar, estornarPagamento, listarParcelasPagar, pagarNaConta } from "../apps/web/lib/contas-pagar";
 import { registrarPagamento } from "../apps/web/lib/receivables";
 
@@ -50,6 +50,7 @@ async function main() {
   const contato = await prisma.contact.create({ data: { tenantId: tenant.id, waJid: `fumaca-${Date.now()}@s.whatsapp.net`, name: marca } });
   let caixaId: string | null = null;
   let fornecedorId: string | null = null;
+  let produtoId: string | null = null;
 
   try {
     caixaId = (await abrirCaixa(tenant.id, usuario.id, 5000)).id;
@@ -136,6 +137,37 @@ async function main() {
     const idempotente = await prisma.$transaction((tx) => garantirContaDoPedido(tx, pedido.id));
     confere("garantir a conta duas vezes devolve a mesma", idempotente.id, contaPedido!.id);
 
+    /* ------------------- cancelar e refazer pedido fechado (Believe, 14/10) ------------------- */
+    produtoId = (await prisma.product.create({ data: { tenantId: tenant.id, name: `${marca} produto`, priceCents: 150_00, stockQty: 10, isActive: false } })).id;
+    const recorrente = await prisma.order.create({
+      data: { tenantId: tenant.id, contactId: contato.id, createdById: usuario.id, items: { create: [{ productId: produtoId, nomeProduto: "Produto de teste", precoTabelaCents: 150_00, precoUnitCents: 150_00, quantidade: 2 }] } },
+    });
+    await fecharPedido({
+      orderId: recorrente.id, tenantId: tenant.id, userId: usuario.id, paymentMethod: "FIADO", descontoCents: 0, pago: false,
+      parcelamento: { entradaCents: 100_00, entradaPaga: true, entradaMeio: "DINHEIRO", numParcelas: 2, periodicidade: "SEMANAL", primeiroVencimento: dia(7) },
+    });
+    let estoque = (await prisma.product.findUniqueOrThrow({ where: { id: produtoId } })).stockQty;
+    confere("fechar baixa o estoque", estoque, 8);
+    const refeito = await cancelarPedido({ orderId: recorrente.id, tenantId: tenant.id, userId: usuario.id, userName: "fumaça", motivo: "teste de fumaça", refazer: true });
+    estoque = (await prisma.product.findUniqueOrThrow({ where: { id: produtoId } })).stockQty;
+    const contaRec = await prisma.contaReceber.findUniqueOrThrow({ where: { orderId: recorrente.id }, include: { parcelas: true } });
+    const liquido = (await prisma.pagamento.findMany({ where: { orderId: recorrente.id } })).reduce((s2, x) => s2 + x.valorCents, 0);
+    const original = await prisma.order.findUniqueOrThrow({ where: { id: recorrente.id } });
+    confere("cancelar fechado: estoque volta, entrada estornada, conta e parcelas canceladas",
+      [estoque, refeito.estornadoCents, liquido, contaRec.canceladaEm !== null, contaRec.parcelas.every((x) => x.canceladaEm !== null), original.status, original.motivoCancelamento],
+      [10, 100_00, 0, true, true, "CANCELADO", "teste de fumaça"]);
+    const copia = await prisma.order.findUniqueOrThrow({ where: { id: refeito.copia!.id }, include: { items: true } });
+    confere("refazer: cópia aguardando o financeiro, com os itens e a condição", [copia.status, copia.items.length, copia.refeitoDeNumero, copia.paymentMethod], ["AGUARDANDO_FINANCEIRO", 1, original.numero, "FIADO"]);
+
+    const aVista = await prisma.order.create({
+      data: { tenantId: tenant.id, contactId: contato.id, createdById: usuario.id, items: { create: [{ productId: produtoId, nomeProduto: "Produto de teste", precoTabelaCents: 150_00, precoUnitCents: 150_00, quantidade: 1 }] } },
+    });
+    await fecharPedido({ orderId: aVista.id, tenantId: tenant.id, userId: usuario.id, paymentMethod: "DINHEIRO", descontoCents: 0, pago: true });
+    const cAVista = await cancelarPedido({ orderId: aVista.id, tenantId: tenant.id, userId: usuario.id, userName: "fumaça", motivo: "teste de fumaça" });
+    estoque = (await prisma.product.findUniqueOrThrow({ where: { id: produtoId } })).stockQty;
+    const liquidoAVista = (await prisma.pagamento.findMany({ where: { orderId: aVista.id } })).reduce((s2, x) => s2 + x.valorCents, 0);
+    confere("cancelar pago na hora: estoque volta e o dinheiro sai em estorno", [estoque, cAVista.estornadoCents, liquidoAVista], [10, 150_00, 0]);
+
     /* ---------------------------------------- contas a pagar ---------------------------------------- */
     const contaPagar = await prisma.$transaction((tx) =>
       criarContaPagar(tx, {
@@ -173,6 +205,10 @@ async function main() {
     if (fornecedorId) {
       await prisma.contaPagar.deleteMany({ where: { fornecedorId } }).catch((e) => console.error("limpeza das contas a pagar:", e.message));
       await prisma.fornecedor.delete({ where: { id: fornecedorId } }).catch((e) => console.error("limpeza do fornecedor:", e.message));
+    }
+    if (produtoId) {
+      await prisma.stockMovement.deleteMany({ where: { productId: produtoId } }).catch((e) => console.error("limpeza do estoque:", e.message));
+      await prisma.product.delete({ where: { id: produtoId } }).catch((e) => console.error("limpeza do produto:", e.message));
     }
     if (caixaId) await prisma.caixa.delete({ where: { id: caixaId } }).catch((e) => console.error("limpeza do caixa:", e.message));
   }

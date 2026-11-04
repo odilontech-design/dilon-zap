@@ -1,4 +1,4 @@
-import { corDoTextoSobre, type Recibo } from "./recibo";
+import { corDoTextoSobre, corLegivelSobre, type Recibo } from "./recibo";
 
 /**
  * Recibo visual para enviar como imagem pelo WhatsApp.
@@ -24,6 +24,10 @@ export function ReciboImagemJSX({
   const mutedColor = "#64748b";
   const lightBorder = "#e2e8f0";
   const lightBg = "#f8fafc";
+  // A cor da marca como TEXTO precisa de contraste: o TOTAL fica sobre o
+  // fundo claro e, com uma cor de marca clara, sumia (ver corLegivelSobre).
+  const corDoValor = corLegivelSobre(accentColor, lightBg);
+  const corDoAjuste = corLegivelSobre(accentColor, bgColor);
 
   return (
     <div
@@ -122,7 +126,7 @@ export function ReciboImagemJSX({
               display: "flex",
               flexDirection: "column",
               padding: "10px 0",
-              borderBottom: i < recibo.itens.length - 1 ? `1px dotted ${lightBorder}` : "none",
+              borderBottom: i < recibo.itens.length - 1 ? `1px solid ${lightBorder}` : "none",
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -133,7 +137,7 @@ export function ReciboImagemJSX({
               <span style={{ fontSize: 14, fontWeight: 600, flexShrink: 0 }}>{item.total}</span>
             </div>
             {item.ajuste && (
-              <span style={{ fontSize: 11, color: accentColor, marginTop: 2 }}>{item.ajuste}</span>
+              <span style={{ fontSize: 11, color: corDoAjuste, marginTop: 2 }}>{item.ajuste}</span>
             )}
           </div>
         ))}
@@ -170,7 +174,7 @@ export function ReciboImagemJSX({
                 justifyContent: "space-between",
                 fontSize: 24,
                 fontWeight: 700,
-                color: accentColor,
+                color: corDoValor,
                 marginTop: 4,
               }}
             >
@@ -206,12 +210,12 @@ export function ReciboImagemJSX({
             letterSpacing: 1,
             padding: "8px 32px",
             borderRadius: 6,
-            backgroundColor: recibo.situacao === "PAGO" ? "#dcfce7" : "#fef9c3",
-            color: recibo.situacao === "PAGO" ? "#166534" : "#854d0e",
-            border: `1.5px solid ${recibo.situacao === "PAGO" ? "#86efac" : "#fde047"}`,
+            backgroundColor: recibo.situacao === "PAGO" ? "#dcfce7" : recibo.situacao === "ORCAMENTO" ? "#e0f2fe" : "#fef9c3",
+            color: recibo.situacao === "PAGO" ? "#166534" : recibo.situacao === "ORCAMENTO" ? "#075985" : "#854d0e",
+            border: `1.5px solid ${recibo.situacao === "PAGO" ? "#86efac" : recibo.situacao === "ORCAMENTO" ? "#7dd3fc" : "#fde047"}`,
           }}
         >
-          {recibo.situacao === "PAGO" ? "PAGO" : "PAGAMENTO PENDENTE"}
+          {recibo.situacao === "PAGO" ? "PAGO" : recibo.situacao === "ORCAMENTO" ? "ORÇAMENTO" : "PAGAMENTO PENDENTE"}
         </div>
       </div>
 

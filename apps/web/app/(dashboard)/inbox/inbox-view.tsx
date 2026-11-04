@@ -1,8 +1,13 @@
 "use client";
 
+import { rotuloDeData } from "@/lib/rotulo-data";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useRecurso } from "@/components/recursos-context";
+import { useRecurso, useTermoPedido } from "@/components/recursos-context";
+import { TextoWhatsApp, semMarcacao } from "@/components/texto-whatsapp";
+import { lerVcards } from "@/lib/vcard";
+import { casaComBusca } from "@/lib/busca";
 import { useRouter, useSearchParams } from "next/navigation";
+import { rolarAte, rolarParaOFim } from "@/lib/rolagem";
 import useSWR from "swr";
 import EmojiPickerReact, { EmojiStyle } from "emoji-picker-react";
 import {
@@ -140,6 +145,8 @@ type Message = {
   // atualizou os participantes ainda.
   autorTelefone: string | null;
   isEdited: boolean;
+  bodyOriginal?: string | null;
+  contatoVcard?: string | null;
   isDeleted: boolean;
   isForwarded: boolean;
   retryRequestedAt: string | null;
@@ -258,8 +265,12 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
   );
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
-  const { data: statusCounts } = useSWR<Record<ConversationStatus, number>>(
-    "/api/conversations/status-counts",
+  // Mesmo filtro da lista, sem o status: o número de cada aba bate com o que
+  // ela mostra quando a atendente, o setor ou a busca estão escolhidos.
+  const filtroDasAbas = new URLSearchParams(query);
+  filtroDasAbas.delete("status");
+  const { data: statusCounts } = useSWR<Record<ConversationStatus, number> & { naoLidas?: Record<ConversationStatus, number> }>(
+    `/api/conversations/status-counts?${filtroDasAbas.toString()}`,
     fetcher,
     { refreshInterval: STATUS_COUNTS_INTERVAL }
   );
@@ -331,8 +342,15 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
               }`}
             >
               {t.label}
+              {/* Total de conversas da aba, já com o filtro aplicado. As não
+                  lidas ficam no menu da esquerda e na dica ao passar o mouse. */}
               {!!statusCounts?.[t.key] && (
                 <span
+                  title={
+                    statusCounts.naoLidas?.[t.key]
+                      ? `${statusCounts[t.key]} conversa(s), ${statusCounts.naoLidas[t.key]} mensagem(ns) não lida(s)`
+                      : `${statusCounts[t.key]} conversa(s)`
+                  }
                   className={`text-[10px] rounded-full px-1.5 py-0.5 ${
                     tab === t.key ? "bg-accent/15 text-accent" : "bg-neutral-200 text-neutral-600"
                   }`}
@@ -389,6 +407,7 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
                 className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
               >
                 <option value="">Todos</option>
+                <option value="sem">Sem responsável</option>
                 {users?.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -448,7 +467,7 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
                     <p
                       className={`text-xs truncate ${c.unreadCount > 0 ? "text-neutral-800" : "text-neutral-500"}`}
                     >
-                      {c.messages[0]?.body ?? ""}
+                      {semMarcacao(c.messages[0]?.body ?? "")}
                     </p>
                     {c.unreadCount > 0 && (
                       <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-accent text-white text-[10px] font-semibold flex items-center justify-center">
@@ -744,6 +763,18 @@ export function ConversationThread({
   const [pedidoAberto, setPedidoAberto] = useState<Pedido | null>(null);
   const [uploading, setUploading] = useState(false);
   const [recording, setRecording] = useState(false);
+  // Áudio gravado espera aqui, com player, até a pessoa ouvir e mandar (ou
+  // descartar) — antes ele saía direto ao parar a gravação, sem chance de
+  // corrigir um áudio errado.
+  const [audioPendente, setAudioPendente] = useState<{ file: File; url: string } | null>(null);
+  const [segundosGravando, setSegundosGravando] = useState(0);
+  useEffect(() => {
+    if (!recording) return;
+    setSegundosGravando(0);
+    const t = setInterval(() => setSegundosGravando((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, [recording]);
+  const tempoGravando = `${Math.floor(segundosGravando / 60)}:${String(segundosGravando % 60).padStart(2, "0")}`;
   // Imagem/arquivo colado ou anexado espera aqui até confirmar — igual o
   // WhatsApp mostra a prévia antes de mandar, em vez de sair enviando na
   // hora que a pessoa cola ou escolhe o arquivo.
@@ -763,6 +794,29 @@ export function ConversationThread({
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedMessageIds, setSelectedMessageIds] = useState<string[]>([]);
   const [reactionBarFor, setReactionBarFor] = useState<string | null>(null);
+  // Mensagens editadas com a versão original aberta (clique em "editado").
+  const [originaisAbertas, setOriginaisAbertas] = useState<Set<string>>(new Set());
+  const [enviandoContato, setEnviandoContato] = useState(false);
+  // Clicar na citação leva à mensagem original e a destaca por um instante,
+  // como no WhatsApp (pedido da Hemoderi, 14/10).
+  const [destacada, setDestacada] = useState<string | null>(null);
+  function irParaMensagem(id: string) {
+    const alvo = document.getElementById(`msg-${id}`);
+    if (!alvo) {
+      alert("A mensagem original não está nesta conversa (pode ter sido apagada).");
+      return;
+    }
+    rolarAte(messagesContainerRef.current, alvo);
+    setDestacada(id);
+    window.setTimeout(() => setDestacada((atual) => (atual === id ? null : atual)), 2000);
+  }
+  // Busca DENTRO da conversa (a lupa do WhatsApp): acha a palavra no texto, no
+  // nome de quem escreveu e no nome do arquivo, e anda entre os resultados.
+  // Vale também para Grupos, que usam esta mesma tela (André, Hemoderi, 19/10).
+  const [buscaAberta, setBuscaAberta] = useState(false);
+  const [termoBusca, setTermoBusca] = useState("");
+  const [indiceBusca, setIndiceBusca] = useState(0);
+  const buscaInputRef = useRef<HTMLInputElement>(null);
   const [fullReactionPickerFor, setFullReactionPickerFor] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const draftInputRef = useRef<HTMLTextAreaElement>(null);
@@ -799,6 +853,7 @@ export function ConversationThread({
   // mudou com a tela aberta, sessão expirou), `?? []` deixaria o objeto
   // passar e o .filter logo abaixo derrubaria o Inbox inteiro. Desligar um
   // módulo secundário não pode quebrar a tela principal do produto.
+  const termoPedido = useTermoPedido();
   const pedidosAbertos = (Array.isArray(pedidos) ? pedidos : []).filter(
     (p) => p.status === "RASCUNHO" || p.status === "AGUARDANDO_FINANCEIRO"
   );
@@ -814,6 +869,41 @@ export function ConversationThread({
     historicoOculto: boolean;
   }>(`/api/conversations/${conversationId}/messages`, fetcher, { refreshInterval: MESSAGES_INTERVAL });
   const messages = messagesData?.mensagens;
+  // Resultados em ordem de tela (antigas primeiro). A busca começa a valer com
+  // 2 letras, para não acender a conversa inteira.
+  const resultadosBusca = useMemo(() => {
+    const termo = termoBusca.trim();
+    if (!buscaAberta || termo.length < 2) return [] as string[];
+    return (messages ?? [])
+      .filter((m) => !m.isDeleted && casaComBusca([m.body, m.autorNome ?? "", m.sender?.name ?? "", m.mediaFileName ?? ""].join(" "), termo))
+      .map((m) => m.id);
+  }, [messages, termoBusca, buscaAberta]);
+  const idsDaBusca = useMemo(() => new Set(resultadosBusca), [resultadosBusca]);
+  const resultadoAtual = resultadosBusca.length > 0 ? resultadosBusca[Math.min(indiceBusca, resultadosBusca.length - 1)] : null;
+
+  function abrirBusca() {
+    setBuscaAberta(true);
+    requestAnimationFrame(() => buscaInputRef.current?.select());
+  }
+  function fecharBusca() {
+    setBuscaAberta(false);
+    setTermoBusca("");
+    setIndiceBusca(0);
+  }
+  function andarNaBusca(passo: 1 | -1) {
+    if (resultadosBusca.length === 0) return;
+    setIndiceBusca((i) => (Math.min(i, resultadosBusca.length - 1) + passo + resultadosBusca.length) % resultadosBusca.length);
+  }
+  // Ao digitar, começa pelo resultado mais RECENTE (é o que se procura quase sempre).
+  useEffect(() => {
+    setIndiceBusca(Math.max(resultadosBusca.length - 1, 0));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- só quando o termo muda
+  }, [termoBusca, buscaAberta]);
+  // Leva a tela até o resultado atual.
+  useEffect(() => {
+    if (!resultadoAtual) return;
+    rolarAte(messagesContainerRef.current, document.getElementById(`msg-${resultadoAtual}`));
+  }, [resultadoAtual, indiceBusca]);
   // As imagens desta conversa, em ordem, pra navegar entre elas no
   // visualizador. Apagada fica de fora: o conteúdo já não existe mais.
   const imagensDaConversa = useMemo(
@@ -925,7 +1015,7 @@ export function ConversationThread({
   // via onLoad, porque termina de carregar bem depois desse efeito rodar.
   function scrollToBottom(behavior: ScrollBehavior = "auto") {
     if (isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior });
+      rolarParaOFim(messagesContainerRef.current, behavior === "smooth");
     }
   }
 
@@ -1258,8 +1348,10 @@ export function ConversationThread({
     recorder.onstop = () => {
       stream.getTracks().forEach((track) => track.stop());
       const blob = new Blob(recordedChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-      const ext = blob.type.includes("ogg") ? "ogg" : "webm";
-      uploadAndSend(new File([blob], `audio.${ext}`, { type: blob.type }));
+      // O nome segue o formato real: Safari e o Chrome recente gravam em MP4.
+      const ext = blob.type.includes("ogg") ? "ogg" : blob.type.includes("mp4") ? "m4a" : "webm";
+      const file = new File([blob], `audio.${ext}`, { type: blob.type });
+      setAudioPendente({ file, url: URL.createObjectURL(blob) });
     };
     recorder.start();
     mediaRecorderRef.current = recorder;
@@ -1269,6 +1361,19 @@ export function ConversationThread({
   function stopRecording() {
     mediaRecorderRef.current?.stop();
     setRecording(false);
+  }
+
+  function descartarAudio() {
+    if (audioPendente) URL.revokeObjectURL(audioPendente.url);
+    setAudioPendente(null);
+  }
+
+  async function enviarAudio() {
+    if (!audioPendente) return;
+    const { file, url } = audioPendente;
+    setAudioPendente(null);
+    URL.revokeObjectURL(url);
+    await uploadAndSend(file);
   }
 
   async function handleBlock(noWhatsApp: boolean) {
@@ -1344,8 +1449,9 @@ export function ConversationThread({
                         : ""}
                     </p>
                   ) : (
-                    <p className="text-xs font-mono text-neutral-400 flex items-center gap-1.5">
+                    <p className="text-xs font-mono text-neutral-400 flex items-center gap-1.5 flex-wrap">
                       #{conversation.ticketNumber}
+                      <PresencaDoContato conversationId={conversationId} />
                       <SeloPendencia pendencia={conversation.contact.pendencia} />
                     </p>
                   )}
@@ -1468,6 +1574,16 @@ export function ConversationThread({
                 </button>
               )}
               <button
+                onClick={() => (buscaAberta ? fecharBusca() : abrirBusca())}
+                title="Pesquisar nesta conversa"
+                aria-label="Pesquisar nesta conversa"
+                className={`text-xs rounded-md border px-2.5 py-1.5 ${
+                  buscaAberta ? "border-accent text-accent bg-accent/5" : "border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                🔍
+              </button>
+              <button
                 onClick={toggleSelectionMode}
                 className={`text-xs rounded-md border px-2.5 py-1.5 ${
                   selectionMode ? "border-accent text-accent bg-accent/5" : "border-neutral-300 hover:bg-neutral-50"
@@ -1477,10 +1593,11 @@ export function ConversationThread({
               </button>
               <button
                 onClick={abrirPedido}
+                title={`${termoPedido.singular} desta conversa`}
                 hidden={!temPedidos || modoGrupo}
                 className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
               >
-                Pedido
+                {termoPedido.singular}
                 {pedidosAbertos.length > 0 && (
                   <span className="ml-1.5 rounded-full bg-accent text-white px-1.5 text-[10px]">
                     {pedidosAbertos.length}
@@ -1526,6 +1643,53 @@ export function ConversationThread({
           </div>
         )}
         {aviso && <AvisoDeConexao aviso={aviso} />}
+
+        {buscaAberta && (
+          <div className="flex items-center gap-2 px-3 md:px-6 py-2 border-b border-neutral-200 bg-surface">
+            <input
+              ref={buscaInputRef}
+              autoFocus
+              value={termoBusca}
+              onChange={(e) => setTermoBusca(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") fecharBusca();
+                else if (e.key === "Enter") {
+                  e.preventDefault();
+                  andarNaBusca(e.shiftKey ? 1 : -1);
+                }
+              }}
+              placeholder="Pesquisar nesta conversa (nome, clínica, palavra...)"
+              aria-label="Pesquisar nesta conversa"
+              className="flex-1 min-w-0 rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+            <span className="text-xs text-neutral-500 tabular-nums shrink-0 min-w-[5.5rem] text-right">
+              {termoBusca.trim().length < 2
+                ? ""
+                : resultadosBusca.length === 0
+                  ? "Nada encontrado"
+                  : `${Math.min(indiceBusca, resultadosBusca.length - 1) + 1} de ${resultadosBusca.length}`}
+            </span>
+            <button
+              onClick={() => andarNaBusca(-1)}
+              disabled={resultadosBusca.length === 0}
+              title="Resultado anterior (Enter)"
+              className="rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40 hover:bg-neutral-50"
+            >
+              ↑
+            </button>
+            <button
+              onClick={() => andarNaBusca(1)}
+              disabled={resultadosBusca.length === 0}
+              title="Próximo resultado (Shift+Enter)"
+              className="rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-40 hover:bg-neutral-50"
+            >
+              ↓
+            </button>
+            <button onClick={fecharBusca} title="Fechar a pesquisa (Esc)" aria-label="Fechar a pesquisa" className="text-neutral-400 hover:text-neutral-700 text-lg leading-none px-1">
+              ×
+            </button>
+          </div>
+        )}
 
         <div
           ref={messagesContainerRef}
@@ -1583,8 +1747,15 @@ export function ConversationThread({
                 )}
                 <div className="relative">
                 <div
-                  className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm ${
+                  id={`msg-${m.id}`}
+                  className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm transition-shadow duration-500 ${
                     m.direction === "OUTBOUND" ? "bg-accent text-white" : "bg-neutral-100 text-neutral-900"
+                  } ${
+                    destacada === m.id || resultadoAtual === m.id
+                      ? "ring-4 ring-amber-400"
+                      : idsDaBusca.has(m.id)
+                        ? "ring-2 ring-amber-200"
+                        : ""
                   }`}
                 >
                 {m.direction === "OUTBOUND" && m.sender && (
@@ -1612,9 +1783,12 @@ export function ConversationThread({
                       </p>
                     )}
                     {m.quotedMessage && (
-                      <div
-                        className={`mb-1.5 rounded border-l-2 pl-2 py-1 ${
-                          m.direction === "OUTBOUND" ? "border-white/50 bg-surface/10" : "border-accent/50 bg-black/5"
+                      <button
+                        type="button"
+                        onClick={() => irParaMensagem(m.quotedMessage!.id)}
+                        title="Ir para a mensagem original"
+                        className={`block w-full text-left mb-1.5 rounded border-l-2 pl-2 py-1 cursor-pointer hover:brightness-95 ${
+                          m.direction === "OUTBOUND" ? "border-white/50 bg-surface/10 hover:bg-surface/20" : "border-accent/50 bg-black/5 hover:bg-black/10"
                         }`}
                       >
                         <p className={`text-xs font-medium ${m.direction === "OUTBOUND" ? "text-white/90" : "text-accent"}`}>
@@ -1623,7 +1797,7 @@ export function ConversationThread({
                         <p className={`text-xs truncate ${m.direction === "OUTBOUND" ? "text-white/70" : "text-neutral-500"}`}>
                           {quotedSnippet(m.quotedMessage)}
                         </p>
-                      </div>
+                      </button>
                     )}
                     {m.mediaType && (
                       <MessageMedia
@@ -1632,7 +1806,24 @@ export function ConversationThread({
                         onAmpliar={() => setImagemAberta(m.id)}
                       />
                     )}
-                    {m.body && <p className="whitespace-pre-wrap">{m.body}</p>}
+                    {m.contatoVcard ? (
+                      <CartaoDeContato vcard={m.contatoVcard} escuro={m.direction === "OUTBOUND"} />
+                    ) : (
+                      m.body && (
+                        <p className="whitespace-pre-wrap break-words">
+                          <TextoWhatsApp texto={m.body} />
+                        </p>
+                      )
+                    )}
+                    {m.isEdited && m.bodyOriginal && originaisAbertas.has(m.id) && (
+                      <p
+                        className={`mt-1 whitespace-pre-wrap text-xs border-l-2 pl-2 ${
+                          m.direction === "OUTBOUND" ? "border-white/50 text-white/80" : "border-neutral-300 text-neutral-500"
+                        }`}
+                      >
+                        <span className="font-medium">Original:</span> {m.bodyOriginal}
+                      </p>
+                    )}
                   </>
                 )}
                 <div
@@ -1670,7 +1861,29 @@ export function ConversationThread({
                     <span />
                   )}
                   <div className="flex items-center gap-1 shrink-0">
-                    {m.isEdited && !m.isDeleted && <span className="italic">editado</span>}
+                    {m.isEdited && !m.isDeleted && (
+                      // Como no WhatsApp: clicar em "editado" mostra o texto
+                      // original (pedido da Hemoderi, 13/10).
+                      m.bodyOriginal ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setOriginaisAbertas((atual) => {
+                              const novo = new Set(atual);
+                              if (novo.has(m.id)) novo.delete(m.id);
+                              else novo.add(m.id);
+                              return novo;
+                            })
+                          }
+                          title="Ver a versão original"
+                          className="italic underline decoration-dotted hover:opacity-100"
+                        >
+                          editado
+                        </button>
+                      ) : (
+                        <span className="italic">editado</span>
+                      )
+                    )}
                     {m.status === "PENDING" ? (
                       // Com o número desconectado, "enviando..." sem fim faria
                       // a atendente achar que já foi.
@@ -1931,6 +2144,22 @@ export function ConversationThread({
               ícones, a caixa e o Enviar numa linha só deixavam ~100px pro
               texto — o placeholder aparecia cortado e escrever era
               incômodo. No computador continua tudo na mesma linha. */}
+          {audioPendente && (
+            <div className="mx-2.5 md:mx-4 mt-2 flex flex-wrap items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 p-2">
+              <audio controls src={audioPendente.url} className="h-9 flex-1 min-w-[200px]" />
+              <button type="button" onClick={descartarAudio} className="rounded-md px-3 py-1.5 text-sm text-red-600 hover:bg-red-50">
+                Descartar
+              </button>
+              <button
+                type="button"
+                onClick={enviarAudio}
+                disabled={uploading || aviso?.bloqueiaEnvio}
+                className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+              >
+                Enviar áudio
+              </button>
+            </div>
+          )}
           <form
             onSubmit={handleSend}
             className="relative p-2.5 md:p-4 flex flex-wrap md:flex-nowrap gap-1.5 md:gap-2 items-end"
@@ -1984,6 +2213,15 @@ export function ConversationThread({
             </button>
             <button
               type="button"
+              onClick={() => setEnviandoContato(true)}
+              disabled={uploading || recording || !!editingMessage || aviso?.bloqueiaEnvio}
+              title="Enviar contato"
+              className="text-lg text-neutral-500 hover:text-accent disabled:opacity-40 px-1"
+            >
+              👤
+            </button>
+            <button
+              type="button"
               onClick={() => setAgendando(true)}
               disabled={uploading || recording || !!editingMessage}
               title="Agendar esta mensagem"
@@ -1994,8 +2232,8 @@ export function ConversationThread({
             <button
               type="button"
               onClick={recording ? stopRecording : startRecording}
-              disabled={uploading || !!editingMessage || aviso?.bloqueiaEnvio}
-              title={recording ? "Parar gravação" : "Gravar áudio"}
+              disabled={uploading || !!editingMessage || aviso?.bloqueiaEnvio || !!audioPendente}
+              title={recording ? "Parar gravação (você ouve antes de enviar)" : "Gravar áudio"}
               className={`text-lg px-1 disabled:opacity-40 ${recording ? "text-red-600" : "text-neutral-500 hover:text-accent"}`}
             >
               {recording ? "⏹" : "🎤"}
@@ -2016,7 +2254,7 @@ export function ConversationThread({
                   : uploading
                     ? "Enviando anexo..."
                     : recording
-                      ? "Gravando áudio..."
+                      ? `Gravando áudio... ${tempoGravando} — clique em ⏹ para parar`
                       : "Escreva uma mensagem..."
               }
               disabled={uploading || recording || aviso?.bloqueiaEnvio}
@@ -2089,6 +2327,25 @@ export function ConversationThread({
             // menos 1 caractere, então mandar "" faria o "Fechar sem motivo"
             // devolver 400 e a conversa simplesmente não fechar.
             patchConversation(motivo ? { status: "RESOLVED", closeReason: motivo } : { status: "RESOLVED" });
+          }}
+        />
+      )}
+      {enviandoContato && (
+        <EnviarContato
+          onFechar={() => setEnviandoContato(false)}
+          onEscolher={async (nome, telefone) => {
+            const res = await fetch("/api/messages/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ conversationId, contato: { nome, telefone } }),
+            });
+            if (!res.ok) {
+              const b = await res.json().catch(() => ({}));
+              alert(typeof b.error === "string" ? b.error : "não deu pra enviar o contato");
+              return;
+            }
+            setEnviandoContato(false);
+            mutateMessages();
           }}
         />
       )}
@@ -2285,7 +2542,7 @@ function ForwardModal({
   );
 }
 
-function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
+export function EmojiPicker({ onPick, onClose }: { onPick: (emoji: string) => void; onClose: () => void }) {
   return (
     <>
       <div className="fixed inset-0 z-10" onClick={onClose} />
@@ -2389,7 +2646,7 @@ type SavedTextItem = {
  * comum, não a exceção: depois de remover, junta espaço duplicado, vírgula
  * solta no começo da linha e espaço antes de pontuação.
  */
-function aplicarVariaveis(corpo: string, contact: ContactRef) {
+function aplicarVariaveis(corpo: string, contact: { name?: string | null }) {
   const primeiro = contact.name?.trim().split(/\s+/)[0];
   if (primeiro) return corpo.replace(/\{nome\}/gi, primeiro);
 
@@ -2402,12 +2659,13 @@ function aplicarVariaveis(corpo: string, contact: ContactRef) {
     .trim();
 }
 
-function SavedTextPicker({
-  contact,
+export function SavedTextPicker({
+  contact = { name: null },
   onPick,
   onClose,
 }: {
-  contact: ContactRef;
+  /** Sem contato (Chat da equipe), o {nome} sai do texto. */
+  contact?: { name?: string | null };
   onPick: (corpo: string) => void;
   onClose: () => void;
 }) {
@@ -2984,7 +3242,8 @@ function ContactPanel({
         <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone</label>
         <p className="text-sm text-neutral-600">{formatPhoneDisplay(contact)}</p>
       </div>
-      <EtapasPorFunil contactId={contact.id} onSalvo={onSaved} compacto />
+      {/* Tarefas na própria conversa (Believe, 23/10): o próximo passo nasce aqui. */}
+      <EtapasPorFunil contactId={contact.id} onSalvo={onSaved} compacto comTarefas />
       <div>
         <label className="block text-xs font-medium text-neutral-700 mb-1">Anotações</label>
         <textarea
@@ -3543,44 +3802,6 @@ function MarcaAtendimento({ evento }: { evento: EventoAtendimento }) {
   );
 }
 
-/**
- * Como o WhatsApp escreve a data do separador: "Hoje" e "Ontem" por extenso,
- * dia da semana na semana corrente, e data cheia a partir daí.
- *
- * A referência é sempre a meia-noite de hoje, não "24h atrás" — senão às 9h
- * da manhã uma mensagem das 22h de anteontem cairia em "ontem".
- */
-function rotuloDeData(iso: string) {
-  const data = new Date(iso);
-  const hoje = new Date();
-  const meiaNoiteHoje = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
-  const meiaNoiteData = new Date(data.getFullYear(), data.getMonth(), data.getDate());
-  const diasAtras = Math.round((meiaNoiteHoje.getTime() - meiaNoiteData.getTime()) / 86400000);
-
-  if (diasAtras === 0) return "Hoje";
-  if (diasAtras === 1) return "Ontem";
-
-  // Passou de ontem, leva dia da semana E data completa: "Sexta-feira
-  // 14/08/2026".
-  //
-  // Antes o dia da semana aparecia sozinho na semana corrente, e a data
-  // sozinha depois disso. Os dois tinham o mesmo defeito: "Sexta-feira" não
-  // diz QUAL sexta, e "14/08" obriga a pessoa a calcular que dia da semana
-  // foi aquilo. Numa conversa que mistura cobrança e prazo de entrega, as
-  // duas juntas respondem sem esforço.
-  //
-  // O ano entra sempre, inclusive no corrente: é uma palavra a mais numa
-  // faixa que aparece poucas vezes por conversa, e resolve a dúvida em
-  // histórico que atravessa a virada do ano.
-  const diaDaSemana = data.toLocaleDateString("pt-BR", { weekday: "long" });
-  const dataCompleta = data.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-  return `${diaDaSemana.charAt(0).toUpperCase()}${diaDaSemana.slice(1)} ${dataCompleta}`;
-}
-
 /** Faixa de data entre os blocos de mensagens, igual à do WhatsApp. */
 function SeparadorDeData({ iso }: { iso: string }) {
   return (
@@ -3655,4 +3876,164 @@ function AvisoDeConexao({ aviso }: { aviso: NonNullable<ReturnType<typeof avisoD
       <p className="opacity-90">{aviso.detalhe}</p>
     </div>
   );
+}
+
+/**
+ * Cartão de contato dentro da conversa (recebido ou enviado), com atalho para
+ * conversar com o número — como o "Conversar" do WhatsApp.
+ */
+function CartaoDeContato({ vcard, escuro }: { vcard: string; escuro: boolean }) {
+  const router = useRouter();
+  const [abrindo, setAbrindo] = useState<string | null>(null);
+  const cartoes = lerVcards(vcard);
+
+  async function conversar(nome: string, telefone: string) {
+    setAbrindo(telefone);
+    try {
+      const resContato = await fetch("/api/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone: telefone, name: nome }),
+      });
+      if (!resContato.ok) return alert("não deu pra abrir esse contato");
+      const contato = await resContato.json();
+      const resConversa = await fetch(`/api/contacts/${contato.id}/start-conversation`, { method: "POST" });
+      const conversa = await resConversa.json().catch(() => ({}));
+      if (!resConversa.ok) return alert(typeof conversa.error === "string" ? conversa.error : "não deu pra abrir a conversa");
+      router.push(`/inbox?open=${conversa.id}`);
+    } finally {
+      setAbrindo(null);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 min-w-[12rem]">
+      {cartoes.map((c, i) => (
+        <div key={i} className={`rounded-md px-3 py-2 ${escuro ? "bg-white/15" : "bg-white border border-neutral-200"}`}>
+          <p className="font-medium flex items-center gap-1.5">
+            <span aria-hidden>👤</span> {c.nome}
+          </p>
+          {c.telefones.map((t) => (
+            <div key={t} className="flex items-center justify-between gap-3 mt-1">
+              <span className={`text-xs tabular-nums ${escuro ? "text-white/80" : "text-neutral-600"}`}>+{t}</span>
+              <button
+                onClick={() => conversar(c.nome, t)}
+                disabled={abrindo === t}
+                className={`text-xs font-medium hover:underline disabled:opacity-50 ${escuro ? "text-white" : "text-accent"}`}
+              >
+                {abrindo === t ? "Abrindo..." : "Conversar"}
+              </button>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+type ContatoParaEnviar = { id: string; name: string | null; phoneNumber: string | null; waJid: string };
+
+/** Escolher um contato da agenda (ou digitar nome e número) para enviar como cartão. */
+function EnviarContato({ onFechar, onEscolher }: { onFechar: () => void; onEscolher: (nome: string, telefone: string) => Promise<void> }) {
+  const { data: contatos } = useSWR<ContatoParaEnviar[]>("/api/contacts", fetcher);
+  const [busca, setBusca] = useState("");
+  const [nome, setNome] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  const termo = busca.trim().toLowerCase();
+  const digitosBusca = busca.replace(/\D/g, "");
+  const telefoneDe = (c: ContatoParaEnviar) => c.phoneNumber ?? (c.waJid.endsWith("@s.whatsapp.net") ? c.waJid.split("@")[0] : null);
+  const lista = (Array.isArray(contatos) ? contatos : [])
+    .filter((c) => telefoneDe(c))
+    .filter((c) => !termo || (c.name ?? "").toLowerCase().includes(termo) || (digitosBusca && (telefoneDe(c) ?? "").includes(digitosBusca)))
+    .slice(0, 30);
+
+  async function enviar(n: string, t: string) {
+    setEnviando(true);
+    await onEscolher(n, t);
+    setEnviando(false);
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md max-h-[85vh] flex flex-col">
+        <header className="p-4 border-b border-neutral-200">
+          <h2 className="font-semibold mb-2">Enviar contato</h2>
+          <input
+            autoFocus
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar na agenda por nome ou número"
+            className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm"
+          />
+        </header>
+        <ul className="overflow-y-auto divide-y divide-neutral-100">
+          {!contatos && <li className="p-4 text-sm text-neutral-400">Carregando...</li>}
+          {contatos && lista.length === 0 && <li className="p-4 text-sm text-neutral-400">Nenhum contato encontrado.</li>}
+          {lista.map((c) => (
+            <li key={c.id}>
+              <button
+                onClick={() => enviar(c.name || telefoneDe(c)!, telefoneDe(c)!)}
+                disabled={enviando}
+                className="w-full text-left px-4 py-2.5 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                <p className="text-sm font-medium truncate">{c.name || "Sem nome"}</p>
+                <p className="text-xs text-neutral-500 tabular-nums">+{telefoneDe(c)}</p>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <footer className="p-4 border-t border-neutral-200 flex flex-col gap-2">
+          <p className="text-xs text-neutral-500">Ou digite outro contato:</p>
+          <div className="flex gap-2">
+            <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" className="flex-1 min-w-0 rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm" />
+            <input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="(11) 99999-9999" inputMode="tel" className="w-40 rounded-md border border-neutral-300 bg-surface px-3 py-1.5 text-sm" />
+          </div>
+          <div className="flex justify-end gap-2">
+            <button onClick={onFechar} className="px-3 py-1.5 text-sm text-neutral-600">Fechar</button>
+            <button
+              onClick={() => enviar(nome.trim(), telefone)}
+              disabled={enviando || !nome.trim() || telefone.replace(/\D/g, "").length < 10}
+              className="rounded-md bg-accent px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+            >
+              {enviando ? "Enviando..." : "Enviar"}
+            </button>
+          </div>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "online", "digitando…" ou "visto por último hoje às 14:32", como no
+ * WhatsApp. Consulta lenta (20s) e só com a conversa aberta; o worker assina a
+ * presença do contato sob demanda. Contato que esconde o visto por último (ou
+ * worker fora do ar) não mostra nada — melhor nada do que um palpite.
+ */
+function PresencaDoContato({ conversationId }: { conversationId: string }) {
+  const { data } = useSWR<{ estado: "online" | "digitando" | "gravando" | "offline" | null; vistoEm: number | null }>(
+    `/api/conversations/${conversationId}/presenca`,
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : { estado: null, vistoEm: null })),
+    { refreshInterval: 20_000 }
+  );
+  if (!data?.estado) return null;
+  if (data.estado === "digitando" || data.estado === "gravando") {
+    return <span className="font-sans text-accent">{data.estado === "digitando" ? "digitando…" : "gravando áudio…"}</span>;
+  }
+  if (data.estado === "online") return <span className="font-sans text-accent">online</span>;
+  if (!data.vistoEm) return null;
+  return <span className="font-sans">visto por último {vistoPorUltimo(data.vistoEm)}</span>;
+}
+
+function vistoPorUltimo(ms: number): string {
+  const d = new Date(ms);
+  const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+  const dia = (x: Date) => x.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
+  const hoje = new Date();
+  const ontem = new Date(Date.now() - 86_400_000);
+  if (dia(d) === dia(hoje)) return `hoje às ${hora}`;
+  if (dia(d) === dia(ontem)) return `ontem às ${hora}`;
+  return `em ${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "America/Sao_Paulo" })} às ${hora}`;
 }

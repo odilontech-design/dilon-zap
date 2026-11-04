@@ -3,7 +3,9 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { deleteMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
+import { origemCanonica, origensDoTenant } from "@/lib/origens";
 import { pendenciaDoContato } from "@/lib/contas-receber";
+import { podeVerPendencia, recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import {
   ErroDeNegocio,
@@ -51,12 +53,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     prisma.stage.findMany({ where: { funilId: n.funilId }, orderBy: { position: "asc" } }),
     prisma.user.findMany({ where: { tenantId: user.tenantId }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
     prisma.motivoDePerda.findMany({ where: { tenantId: user.tenantId }, select: { id: true, nome: true, ativo: true } }),
-    prisma.negociacao.findMany({
-      where: { tenantId: user.tenantId, origem: { not: null } },
-      distinct: ["origem"],
-      select: { origem: true },
-    }),
-    pendenciaDoContato(user.tenantId, n.contactId),
+    origensDoTenant(user.tenantId),
+    podeVerPendencia(user).then((pode) => (pode ? pendenciaDoContato(user.tenantId, n.contactId) : null)),
   ]);
 
   const c = n.contact;
@@ -76,6 +74,15 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       fechadaEm: n.fechadaEm,
       motivoPerdaId: n.motivoPerdaId,
       detalhePerda: n.detalhePerda,
+      pagamento: n.pagForma
+        ? {
+            forma: n.pagForma,
+            entradaCents: n.pagEntradaCents,
+            numParcelas: n.pagNumParcelas,
+            periodicidade: n.pagPeriodicidade,
+            primeiroVencimento: n.pagPrimeiroVencimento ? n.pagPrimeiroVencimento.toISOString().slice(0, 10) : null,
+          }
+        : null,
       proximaTarefa: null,
       tarefasAtrasadas: 0,
       contato: {
@@ -94,11 +101,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     etapas: etapas.map((e) => ({ id: e.id, nome: e.name, cor: e.color, position: e.position, probabilidade: e.probabilidade })),
     usuarios,
     motivos,
-    origens: origensBrutas.map((o) => o.origem!).sort(),
+    origens: origensBrutas,
     eventos: n.eventos,
     notas: n.notas,
     anexos: n.anexos,
-    pedidos: n.pedidos,
+    // Atendente sem Pedidos (empresa que reservou isso à gerência) não vê valores.
+    pedidos: (await recursosDoUsuario(user)).has("PEDIDOS") || user.role === "SUPERADMIN" ? n.pedidos : [],
     itens: n._count.itens,
   });
 }
@@ -116,6 +124,17 @@ const schema = z.object({
   responsavelId: z.string().nullable().optional(),
   origem: z.string().trim().max(60).nullable().optional(),
   previsaoFechamento: z.string().nullable().optional(),
+  // Condição de pagamento combinada; null limpa. Vai para o pedido gerado.
+  pagamento: z
+    .object({
+      forma: z.enum(["PIX", "PIX_PENDENTE", "CARTAO", "DINHEIRO", "BOLETO", "FIADO"]),
+      entradaCents: z.number().int().min(0).max(10_000_000_000).optional(),
+      numParcelas: z.number().int().min(1).max(60).optional(),
+      periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]).optional(),
+      primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -132,6 +151,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       const resp = await prisma.user.findFirst({ where: { id: d.responsavelId, tenantId: user.tenantId }, select: { id: true } });
       if (!resp) return NextResponse.json({ error: "responsável inválido" }, { status: 400 });
     }
+    if (d.origem) d.origem = (await origemCanonica(user.tenantId, d.origem)) ?? d.origem;
 
     // Campos primeiro, depois a mudança de estado: "ganhar com o valor corrigido"
     // é um gesto só na tela e precisa gravar o valor novo no ganho.
@@ -147,6 +167,21 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
               ? new Date(d.previsaoFechamento)
               : null,
           }
+        : {}),
+      ...(d.pagamento !== undefined
+        ? (() => {
+            const p = d.pagamento;
+            // Plano de parcelas só faz sentido no Recorrente; nas outras formas
+            // fica só a forma (e, a prazo, o 1º vencimento como data combinada).
+            const recorrente = p?.forma === "FIADO";
+            return {
+              pagForma: p?.forma ?? null,
+              pagEntradaCents: recorrente ? p?.entradaCents ?? 0 : null,
+              pagNumParcelas: recorrente ? p?.numParcelas ?? 1 : null,
+              pagPeriodicidade: recorrente ? p?.periodicidade ?? "SEMANAL" : null,
+              pagPrimeiroVencimento: p?.primeiroVencimento ? new Date(`${p.primeiroVencimento}T12:00:00Z`) : null,
+            };
+          })()
         : {}),
     };
     if (Object.keys(campos).length > 0) {

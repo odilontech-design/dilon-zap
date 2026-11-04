@@ -1,0 +1,23 @@
+{
+  "name": "@dilon-zap/ambiente-teste",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Banco Postgres local e descartavel para testes. Fica fora dos Dockerfiles de proposito.",
+  "scripts": {
+    "test": "tsx src/rodar-testes.ts",
+    "site": "tsx src/rodar-site.ts",
+    "build": "tsx src/rodar-build.ts"
+  },
+  "dependencies": {
+    "@dilon-zap/db": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.16.10",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "embedded-postgres": "18.6.0-beta.19",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.2"
+  },
+  "type": "module"
+}

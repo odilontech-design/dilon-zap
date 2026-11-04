@@ -17,6 +17,8 @@ const bodySchema = z.object({
         sku: z.string().optional(),
         categoria: z.string().optional(),
         priceCents: z.number().int().min(0),
+        // 5ª coluna, opcional. Vazia não apaga o custo que já está no cadastro.
+        custoCents: z.number().int().min(0).optional(),
       })
     )
     .max(2000),
@@ -59,6 +61,7 @@ export async function POST(req: Request) {
           where: { id: existente.id },
           data: {
             priceCents: linha.priceCents,
+            ...(linha.custoCents !== undefined ? { custoCents: linha.custoCents } : {}),
             ...(linha.sku?.trim() ? { sku: linha.sku.trim() } : {}),
             ...(linha.categoria?.trim() ? { categoria: linha.categoria.trim() } : {}),
           },
@@ -72,6 +75,7 @@ export async function POST(req: Request) {
             sku: linha.sku?.trim() || null,
             categoria: linha.categoria?.trim() || null,
             priceCents: linha.priceCents,
+            custoCents: linha.custoCents ?? null,
           },
         });
         criados++;

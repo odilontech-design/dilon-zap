@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
+import { empresaSuspensa } from "@/lib/suspensao";
 
 export type CurrentUser = {
   id: string;
@@ -15,6 +16,9 @@ export async function requireUser(): Promise<CurrentUser> {
   const session = await getServerSession(authOptions);
   const user = session?.user as CurrentUser | undefined;
   if (!user) redirect("/login");
+  // Empresa com acesso suspenso não usa nada daqui, nem pelo endereço direto.
+  // SUPERADMIN passa: precisa entrar pra reativar e dar suporte.
+  if (user.role !== "SUPERADMIN" && (await empresaSuspensa(user.tenantId))) redirect("/suspenso");
   return user;
 }
 

@@ -19,7 +19,8 @@ import {
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
 
-  const carregado = await carregarPedidoDoRecibo(user.tenantId, params.id);
+  const orcamento = new URL(req.url).searchParams.get("orcamento") === "1";
+  const carregado = await carregarPedidoDoRecibo(user.tenantId, params.id, { orcamento });
   if (!carregado) {
     return NextResponse.json(
       { error: "Pedido não encontrado ou ainda não fechado." },
@@ -38,11 +39,7 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const cliente = resolverDadosDoCliente(carregado.pedido.contact, ajustes);
   const mesReferencia = resolverMesReferencia(carregado.pedido, ajustes);
 
-  const recibo = montarReciboDoPedido(
-    carregado.empresa,
-    { ...carregado.pedido, mesReferencia },
-    cliente
-  );
+  const recibo = montarReciboDoPedido(carregado.empresa, { ...carregado.pedido, mesReferencia }, cliente, { orcamento });
   const png = await desenharReciboPng(recibo, carregado.empresa.reciboLogoKey);
 
   return new Response(new Uint8Array(png), {

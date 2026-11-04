@@ -58,7 +58,7 @@ export function SetoresPanel({ podeEditar }: { podeEditar: boolean }) {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <p className="text-sm text-neutral-600 mb-6">
         Setor é para quem divide o atendimento por assunto. O menu de triagem encaminha a
         conversa para o setor, e ela fica numa fila que toda a equipe do setor enxerga —

@@ -19,6 +19,14 @@ import { montarBrCode } from "./pix";
 export type MeioDePagamento = "PIX" | "PIX_PENDENTE" | "CARTAO" | "DINHEIRO" | "BOLETO" | "FIADO";
 
 export type ReciboEntrada = {
+  /**
+   * Orçamento: o pedido ainda não fechou (a consultora manda para a cliente
+   * conferir antes — Believe, 16/10). Muda título, selo e pagamento; sem PIX
+   * nem cobrança. `plano` é a condição combinada, se houver.
+   */
+  orcamento?: {
+    plano?: { entradaCents: number | null; numParcelas: number | null; periodicidade: string | null; primeiroVencimento: Date | null } | null;
+  };
   empresa: {
     nome: string;
     reciboNome: string | null;
@@ -51,6 +59,19 @@ export type ReciboEntrada = {
     vendedor: string | null;
     itens: { nomeProduto: string; precoTabelaCents: number; precoUnitCents: number; quantidade: number }[];
     pagamentos: { valorCents: number }[];
+    /**
+     * Parcelas da conta a receber do pedido (Recorrente: entrada + parcelas).
+     * Saem detalhadas no recibo — pedido da Believe, 14/10. Ausente ou com
+     * uma parcela só, o recibo segue com o vencimento simples.
+     */
+    parcelas?: {
+      tipo: "ENTRADA" | "UNICA" | "SEMANAL" | "QUINZENAL" | "MENSAL";
+      numero: number;
+      totalParcelas: number;
+      vencimento: Date | null;
+      valorCents: number;
+      pagoCents: number;
+    }[];
   };
   cliente: {
     nome: string | null;
@@ -85,7 +106,7 @@ export type Recibo = {
   itens: ItemRecibo[];
   quantidadeDeItens: number;
   totais: (Linha & { destaque?: boolean })[];
-  situacao: "PAGO" | "PENDENTE";
+  situacao: "PAGO" | "PENDENTE" | "ORCAMENTO";
   pagamento: Linha[];
   /**
    * "Copia e cola" do PIX, já com o saldo devedor. Só existe quando o pedido
@@ -194,6 +215,60 @@ export function corDoTextoSobre(fundo: string): string {
   return luz > 0.45 ? "#1e293b" : "#ffffff";
 }
 
+function luminancia(hex: string): number {
+  const n = (i: number) => parseInt(hex.slice(i, i + 2), 16) / 255;
+  const canal = (c: number) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return 0.2126 * canal(n(1)) + 0.7152 * canal(n(3)) + 0.0722 * canal(n(5));
+}
+
+function contraste(a: string, b: string): number {
+  const [x, y] = [luminancia(a), luminancia(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+/**
+ * A cor da marca usada como TEXTO sobre fundo claro (o TOTAL, o desconto do
+ * item). Cor clara — o lilás da Believe — deixava o valor do pedido quase
+ * apagado (14/10). Escurece a mesma cor, mantendo o tom, até ter contraste de
+ * leitura (4,5:1, o mínimo da WCAG para texto); cor que já é escura passa igual.
+ */
+export function corLegivelSobre(cor: string, fundo = "#ffffff", minimo = 4.5): string {
+  if (!/^#[0-9a-fA-F]{6}$/.test(cor)) return "#1e293b";
+  if (contraste(cor, fundo) >= minimo) return cor;
+  // Escurece pela luminosidade (HSL), mantendo matiz e saturação: o lilás
+  // vira roxo, não cinza.
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(cor.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  let h = 0;
+  let sat = 0;
+  let l = (max + min) / 2;
+  if (max !== min) {
+    const d = max - min;
+    sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h /= 6;
+  }
+  const paraHex = (hh: number, ss: number, ll: number) => {
+    const q = ll < 0.5 ? ll * (1 + ss) : ll + ss - ll * ss;
+    const pp = 2 * ll - q;
+    const canal = (t: number) => {
+      const tt = t < 0 ? t + 1 : t > 1 ? t - 1 : t;
+      if (tt < 1 / 6) return pp + (q - pp) * 6 * tt;
+      if (tt < 1 / 2) return q;
+      if (tt < 2 / 3) return pp + (q - pp) * (2 / 3 - tt) * 6;
+      return pp;
+    };
+    return "#" + [canal(hh + 1 / 3), canal(hh), canal(hh - 1 / 3)].map((c) => Math.round(c * 255).toString(16).padStart(2, "0")).join("");
+  };
+  let saida = cor;
+  while (l > 0 && contraste(saida, fundo) < minimo) {
+    l = Math.max(0, l - 0.03);
+    saida = paraHex(h, sat, l);
+  }
+  return saida;
+}
+
 export function aplicarVariaveis(texto: string, valores: Record<string, string>): string {
   return texto.replace(/\{(\w+)\}/g, (original, chave: string) => valores[chave] ?? original);
 }
@@ -216,7 +291,55 @@ function mesmoDia(a: Date, b: Date, tz: string) {
   return formatar(a, tz, false) === formatar(b, tz, false);
 }
 
-export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recibo {
+/** Parcelas da conta, já com o quanto foi pago em cada uma. */
+export function parcelasDoRecibo(
+  conta:
+    | {
+        canceladaEm: Date | null;
+        parcelas: { tipo: "ENTRADA" | "UNICA" | "SEMANAL" | "QUINZENAL" | "MENSAL"; numero: number; totalParcelas: number; vencimento: Date | null; valorCents: number; pagamentos: { valorCents: number }[] }[];
+      }
+    | null
+    | undefined
+) {
+  if (!conta || conta.canceladaEm) return undefined;
+  return conta.parcelas.map(({ pagamentos, ...p }) => ({ ...p, pagoCents: pagamentos.reduce((s, x) => s + x.valorCents, 0) }));
+}
+
+export function montarRecibo(entrada: ReciboEntrada): Recibo {
+  const recibo = montarReciboBase(entrada);
+  if (!entrada.orcamento) return recibo;
+
+  // Orçamento: mesmo papel, mas é proposta — nada de "pendente", PIX ou saldo.
+  const { pedido, empresa } = entrada;
+  const tz = empresa.timezone;
+  const pagamento: Linha[] = [];
+  if (pedido.paymentMethod) pagamento.push({ rotulo: "Forma de pagamento", valor: ROTULO_MEIO[pedido.paymentMethod] });
+  const plano = entrada.orcamento.plano;
+  if (plano?.numParcelas) {
+    const intervalo =
+      plano.periodicidade === "SEMANAL" ? "semanais" : plano.periodicidade === "QUINZENAL" ? "quinzenais" : plano.periodicidade === "MENSAL" ? "mensais" : "";
+    const restante = pedido.totalCents - (plano.entradaCents ?? 0);
+    const parcela = Math.floor(restante / plano.numParcelas);
+    const condicao = [
+      plano.entradaCents ? `Entrada ${centsToBRL(plano.entradaCents)}` : null,
+      `${plano.numParcelas}x de ${centsToBRL(parcela)}${intervalo ? ` ${intervalo}` : ""}`,
+    ]
+      .filter(Boolean)
+      .join(" + ");
+    pagamento.push({ rotulo: "Condição", valor: condicao });
+    if (plano.primeiroVencimento) pagamento.push({ rotulo: "1ª parcela", valor: formatar(plano.primeiroVencimento, tz, false) });
+  }
+  return {
+    ...recibo,
+    titulo: `Orçamento nº ${pedido.numero}`,
+    situacao: "ORCAMENTO",
+    pagamento,
+    pixCopiaECola: null,
+    mensagem: "Este é um orçamento: os valores e as condições valem até a confirmação do pedido.",
+  };
+}
+
+function montarReciboBase({ empresa, pedido, cliente }: ReciboEntrada): Recibo {
   const tz = empresa.timezone;
 
   // Item sem preço de tabela (lançado à mão, fora do catálogo) não tem
@@ -275,6 +398,17 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
     totais.push({ rotulo: "Subtotal", valor: centsToBRL(pedido.subtotalCents) });
   }
   if (pedido.descontoCents > 0) totais.push({ rotulo: "Desconto", valor: `- ${centsToBRL(pedido.descontoCents)}` });
+  // Total de descontos somado, quando vem de mais de um lugar (dois itens com
+  // desconto, ou item e pedido): a cliente vê de uma vez quanto economizou —
+  // pedido da Believe, 14/10 (R$ 81 + R$ 31 = R$ 112 no pedido da Daniele).
+  const itensComDesconto = detalhado
+    ? itensBase.filter((i) => mostraDesconto && i.tabela - i.precoUnitCents > 0).length
+    : 0;
+  const fontesDeDesconto = itensComDesconto + (pedido.descontoCents > 0 ? 1 : 0);
+  const descontoTotal = (detalhado ? descontoItens : 0) + pedido.descontoCents;
+  if (fontesDeDesconto >= 2 && descontoTotal > 0) {
+    totais.push({ rotulo: "Total de descontos", valor: `- ${centsToBRL(descontoTotal)}` });
+  }
   totais.push({ rotulo: "TOTAL", valor: centsToBRL(pedido.totalCents), destaque: true });
 
   const quando = pedido.fechadoEm ?? pedido.createdAt;
@@ -296,7 +430,33 @@ export function montarRecibo({ empresa, pedido, cliente }: ReciboEntrada): Recib
       const chave = texto(empresa.reciboChavePix);
       if (chave) pagamento.push({ rotulo: "Chave PIX", valor: chave });
     }
-    if (pedido.vencimento) pagamento.push({ rotulo: "Vencimento", valor: formatar(pedido.vencimento, tz, false) });
+    const parcelas = pedido.parcelas ?? [];
+    if (parcelas.length > 1) {
+      // Recorrente: entrada e cada parcela com data e valor; as já pagas
+      // marcadas. É o que a cliente usa para se organizar.
+      const regulares = parcelas.filter((p) => p.tipo !== "ENTRADA");
+      const tipo = regulares[0]?.tipo;
+      const intervalo = tipo === "SEMANAL" ? "semanais" : tipo === "QUINZENAL" ? "quinzenais" : tipo === "MENSAL" ? "mensais" : "";
+      // Entrada dividida (29/10) numera as partes; a entrada única fica só "Entrada".
+      const qtdEntradas = parcelas.filter((p) => p.tipo === "ENTRADA").length;
+      let entradaN = 0;
+      for (const p of parcelas) {
+        const quando = p.vencimento ? formatar(p.vencimento, tz, false) : "sem data";
+        const paga = p.pagoCents >= p.valorCents;
+        pagamento.push({
+          rotulo: p.tipo === "ENTRADA" ? `Entrada${qtdEntradas > 1 ? ` ${++entradaN}/${qtdEntradas}` : ""} · ${quando}` : `Parcela ${p.numero}/${p.totalParcelas} · ${quando}`,
+          valor: `${centsToBRL(p.valorCents)}${paga ? " (pago)" : ""}`,
+        });
+      }
+      if (regulares.length > 0 && intervalo) {
+        pagamento.splice(pagamento.length - parcelas.length, 0, {
+          rotulo: "Parcelamento",
+          valor: `${regulares.length} parcela(s) ${intervalo}`,
+        });
+      }
+    } else if (pedido.vencimento) {
+      pagamento.push({ rotulo: "Vencimento", valor: formatar(pedido.vencimento, tz, false) });
+    }
     // Mesma conta de saldoDoPedido(): a verdade é o histórico de pagamentos.
     const recebido = pedido.pagamentos.reduce((s, p) => s + p.valorCents, 0);
     if (recebido > 0) {

@@ -1,3 +1,4 @@
+import { exigeValorNaEtapa, origemCanonica } from "@/lib/origens";
 import { prisma } from "@dilon-zap/db";
 import type { CurrentUser } from "@/lib/session";
 
@@ -50,6 +51,8 @@ export async function criarNegociacao(args: {
   previsaoFechamento: Date | null;
 }) {
   const etapa = await etapaDoFunil(args.stageId, args.funilId);
+  const faltaValor = await exigeValorNaEtapa(etapa.id, args.valorCents);
+  if (faltaValor) throw new ErroDeNegocio(faltaValor, 422);
   return prisma.$transaction(async (tx) => {
     const negociacao = await tx.negociacao.create({
       data: {
@@ -102,6 +105,10 @@ export async function criarNegociacao(args: {
 export async function moverNegociacao(n: NegociacaoAtual, stageId: string, quem: Quem) {
   if (n.status !== "ABERTA") throw new ErroDeNegocio("reabra a negociação antes de mover", 409);
   if (n.stageId === stageId) return;
+
+  const atual = await prisma.negociacao.findUnique({ where: { id: n.id }, select: { valorCents: true } });
+  const faltaValor = await exigeValorNaEtapa(stageId, atual?.valorCents);
+  if (faltaValor) throw new ErroDeNegocio(faltaValor, 422);
 
   const [de, para] = await Promise.all([
     prisma.stage.findUnique({ where: { id: n.stageId }, select: { name: true } }),
@@ -266,6 +273,9 @@ export async function aplicarEtapaEValorDoContato(args: {
   contato: { id: string; name: string | null; phoneNumber: string | null; waJid: string };
   stageId?: string | null;
   dealValueCents?: number;
+  /** Só ao ABRIR uma negociação por aqui (empresas que exigem os dados). */
+  responsavelId?: string | null;
+  origem?: string | null;
 }) {
   const { tenantId, quem, contato } = args;
 
@@ -281,8 +291,17 @@ export async function aplicarEtapaEValorDoContato(args: {
       orderBy: { updatedAt: "desc" },
     });
     if (aberta) {
+      // O valor digitado junto entra antes: a etapa pode exigi-lo.
+      if (args.dealValueCents !== undefined) {
+        await prisma.negociacao.update({ where: { id: aberta.id }, data: { valorCents: args.dealValueCents } });
+        await recalcularValores(aberta.id);
+      }
       await moverNegociacao(aberta, etapa.id, quem);
     } else {
+      if (args.responsavelId) {
+        const resp = await prisma.user.findFirst({ where: { id: args.responsavelId, tenantId }, select: { id: true } });
+        if (!resp) throw new ErroDeNegocio("responsável inválido", 400);
+      }
       await criarNegociacao({
         tenantId,
         quem,
@@ -292,10 +311,12 @@ export async function aplicarEtapaEValorDoContato(args: {
         titulo: contato.name?.trim() || contato.phoneNumber || contato.waJid.split("@")[0],
         valorCents: args.dealValueCents ?? 0,
         recorrencia: "UNICA",
-        responsavelId: null,
-        origem: null,
+        responsavelId: args.responsavelId ?? quem.id,
+        origem: await origemCanonica(tenantId, args.origem),
         previsaoFechamento: null,
       });
+      // O valor já entrou na negociação nova; não precisa do passo seguinte.
+      return;
     }
   }
 
@@ -403,6 +424,12 @@ export async function salvarItens(negociacaoId: string, tenantId: string, itens:
  */
 export async function gerarPedido(n: { id: string; contactId: string }, tenantId: string, quem: Quem) {
   const itens = await prisma.negociacaoItem.findMany({ where: { negociacaoId: n.id } });
+  // Condição de pagamento combinada na negociação: o pedido nasce com ela, e o
+  // financeiro só confere ao fechar (pedido da Believe, 13/10).
+  const pag = await prisma.negociacao.findUnique({
+    where: { id: n.id },
+    select: { pagForma: true, pagEntradaCents: true, pagNumParcelas: true, pagPeriodicidade: true, pagPrimeiroVencimento: true },
+  });
   if (itens.length === 0) throw new ErroDeNegocio("adicione itens à negociação antes de gerar o pedido", 400);
 
   const existente = await prisma.order.findFirst({
@@ -426,6 +453,11 @@ export async function gerarPedido(n: { id: string; contactId: string }, tenantId
       conversationId: conversa?.id ?? null,
       createdById: quem.id,
       negociacaoId: n.id,
+      paymentMethod: pag?.pagForma ?? null,
+      planoEntradaCents: pag?.pagForma === "FIADO" ? pag.pagEntradaCents : null,
+      planoNumParcelas: pag?.pagForma === "FIADO" ? pag.pagNumParcelas : null,
+      planoPeriodicidade: pag?.pagForma === "FIADO" ? pag.pagPeriodicidade : null,
+      planoPrimeiroVencimento: pag?.pagPrimeiroVencimento ?? null,
       items: {
         create: itens.map((i) => ({
           productId: i.productId,
@@ -533,6 +565,23 @@ export async function duplicarEmOutroFunil(
     previsaoFechamento: original.previsaoFechamento,
   });
 
+  // A cópia sabe de onde veio: relatórios de "todos os funis" não a contam de novo.
+  await prisma.negociacao.update({ where: { id: copia.id }, data: { duplicadaDeId: original.id } });
+
+  // A condição de pagamento combinada vai junto com a cópia.
+  if (original.pagForma) {
+    await prisma.negociacao.update({
+      where: { id: copia.id },
+      data: {
+        pagForma: original.pagForma,
+        pagEntradaCents: original.pagEntradaCents,
+        pagNumParcelas: original.pagNumParcelas,
+        pagPeriodicidade: original.pagPeriodicidade,
+        pagPrimeiroVencimento: original.pagPrimeiroVencimento,
+      },
+    });
+  }
+
   if (original.itens.length > 0) {
     await prisma.negociacaoItem.createMany({
       data: original.itens.map((i) => ({
@@ -568,4 +617,80 @@ export async function duplicarEmOutroFunil(
   });
 
   return copia;
+}
+
+/* ------------------------------------------------------------------------ *
+ * Valor vindo dos pedidos
+ * ------------------------------------------------------------------------ */
+
+/** Até quantos dias depois de ganha uma negociação ainda recebe o pedido do cliente. */
+const DIAS_GANHA_RECEBE_PEDIDO = 15;
+
+/**
+ * Liga o pedido montado na conversa à negociação do cliente e leva o valor
+ * para o CRM (reunião Believe, 29/10). Antes, só o pedido gerado DENTRO da
+ * negociação ficava ligado — e a equipe monta tudo pela conversa, então
+ * nenhuma negociação recebia valor e o funil mostrava R$ 0.
+ *
+ * Escolhe a negociação em andamento mais recente do cliente; sem nenhuma, a
+ * ganha há pouco tempo (é comum marcar ganha e o pedido fechar depois). Sem
+ * nenhuma das duas, o pedido fica solto — não inventa negociação.
+ *
+ * Nunca derruba o fluxo do pedido: falhar aqui só deixa o CRM sem o valor.
+ */
+export async function vincularPedidoANegociacao(orderId: string) {
+  try {
+    const o = await prisma.order.findUnique({
+      where: { id: orderId },
+      select: { id: true, tenantId: true, contactId: true, negociacaoId: true, status: true },
+    });
+    if (!o) return;
+    let negociacaoId = o.negociacaoId;
+    if (!negociacaoId && o.status !== "CANCELADO") {
+      const aberta = await prisma.negociacao.findFirst({
+        where: { tenantId: o.tenantId, contactId: o.contactId, status: "ABERTA" },
+        orderBy: { updatedAt: "desc" },
+        select: { id: true },
+      });
+      const ganha = aberta
+        ? null
+        : await prisma.negociacao.findFirst({
+            where: {
+              tenantId: o.tenantId,
+              contactId: o.contactId,
+              status: "GANHA",
+              fechadaEm: { gte: new Date(Date.now() - DIAS_GANHA_RECEBE_PEDIDO * 86_400_000) },
+            },
+            orderBy: { fechadaEm: "desc" },
+            select: { id: true },
+          });
+      negociacaoId = aberta?.id ?? ganha?.id ?? null;
+      if (!negociacaoId) return;
+      await prisma.order.update({ where: { id: o.id }, data: { negociacaoId } });
+    }
+    if (negociacaoId) await valorDosPedidos(negociacaoId);
+  } catch (e) {
+    console.error("[negociacao] falha ao levar o pedido para o CRM", orderId, e);
+  }
+}
+
+/**
+ * O valor da negociação passa a ser a soma dos pedidos dela que não foram
+ * cancelados: o fechado vale o total (com desconto), o em montagem vale a
+ * soma dos itens. Negociação com itens próprios não muda — lá os itens mandam.
+ */
+export async function valorDosPedidos(negociacaoId: string) {
+  const n = await prisma.negociacao.findUnique({ where: { id: negociacaoId }, select: { _count: { select: { itens: true } } } });
+  if (!n || n._count.itens > 0) return;
+  const pedidos = await prisma.order.findMany({
+    where: { negociacaoId, status: { not: "CANCELADO" } },
+    select: { status: true, totalCents: true, items: { select: { precoUnitCents: true, quantidade: true } } },
+  });
+  if (pedidos.length === 0) return;
+  const total = pedidos.reduce(
+    (s, p) => s + (p.status === "FECHADO" ? p.totalCents : p.items.reduce((t, i) => t + i.precoUnitCents * i.quantidade, 0)),
+    0
+  );
+  await prisma.negociacao.update({ where: { id: negociacaoId }, data: { valorCents: total } });
+  await recalcularValores(negociacaoId);
 }

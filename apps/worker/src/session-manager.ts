@@ -11,17 +11,22 @@ import makeWASocket, {
   // sync que chega sozinho ao parear.
   proto,
   type WAMessage,
+  type CacheStore,
   type GroupMetadata,
 } from "@whiskeysockets/baileys";
 import { Boom } from "@hapi/boom";
+import NodeCache from "@cacheable/node-cache";
 import QRCode from "qrcode";
 import pino from "pino";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { uploadMedia, downloadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { usePostgresAuthState } from "./postgres-auth-state";
 import { avisarMensagemNova } from "./aviso-mensagem";
-import { dentroDoHorario, type DiaDeAtendimento } from "./business-hours";
+import { registrarPresenca } from "./presenca";
+import { lerNotaDeVoz } from "./ogg-audio";
+import { abrirEdicaoSecreta, textoDoContato } from "./contato-e-edicao";
+import { dentroDoHorario, noIntervaloDeAlmoco, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
 import { decidirAutoResposta, avaliarAutomacao, equipeFalou, numeroTemRobo, type OpcaoUra } from "./auto-reply-decisao";
 import {
@@ -100,6 +105,34 @@ export function getSocketForTenant(tenantId: string) {
  */
 export function getSocketForSession(sessionId: string) {
   return activeSessions.get(sessionId)?.socket ?? null;
+}
+
+/**
+ * Marca como lidas, NO WHATSAPP do aparelho conectado, mensagens que a equipe
+ * leu no Dilon Zap. Sem isto, abrir a conversa aqui zerava o contador só do
+ * sistema e o celular continuava mostrando tudo como não lido — a
+ * dessincronia que a Hemoderi relatou (15/10). O caminho contrário (lido no
+ * celular → lido aqui) é o read-self/chats.update, no messages.update.
+ *
+ * Uma leitura por conversa aberta, com no máximo as últimas 50 mensagens:
+ * é o mesmo gesto de abrir o chat no celular, não varredura.
+ */
+export async function marcarLidasNoWhatsApp(
+  sessionId: string,
+  waJid: string,
+  mensagens: { id: string; participant?: string | null }[]
+): Promise<{ ok: boolean; reason?: string }> {
+  const socket = getSocketForSession(sessionId);
+  if (!socket) return { ok: false, reason: "sem conexão ativa" };
+  const chaves = mensagens.slice(-50).map((m) => ({
+    remoteJid: waJid,
+    id: m.id,
+    fromMe: false,
+    ...(m.participant ? { participant: m.participant } : {}),
+  }));
+  if (chaves.length === 0) return { ok: true };
+  await socket.readMessages(chaves);
+  return { ok: true };
 }
 
 /** Edita o texto de uma mensagem já enviada — WhatsApp só deixa editar mensagem própria (fromMe). */
@@ -264,6 +297,18 @@ export async function startSession(sessionId: string) {
   // e tanto pollOutbox quanto getSocketForTenant ficam "cegos" pra uma
   // conexão que continua viva, podendo até duplicar envio de mensagem.
   let stopped = false;
+  // Esta conexão caiu (e outra vai ser aberta no lugar). Diferente de
+  // `stopped` (a sessão foi parada de vez): aqui só ESTA instância termina.
+  //
+  // Vazamento de 27/10: a cada reconexão o laço da fila de saída da conexão
+  // antiga seguia rodando para sempre — consultando o banco a cada 1–5s,
+  // tentando enviar pelo socket fechado ("Connection Closed" aos milhares) e
+  // segurando o socket inteiro na memória (~25 MB/h, até travar o worker).
+  let encerrada = false;
+  // Cache das chaves de criptografia desta conexão. Criado aqui (e não dentro
+  // do Baileys) para poder ser FECHADO quando ela cai: o temporizador interno
+  // do NodeCache o mantém vivo para sempre se ninguém chamar close().
+  const cacheDeChaves = new NodeCache({ stdTTL: 5 * 60, useClones: false, deleteOnExpire: true });
   const entry: ActiveSession = { stop: () => (stopped = true), socket: null, tenantId: "" };
   activeSessions.set(sessionId, entry);
 
@@ -285,7 +330,7 @@ export async function startSession(sessionId: string) {
       // ao mesmo tempo), isso alarga a janela de corrida entre operações
       // concorrentes de criptografia e pode corromper o estado da sessão do
       // Signal Protocol (erros "Bad MAC" / "No matching sessions found").
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger) },
+      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, baileysLogger, cacheDeChaves as unknown as CacheStore) },
       logger: baileysLogger,
       printQRInTerminal: false,
       // Pede o histórico mais completo que o WhatsApp aceitar mandar no
@@ -349,6 +394,7 @@ export async function startSession(sessionId: string) {
     // sempre, sem socket de verdade e sem nunca chegar no pollOutbox, e
     // syncSessions() nunca mais tentava de novo — só reiniciando o worker
     // inteiro destravava. Agora tenta de novo sozinho em 3s, igual reconexão normal.
+    cacheDeChaves.close();
     activeSessions.delete(sessionId);
     logger.error({ err, sessionId }, "falha ao iniciar sessão — tentando de novo em 3s");
     if (!stopped) setTimeout(() => startSession(sessionId), 3_000);
@@ -382,7 +428,11 @@ export async function startSession(sessionId: string) {
     }
 
     if (connection === "close") {
-      activeSessions.delete(sessionId);
+      // Encerra o que é DESTA conexão antes de qualquer outra coisa: o laço
+      // da fila de saída para na próxima volta e o cache de chaves é solto.
+      encerrada = true;
+      cacheDeChaves.close();
+      if (activeSessions.get(sessionId) === entry) activeSessions.delete(sessionId);
 
       const statusCode = (lastDisconnect?.error as Boom)?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
@@ -404,11 +454,22 @@ export async function startSession(sessionId: string) {
   });
 
   socket.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
+    // "append" é o que o WhatsApp entrega de uma vez quando o aparelho
+    // vinculado volta a conectar: tudo o que chegou enquanto o worker estava
+    // fora (reconexão, reinício, deploy). Ignorar esse tipo fazia a mensagem
+    // aparecer no WhatsApp Web e nunca no Inbox — Hemoderi, 29/10, tráfego
+    // pago, em que chega lead a qualquer hora e toda queda perde alguns.
+    if (type !== "notify" && type !== "append") return;
+    const atrasada = type === "append";
+    let repetidas = 0;
+    let processadas = 0;
 
     for (const msg of messages) {
       const waJid = msg.key.remoteJid;
       if (!waJid) continue;
+      // Status de contato entregue em atraso não interessa: só marcava a data
+      // do último Status, e isso o próximo Status já refaz.
+      if (atrasada && waJid === "status@broadcast") continue;
       // status@broadcast = atualização de Status de QUALQUER contato, não uma
       // conversa de verdade — remoteJid é sempre esse valor fixo, quem postou
       // é msg.key.participant (mesmo padrão de mensagem de grupo). Só marca
@@ -426,6 +487,16 @@ export async function startSession(sessionId: string) {
         }
         continue;
       }
+      // Edição no formato novo: vem cifrada com o segredo da original. Vale
+      // para conversa e para grupo, por isso antes do desvio de grupo.
+      const secreta = normalizeMessageContent(msg.message)?.secretEncryptedMessage;
+      if (secreta) {
+        await aplicarEdicaoSecreta(sessionId, msg, secreta, socket).catch((err) =>
+          logger.error({ err, waMessageId: msg.key.id }, "falha ao abrir edição cifrada")
+        );
+        continue;
+      }
+
       // Grupo tem caminho próprio: só grava se a equipe ativou, e grava quem
       // mandou cada mensagem. Ver registrarMensagemDeGrupo.
       if (ehGrupo(waJid)) {
@@ -433,6 +504,18 @@ export async function startSession(sessionId: string) {
           logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem de grupo")
         );
         continue;
+      }
+
+      // Entrega em atraso pode repetir mensagem que já gravamos (o worker caiu
+      // antes de confirmar). A gravação já ignora a repetida, mas só depois de
+      // atualizar a conversa — o que reabriria um atendimento já resolvido — e
+      // de baixar a mídia de novo. Confere antes.
+      if (atrasada && msg.key.id) {
+        const jaTem = await prisma.message.findFirst({ where: { sessionId, waMessageId: msg.key.id }, select: { id: true } });
+        if (jaTem) {
+          repetidas++;
+          continue;
+        }
       }
 
       const content = await extractInboundContent(msg, socket).catch((err) => {
@@ -464,14 +547,50 @@ export async function startSession(sessionId: string) {
         // 6.x populava sem declarar no tipo — e nem sempre populava.
         remoteJidAlt: msg.key.remoteJidAlt ?? undefined,
         quotedWaMessageId: content.quotedWaMessageId,
+        waSecret: segredoDe(msg),
+        contatoVcard: content.contatoVcard,
+        // Entregue em atraso: vale a hora em que o cliente mandou, não a de agora.
+        momento: atrasada ? momentoDaMensagem(msg) : undefined,
         socket,
-      }).catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
+      })
+        .then(() => {
+          processadas++;
+        })
+        .catch((err) => logger.error({ err, waMessageId: msg.key.id }, "falha ao registrar mensagem"));
+    }
+
+    if (atrasada && messages.length > 0) {
+      logger.info({ sessionId, recebidas: messages.length, processadas, repetidas }, "mensagens entregues após reconexão tratadas");
     }
   });
 
   socket.ev.on("messages.update", async (updates) => {
     for (const { key, update } of updates) {
-      if (!key.fromMe || !key.id || update.status == null) continue;
+      if (!key.id) continue;
+
+      // Mensagem editada no WhatsApp (pelo cliente, ou por nós no celular): o
+      // Baileys entrega a edição aqui. Antes era ignorada e o Inbox ficava com
+      // o texto velho. Guarda o original na primeira edição, para "editado"
+      // mostrar a versão anterior (pedido da Hemoderi, 13/10).
+      const editada = update.message?.editedMessage?.message;
+      if (editada) {
+        await aplicarEdicao(sessionId, key.id, textoDaEdicao(editada)).catch((err) =>
+          logger.error({ err, waMessageId: key.id }, "falha ao aplicar edição")
+        );
+        continue;
+      }
+
+      // Lida em outro aparelho nosso (o celular): o WhatsApp manda o recibo
+      // "read-self", que chega aqui como mensagem do cliente com status de
+      // lida. Marca lida no Inbox também — lido no celular é lido aqui.
+      if (!key.fromMe && update.status === proto.WebMessageInfo.Status.READ) {
+        await prisma.message
+          .updateMany({ where: { sessionId, waMessageId: key.id, direction: "INBOUND", readAt: null }, data: { readAt: new Date() } })
+          .catch((err) => logger.error({ err }, "falha ao marcar lida pelo celular"));
+        continue;
+      }
+
+      if (!key.fromMe || update.status == null) continue;
 
       const status = mapReceiptStatus(update.status);
       if (!status) continue;
@@ -500,6 +619,19 @@ export async function startSession(sessionId: string) {
       if (!status) continue;
 
       await aplicarRecibo(sessionId, key.id, status);
+    }
+  });
+
+  // Conversa marcada como lida no celular (abriu o chat no WhatsApp, ou
+  // "marcar como lida"): o app avisa com unreadCount 0. Sem isto, o que já
+  // foi lido no celular continuava "não lido" no Inbox — a dessincronia que a
+  // Hemoderi relatou (13/10).
+  socket.ev.on("chats.update", async (chats) => {
+    for (const chat of chats) {
+      if (chat.unreadCount !== 0 || !chat.id) continue;
+      await marcarConversaComoLida(sessionId, chat.id).catch((err) =>
+        logger.error({ err, jid: chat.id }, "falha ao marcar conversa lida pelo celular")
+      );
     }
   });
 
@@ -602,6 +734,11 @@ export async function startSession(sessionId: string) {
   socket.ev.on("contacts.upsert", (contatos) => {
     void aplicarNomeDaAgenda(contatos);
   });
+  // Online / digitando / visto por último de quem a equipe está com a conversa
+  // aberta (a assinatura é feita sob demanda, ver presenca.ts).
+  socket.ev.on("presence.update", (update) => {
+    registrarPresenca(sessionId, update as Parameters<typeof registrarPresenca>[1]);
+  });
   socket.ev.on("contacts.update", (contatos) => {
     void aplicarNomeDaAgenda(contatos);
   });
@@ -662,7 +799,7 @@ export async function startSession(sessionId: string) {
     }
   });
 
-  pollOutbox(sessionId, socket, () => stopped);
+  pollOutbox(sessionId, socket, () => stopped || encerrada);
 }
 
 // Ordem de progresso de uma mensagem enviada. Existe pra que o status só
@@ -774,6 +911,35 @@ export function prefixoRespostaDeStatus(m: proto.IMessage): string | null {
   return tipo ? `↩️ Respondeu ao seu Status (${tipo})` : "↩️ Respondeu ao seu Status";
 }
 
+/** Hora em que o WhatsApp diz que a mensagem foi mandada (nunca no futuro). */
+function momentoDaMensagem(msg: WAMessage): Date | undefined {
+  const ts = Number(msg.messageTimestamp ?? 0);
+  return ts > 0 ? new Date(Math.min(ts * 1000, Date.now())) : undefined;
+}
+
+/**
+ * Texto das mensagens com botão, lista e modelo, e das respostas a elas. Até
+ * aqui eram descartadas como "tipo sem suporte" — sumiam do Inbox e só
+ * apareciam no celular. Pega o texto visível; se for só imagem ou botão sem
+ * texto, continua ignorada (e registrada no log).
+ */
+function textoInterativo(m: proto.IMessage): string {
+  const partes = [
+    m.buttonsResponseMessage?.selectedDisplayText,
+    m.listResponseMessage?.title,
+    m.templateButtonReplyMessage?.selectedDisplayText,
+    m.interactiveResponseMessage?.body?.text,
+    m.buttonsMessage?.contentText,
+    m.listMessage?.description,
+    m.templateMessage?.hydratedTemplate?.hydratedContentText,
+    m.interactiveMessage?.body?.text,
+  ];
+  return partes
+    .map((p) => p?.trim())
+    .filter((p): p is string => !!p)
+    .join("\n");
+}
+
 function comPrefixoDeStatus(m: proto.IMessage, texto: string): string {
   const prefixo = prefixoRespostaDeStatus(m);
   if (!prefixo) return texto;
@@ -789,7 +955,7 @@ function comPrefixoDeStatus(m: proto.IMessage, texto: string): string {
 async function extractInboundContent(
   msg: WAMessage,
   socket: ReturnType<typeof makeWASocket>
-): Promise<{ text: string; media?: InboundMedia; quotedWaMessageId?: string } | null> {
+): Promise<{ text: string; media?: InboundMedia; quotedWaMessageId?: string; contatoVcard?: string } | null> {
   // Desembrulha antes de olhar o tipo: PDF/arquivo enviado COM legenda chega
   // dentro de documentWithCaptionMessage (e o mesmo vale pra mensagem
   // temporária e de visualização única). Sem isso o arquivo caía no
@@ -866,7 +1032,27 @@ async function extractInboundContent(
     };
   }
 
-  const texto = comPrefixoDeStatus(m, plainText);
+  // Cartão de contato: fica como texto legível (nome e telefone) e o vCard
+  // vai junto, para o Inbox mostrar o cartão com "Abrir conversa".
+  if (m.contactMessage?.vcard) {
+    return {
+      text: textoDoContato(m.contactMessage.vcard, m.contactMessage.displayName),
+      contatoVcard: m.contactMessage.vcard,
+      quotedWaMessageId,
+    };
+  }
+  if (m.contactsArrayMessage?.contacts?.length) {
+    const cartoes = m.contactsArrayMessage.contacts.filter((c) => c.vcard);
+    if (cartoes.length) {
+      return {
+        text: cartoes.map((c) => textoDoContato(c.vcard!, c.displayName)).join("\n\n"),
+        contatoVcard: cartoes.map((c) => c.vcard).join("\n"),
+        quotedWaMessageId,
+      };
+    }
+  }
+
+  const texto = comPrefixoDeStatus(m, plainText || textoInterativo(m));
   if (!texto) {
     // Tipo que ainda não tratamos (localização, contato, enquete...). Fica no
     // log com o tipo, para a próxima reclamação de "não chegou" ter resposta.
@@ -1003,6 +1189,15 @@ async function recordMessage(params: {
   pushName?: string;
   remoteJidAlt?: string;
   quotedWaMessageId?: string;
+  /** messageSecret da mensagem (base64) — ver Message.waSecret. */
+  waSecret?: string;
+  contatoVcard?: string;
+  /**
+   * Hora em que a mensagem foi mandada, quando ela chega depois (entrega após
+   * reconexão). Sem isso, vale agora. Nunca faz a conversa "voltar no tempo":
+   * a última atividade só avança.
+   */
+  momento?: Date;
   socket: ReturnType<typeof makeWASocket>;
   // Mensagem de grupo: o contato da conversa é o grupo, e o autor vai na
   // própria mensagem. autorJid/autorNome nulos = mandada pela empresa.
@@ -1086,14 +1281,22 @@ async function recordMessage(params: {
   // Mensagem OUTBOUND vinda do celular (fora do Inbox) só atualiza a data —
   // não força status "OPEN" como faz uma mensagem nova do cliente, porque
   // não é uma demanda nova que precisa de atendimento.
+  let ultimaAtividade = new Date();
+  if (params.momento) {
+    const atual = await prisma.conversation.findUnique({
+      where: { contactId_sessionId: { contactId: contact.id, sessionId: params.sessionId } },
+      select: { lastMessageAt: true },
+    });
+    ultimaAtividade = atual && atual.lastMessageAt > params.momento ? atual.lastMessageAt : params.momento;
+  }
   const conversation = await prisma.conversation.upsert({
     where: { contactId_sessionId: { contactId: contact.id, sessionId: params.sessionId } },
-    update: isInbound ? { lastMessageAt: new Date(), status: "OPEN" } : { lastMessageAt: new Date() },
+    update: isInbound ? { lastMessageAt: ultimaAtividade, status: "OPEN" } : { lastMessageAt: ultimaAtividade },
     create: {
       tenantId: session.tenantId,
       sessionId: params.sessionId,
       contactId: contact.id,
-      lastMessageAt: new Date(),
+      lastMessageAt: ultimaAtividade,
       // Grupo não tem ciclo de atendimento: fica sempre aberto.
       status: isInbound || params.grupo ? "OPEN" : "RESOLVED",
       // Número com setor dono entrega a conversa já na fila dele — quem
@@ -1168,6 +1371,9 @@ async function recordMessage(params: {
     // enviou já foi descartado pela pré-checagem de waMessageId acima. Grupo
     // fica de fora — lá o robô nunca fala, então a marca não serviria a nada.
     deCelular: !isInbound && !params.grupo,
+    waSecret: params.waSecret,
+    contatoVcard: params.contatoVcard,
+    ...(params.momento ? { createdAt: params.momento } : {}),
     ...mediaFields,
   };
 
@@ -1186,6 +1392,15 @@ async function recordMessage(params: {
     await prisma.message.create({ data: messageData });
   }
 
+  // Respondeu (pelo celular), então leu: as mensagens do cliente antes desta
+  // deixam de contar como não lidas. Decisão da Hemoderi (13/10) — mensagem
+  // respondida aparecia como pendente no filtro de não lidas.
+  if (!isInbound) {
+    await prisma.message
+      .updateMany({ where: { conversationId: conversation.id, direction: "INBOUND", readAt: null }, data: { readAt: new Date() } })
+      .catch((err) => logger.error({ err }, "falha ao marcar lidas após resposta"));
+  }
+
   // A regra de quem cala o robô e de quando a triagem reinicia tem nome e
   // teste — ver avaliarAutomacao. Em grupo o robô nunca fala: saudação,
   // aviso de ausência e menu de triagem mandados pra dezenas de pessoas são
@@ -1201,7 +1416,12 @@ async function recordMessage(params: {
   //
   // Número marcado "sem automações" (o pessoal) também cala tudo — menu,
   // saudação, ausência e palavra-chave. Ver numeroTemRobo.
-  if (isInbound && !params.grupo && numeroTemRobo(session)) {
+  // Mensagem entregue com mais de 10 minutos de atraso (o worker estava fora)
+  // também não recebe resposta automática: "estamos fora do horário" horas
+  // depois, ou um menu de triagem fora de hora, só confunde quem já esperou.
+  // A equipe vê a mensagem no Inbox e responde.
+  const defasada = !!params.momento && Date.now() - params.momento.getTime() > 10 * 60_000;
+  if (isInbound && !params.grupo && !defasada && numeroTemRobo(session)) {
     const atendimento = await carregarAtendimento(session.tenantId);
     const menuLigado = atendimento.uraAtiva && atendimento.uraOpcoes.length > 0;
     const decisao = avaliarAutomacao(
@@ -1233,13 +1453,15 @@ async function recordMessage(params: {
         });
       }
 
+      const noAlmoco = noIntervaloDeAlmoco(atendimento.dias, atendimento.timezone, atendimento.almocoInicio, atendimento.almocoFim);
       await maybeAutoReply({
         tenantId: session.tenantId,
         sessionId: params.sessionId,
         conversationId: conversation.id,
         inboundText: params.text,
-        foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone),
-        mensagemAusencia: atendimento.outOfHoursMessage,
+        // Almoço conta como fora do horário, com a mensagem própria dele.
+        foraDoHorario: !dentroDoHorario(atendimento.dias, atendimento.timezone) || noAlmoco,
+        mensagemAusencia: noAlmoco ? atendimento.almocoMensagem || atendimento.outOfHoursMessage : atendimento.outOfHoursMessage,
         ausenciaAvisadaEm: conversation.outOfHoursNotifiedAt,
         contactId: contact.id,
         saudacaoEnviadaEm: contact.saudacaoEnviadaEm,
@@ -1423,6 +1645,8 @@ async function registrarMensagemDeGrupo(p: {
     media: content.media,
     waMessageId: p.msg.key.id ?? undefined,
     quotedWaMessageId: content.quotedWaMessageId,
+    waSecret: segredoDe(p.msg),
+    contatoVcard: content.contatoVcard,
     socket: p.socket,
     // Mandada do celular da empresa: igual a uma OUTBOUND num chat 1:1, não
     // tem participante a mostrar.
@@ -1573,6 +1797,9 @@ const cacheAtendimento = new Map<
     dados: {
       timezone: string;
       outOfHoursMessage: string | null;
+      almocoInicio: string | null;
+      almocoFim: string | null;
+      almocoMensagem: string | null;
       dias: DiaDeAtendimento[];
       uraAtiva: boolean;
       uraMensagem: string | null;
@@ -1592,6 +1819,9 @@ async function carregarAtendimento(tenantId: string) {
       select: {
         timezone: true,
         outOfHoursMessage: true,
+        almocoInicio: true,
+        almocoFim: true,
+        almocoMensagem: true,
         uraAtiva: true,
         uraMensagem: true,
         uraReinicioAposMinutos: true,
@@ -1629,6 +1859,9 @@ async function carregarAtendimento(tenantId: string) {
   const dados = {
     timezone: tenant.timezone,
     outOfHoursMessage: tenant.outOfHoursMessage,
+    almocoInicio: tenant.almocoInicio,
+    almocoFim: tenant.almocoFim,
+    almocoMensagem: tenant.almocoMensagem,
     dias,
     uraAtiva: tenant.uraAtiva,
     uraMensagem: tenant.uraMensagem,
@@ -2032,6 +2265,40 @@ async function maybeAutoReply(params: {
   wakeOutboxForTenant(params.tenantId);
 }
 
+async function conferirMidiaEnviada(enviada: WAMessage, original: Buffer) {
+  const audio = enviada.message?.audioMessage;
+  const resumo = {
+    id: enviada.key.id,
+    host: audio?.url ? new URL(audio.url).hostname : null,
+    directPath: !!audio?.directPath,
+    fileLength: Number(audio?.fileLength ?? 0),
+    tamanhoOriginal: original.length,
+    seconds: audio?.seconds,
+    mimetype: audio?.mimetype,
+  };
+  try {
+    const baixado = (await downloadMediaMessage(enviada, "buffer", {})) as Buffer;
+    const igual = createHash("sha256").update(baixado).digest("hex") === createHash("sha256").update(original).digest("hex");
+    logger.warn({ ...resumo, baixadoBytes: baixado.length, igual }, igual ? "audio enviado conferido: baixa e bate com o original" : "audio enviado NAO bate com o original");
+  } catch (err) {
+    logger.warn({ ...resumo, erro: (err as Error).message }, "audio enviado NAO baixa do WhatsApp");
+  }
+}
+
+/** Miniatura JPEG (32px de largura, como o Baileys faria) e as dimensões. */
+async function miniaturaDaImagem(buffer: Buffer): Promise<{ jpegThumbnail: string; width?: number; height?: number } | null> {
+  try {
+    const { default: sharp } = await import("sharp");
+    const img = sharp(buffer);
+    const meta = await img.metadata();
+    // Em base64, como o Baileys guarda a que ele mesmo gera.
+    const jpegThumbnail = (await img.resize(32).jpeg({ quality: 50 }).toBuffer()).toString("base64");
+    return { jpegThumbnail, width: meta.width, height: meta.height };
+  } catch {
+    return null; // sem miniatura a imagem ainda chega; só sem a prévia borrada
+  }
+}
+
 // Baixa a mídia do R2 e manda pro WhatsApp no formato certo pro tipo. Áudio
 // sempre como nota de voz (ptt) — é o formato que casa com o player estilo
 // WhatsApp que a gente mostra no inbox.
@@ -2052,14 +2319,34 @@ async function sendOutboundMedia(
   const mimetype = message.mediaMimeType ?? undefined;
 
   if (message.mediaType === "AUDIO") {
-    return socket.sendMessage(
+    // Duração e onda prontas: o cálculo do próprio Baileys lê um arquivo
+    // temporário que não existe mais e falhava sempre (ENOENT), e a nota de
+    // voz chegava sem duração — o celular do cliente recusava tocar (23/10).
+    const nota = lerNotaDeVoz(buffer);
+    const enviada = await socket.sendMessage(
       jid,
-      { audio: buffer, mimetype: mimetype ?? "audio/ogg; codecs=opus", ptt: true },
+      {
+        audio: buffer,
+        mimetype: mimetype ?? "audio/ogg; codecs=opus",
+        ptt: true,
+        ...(nota ? { seconds: nota.seconds, waveform: nota.waveform } : {}),
+      },
       options
     );
+    // Diagnóstico (23/10, "não foi possível baixar o áudio" no cliente): baixa
+    // de volta do WhatsApp o que acabou de subir, como o celular do cliente
+    // faria, e compara com o original. Só leitura, em segundo plano.
+    if (enviada) void conferirMidiaEnviada(enviada, buffer);
+    return enviada;
   }
   if (message.mediaType === "IMAGE") {
-    return socket.sendMessage(jid, { image: buffer, mimetype, caption: message.body || undefined }, options);
+    // Mesma falha do áudio na miniatura: a imagem ia sem prévia. Gerada aqui.
+    const miniatura = await miniaturaDaImagem(buffer);
+    return socket.sendMessage(
+      jid,
+      { image: buffer, mimetype, caption: message.body || undefined, ...(miniatura ?? {}) },
+      options
+    );
   }
   if (message.mediaType === "VIDEO") {
     return socket.sendMessage(jid, { video: buffer, mimetype: mimetype ?? "video/mp4", caption: message.body || undefined }, options);
@@ -2187,7 +2474,15 @@ function pollOutbox(sessionId: string, socket: ReturnType<typeof makeWASocket>, 
             });
           }
 
-          if (message.mediaType && message.mediaKey) {
+          if (message.contatoVcard) {
+            // Cartão de contato: o WhatsApp mostra com "Conversar" e "Salvar".
+            const nomeDoCartao = /^FN:(.*)$/m.exec(message.contatoVcard)?.[1]?.trim() || "Contato";
+            await socket.sendMessage(
+              jid,
+              { contacts: { displayName: nomeDoCartao, contacts: [{ vcard: message.contatoVcard }] } },
+              { quoted, messageId: waMessageId }
+            );
+          } else if (message.mediaType && message.mediaKey) {
             await sendOutboundMedia(socket, jid, messageForSend, { quoted, messageId: waMessageId });
           } else {
             await socket.sendMessage(jid, { text: displayBody }, { quoted, messageId: waMessageId });
@@ -2285,4 +2580,101 @@ export function watchForNewSessions() {
   setInterval(() => {
     syncSessions();
   }, NEW_SESSION_POLL_INTERVAL_MS);
+}
+
+
+/** O texto de uma edição: conversa simples, texto com formatação ou legenda. */
+function textoDaEdicao(m: proto.IMessage): string | null {
+  return (
+    m.conversation ??
+    m.extendedTextMessage?.text ??
+    m.imageMessage?.caption ??
+    m.videoMessage?.caption ??
+    m.documentMessage?.caption ??
+    m.protocolMessage?.editedMessage?.conversation ??
+    m.protocolMessage?.editedMessage?.extendedTextMessage?.text ??
+    null
+  );
+}
+
+async function aplicarEdicao(sessionId: string, waMessageId: string, texto: string | null) {
+  if (texto == null) return;
+  const msg = await prisma.message.findFirst({
+    where: { sessionId, waMessageId },
+    select: { id: true, body: true, bodyOriginal: true },
+  });
+  if (!msg || msg.body === texto) return;
+  await prisma.message.update({
+    where: { id: msg.id },
+    data: { body: texto, isEdited: true, editedAt: new Date(), bodyOriginal: msg.bodyOriginal ?? msg.body },
+  });
+}
+
+/** Marca como lidas as mensagens do cliente na conversa daquele chat. */
+async function marcarConversaComoLida(sessionId: string, jid: string) {
+  await prisma.message.updateMany({
+    where: {
+      sessionId,
+      direction: "INBOUND",
+      readAt: null,
+      // O chat pode vir pelo número ou pelo LID; o contato guarda um dos dois.
+      conversation: { contact: { OR: [{ waJid: jid }, { phoneNumber: jid.split("@")[0] }] } },
+    },
+    data: { readAt: new Date() },
+  });
+}
+
+
+/** O messageSecret que vem com a mensagem, em base64 (ou undefined). */
+function segredoDe(msg: WAMessage): string | undefined {
+  const segredo =
+    msg.message?.messageContextInfo?.messageSecret ?? normalizeMessageContent(msg.message)?.messageContextInfo?.messageSecret;
+  return segredo && segredo.length ? Buffer.from(segredo).toString("base64") : undefined;
+}
+
+/**
+ * Edição que chegou cifrada (secretEncryptedMessage, MESSAGE_EDIT). Acha a
+ * original pelo id, abre com o segredo dela e aplica como uma edição comum.
+ * Sem o segredo (mensagem recebida antes de guardarmos), não há como abrir —
+ * fica no log para a pergunta "por que não editou?" ter resposta.
+ */
+async function aplicarEdicaoSecreta(
+  sessionId: string,
+  msg: WAMessage,
+  secreta: proto.Message.ISecretEncryptedMessage,
+  socket: ReturnType<typeof makeWASocket>
+) {
+  if (secreta.secretEncType !== proto.Message.SecretEncryptedMessage.SecretEncType.MESSAGE_EDIT) return;
+  const idOriginal = secreta.targetMessageKey?.id;
+  if (!idOriginal || !secreta.encPayload || !secreta.encIv) return;
+
+  const original = await prisma.message.findFirst({
+    where: { sessionId, waMessageId: idOriginal },
+    select: { id: true, waSecret: true, direction: true, autorJid: true },
+  });
+  if (!original) return;
+  if (!original.waSecret) {
+    logger.warn({ waMessageId: idOriginal }, "edição cifrada de mensagem sem segredo guardado (recebida antes de 15/10)");
+    return;
+  }
+
+  const eu = [socket.user?.id, socket.user?.lid];
+  const k = msg.key as typeof msg.key & { participantAlt?: string | null };
+  const autorDaEdicao = msg.key.fromMe ? eu : [k.participant, k.participantAlt, k.remoteJid, k.remoteJidAlt];
+  const autorDaOriginal =
+    original.direction === "OUTBOUND" ? eu : [original.autorJid, k.participant, k.participantAlt, k.remoteJid, k.remoteJidAlt];
+
+  const nova = abrirEdicaoSecreta({
+    segredo: Buffer.from(original.waSecret, "base64"),
+    idOriginal,
+    autoresOriginal: autorDaOriginal,
+    autoresEdicao: autorDaEdicao,
+    encPayload: secreta.encPayload,
+    encIv: secreta.encIv,
+  });
+  if (!nova) {
+    logger.warn({ waMessageId: idOriginal }, "edição cifrada não abriu com nenhuma combinação de autor");
+    return;
+  }
+  await aplicarEdicao(sessionId, idOriginal, textoDaEdicao(nova));
 }

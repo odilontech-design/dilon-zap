@@ -37,7 +37,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const updated = await prisma.message.update({
     where: { id: message.id },
-    data: { body: parsed.data.text, isEdited: true, editedAt: new Date() },
+    // Guarda o texto antes da PRIMEIRA edição: edições seguidas não apagam o original.
+    data: { body: parsed.data.text, isEdited: true, editedAt: new Date(), bodyOriginal: message.bodyOriginal ?? message.body },
   });
   return NextResponse.json(updated);
 }

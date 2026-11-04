@@ -9,6 +9,7 @@ import { avisarNoCelular } from "@/lib/push";
 import { contactLabel } from "@/lib/contact";
 import { camposDoContato, NEGOCIACAO_ABERTA_DO_CONTATO } from "@/lib/negociacoes";
 import { pendenciaDoContato } from "@/lib/contas-receber";
+import { podeVerPendencia } from "@/lib/plano";
 
 const bodySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED"]).optional(),
@@ -39,10 +40,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   // A etapa do contato que o painel do Inbox mostra é a da negociação aberta;
   // as colunas antigas do contato não são mais atualizadas.
   const { negociacoes, ...contato } = conversation.contact;
-  const pendencia = await pendenciaDoContato(user.tenantId, contato.id);
+  const pendencia = (await podeVerPendencia(user)) ? await pendenciaDoContato(user.tenantId, contato.id) : null;
   return NextResponse.json({
     ...conversation,
-    contact: { ...contato, ...camposDoContato(negociacoes), pendencia: pendencia.saldoCents > 0 ? pendencia : null },
+    contact: { ...contato, ...camposDoContato(negociacoes), pendencia: pendencia && pendencia.saldoCents > 0 ? pendencia : null },
   });
 }
 

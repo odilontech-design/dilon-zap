@@ -84,6 +84,34 @@ services:
       postgres:
         condition: service_healthy
 
+  # Worker do SDR (prospecção): processa importações de CSV e qualificações da fila
+  # no Postgres. Sem WhatsApp, sem porta e sem nenhuma chave de serviço externo.
+  #
+  # Não usa env_file de propósito: o .env do Zap tem o segredo do worker do
+  # WhatsApp, as chaves do R2, do Mercado Pago e da Asaas, e este processo não
+  # usa nenhuma delas. Recebe só o endereço do banco.
+  #
+  # Subir só DEPOIS do db push do SDR: antes disso ele apenas registra erro de
+  # tabela ausente no log, a cada ciclo, sem efeito em mais nada.
+  sdr-worker:
+    build:
+      context: .
+      dockerfile: apps/sdr-worker/Dockerfile
+    restart: unless-stopped
+    logging: *log
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      # O Node enxerga a memória do contêiner, mas o teto explícito evita que o
+      # heap cresça até o limite do mem_limit e o kernel mate o processo.
+      NODE_OPTIONS: --max-old-space-size=256
+    mem_limit: 384m
+    # Dá tempo de terminar o lote em andamento ao parar. Se não terminar, a
+    # reserva do trabalho vence e outro ciclo o retoma sem duplicar nada.
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # Segundo produto, container próprio. Compartilha o Postgres da VPS, mas em
   # banco separado (ESQUADRIAS_DATABASE_URL no .env) — são clientes
   # diferentes, e um dump do Zap não pode arrastar dado de serralheria junto.

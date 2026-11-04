@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
+import { CampoCategoria } from "@/components/campo-categoria";
 import { reaisParaCentavos } from "../funil/tipos";
 import { chamar, dataHoraBR, fetcher, ROTULO_MEIO } from "../receber/formatos";
 
@@ -35,7 +36,7 @@ type Dados = {
   resumo: Resumo;
   recebimentos: { id: string; valorCents: number; meio: string | null; lancadoEm: string; cliente: string; referencia: string; parcela: string | null; observacao: string | null; por: string | null }[];
   pagamentosAFornecedores: { id: string; valorCents: number; meio: string | null; lancadoEm: string; fornecedor: string; referencia: string; parcela: string | null; observacao: string | null; por: string | null }[];
-  movimentos: { id: string; tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; valorCents: number; descricao: string; createdAt: string; createdBy: { name: string } | null }[];
+  movimentos: { id: string; tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; valorCents: number; descricao: string; createdAt: string; createdBy: { name: string } | null; categoria: { nome: string } | null }[];
 };
 
 type Historico = {
@@ -124,6 +125,7 @@ export function CaixaPanel() {
           aberto
           onMovimento={setMovimento}
           onFechar={() => setFechando(true)}
+          onMudou={() => mutate()}
         />
       )}
 
@@ -205,13 +207,29 @@ function DetalheDoCaixa({
   aberto,
   onMovimento,
   onFechar,
+  onMudou,
 }: {
   dados: Dados;
   aberto: boolean;
   onMovimento?: (t: "SUPRIMENTO" | "SANGRIA" | "DESPESA") => void;
   onFechar?: () => void;
+  onMudou?: () => void;
 }) {
   const r = dados.resumo;
+
+  async function excluirMovimento(m: { id: string; descricao: string }) {
+    if (!confirm(`Excluir o lançamento "${m.descricao}"?`)) return;
+    const res = await fetch(`/api/caixa/${dados.caixa.id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ acao: "excluirMovimento", movimentoId: m.id }),
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      return alert(typeof b.error === "string" ? b.error : "não deu pra excluir");
+    }
+    onMudou?.();
+  }
   const meios = Object.entries(r.porMeio).filter(([, v]) => v !== 0);
 
   return (
@@ -288,9 +306,17 @@ function DetalheDoCaixa({
                 <li key={m.id} className="flex justify-between gap-3">
                   <span className="min-w-0 truncate">
                     {ROTULO_MOV[m.tipo]} · {m.descricao}
+                    {m.categoria && <span className="text-xs text-neutral-400"> · {m.categoria.nome}</span>}
                   </span>
-                  <span className={`shrink-0 ${m.tipo === "SUPRIMENTO" ? "text-green-700" : "text-red-600"}`}>
-                    {m.tipo === "SUPRIMENTO" ? "+" : "−"} {centsToBRL(m.valorCents)}
+                  <span className="shrink-0 flex items-center gap-2">
+                    <span className={m.tipo === "SUPRIMENTO" ? "text-green-700" : "text-red-600"}>
+                      {m.tipo === "SUPRIMENTO" ? "+" : "−"} {centsToBRL(m.valorCents)}
+                    </span>
+                    {aberto && (
+                      <button onClick={() => excluirMovimento(m)} title="Excluir lançamento" className="text-neutral-400 hover:text-red-600 text-xs">
+                        🗑
+                      </button>
+                    )}
                   </span>
                 </li>
               ))}
@@ -390,6 +416,7 @@ function VerCaixa({ id, onFechar }: { id: string; onFechar: () => void }) {
 function MovimentoModal({ caixaId, tipo, onFechar, onFeito }: { caixaId: string; tipo: "SUPRIMENTO" | "SANGRIA" | "DESPESA"; onFechar: () => void; onFeito: () => void }) {
   const [valor, setValor] = useState("");
   const [descricao, setDescricao] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
@@ -400,7 +427,7 @@ function MovimentoModal({ caixaId, tipo, onFechar, onFeito }: { caixaId: string;
     if (!descricao.trim()) return setErro("descreva o movimento");
     setErro(null);
     setSalvando(true);
-    const r = await chamar(`/api/caixa/${caixaId}`, "POST", { acao: "movimento", tipo, valorCents: cents, descricao: descricao.trim() });
+    const r = await chamar(`/api/caixa/${caixaId}`, "POST", { acao: "movimento", tipo, valorCents: cents, descricao: descricao.trim(), ...(tipo === "DESPESA" ? { categoriaId: categoriaId || null } : {}) });
     setSalvando(false);
     if (!r.ok) return setErro(r.erro ?? "não deu pra registrar");
     onFeito();
@@ -426,6 +453,12 @@ function MovimentoModal({ caixaId, tipo, onFechar, onFeito }: { caixaId: string;
             Descrição
             <input value={descricao} onChange={(e) => setDescricao(e.target.value)} className={`${campo} mt-1`} />
           </label>
+          {tipo === "DESPESA" && (
+            <label className="text-xs font-medium text-neutral-700">
+              Categoria
+              <CampoCategoria tipo="DESPESA" value={categoriaId} onChange={setCategoriaId} className={`${campo} mt-1`} />
+            </label>
+          )}
           {erro && <p className="text-sm text-red-600">{erro}</p>}
         </div>
         <div className="flex justify-end gap-2 mt-5">

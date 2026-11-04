@@ -10,11 +10,15 @@ import {
   NEGOCIACAO_ABERTA_DO_CONTATO,
 } from "@/lib/negociacoes";
 import { pendenciaDoContato } from "@/lib/contas-receber";
+import { podeVerPendencia } from "@/lib/plano";
 import { CAMPOS_ENDERECO, formatarCep, montarEndereco } from "@/lib/cadastro-cliente";
 
 const bodySchema = z.object({
   stageId: z.string().nullable().optional(),
   dealValueCents: z.number().int().min(0).optional(),
+  // Ao abrir a negociação pela etapa (empresas que exigem os dados).
+  responsavelId: z.string().nullable().optional(),
+  origem: z.string().trim().max(60).nullable().optional(),
   name: z.string().max(120).nullable().optional(),
   notes: z.string().max(4000).nullable().optional(),
   documento: z.string().max(40).nullable().optional(),
@@ -98,8 +102,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (!contact) return NextResponse.json({ error: "not found" }, { status: 404 });
 
   const { negociacoes, ...resto } = contact;
-  const pendencia = await pendenciaDoContato(user.tenantId, contact.id);
-  return NextResponse.json({ ...resto, ...camposDoContato(negociacoes), pendencia: pendencia.saldoCents > 0 ? pendencia : null });
+  const pendencia = (await podeVerPendencia(user)) ? await pendenciaDoContato(user.tenantId, contact.id) : null;
+  return NextResponse.json({ ...resto, ...camposDoContato(negociacoes), pendencia: pendencia && pendencia.saldoCents > 0 ? pendencia : null });
 }
 
 /**
@@ -129,6 +133,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     endereco,
     stageId,
     dealValueCents,
+    responsavelId,
+    origem,
     email,
     nascimento,
     rgIe,
@@ -147,7 +153,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // da Believe pra uma etapa cadastrada por outro negócio.
   try {
     if (stageId !== undefined || dealValueCents !== undefined) {
-      await aplicarEtapaEValorDoContato({ tenantId: user.tenantId, quem: user, contato: contact, stageId, dealValueCents });
+      await aplicarEtapaEValorDoContato({ tenantId: user.tenantId, quem: user, contato: contact, stageId, dealValueCents, responsavelId, origem });
     }
   } catch (e) {
     if (e instanceof ErroDeNegocio) return NextResponse.json({ error: e.message }, { status: e.status });

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { useRecurso } from "@/components/recursos-context";
+import { useRecurso, useTermoPedido } from "@/components/recursos-context";
 import { centsToBRL } from "@/lib/billing";
 import { fetcher, reaisParaCentavos } from "./tipos";
 
@@ -51,6 +51,7 @@ export function ItensNegociacao({
   onMudou: () => void;
 }) {
   const temPedidos = useRecurso("PEDIDOS");
+  const termo = useTermoPedido();
   const { data: salvos, mutate } = useSWR<ItemSalvo[]>(`/api/negociacoes/${negociacaoId}/itens`, fetcher);
   // Empresa sem Pedidos nem Materiais não tem catálogo: a rota responde 403 e a
   // tela segue com item avulso, em vez de quebrar.
@@ -139,7 +140,7 @@ export function ItensNegociacao({
     try {
       const res = await fetch(`/api/negociacoes/${negociacaoId}/pedido`, { method: "POST" });
       const body = await res.json().catch(() => ({}));
-      if (!res.ok) return setErro(typeof body.error === "string" ? body.error : "não deu pra gerar o pedido");
+      if (!res.ok) return setErro(typeof body.error === "string" ? body.error : `não deu pra gerar o ${termo.minusculo}`);
       onMudou();
     } finally {
       setOcupado(false);
@@ -268,7 +269,7 @@ export function ItensNegociacao({
         )}
         {temPedidos && !pedidoAtivo && itens.length > 0 && !sujo && (
           <button onClick={gerarPedido} disabled={ocupado} className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50">
-            Gerar pedido
+            Gerar {termo.minusculo}
           </button>
         )}
       </div>
@@ -278,7 +279,7 @@ export function ItensNegociacao({
           {pedidos.map((p) => (
             <li key={p.id} className="text-xs text-neutral-600">
               <Link href="/pedidos" className="text-accent hover:underline">
-                Pedido #{p.numero}
+                {termo.singular} #{p.numero}
               </Link>{" "}
               · {STATUS_PEDIDO[p.status] ?? p.status}
               {p.status === "FECHADO" && (p.pago ? " · pago" : " · a receber")}

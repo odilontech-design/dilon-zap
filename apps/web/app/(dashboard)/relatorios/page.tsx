@@ -7,7 +7,7 @@ export default async function RelatoriosPage() {
   const user = await requireUser();
   return (
     <div className="p-4 md:p-8">
-      <div className="flex items-center gap-4 mb-6">
+      <div className="flex items-center gap-4 mb-6 flex-wrap">
         <h1 className="text-lg font-semibold">Relatórios</h1>
         {/* Os relatórios do CRM mostram o desempenho de cada pessoa: só a gestão os vê. */}
         {ehGerencia(user.role) && (

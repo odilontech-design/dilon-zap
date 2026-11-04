@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
 import { reaisParaCentavos } from "../funil/tipos";
+import { CampoCategoria } from "@/components/campo-categoria";
 import { chamar, dataVencimento, hojeISO } from "../receber/formatos";
 
 export type FormaPagar = "BOLETO" | "PIX" | "TRANSFERENCIA" | "CARTAO" | "DINHEIRO" | "CHEQUE" | "OUTRO";
@@ -80,6 +81,7 @@ export function EscolherFornecedor({ valor, onChange }: { valor: { id: string | 
 export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => void; onCriada: () => void }) {
   const [fornecedor, setFornecedor] = useState<{ id: string | null; nome: string }>({ id: null, nome: "" });
   const [descricao, setDescricao] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [total, setTotal] = useState("");
   const [numParcelas, setNumParcelas] = useState("1");
   const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("MENSAL");
@@ -87,6 +89,10 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
   const [forma, setForma] = useState<FormaPagar>("BOLETO");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Ajustes feitos à mão na prévia, por parcela: data e valor do boleto.
+  // Mexer no total, no número de parcelas, na periodicidade ou no 1º
+  // vencimento refaz a prévia e descarta os ajustes.
+  const [ajustes, setAjustes] = useState<Record<number, { vencimento?: string; valor?: string }>>({});
 
   const totalCents = reaisParaCentavos(total);
   const n = Number(numParcelas);
@@ -101,22 +107,40 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
     }
   }, [totalCents, n, periodicidade, primeiro]);
 
+  useEffect(() => setAjustes({}), [totalCents, n, periodicidade, primeiro]);
+
+  const linhas = previa.linhas.map((p, i) => {
+    const a = ajustes[i] ?? {};
+    const vencimento = a.vencimento ?? p.vencimento.toISOString().slice(0, 10);
+    const valorCents = a.valor !== undefined ? reaisParaCentavos(a.valor) : p.valorCents;
+    return { numero: p.numero, totalParcelas: p.totalParcelas, vencimento, valorCents };
+  });
+  const ajustou = Object.keys(ajustes).length > 0;
+  const somaCents = linhas.reduce((s, l) => s + (l.valorCents ?? 0), 0);
+  const ajustar = (i: number, campo: "vencimento" | "valor", v: string) =>
+    setAjustes((a) => ({ ...a, [i]: { ...a[i], [campo]: v } }));
+
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
     if (!fornecedor.nome.trim()) return setErro("informe o fornecedor");
     if (totalCents === null || totalCents <= 0) return setErro("informe o valor total");
     if (previa.erro) return setErro(previa.erro);
+    if (ajustou && linhas.some((l) => !l.vencimento || !l.valorCents || l.valorCents <= 0)) {
+      return setErro("confira a data e o valor de cada parcela");
+    }
 
     setSalvando(true);
     const r = await chamar("/api/contas-pagar", "POST", {
       ...(fornecedor.id ? { fornecedorId: fornecedor.id } : { fornecedorNome: fornecedor.nome.trim() }),
       descricao: descricao.trim() || null,
+      categoriaId: categoriaId || null,
       totalCents,
       numParcelas: n,
       periodicidade,
       primeiroVencimento: primeiro,
       forma,
+      ...(ajustou ? { parcelas: linhas.map((l) => ({ vencimento: l.vencimento, valorCents: l.valorCents! })) } : {}),
     });
     setSalvando(false);
     if (!r.ok) return setErro(r.erro ?? "não deu pra criar a conta");
@@ -135,6 +159,10 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
           <label className="text-xs font-medium text-neutral-700">
             Descrição (opcional)
             <input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="ex: NF 1234, reposição de estoque" className={`${campo} mt-1`} />
+          </label>
+          <label className="text-xs font-medium text-neutral-700">
+            Categoria
+            <CampoCategoria tipo="DESPESA" value={categoriaId} onChange={setCategoriaId} className={`${campo} mt-1`} />
           </label>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <label className="text-xs font-medium text-neutral-700">
@@ -170,7 +198,7 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
           </label>
 
           {previa.linhas.length > 0 && (
-            <div className="rounded-md border border-neutral-200 overflow-hidden">
+            <div className="rounded-md border border-neutral-200 overflow-x-auto">
               <table className="w-full text-sm tabular-nums">
                 <thead className="bg-neutral-50 text-xs text-neutral-500">
                   <tr>
@@ -180,17 +208,42 @@ export function NovaContaPagarModal({ onFechar, onCriada }: { onFechar: () => vo
                   </tr>
                 </thead>
                 <tbody>
-                  {previa.linhas.map((p, i) => (
+                  {linhas.map((l, i) => (
                     <tr key={i} className="border-t border-neutral-100">
-                      <td className="px-3 py-1.5">
-                        {p.numero} de {p.totalParcelas}
+                      <td className="px-3 py-1.5 whitespace-nowrap">
+                        {l.numero} de {l.totalParcelas}
                       </td>
-                      <td className="px-3 py-1.5">{dataVencimento(p.vencimento.toISOString())}</td>
-                      <td className="px-3 py-1.5 text-right">{centsToBRL(p.valorCents)}</td>
+                      <td className="px-3 py-1">
+                        <input
+                          type="date"
+                          value={l.vencimento}
+                          onChange={(e) => ajustar(i, "vencimento", e.target.value)}
+                          aria-label={`Vencimento da parcela ${l.numero}`}
+                          className="rounded-md border border-neutral-300 bg-surface px-2 py-1 text-sm"
+                        />
+                      </td>
+                      <td className="px-3 py-1 text-right">
+                        <input
+                          value={ajustes[i]?.valor ?? (l.valorCents! / 100).toFixed(2).replace(".", ",")}
+                          onChange={(e) => ajustar(i, "valor", e.target.value)}
+                          inputMode="decimal"
+                          aria-label={`Valor da parcela ${l.numero}`}
+                          className="w-28 rounded-md border border-neutral-300 bg-surface px-2 py-1 text-sm text-right tabular-nums"
+                        />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              <p className="px-3 py-2 text-[11px] text-neutral-500 border-t border-neutral-100 flex flex-wrap justify-between gap-2">
+                <span>Ajuste a data e o valor de cada boleto, se precisar — vale data passada.</span>
+                {ajustou && (
+                  <span className={somaCents !== totalCents ? "text-amber-700 font-medium" : ""}>
+                    Soma das parcelas: {centsToBRL(somaCents)}
+                    {somaCents !== totalCents && " (diferente do total — vale a soma)"}
+                  </span>
+                )}
+              </p>
             </div>
           )}
           {previa.erro && totalCents ? <p className="text-xs text-amber-700">{previa.erro}</p> : null}

@@ -5,6 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { PlanoPanel } from "./plano-panel";
 import { ErpPanel } from "./erp-panel";
+import { AjustesEmpresa } from "./ajustes-empresa";
 import type { Recurso } from "@/lib/plano-regras";
 import { formatDate, formatTime } from "@/lib/contact";
 import { centsToBRL, effectiveInvoiceStatus } from "@/lib/billing";
@@ -88,6 +89,12 @@ type TenantDetailResponse = {
     recursos: { recurso: Recurso; ativo: boolean; motivo: string | null }[];
     invoices: Invoice[];
     _count: { contacts: number; conversations: number };
+    conversasAbertasATodos?: boolean;
+    restringirFilaGeral?: boolean;
+    termoPedido?: string | null;
+    pedidosSoGerencia?: boolean;
+    negociacaoCompleta?: boolean;
+    suspensoEm?: string | null;
   };
   recentAudit: AuditEntry[];
 };
@@ -193,6 +200,18 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         tenantId={tenant.id}
         assinatura={tenant.subscription}
         excecoes={tenant.recursos ?? []}
+        onSalvo={mutate}
+      />
+      <AjustesEmpresa
+        tenantId={tenant.id}
+        inicial={{
+          conversasAbertasATodos: !!tenant.conversasAbertasATodos,
+          restringirFilaGeral: !!tenant.restringirFilaGeral,
+          termoPedido: tenant.termoPedido ?? null,
+          pedidosSoGerencia: !!tenant.pedidosSoGerencia,
+          negociacaoCompleta: !!tenant.negociacaoCompleta,
+        }}
+        suspensoEm={tenant.suspensoEm ?? null}
         onSalvo={mutate}
       />
       <ErpPanel tenantId={tenant.id} tenantName={tenant.name} onSalvo={mutate} />

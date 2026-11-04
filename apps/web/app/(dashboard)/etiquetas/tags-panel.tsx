@@ -27,7 +27,7 @@ export function TagsPanel() {
   }
 
   return (
-    <div className="max-w-4xl">
+    <div className="max-w-6xl">
       <div className="flex items-center justify-between gap-3 mb-4">
         <input
           value={search}

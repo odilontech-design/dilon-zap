@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
+import { TrocarCategoria } from "@/components/campo-categoria";
+import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
 import { reaisParaCentavos } from "../funil/tipos";
 import {
   chamar,
@@ -43,6 +45,7 @@ type Detalhe = {
   id: string;
   origem: "MANUAL" | "PEDIDO";
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   canceladaEm: string | null;
   createdAt: string;
   contato: { id: string; name: string | null; waJid: string; phoneNumber: string | null };
@@ -97,10 +100,32 @@ export function ContaDrawer({
   }
 
   async function cancelarConta() {
-    if (!confirm("Cancelar esta conta inteira? As parcelas deixam de contar como a receber.")) return;
+    const recebido = data ? data.totalCents - data.saldoCents : 0;
+    const motivo = prompt(
+      recebido > 0
+        ? `Excluir esta conta? O que já foi recebido (${centsToBRL(recebido)}) será estornado e as parcelas deixam de contar como a receber.\n\nMotivo:`
+        : "Excluir esta conta? As parcelas deixam de contar como a receber.\n\nMotivo:"
+    );
+    if (motivo === null) return;
     setAviso(null);
-    const r = await chamar(`/api/contas-receber/${contaId}`, "PATCH", { acao: "cancelar" });
-    if (!r.ok) return setAviso(r.erro ?? "não deu pra cancelar");
+    const r = await chamar(`/api/contas-receber/${contaId}`, "PATCH", { acao: "cancelar", estornar: true, motivo: motivo.trim() || undefined });
+    if (!r.ok) return setAviso(r.erro ?? "não deu pra excluir");
+    onMudou();
+    onFechar();
+  }
+
+  // Conta de pedido não se exclui sozinha: cancela o PEDIDO, que devolve o
+  // estoque, estorna o recebido e cancela a conta junto (Believe, 14/10).
+  async function cancelarPedidoDaConta() {
+    if (!data?.pedido) return;
+    const motivo = prompt(
+      `Cancelar o pedido #${data.pedido.numero}? Os produtos voltam ao estoque, o que foi recebido é estornado e esta conta é cancelada.\n\nMotivo (obrigatório):`
+    );
+    if (motivo === null) return;
+    if (motivo.trim().length < 3) return setAviso("explique o motivo do cancelamento");
+    setAviso(null);
+    const r = await chamar(`/api/orders/${data.pedido.id}`, "PATCH", { acao: "cancelar", motivo: motivo.trim() });
+    if (!r.ok) return setAviso(r.erro ?? "não deu pra cancelar o pedido");
     onMudou();
     onFechar();
   }
@@ -139,6 +164,7 @@ export function ContaDrawer({
         <h2 className="text-base font-semibold break-words">{nomeDoContato(data.contato)}</h2>
         {data.descricao && <p className="text-sm text-neutral-600">{data.descricao}</p>}
         <p className="text-xs text-neutral-400">Criada em {dataHoraBR(data.createdAt)}</p>
+        <TrocarCategoria tipo="RECEITA" url={`/api/contas-receber/${contaId}`} atual={data.categoria?.id ?? null} disabled={cancelada} onMudou={recarregar} />
         {cancelada && <p className="text-sm text-red-600 font-medium">Conta cancelada</p>}
       </div>
 
@@ -164,7 +190,12 @@ export function ContaDrawer({
         )}
         {manual && !cancelada && (
           <button onClick={cancelarConta} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
-            Cancelar conta
+            Excluir conta
+          </button>
+        )}
+        {!manual && !cancelada && data.pedido && (
+          <button onClick={cancelarPedidoDaConta} className="rounded-md border border-red-300 px-3 py-1.5 text-sm text-red-700 hover:bg-red-50">
+            Cancelar pedido #{data.pedido.numero}
           </button>
         )}
       </div>
@@ -387,14 +418,17 @@ function ReparcelarModal({
   const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("SEMANAL");
   const [primeiro, setPrimeiro] = useState(hojeISO());
   const [vencEntrada, setVencEntrada] = useState(hojeISO());
+  const [partesEntrada, setPartesEntrada] = useState<ParteDaEntrada[] | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
 
   const entradaCents = entrada.trim() ? reaisParaCentavos(entrada) : 0;
   const n = Number(numParcelas);
+  const entradaDividida = entradasDoPlano(partesEntrada, entradaCents ?? 0);
 
   const previa = useMemo(() => {
     if (entradaCents === null || !Number.isInteger(n) || n < 1) return { erro: null as string | null, linhas: [] };
+    if (entradaDividida.erro) return { erro: entradaDividida.erro, linhas: [] };
     try {
       return {
         erro: null,
@@ -405,12 +439,13 @@ function ReparcelarModal({
           periodicidade,
           primeiroVencimento: new Date(`${primeiro}T12:00:00Z`),
           vencimentoEntrada: new Date(`${vencEntrada}T12:00:00Z`),
+          entradas: entradaDividida.entradas?.map((p) => ({ vencimento: new Date(`${p.vencimento}T12:00:00Z`), valorCents: p.valorCents })),
         }),
       };
     } catch (e) {
       return { erro: (e as Error).message, linhas: [] };
     }
-  }, [entradaCents, n, periodicidade, primeiro, vencEntrada, totalRestanteCents]);
+  }, [entradaCents, n, periodicidade, primeiro, vencEntrada, totalRestanteCents, entradaDividida.entradas, entradaDividida.erro]);
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -421,6 +456,7 @@ function ReparcelarModal({
       acao: "reparcelar",
       entradaCents: entradaCents || undefined,
       vencimentoEntrada: entradaCents ? vencEntrada : undefined,
+      ...(entradaDividida.entradas ? { entradas: entradaDividida.entradas } : {}),
       numParcelas: n,
       periodicidade,
       primeiroVencimento: primeiro,
@@ -459,12 +495,15 @@ function ReparcelarModal({
             1º vencimento
             <input type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} className={`${campo} mt-1`} />
           </label>
-          {entradaCents ? (
+          {entradaCents && !partesEntrada ? (
             <label className="text-xs font-medium text-neutral-700">
               Vence a entrada
               <input type="date" value={vencEntrada} onChange={(e) => setVencEntrada(e.target.value)} className={`${campo} mt-1`} />
             </label>
           ) : null}
+        </div>
+        <div className="mt-3 flex flex-col">
+          <DividirEntrada entradaCents={entradaCents ?? 0} diaInicial={vencEntrada} partes={partesEntrada} onChange={setPartesEntrada} />
         </div>
 
         {previa.linhas.length > 0 && (

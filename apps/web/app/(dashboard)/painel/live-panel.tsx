@@ -54,7 +54,7 @@ export function LivePanel() {
 
       <div>
         <h2 className="text-sm font-semibold text-neutral-700 mb-3">Carga por atendente</h2>
-        <div className="rounded-lg border border-neutral-200 bg-surface overflow-hidden">
+        <div className="rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500">
               <tr>

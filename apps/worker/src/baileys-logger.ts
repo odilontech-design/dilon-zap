@@ -52,5 +52,10 @@ function filtrar(base: Logger): Logger {
 }
 
 export function criarBaileysLogger(): Logger {
-  return filtrar(pino({ level: "debug" }));
+  // O Baileys loga falhas como { error } — sem serializador, um Error vira
+  // "{}" no JSON (foram 4.333 "transaction failed" sem motivo nenhum antes da
+  // queda de 21/10). Com ele, sai tipo, mensagem e pilha.
+  return filtrar(
+    pino({ level: "debug", serializers: { error: pino.stdSerializers.err, err: pino.stdSerializers.err } })
+  );
 }

@@ -276,3 +276,28 @@ export async function refreshGroupParticipants(
     return { ok: false, reason: "worker fora do ar" };
   }
 }
+
+/**
+ * Avisa o WhatsApp do aparelho que estas mensagens foram lidas (ver
+ * marcarLidasNoWhatsApp no worker). Melhor esforço: falhar aqui nunca impede
+ * marcar como lido no Dilon Zap.
+ */
+export async function marcarLidasNoWhatsApp(
+  sessionId: string,
+  waJid: string,
+  mensagens: { id: string; participant?: string | null }[]
+): Promise<void> {
+  const baseUrl = process.env.WORKER_INTERNAL_URL;
+  const secret = process.env.WORKER_INTERNAL_SECRET;
+  if (!baseUrl || !secret || mensagens.length === 0) return;
+  try {
+    await fetch(`${baseUrl}/internal/messages/read`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ sessionId, waJid, mensagens }),
+      signal: AbortSignal.timeout(5_000),
+    });
+  } catch {
+    // worker fora do ar ou lento: o lido do Dilon Zap já valeu.
+  }
+}

@@ -40,7 +40,7 @@ export function ConcluirTarefa({
   onFechar,
   onConcluida,
 }: {
-  tarefa: { id: string; tipo: TipoTarefa; titulo: string; negociacaoId: string; responsavelId: string | null };
+  tarefa: { id: string; tipo: TipoTarefa; titulo: string; negociacaoId: string | null; responsavelId: string | null };
   onFechar: () => void;
   onConcluida: () => void;
 }) {
@@ -77,7 +77,8 @@ export function ConcluirTarefa({
       }
 
       if (reagendar) {
-        await fetch(`/api/negociacoes/${tarefa.negociacaoId}/tarefas`, {
+        // Tarefa geral reagenda como geral.
+        await fetch(tarefa.negociacaoId ? `/api/negociacoes/${tarefa.negociacaoId}/tarefas` : "/api/tarefas", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

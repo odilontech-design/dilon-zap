@@ -9,8 +9,10 @@ import { requireUser } from "@/lib/session";
 export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
 
+  // O suporte apaga as PRÓPRIAS mensagens também nas outras empresas; o resto
+  // continua restrito à empresa de quem pede.
   const mensagem = await prisma.teamMessage.findFirst({
-    where: { id: params.id, tenantId: user.tenantId },
+    where: user.role === "SUPERADMIN" ? { id: params.id, OR: [{ tenantId: user.tenantId }, { authorId: user.id }] } : { id: params.id, tenantId: user.tenantId },
     select: { id: true, authorId: true, destinatarioId: true },
   });
   if (!mensagem) return NextResponse.json({ error: "not found" }, { status: 404 });

@@ -4,6 +4,7 @@ import { prisma } from "@dilon-zap/db";
 import { uploadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
 import { podeVerCanal } from "@/lib/team-chat";
+import { colegaPermitido, contextoDoChat } from "@/lib/suporte-chat";
 
 const MAX_SIZE_BYTES = 16 * 1024 * 1024; // mesmo teto do anexo do Inbox
 
@@ -52,12 +53,11 @@ export async function POST(req: Request) {
   }
 
   if (destinatarioId) {
-    // Conversa direta: o colega precisa existir, ser da empresa e estar ativo.
-    const colega = await prisma.user.findFirst({
-      where: { id: destinatarioId, tenantId: user.tenantId, deactivatedAt: null, NOT: { id: user.id } },
-      select: { id: true },
-    });
-    if (!colega) return NextResponse.json({ error: "colega não encontrado" }, { status: 404 });
+    // Conversa direta: o colega precisa existir, ser da empresa (ou o suporte
+    // da Dilon Tech) e estar ativo.
+    if (!(await colegaPermitido(user, contextoDoChat(user, null), destinatarioId))) {
+      return NextResponse.json({ error: "colega não encontrado" }, { status: 404 });
+    }
   } else {
     const membros = await prisma.setorMembro.findMany({ where: { userId: user.id }, select: { setorId: true } });
     if (!podeVerCanal(user.role, membros.map((m) => m.setorId), setorId)) {

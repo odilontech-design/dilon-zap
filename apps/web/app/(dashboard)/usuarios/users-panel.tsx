@@ -118,8 +118,8 @@ export function UsersPanel({ meuId }: { meuId: string }) {
   const ativos = (usuarios ?? []).filter((u) => !u.deactivatedAt);
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl">
-      <div className="flex items-start justify-between gap-4 mb-1">
+    <div className="p-4 md:p-6 max-w-6xl">
+      <div className="flex items-start justify-between gap-4 mb-1 flex-wrap">
         <h1 className="text-xl font-semibold">Usuários</h1>
         <button
           onClick={() => setCriando(true)}

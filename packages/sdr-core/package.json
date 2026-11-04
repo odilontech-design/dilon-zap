@@ -1,0 +1,15 @@
+{
+  "name": "@dilon-zap/sdr-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Regras e acesso a dados do Dilon SDR, compartilhados pelo site e pelo apps/sdr-worker. Não conhece WhatsApp.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "dependencies": {
+    "@dilon-zap/db": "*",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  }
+}

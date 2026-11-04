@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
+import { useTermoPedido } from "@/components/recursos-context";
+import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
 
 /**
  * Painel do pedido — o mesmo dos dois lados.
@@ -36,6 +38,17 @@ export type Pedido = {
   totalCents: number;
   observacao: string | null;
   mesReferencia?: string | null;
+  // Plano combinado na negociação que gerou o pedido (sugestão para o fechamento).
+  planoEntradaCents?: number | null;
+  planoNumParcelas?: number | null;
+  planoPeriodicidade?: "ENTRADA" | "UNICA" | "SEMANAL" | "QUINZENAL" | "MENSAL" | null;
+  planoPrimeiroVencimento?: string | null;
+  negociacaoId?: string | null;
+  canceladoEm?: string | null;
+  motivoCancelamento?: string | null;
+  canceladoPorNome?: string | null;
+  /** Cópia criada ao editar um pedido fechado. */
+  refeitoDeNumero?: number | null;
   createdAt: string;
   fechadoEm: string | null;
   createdBy: { name: string } | null;
@@ -124,6 +137,9 @@ export function OrderPanel({
   onFechar: () => void;
   onMudou: () => void;
 }) {
+  const termo = useTermoPedido();
+  // Cancelar (ou editar = cancelar e refazer) pede o motivo antes.
+  const [cancelando, setCancelando] = useState<null | "cancelar" | "refazer">(null);
   const { data: produtos } = useSWR<Produto[]>("/api/products", fetcher);
   const fotoDe = useMemo(
     () => new Map((produtos ?? []).filter((p) => p.fotoKey).map((p) => [p.id, p.fotoKey!])),
@@ -146,6 +162,9 @@ export function OrderPanel({
   const [enviandoRecibo, setEnviandoRecibo] = useState(false);
   const [reciboEnviado, setReciboEnviado] = useState(false);
   const [confirmandoRecibo, setConfirmandoRecibo] = useState(false);
+  // O mesmo envio serve ao recibo (pedido fechado) e ao orçamento (em montagem).
+  const [envioDeOrcamento, setEnvioDeOrcamento] = useState(false);
+  const [orcamentoEnviado, setOrcamentoEnviado] = useState(false);
   const [erroRecibo, setErroRecibo] = useState<string | null>(null);
   // Vem da ficha do contato: no primeiro recibo chega vazio e a pessoa digita;
   // do segundo em diante já vem preenchido.
@@ -163,14 +182,27 @@ export function OrderPanel({
   );
 
   // Venda a prazo: uma parcela com vencimento, ou entrada + parcelas.
-  const [vencimento, setVencimento] = useState(diaDaquiA(7));
+  // Data combinada na negociação; se já passou, sugere daqui a 7 dias.
+  const vencimentoCombinado =
+    pedido.planoPrimeiroVencimento && pedido.planoPrimeiroVencimento.slice(0, 10) >= diaDaquiA(0)
+      ? pedido.planoPrimeiroVencimento.slice(0, 10)
+      : diaDaquiA(7);
+  const [vencimento, setVencimento] = useState(vencimentoCombinado);
   const [parcelar, setParcelar] = useState(pagamento === "FIADO");
-  const [entrada, setEntrada] = useState("");
-  const [entradaPaga, setEntradaPaga] = useState(true);
-  const [entradaMeio, setEntradaMeio] = useState<"PIX" | "DINHEIRO" | "CARTAO">("DINHEIRO");
-  const [numParcelas, setNumParcelas] = useState("4");
-  const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("SEMANAL");
-  const [primeiroVencimento, setPrimeiroVencimento] = useState(diaDaquiA(7));
+  const [entrada, setEntrada] = useState(
+    pedido.planoEntradaCents ? (pedido.planoEntradaCents / 100).toFixed(2).replace(".", ",") : ""
+  );
+  // A entrada só vira recebimento quando o financeiro confirma que entrou, e
+  // por qual forma (Believe, 23/10): antes vinha marcada como paga em dinheiro
+  // e caía no caixa sozinha, mesmo em venda faturada que o cliente ia pagar depois.
+  const [entradaPaga, setEntradaPaga] = useState(false);
+  const [entradaMeio, setEntradaMeio] = useState<"" | "PIX" | "DINHEIRO" | "CARTAO">("");
+  const [partesEntrada, setPartesEntrada] = useState<ParteDaEntrada[] | null>(null);
+  const [numParcelas, setNumParcelas] = useState(String(pedido.planoNumParcelas ?? 4));
+  const [periodicidade, setPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">(
+    pedido.planoPeriodicidade === "QUINZENAL" || pedido.planoPeriodicidade === "MENSAL" ? pedido.planoPeriodicidade : "SEMANAL"
+  );
+  const [primeiroVencimento, setPrimeiroVencimento] = useState(vencimentoCombinado);
   const [podeLiberar, setPodeLiberar] = useState(false);
 
   const editavel = pedido.status === "RASCUNHO" || pedido.status === "AGUARDANDO_FINANCEIRO";
@@ -184,11 +216,13 @@ export function OrderPanel({
   const total = Math.max(subtotal - Math.min(descontoCents, subtotal), 0);
   const aPrazo = A_PRAZO.includes(pagamento);
   const entradaCents = parseValor(entrada) ?? 0;
+  const entradaDividida = entradasDoPlano(partesEntrada, entradaCents);
 
   const previaParcelas = useMemo(() => {
     if (!aPrazo || !parcelar || total <= 0) return { erro: null as string | null, linhas: [] as ReturnType<typeof gerarParcelas> };
     const n = Number(numParcelas);
     if (!Number.isInteger(n) || n < 1) return { erro: "informe o número de parcelas", linhas: [] };
+    if (entradaDividida.erro) return { erro: entradaDividida.erro, linhas: [] };
     try {
       return {
         erro: null,
@@ -199,12 +233,13 @@ export function OrderPanel({
           periodicidade,
           primeiroVencimento: new Date(`${primeiroVencimento}T12:00:00Z`),
           vencimentoEntrada: new Date(`${diaDaquiA(0)}T12:00:00Z`),
+          entradas: entradaDividida.entradas?.map((p) => ({ vencimento: new Date(`${p.vencimento}T12:00:00Z`), valorCents: p.valorCents })),
         }),
       };
     } catch (e) {
       return { erro: (e as Error).message, linhas: [] };
     }
-  }, [aPrazo, parcelar, total, entradaCents, numParcelas, periodicidade, primeiroVencimento]);
+  }, [aPrazo, parcelar, total, entradaCents, numParcelas, periodicidade, primeiroVencimento, entradaDividida.entradas, entradaDividida.erro]);
 
   const sugestoes = useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -266,14 +301,16 @@ export function OrderPanel({
           documento: documento.trim() || null,
           nomeNoRecibo: nomeNoRecibo.trim() || null,
           mesReferencia: mesReferencia.trim() || null,
+          ...(envioDeOrcamento ? { orcamento: true } : {}),
         }),
       });
       const b = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setErroRecibo(typeof b.error === "string" ? b.error : "não deu pra enviar o recibo");
+        setErroRecibo(typeof b.error === "string" ? b.error : "não deu pra enviar");
         return;
       }
-      setReciboEnviado(true);
+      if (envioDeOrcamento) setOrcamentoEnviado(true);
+      else setReciboEnviado(true);
       setConfirmandoRecibo(false);
       onMudou();
     } catch {
@@ -295,6 +332,8 @@ export function OrderPanel({
   async function fechar(liberarPendencia = false) {
     if (aPrazo && parcelar && previaParcelas.erro) return setErro(previaParcelas.erro);
     if (aPrazo && !parcelar && !vencimento) return setErro("informe quando o cliente vai pagar");
+    if (aPrazo && parcelar && entradaCents > 0 && entradaPaga && !entradaMeio) return setErro("informe a forma de pagamento da entrada");
+    if (aPrazo && parcelar && entradaDividida.erro) return setErro(entradaDividida.erro);
     if ((await salvarItens()) === null) return;
 
     setErro(null);
@@ -314,7 +353,8 @@ export function OrderPanel({
               parcelamento: {
                 entradaCents,
                 entradaPaga: entradaCents > 0 && entradaPaga,
-                entradaMeio,
+                entradaMeio: entradaPaga && entradaMeio ? entradaMeio : undefined,
+                ...(entradaDividida.entradas ? { entradas: entradaDividida.entradas } : {}),
                 numParcelas: Number(numParcelas),
                 periodicidade,
                 primeiroVencimento,
@@ -333,7 +373,7 @@ export function OrderPanel({
     }
     setPodeLiberar(false);
     onMudou();
-    if (r.jaEstavaFechado) setErro("Esse pedido já tinha sido fechado — nada foi baixado de novo.");
+    if (r.jaEstavaFechado) setErro(`Esse ${termo.minusculo} já tinha sido fechado — nada foi baixado de novo.`);
     else setFechadoAgora(typeof r.total === "number" ? r.total : total);
   }
 
@@ -344,7 +384,7 @@ export function OrderPanel({
           onClick={(e) => e.stopPropagation()}
           className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm p-6 text-center"
         >
-          <p className="text-sm text-neutral-500">Pedido #{pedido.numero} fechado</p>
+          <p className="text-sm text-neutral-500">{termo.singular} #{pedido.numero} fechado</p>
           <p className="text-2xl font-semibold tabular-nums mt-1">{centsToBRL(fechadoAgora)}</p>
           <p className="text-sm text-neutral-600 mt-1">
             {PAGAMENTO_LABEL[pagamento]} · {pagamento === "PIX" || pagamento === "CARTAO" || pagamento === "DINHEIRO" ? "pago" : "a receber"}
@@ -359,7 +399,10 @@ export function OrderPanel({
               Imprimir recibo
             </a>
             <button
-              onClick={() => setConfirmandoRecibo(true)}
+              onClick={() => {
+                setEnvioDeOrcamento(false);
+                setConfirmandoRecibo(true);
+              }}
               disabled={reciboEnviado}
               className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
             >
@@ -400,7 +443,7 @@ export function OrderPanel({
         <header className="p-5 border-b border-neutral-200 flex items-start justify-between gap-3">
           <div>
             <h2 className="font-semibold">
-              Pedido #{pedido.numero}
+              {termo.singular} #{pedido.numero}
               <span className="ml-2 text-xs font-normal rounded-full bg-neutral-100 text-neutral-600 px-2 py-0.5">
                 {STATUS_LABEL[pedido.status]}
               </span>
@@ -410,6 +453,9 @@ export function OrderPanel({
                 </span>
               )}
             </h2>
+            {pedido.refeitoDeNumero && (
+              <p className="text-xs text-accent mt-0.5">Refeito do {termo.minusculo} #{pedido.refeitoDeNumero}, que foi cancelado</p>
+            )}
             <p className="text-sm text-neutral-500 mt-0.5">
               {pedido.contact.name ?? pedido.contact.phoneNumber ?? "Cliente"}
               {pedido.createdBy && ` · aberto por ${pedido.createdBy.name}`}
@@ -645,6 +691,11 @@ export function OrderPanel({
 
           {podeFechar && aPrazo && (
             <div className="rounded-md border border-neutral-200 p-3 flex flex-col gap-3 text-sm">
+              {pedido.negociacaoId && (pedido.planoNumParcelas || pedido.planoPrimeiroVencimento) && (
+                <p className="text-xs rounded-md bg-accent/10 text-accent px-2 py-1">
+                  Condição combinada na negociação — confira antes de fechar.
+                </p>
+              )}
               <div className="flex gap-4">
                 <label className="flex items-center gap-1.5">
                   <input type="radio" checked={!parcelar} onChange={() => setParcelar(false)} />
@@ -690,15 +741,22 @@ export function OrderPanel({
                       <input type="date" value={primeiroVencimento} onChange={(e) => setPrimeiroVencimento(e.target.value)} className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5" />
                     </label>
                   </div>
+                  <DividirEntrada entradaCents={entradaCents} diaInicial={diaDaquiA(0)} partes={partesEntrada} onChange={setPartesEntrada} />
                   {entradaCents > 0 && (
                     <label className="flex flex-wrap items-center gap-2">
                       <input type="checkbox" checked={entradaPaga} onChange={(e) => setEntradaPaga(e.target.checked)} />
-                      Entrada paga agora, em
+                      {partesEntrada ? "1ª parte da entrada já recebida, em" : "Entrada já recebida, em"}
                       <select value={entradaMeio} onChange={(e) => setEntradaMeio(e.target.value as typeof entradaMeio)} disabled={!entradaPaga} className="rounded-md border border-neutral-300 bg-surface px-2 py-1">
+                        <option value="">forma de pagamento…</option>
                         <option value="DINHEIRO">Dinheiro</option>
                         <option value="PIX">PIX</option>
                         <option value="CARTAO">Cartão</option>
                       </select>
+                      {!entradaPaga && (
+                        <span className="basis-full text-xs text-neutral-500">
+                          Sem marcar, a entrada fica no A receber vencendo hoje, para registrar quando o dinheiro entrar.
+                        </span>
+                      )}
                     </label>
                   )}
                   {previaParcelas.linhas.length > 0 && (
@@ -706,7 +764,7 @@ export function OrderPanel({
                       {previaParcelas.linhas.map((p, i) => (
                         <li key={i} className="flex justify-between px-3 py-1.5">
                           <span>
-                            {p.tipo === "ENTRADA" ? "Entrada" : `${p.numero} de ${p.totalParcelas}`} ·{" "}
+                            {p.tipo === "ENTRADA" ? (p.totalParcelas > 1 ? `Entrada ${p.numero} de ${p.totalParcelas}` : "Entrada") : `${p.numero} de ${p.totalParcelas}`} ·{" "}
                             {p.vencimento.toISOString().slice(0, 10).split("-").reverse().join("/")}
                           </span>
                           <span>{centsToBRL(p.valorCents)}</span>
@@ -718,6 +776,14 @@ export function OrderPanel({
                 </>
               )}
             </div>
+          )}
+
+          {pedido.status === "CANCELADO" && (
+            <p className="rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+              Cancelado{pedido.canceladoEm ? ` em ${new Date(pedido.canceladoEm).toLocaleString("pt-BR")}` : ""}
+              {pedido.canceladoPorNome ? ` por ${pedido.canceladoPorNome}` : ""}
+              {pedido.motivoCancelamento ? <> — <i>{pedido.motivoCancelamento}</i></> : null}
+            </p>
           )}
 
           {pedido.status === "FECHADO" && (
@@ -743,7 +809,10 @@ export function OrderPanel({
 
           {pedido.status === "FECHADO" && (
             <button
-              onClick={() => setConfirmandoRecibo(true)}
+              onClick={() => {
+                setEnvioDeOrcamento(false);
+                setConfirmandoRecibo(true);
+              }}
               disabled={reciboEnviado}
               className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
             >
@@ -761,13 +830,40 @@ export function OrderPanel({
             </button>
           )}
 
-          {editavel && ehFinanceiro && (
+          {pedido.status === "FECHADO" && ehFinanceiro && (
             <button
-              onClick={() => acao({ acao: "cancelar" }).then((r) => r && onFechar())}
+              onClick={() => setCancelando("refazer")}
+              disabled={ocupado}
+              title="Cancela este e cria uma cópia para ajustar e fechar de novo"
+              className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
+            >
+              Editar
+            </button>
+          )}
+
+          {editavel && itens.length > 0 && (
+            <button
+              onClick={async () => {
+                // A prévia lê os itens salvos: salva antes, para o orçamento sair com o que está na tela.
+                if ((await salvarItens()) === null) return;
+                setEnvioDeOrcamento(true);
+                setConfirmandoRecibo(true);
+              }}
+              disabled={ocupado || orcamentoEnviado}
+              title="Manda para a cliente conferir antes de fechar"
+              className="rounded-md border border-neutral-300 px-4 py-2 disabled:opacity-50"
+            >
+              {orcamentoEnviado ? "✓ Orçamento enviado" : "Enviar orçamento"}
+            </button>
+          )}
+
+          {(editavel || (pedido.status === "FECHADO" && ehFinanceiro)) && (
+            <button
+              onClick={() => setCancelando("cancelar")}
               disabled={ocupado}
               className="px-3 py-2 text-red-600 hover:underline disabled:opacity-50"
             >
-              Cancelar pedido
+              {editavel ? "Cancelar orçamento" : `Cancelar ${termo.minusculo}`}
             </button>
           )}
 
@@ -803,6 +899,27 @@ export function OrderPanel({
         </footer>
       </div>
 
+      {cancelando && (
+        <CancelarPedido
+          numero={pedido.numero}
+          fechado={pedido.status === "FECHADO"}
+          refazer={cancelando === "refazer"}
+          termo={termo}
+          onVoltar={() => setCancelando(null)}
+          onConfirmar={async (motivo) => {
+            const r = await acao({ acao: "cancelar", motivo, refazer: cancelando === "refazer" });
+            setCancelando(null);
+            if (!r) return;
+            if (r.copia) {
+              alert(
+                `${termo.singular} #${pedido.numero} cancelado. A cópia #${r.copia.numero} está em "Aguardando financeiro" para você ajustar e fechar.`
+              );
+            }
+            onFechar();
+          }}
+        />
+      )}
+
       {confirmandoRecibo && (
         <ConfirmarEnvioDoRecibo
           pedidoId={pedido.id}
@@ -817,6 +934,7 @@ export function OrderPanel({
           erro={erroRecibo}
           onEnviar={enviarReciboWhatsApp}
           onCancelar={() => setConfirmandoRecibo(false)}
+          orcamento={envioDeOrcamento}
         />
       )}
     </div>
@@ -844,7 +962,9 @@ function ConfirmarEnvioDoRecibo({
   erro,
   onEnviar,
   onCancelar,
+  orcamento = false,
 }: {
+  orcamento?: boolean;
   pedidoId: string;
   nomeCliente: string;
   documento: string;
@@ -865,12 +985,12 @@ function ConfirmarEnvioDoRecibo({
 
   useEffect(() => {
     const t = setTimeout(() => {
-      const p = new URLSearchParams({ documento, nomeNoRecibo, mesReferencia });
+      const p = new URLSearchParams({ documento, nomeNoRecibo, mesReferencia, ...(orcamento ? { orcamento: "1" } : {}) });
       setConsultaPrevia(p.toString());
       setCarregandoPrevia(true);
     }, 500);
     return () => clearTimeout(t);
-  }, [documento, nomeNoRecibo, mesReferencia]);
+  }, [documento, nomeNoRecibo, mesReferencia, orcamento]);
 
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onCancelar}>
@@ -879,7 +999,7 @@ function ConfirmarEnvioDoRecibo({
         className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm max-h-[92vh] flex flex-col"
       >
         <div className="p-5 pb-0">
-          <h3 className="font-semibold">Enviar recibo ao cliente</h3>
+          <h3 className="font-semibold">{orcamento ? "Enviar orçamento ao cliente" : "Enviar recibo ao cliente"}</h3>
           <p className="text-sm text-neutral-500 mt-0.5">
             É exatamente isto que {nomeCliente} vai receber no WhatsApp.
           </p>
@@ -964,7 +1084,83 @@ function ConfirmarEnvioDoRecibo({
             disabled={enviando}
             className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-50"
           >
-            {enviando ? "Enviando..." : "Enviar ao cliente"}
+            {enviando ? "Enviando..." : orcamento ? "Enviar orçamento" : "Enviar ao cliente"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Confirmação de cancelamento — e de "editar", que é cancelar e refazer.
+ * Diz o que vai acontecer com o estoque e o financeiro antes, e pede o motivo
+ * (pedido da Believe, 14/10: cancelamento sem justificativa não se explica
+ * depois).
+ */
+function CancelarPedido({
+  numero,
+  fechado,
+  refazer,
+  termo,
+  onVoltar,
+  onConfirmar,
+}: {
+  numero: number;
+  fechado: boolean;
+  refazer: boolean;
+  termo: { singular: string; minusculo: string };
+  onVoltar: () => void;
+  onConfirmar: (motivo: string) => Promise<void>;
+}) {
+  const [motivo, setMotivo] = useState(refazer ? "Correção do pedido" : "");
+  const [enviando, setEnviando] = useState(false);
+
+  return (
+    <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onVoltar}>
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md p-5 flex flex-col gap-3">
+        <h3 className="font-semibold">
+          {refazer ? `Editar ${termo.minusculo} #${numero}` : fechado ? `Cancelar ${termo.minusculo} #${numero}` : `Cancelar orçamento #${numero}`}
+        </h3>
+        {fechado ? (
+          <ul className="text-sm text-neutral-700 list-disc pl-5 flex flex-col gap-1">
+            <li>Os produtos <b>voltam ao estoque</b> (fica registrado como devolução).</li>
+            <li>O que já foi recebido é <b>estornado</b>, e as parcelas a receber são canceladas.</li>
+            {refazer && (
+              <li>
+                Nasce uma <b>cópia</b> com os mesmos itens e condição, em “Aguardando financeiro”, para ajustar e fechar de novo.
+              </li>
+            )}
+          </ul>
+        ) : (
+          <p className="text-sm text-neutral-700">Ainda não foi fechado: nada de estoque ou financeiro para desfazer.</p>
+        )}
+        <label className="text-sm">
+          <span className="block text-xs font-medium text-neutral-700 mb-1">Motivo (obrigatório)</span>
+          <textarea
+            autoFocus
+            value={motivo}
+            onChange={(e) => setMotivo(e.target.value)}
+            rows={3}
+            maxLength={300}
+            placeholder="Ex.: valor do produto errado, cliente desistiu, pedido duplicado..."
+            className="w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button onClick={onVoltar} className="px-4 py-2 text-sm text-neutral-600">
+            Voltar
+          </button>
+          <button
+            onClick={async () => {
+              setEnviando(true);
+              await onConfirmar(motivo.trim());
+              setEnviando(false);
+            }}
+            disabled={enviando || motivo.trim().length < 3}
+            className={`rounded-md px-4 py-2 text-sm font-medium text-white disabled:opacity-50 ${refazer ? "bg-accent" : "bg-red-600"}`}
+          >
+            {enviando ? "Aguarde..." : refazer ? "Cancelar e criar cópia" : fechado ? `Cancelar ${termo.minusculo}` : "Cancelar orçamento"}
           </button>
         </div>
       </div>

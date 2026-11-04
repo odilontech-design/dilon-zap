@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/session";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { camposDoContato, NEGOCIACAO_ABERTA_DO_CONTATO } from "@/lib/negociacoes";
 import { pendenciasPorContato } from "@/lib/contas-receber";
+import { podeVerPendencia } from "@/lib/plano";
 
 export async function GET() {
   const user = await requireUser();
@@ -43,7 +44,7 @@ export async function GET() {
   // é onde elas realmente vivem (ver /inbox). Também expõe essa conversa
   // (id + atendente) pro Funil linkar direto pro Inbox.
   // Quanto cada um deve: selo na lista e filtro "com pagamento pendente".
-  const pendencias = await pendenciasPorContato(user.tenantId);
+  const pendencias = (await podeVerPendencia(user)) ? await pendenciasPorContato(user.tenantId) : new Map();
 
   const withTags = contacts.map(({ conversations, negociacoes, ...contact }) => ({
     pendencia: pendencias.get(contact.id) ?? null,

@@ -16,6 +16,7 @@ export type LinhaParcela = {
   conversationId: string | null;
   origem: "MANUAL" | "PEDIDO";
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   contato: { id: string; name: string | null; waJid: string; phoneNumber: string | null };
   vencimento: string | null;
   pagaEm: string | null;

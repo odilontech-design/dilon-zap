@@ -3,8 +3,10 @@ import { z } from "zod";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { funilDaEmpresa, garantirMotivosDePerda } from "@/lib/funis";
+import { origemCanonica, origensDoTenant } from "@/lib/origens";
 import { criarNegociacao, ErroDeNegocio } from "@/lib/negociacoes";
 import { pendenciasPorContato } from "@/lib/contas-receber";
+import { podeVerPendencia } from "@/lib/plano";
 import {
   calcularIndicadores,
   filtrarNegociacoes,
@@ -76,7 +78,9 @@ export async function GET(req: Request) {
     ate: dataOuNada(q.get("ate")),
   });
   const idsFiltrados = new Set(filtradas.map((n) => n.id));
-  const pendencias = await pendenciasPorContato(user.tenantId, { contactIds: [...new Set(brutas.map((n) => n.contactId))] });
+  const pendencias = (await podeVerPendencia(user))
+    ? await pendenciasPorContato(user.tenantId, { contactIds: [...new Set(brutas.map((n) => n.contactId))] })
+    : new Map();
 
   const eventosBrutos = await prisma.historicoDeEtapa.findMany({
     where: { negociacaoId: { in: [...idsFiltrados] } },
@@ -118,12 +122,16 @@ export async function GET(req: Request) {
   const agora = new Date();
   const atrasadasDe = new Map<string, number>();
   for (const t of pendentes) {
+    if (!t.negociacaoId) continue;
     if (!proximaDe.has(t.negociacaoId)) proximaDe.set(t.negociacaoId, t);
     if (t.venceEm < agora) atrasadasDe.set(t.negociacaoId, (atrasadasDe.get(t.negociacaoId) ?? 0) + 1);
   }
 
   // Sugestões de origem: o que a empresa já usou, pra não nascerem "insta" e "Instagram".
-  const origens = [...new Set(brutas.map((n) => n.origem).filter((o): o is string => !!o))].sort();
+  // Lista padronizada (sugestões + as já usadas), a mesma do formulário.
+  const origens = await origensDoTenant(user.tenantId);
+  // Abrir negociação não exige mais nada; o valor só é cobrado a partir do orçamento.
+  const exigirDados = false;
 
   return NextResponse.json({
     funil: { id: funil.id, nome: funil.nome },
@@ -161,6 +169,8 @@ export async function GET(req: Request) {
     })),
     indicadores,
     origens,
+    exigirDados,
+    meuId: user.id,
     motivos,
     usuarios,
   });
@@ -216,7 +226,7 @@ export async function POST(req: Request) {
       valorCents: d.valorCents,
       recorrencia: d.recorrencia,
       responsavelId: d.responsavelId ?? null,
-      origem: d.origem || null,
+      origem: await origemCanonica(user.tenantId, d.origem),
       previsaoFechamento: previsao,
     });
     return NextResponse.json({ id: n.id });

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { recursosDoTenant } from "@/lib/plano";
+import { recursosDoUsuario } from "@/lib/plano";
 import { Sidebar } from "@/components/sidebar";
 import { RecursosProvider } from "@/components/recursos-context";
 
@@ -16,18 +16,21 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Senha provisória não abre o painel. Consulta o banco, e não o JWT, pra
   // valer na hora: a redefinição feita pelo responsável precisa pegar também
   // quem já estava logado, e o JWT só é reemitido no próximo login.
-  const conta = await prisma.user.findUnique({ where: { id: user.id }, select: { senhaProvisoria: true } });
+  const [conta, empresa] = await Promise.all([
+    prisma.user.findUnique({ where: { id: user.id }, select: { senhaProvisoria: true } }),
+    prisma.tenant.findUnique({ where: { id: user.tenantId }, select: { termoPedido: true } }),
+  ]);
   if (conta?.senhaProvisoria) redirect("/trocar-senha");
 
   // Carregado uma vez aqui e distribuído pro menu e pras telas. Array, e não
   // Set, porque atravessa a fronteira servidor → cliente, que só aceita dado
   // serializável.
-  const recursos = [...(await recursosDoTenant(user.tenantId))];
+  const recursos = [...(await recursosDoUsuario(user))];
 
   return (
-    <RecursosProvider recursos={recursos}>
+    <RecursosProvider recursos={recursos} termoPedido={empresa?.termoPedido}>
       <div className="min-h-screen flex flex-col md:flex-row">
-        <Sidebar name={user.name} role={user.role} recursos={recursos} />
+        <Sidebar name={user.name} role={user.role} recursos={recursos} termoPedido={empresa?.termoPedido} />
         <main className="flex-1 min-w-0">{children}</main>
       </div>
     </RecursosProvider>

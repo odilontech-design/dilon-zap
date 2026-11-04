@@ -23,7 +23,8 @@ export type Recurso =
   | "INTEGRACAO_API"
   | "MATERIAIS"
   | "MULTI_NUMERO"
-  | "FUNIL_SAAS";
+  | "FUNIL_SAAS"
+  | "SDR";
 
 /** O que a escada dos planos distribui — e o que a regra antiga entrega inteiro. */
 export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API", "MATERIAIS"];
@@ -40,8 +41,23 @@ export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS",
  */
 export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS"];
 
+/**
+ * Recursos fora também do painel do superadmin. O SDR está em validação na
+ * Dilon Tech, e ligar para outra empresa é decisão à parte: um clique no painel
+ * não pode fazer isso. Quem tem o recurso é quem tem a linha em TenantRecurso.
+ *
+ * Um recurso restrito não entra em plano, na regra antiga nem em
+ * RECURSOS_GERENCIAVEIS, que o filtra daqui: pôr o SDR numa das outras listas
+ * por engano não o abre no painel.
+ */
+export const RECURSOS_RESTRITOS: Recurso[] = ["SDR"];
+
 /** Tudo que o painel do superadmin deixa ligar ou desligar por empresa. */
-export const RECURSOS_GERENCIAVEIS: Recurso[] = [...TODOS_RECURSOS, ...RECURSOS_SOB_DEMANDA];
+export function recursosGerenciaveis(listas: Recurso[][], restritos: Recurso[] = RECURSOS_RESTRITOS): Recurso[] {
+  return listas.flat().filter((r) => !restritos.includes(r));
+}
+
+export const RECURSOS_GERENCIAVEIS: Recurso[] = recursosGerenciaveis([TODOS_RECURSOS, RECURSOS_SOB_DEMANDA]);
 
 export const PLANOS: Record<
   Plano,
@@ -84,6 +100,7 @@ export const ROTULO_RECURSO: Record<Recurso, string> = {
   MATERIAIS: "Biblioteca de materiais dos produtos",
   MULTI_NUMERO: "Mais de um número de WhatsApp",
   FUNIL_SAAS: "Indicadores de SaaS no funil",
+  SDR: "Prospecção comercial (SDR)",
 };
 
 export type Assinatura = {

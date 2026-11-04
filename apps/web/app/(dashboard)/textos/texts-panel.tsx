@@ -81,8 +81,8 @@ export function TextsPanel({ podeEditar, podeExcluir }: { podeEditar: boolean; p
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl">
-      <div className="flex items-start justify-between gap-4 mb-1">
+    <div className="p-4 md:p-6 max-w-6xl">
+      <div className="flex items-start justify-between gap-4 mb-1 flex-wrap">
         <h1 className="text-xl font-semibold">Textos prontos</h1>
         {podeEditar && (
           <button

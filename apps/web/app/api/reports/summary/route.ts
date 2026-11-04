@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
+import { conversationVisibilityWhere } from "@/lib/conversation-access";
 
 const FIRST_RESPONSE_SAMPLE_SIZE = 50; // últimas conversas usadas pra calcular a média — evita varrer o histórico inteiro a cada carregamento
 
@@ -104,7 +105,10 @@ export async function GET() {
     await Promise.all([
     prisma.conversation.groupBy({
       by: ["status"],
-      where: { tenantId: user.tenantId, contact: { grupo: false } },
+      // Abertas e pendentes de quem olha: o financeiro e o atendente veem as
+      // do seu setor, não as da empresa inteira (pedido da Guttierres, 13/10).
+      // Responsável continua vendo tudo — para ele o filtro é vazio.
+      where: { tenantId: user.tenantId, contact: { grupo: false }, ...(await conversationVisibilityWhere(user, { listagem: true })) },
       _count: true,
     }),
     prisma.message.count({

@@ -32,6 +32,7 @@ async function main() {
   const { watchForDuplicateContacts } = await import("./reconcile-contacts");
   const { startScheduledMessagesLoop } = await import("./scheduled-messages");
   const { startReceivablesFollowupLoop } = await import("./receivables-followup");
+  const { vigiarMemoria } = await import("./memoria");
 
   console.log("[dilon-zap worker] iniciando...");
   await syncSessions();
@@ -40,6 +41,7 @@ async function main() {
   startScheduledMessagesLoop();
   startReceivablesFollowupLoop();
   startInternalServer();
+  vigiarMemoria();
   console.log("[dilon-zap worker] no ar, observando sessões a cada 5s.");
 }
 

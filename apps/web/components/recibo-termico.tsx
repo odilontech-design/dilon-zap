@@ -128,7 +128,7 @@ export function ReciboTermico({ recibo, logoUrl }: { recibo: Recibo; logoUrl?: s
           </div>
         ))}
 
-        <div className="selo">{recibo.situacao === "PAGO" ? "PAGO" : "PAGAMENTO PENDENTE"}</div>
+        <div className="selo">{recibo.situacao === "PAGO" ? "PAGO" : recibo.situacao === "ORCAMENTO" ? "ORÇAMENTO" : "PAGAMENTO PENDENTE"}</div>
         {recibo.mensagem && <div className="texto-livre corpo-recibo">{recibo.mensagem}</div>}
         {recibo.pagamento.map((l) => (
           <div key={l.rotulo} className="linha">

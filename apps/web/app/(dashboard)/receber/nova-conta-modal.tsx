@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { centsToBRL } from "@/lib/billing";
 import { reaisParaCentavos } from "../funil/tipos";
+import { CampoCategoria } from "@/components/campo-categoria";
+import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
 import { chamar, dataVencimento, hojeISO, ROTULO_TIPO } from "./formatos";
 
 type Contato = { id: string; nome: string | null; telefone: string | null };
@@ -23,12 +25,14 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
   const [telefoneNovo, setTelefoneNovo] = useState("");
 
   const [descricao, setDescricao] = useState("");
+  const [categoriaId, setCategoriaId] = useState("");
   const [total, setTotal] = useState("");
   const [entrada, setEntrada] = useState("");
   const [numParcelas, setNumParcelas] = useState("1");
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>("SEMANAL");
   const [primeiro, setPrimeiro] = useState(hojeISO());
   const [vencEntrada, setVencEntrada] = useState(hojeISO());
+  const [partesEntrada, setPartesEntrada] = useState<ParteDaEntrada[] | null>(null);
 
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -49,10 +53,12 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
   const totalCents = reaisParaCentavos(total);
   const entradaCents = entrada.trim() ? reaisParaCentavos(entrada) : 0;
   const n = Number(numParcelas);
+  const entradaDividida = entradasDoPlano(partesEntrada, entradaCents ?? 0);
 
   const previa = useMemo(() => {
     if (totalCents === null || totalCents <= 0 || entradaCents === null) return { erro: null as string | null, linhas: [] };
     if (!Number.isInteger(n) || n < 1) return { erro: "informe o número de parcelas", linhas: [] };
+    if (entradaDividida.erro) return { erro: entradaDividida.erro, linhas: [] };
     try {
       return {
         erro: null,
@@ -63,12 +69,13 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
           periodicidade,
           primeiroVencimento: noon(primeiro),
           vencimentoEntrada: noon(vencEntrada),
+          entradas: entradaDividida.entradas?.map((p) => ({ vencimento: noon(p.vencimento), valorCents: p.valorCents })),
         }),
       };
     } catch (e) {
       return { erro: (e as Error).message, linhas: [] };
     }
-  }, [totalCents, entradaCents, n, periodicidade, primeiro, vencEntrada]);
+  }, [totalCents, entradaCents, n, periodicidade, primeiro, vencEntrada, entradaDividida.entradas, entradaDividida.erro]);
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
@@ -94,9 +101,11 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
       const r = await chamar("/api/contas-receber", "POST", {
         contactId,
         descricao: descricao.trim() || null,
+        categoriaId: categoriaId || null,
         totalCents,
         entradaCents: entradaCents || undefined,
         vencimentoEntrada: entradaCents ? vencEntrada : undefined,
+        ...(entradaDividida.entradas ? { entradas: entradaDividida.entradas } : {}),
         numParcelas: n,
         periodicidade,
         primeiroVencimento: primeiro,
@@ -153,6 +162,11 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
             <input value={descricao} onChange={(e) => setDescricao(e.target.value)} placeholder="ex: Venda de coloração, outubro" className={`${campo} mt-1`} />
           </label>
 
+          <label className="text-xs font-medium text-neutral-700">
+            Categoria
+            <CampoCategoria tipo="RECEITA" value={categoriaId} onChange={setCategoriaId} className={`${campo} mt-1`} />
+          </label>
+
           <div className="grid grid-cols-2 gap-3">
             <label className="text-xs font-medium text-neutral-700">
               Valor total (R$)
@@ -181,16 +195,17 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
               1º vencimento
               <input type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} className={`${campo} mt-1`} />
             </label>
-            {entradaCents ? (
+            {entradaCents && !partesEntrada ? (
               <label className="text-xs font-medium text-neutral-700">
                 Vence a entrada
                 <input type="date" value={vencEntrada} onChange={(e) => setVencEntrada(e.target.value)} className={`${campo} mt-1`} />
               </label>
             ) : null}
           </div>
+          <DividirEntrada entradaCents={entradaCents ?? 0} diaInicial={vencEntrada} partes={partesEntrada} onChange={setPartesEntrada} />
 
           {previa.linhas.length > 0 && (
-            <div className="rounded-md border border-neutral-200 overflow-hidden">
+            <div className="rounded-md border border-neutral-200 overflow-x-auto">
               <table className="w-full text-sm tabular-nums">
                 <thead className="bg-neutral-50 text-xs text-neutral-500">
                   <tr>

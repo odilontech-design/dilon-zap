@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { prisma } from "@dilon-zap/db";
 import { uploadMedia } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
+import { exigirRecurso } from "@/lib/plano";
 import { wakeOutbox } from "@/lib/worker-client";
 import { numeroParaEnviar } from "@/lib/whatsapp-sessions";
 import {
@@ -16,12 +17,16 @@ import {
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
+  const bloqueio = await exigirRecurso(user, "PEDIDOS");
+  if (bloqueio) return bloqueio;
 
   // Nome e documento vêm da tela de confirmação do envio. Campo ausente
   // mantém o que já está salvo na ficha; texto vazio limpa.
-  const corpo = (await req.json().catch(() => ({}))) as AjustesDoRecibo;
+  const corpo = (await req.json().catch(() => ({}))) as AjustesDoRecibo & { orcamento?: boolean };
+  // Orçamento: o pedido ainda em montagem, mandado para a cliente conferir.
+  const orcamento = corpo.orcamento === true;
 
-  const carregado = await carregarPedidoDoRecibo(user.tenantId, params.id);
+  const carregado = await carregarPedidoDoRecibo(user.tenantId, params.id, { orcamento });
   if (!carregado) {
     return NextResponse.json(
       { error: "Pedido não encontrado ou ainda não fechado." },
@@ -55,7 +60,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await prisma.order.update({ where: { id: pedido.id }, data: { mesReferencia } });
   }
 
-  const recibo = montarReciboDoPedido(empresa, { ...pedido, mesReferencia }, cliente);
+  const recibo = montarReciboDoPedido(empresa, { ...pedido, mesReferencia }, cliente, { orcamento });
   const png = await desenharReciboPng(recibo, empresa.reciboLogoKey);
 
   const mediaKey = `${user.tenantId}/recibos/${pedido.id}-${randomUUID().slice(0, 8)}.png`;
@@ -85,14 +90,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       // Pago é RECIBO; em aberto ainda é cobrança. O mesmo botão serve às duas
       // coisas (a Guttierres usa assim), e chamar de "comprovante do pedido" um
       // papel que o cliente ainda não pagou confunde quem recebe.
-      body: pedido.pago ? `Recibo #${pedido.numero}` : `Cobrança do pedido #${pedido.numero}`,
+      body: orcamento
+        ? `Orçamento #${pedido.numero}`
+        : pedido.pago
+          ? `Recibo #${pedido.numero}`
+          : `Cobrança do pedido #${pedido.numero}`,
       senderUserId: user.id,
       mediaType: "IMAGE",
       mediaKey,
       mediaMimeType: "image/png",
       // Acompanha a legenda: o cliente que salva o arquivo acha "recibo-56"
       // quando pagou e "cobranca-56" quando ainda deve.
-      mediaFileName: `${pedido.pago ? "recibo" : "cobranca"}-${pedido.numero}.png`,
+      mediaFileName: `${orcamento ? "orcamento" : pedido.pago ? "recibo" : "cobranca"}-${pedido.numero}.png`,
       setorId: conversa.setorId,
     },
   });

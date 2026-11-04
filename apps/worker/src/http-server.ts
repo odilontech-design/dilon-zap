@@ -5,6 +5,7 @@ import {
   editOutboundMessage,
   deleteOutboundMessage,
   reactToMessage,
+  marcarLidasNoWhatsApp,
   wakeOutboxForTenant,
   checarNumerosNoWhatsApp,
   setWhatsAppBlock,
@@ -12,6 +13,7 @@ import {
   buscarHistoricoDeGrupo,
   atualizarParticipantesDoGrupo,
 } from "./session-manager";
+import { consultarPresenca } from "./presenca";
 
 const PORT = Number(process.env.WORKER_INTERNAL_PORT ?? 4001);
 const SECRET = process.env.WORKER_INTERNAL_SECRET;
@@ -58,6 +60,16 @@ export function startInternalServer() {
       return;
     }
 
+    if (req.method === "POST" && req.url === "/internal/presence") {
+      handlePresence(req, res);
+      return;
+    }
+
+    if (req.method === "POST" && req.url === "/internal/messages/read") {
+      handleReadMessages(req, res);
+      return;
+    }
+
     if (req.method === "POST" && req.url === "/internal/messages/react") {
       handleReactMessage(req, res);
       return;
@@ -98,6 +110,26 @@ export function startInternalServer() {
 
   server.listen(PORT, HOST, () => {
     console.log(`[dilon-zap worker] servidor interno ouvindo em ${HOST}:${PORT}`);
+  });
+}
+
+// Presença do contato de uma conversa aberta (online / digitando / visto por
+// último). Assina sob demanda; ver presenca.ts.
+function handlePresence(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { sessionId, waJid, alternativo } = JSON.parse(body) as { sessionId?: string; waJid?: string; alternativo?: string | null };
+      if (!sessionId || !waJid) {
+        res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "sessionId e waJid são obrigatórios" }));
+        return;
+      }
+      const r = await consultarPresenca(getSocketForSession(sessionId), sessionId, waJid, alternativo);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(r));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: (err as Error).message }));
+    }
   });
 }
 
@@ -395,6 +427,28 @@ function handleBlockWhatsApp(req: http.IncomingMessage, res: http.ServerResponse
       res
         .writeHead(500, { "Content-Type": "application/json" })
         .end(JSON.stringify({ error: (err as Error).message }));
+    }
+  });
+}
+
+function handleReadMessages(req: http.IncomingMessage, res: http.ServerResponse) {
+  let body = "";
+  req.on("data", (chunk) => (body += chunk));
+  req.on("end", async () => {
+    try {
+      const { sessionId, waJid, mensagens } = JSON.parse(body) as {
+        sessionId?: string;
+        waJid?: string;
+        mensagens?: { id: string; participant?: string | null }[];
+      };
+      if (!sessionId || !waJid || !Array.isArray(mensagens)) {
+        res.writeHead(400, { "Content-Type": "application/json" }).end(JSON.stringify({ error: "sessionId, waJid e mensagens são obrigatórios" }));
+        return;
+      }
+      const result = await marcarLidasNoWhatsApp(sessionId, waJid, mensagens);
+      res.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify(result));
+    } catch (err) {
+      res.writeHead(500, { "Content-Type": "application/json" }).end(JSON.stringify({ error: (err as Error).message }));
     }
   });
 }

@@ -1,15 +1,19 @@
 "use client";
 
+import { signOut } from "next-auth/react";
 import type { Recurso } from "@/lib/plano-regras";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import useSWR from "swr";
+import { UNREAD_COUNT_INTERVAL } from "@/lib/polling";
 import { SignOutButton } from "@/components/sign-out-button";
 import { AppVersion } from "@/components/app-version";
 import { DilonMark } from "@/components/dilon-mark";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Notificacoes } from "@/components/notificacoes";
+import { termosDoPedido } from "@/components/recursos-context";
 
 // Ícones inline (sem lib externa: são poucos e assim não entra mais um
 // pacote no bundle). Todos no mesmo padrão — traço, 24x24, herdando a cor
@@ -62,6 +66,14 @@ const NAV_ITEMS = [
     icon: icon(<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="m8.5 9.5 1.5 1.5 3-3.5" /><path d="M8.5 16h7" /></>),
   },
   {
+    href: "/sdr",
+    recurso: "SDR" as Recurso,
+    label: "SDR",
+    icon: icon(<><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>),
+    // Mesma regra de leitura de lib/sdr/regras. A barreira real é a rota.
+    somenteGestao: true,
+  },
+  {
     href: "/saas",
     recurso: "FUNIL_SAAS" as Recurso,
     label: "Indicadores SaaS",
@@ -108,7 +120,7 @@ const NAV_ITEMS = [
     // Um item só: A receber, A pagar e Caixa trocam pelas abas do topo da
     // própria página (pedido do Felipe, 11/10 — o menu estava comprido).
     href: "/receber",
-    tambemAtivoEm: ["/pagar", "/caixa"],
+    tambemAtivoEm: ["/pagar", "/caixa", "/categorias", "/estoque"],
     recurso: "CONTAS_RECEBER" as Recurso,
     label: "Financeiro",
     icon: icon(<><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3" /><path d="M3 7h16a2 2 0 0 1 2 2v3h-5a2 2 0 0 0 0 4h5" /><path d="M16.5 14h.01" /></>),
@@ -169,6 +181,7 @@ export function Sidebar({
   name,
   role,
   recursos,
+  termoPedido,
 }: {
   name: string;
   role: "OWNER" | "AGENT" | "FINANCEIRO" | "SUPERADMIN";
@@ -176,6 +189,8 @@ export function Sidebar({
   // menu fora do layout do painel; ausente = mostra tudo, e o servidor
   // continua barrando o que está fora do plano.
   recursos?: Recurso[];
+  /** "Orçamento" troca o nome do menu Pedidos. Ver Tenant.termoPedido. */
+  termoPedido?: string | null;
 }) {
   const ativos = recursos ? new Set(recursos) : null;
   // `open` é só pro mobile (gaveta). No desktop a barra está sempre visível
@@ -183,6 +198,13 @@ export function Sidebar({
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const pathname = usePathname();
+  // Não lidas do Inbox e dos Grupos, no próprio menu: dá pra ver que chegou
+  // mensagem estando em qualquer tela (pedido da Dilon Tech, 13/10).
+  const { data: contadores } = useSWR<{ inbox: number; grupos: number; chatEquipe?: number }>(
+    "/api/menu-contadores",
+    (url: string) => fetch(url).then((r) => (r.ok ? r.json() : { inbox: 0, grupos: 0 })),
+    { refreshInterval: UNREAD_COUNT_INTERVAL }
+  );
 
   // Lido depois da montagem, não no estado inicial: localStorage não existe
   // no servidor, e usar lá quebraria a hidratação do React.
@@ -312,7 +334,11 @@ export function Sidebar({
             simplesmente nunca aparecia, e o nav empurrava o rodapé pra fora
             da tela em vez de rolar. flex-1 dá a ele o espaço que sobra entre
             a marca e o rodapé. */}
-        <nav className="flex-1 min-h-0 flex flex-col gap-1 text-sm overflow-y-auto">
+        <nav
+          className={`flex-1 min-h-0 flex flex-col gap-1 text-sm overflow-y-auto ${
+            collapsed ? "md:[scrollbar-width:none] md:[&::-webkit-scrollbar]:hidden" : ""
+          }`}
+        >
           {NAV_ITEMS.filter(
             (item) =>
               // Superadmin conta como responsável da PRÓPRIA empresa (a Dilon
@@ -336,19 +362,42 @@ export function Sidebar({
           ).map((item) => {
             const prefixos = [item.href, ...("tambemAtivoEm" in item && item.tambemAtivoEm ? item.tambemAtivoEm : [])];
             const active = prefixos.some((h) => pathname === h || pathname?.startsWith(h + "/"));
+            const rotulo = item.href === "/pedidos" ? termosDoPedido(termoPedido).plural : item.label;
+            const naoLidas =
+              item.href === "/inbox"
+                ? contadores?.inbox
+                : item.href === "/grupos"
+                  ? contadores?.grupos
+                  : item.href === "/chat-equipe"
+                    ? contadores?.chatEquipe
+                    : 0;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setOpen(false)}
                 // O title vira a dica de qual item é quando só o ícone aparece.
-                title={collapsed ? item.label : undefined}
+                title={collapsed ? rotulo : undefined}
                 className={`flex items-center gap-3 rounded-md py-2 ${
                   collapsed ? "md:justify-center md:px-0 px-3" : "px-3"
                 } ${active ? "bg-accent/10 text-accent font-medium" : "text-neutral-700 hover:bg-neutral-100"}`}
               >
-                {item.icon}
-                <span className={collapsed ? "md:hidden" : ""}>{item.label}</span>
+                <span className="relative shrink-0 flex">
+                  {item.icon}
+                  {/* Recolhido, só o ícone aparece: o número vira uma bolinha nele. */}
+                  {!!naoLidas && collapsed && (
+                    <span className="hidden md:block absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-accent ring-2 ring-surface" />
+                  )}
+                </span>
+                <span className={`flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>{rotulo}</span>
+                {!!naoLidas && (
+                  <span
+                    title={`${naoLidas} mensagem(ns) não lida(s)`}
+                    className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-accent text-white ${collapsed ? "md:hidden" : ""}`}
+                  >
+                    {naoLidas > 99 ? "99+" : naoLidas}
+                  </span>
+                )}
               </Link>
             );
           })}
@@ -381,7 +430,7 @@ export function Sidebar({
               empurravam a lista de menu e criavam rolagem dentro da barra.
               O alternador aqui é só o ícone — o rótulo "Modo noite" era o
               que mais ocupava largura, e sol/lua já diz o que faz. */}
-          <div className={`flex items-center gap-2 mb-1.5 ${collapsed ? "md:justify-center" : ""}`}>
+          <div className={`flex items-center gap-2 mb-1.5 ${collapsed ? "md:flex-col md:gap-1" : ""}`}>
             <p className={`font-medium text-neutral-700 truncate flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>
               {name}
             </p>
@@ -405,10 +454,18 @@ export function Sidebar({
             <AppVersion />
           </div>
 
-          {/* Recolhida a barra tem 64px: nome e Sair já somem, e sobra só a
-              versão embaixo do ícone de tema. */}
+          {/* Recolhida a barra tem 64px: o nome some, Sair vira ícone e a
+              versão fica embaixo, centralizada. */}
           {collapsed && (
-            <div className="hidden md:block mt-2 text-center">
+            <div className="hidden md:flex md:flex-col md:items-center gap-1 mt-1">
+              <button
+                onClick={() => signOut({ callbackUrl: "/login" })}
+                aria-label="Sair"
+                title="Sair"
+                className="grid place-items-center w-7 h-7 rounded-md text-neutral-400 hover:text-red-600 hover:bg-neutral-100"
+              >
+                {icon(<><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5M21 12H9" /></>)}
+              </button>
               <AppVersion compact />
             </div>
           )}

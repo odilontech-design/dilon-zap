@@ -37,6 +37,33 @@ export async function recursosDoTenant(tenantId: string) {
   return recursosEfetivos(assinatura, excecoes);
 }
 
+/** Recursos que somem para o atendente quando a empresa liga pedidosSoGerencia. */
+const SO_GERENCIA: Recurso[] = ["PEDIDOS", "CONTAS_RECEBER"];
+
+async function atendenteSemPedidos(user: { tenantId: string; role: string }) {
+  if (user.role !== "AGENT") return false;
+  const t = await prisma.tenant.findUnique({ where: { id: user.tenantId }, select: { pedidosSoGerencia: true } });
+  return !!t?.pedidosSoGerencia;
+}
+
+/**
+ * O que esta pessoa usa: o plano da empresa, menos Pedidos e Contas a receber
+ * para o atendente da empresa que reservou isso ao Responsável e ao Financeiro.
+ */
+export async function recursosDoUsuario(user: { tenantId: string; role: string }) {
+  const [ativos, semPedidos] = await Promise.all([recursosDoTenant(user.tenantId), atendenteSemPedidos(user)]);
+  if (semPedidos) for (const r of SO_GERENCIA) ativos.delete(r);
+  return ativos;
+}
+
+/**
+ * Se a pessoa pode ver quanto o cliente deve (o selo "Deve R$"). Quem não
+ * pode recebe a pendência como nula — o dado não sai do servidor.
+ */
+export async function podeVerPendencia(user: { tenantId: string; role: string }) {
+  return !(await atendenteSemPedidos(user));
+}
+
 /**
  * Barra a rota se o recurso não está no plano.
  *
@@ -53,7 +80,7 @@ export async function exigirRecurso(
 ): Promise<NextResponse | null> {
   if (user.role === "SUPERADMIN") return null;
 
-  const ativos = await recursosDoTenant(user.tenantId);
+  const ativos = await recursosDoUsuario(user);
   if (ativos.has(recurso)) return null;
 
   return NextResponse.json(
@@ -79,7 +106,7 @@ export async function exigirAlgumRecurso(
 ): Promise<NextResponse | null> {
   if (user.role === "SUPERADMIN") return null;
 
-  const ativos = await recursosDoTenant(user.tenantId);
+  const ativos = await recursosDoUsuario(user);
   if (recursos.some((r) => ativos.has(r))) return null;
 
   return NextResponse.json(

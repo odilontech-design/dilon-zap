@@ -1,4 +1,5 @@
 import { prisma } from "@dilon-zap/db";
+import { categoriaDeVendas, validarCategoria } from "@/lib/categorias-financeiras";
 import type { PaymentMethod, Prisma, TipoParcela } from "@prisma/client";
 import {
   alocarRecebimento,
@@ -64,6 +65,7 @@ export type NovaContaInput = {
   tenantId: string;
   contactId: string;
   descricao?: string | null;
+  categoriaId?: string | null;
   plano: PlanoDeParcelas;
   userId?: string;
 };
@@ -86,6 +88,7 @@ export async function criarContaManual(db: Db, input: NovaContaInput) {
       contactId: contato.id,
       origem: "MANUAL",
       descricao: input.descricao?.trim() || null,
+      categoriaId: await validarCategoria(db, input.tenantId, input.categoriaId, "RECEITA"),
       createdById: input.userId,
       parcelas: {
         create: parcelas.map((p) => ({
@@ -119,6 +122,8 @@ export async function garantirContaDoPedido(db: Db, orderId: string, userId?: st
     select: { id: true, tenantId: true, contactId: true, totalCents: true, vencimento: true, numero: true },
   });
   if (pedido.totalCents <= 0) throw new ErroDeConta("pedido sem valor não gera conta a receber");
+  // Venda por pedido entra no plano de contas como venda, sem ninguém escolher.
+  const categoriaId = await categoriaDeVendas(db, pedido.tenantId);
 
   const conta = await db.contaReceber.create({
     data: {
@@ -127,6 +132,7 @@ export async function garantirContaDoPedido(db: Db, orderId: string, userId?: st
       orderId: pedido.id,
       origem: "PEDIDO",
       descricao: `Pedido #${pedido.numero}`,
+      categoriaId,
       createdById: userId,
       parcelas: {
         create: {
@@ -331,15 +337,33 @@ export async function cancelarParcela(db: Db, input: { tenantId: string; parcela
   return { ok: true };
 }
 
-export async function cancelarConta(db: Db, input: { tenantId: string; contaId: string }) {
-  const conta = await db.contaReceber.findFirst({
+export async function cancelarConta(
+  db: Db,
+  input: { tenantId: string; contaId: string; estornar?: boolean; userId?: string; motivo?: string | null }
+) {
+  let conta = await db.contaReceber.findFirst({
     where: { id: input.contaId, tenantId: input.tenantId },
     include: { parcelas: { include: { pagamentos: true } } },
   });
   if (!conta) throw new ErroDeConta("conta não encontrada", 404);
   if (conta.orderId) throw new ErroDeConta("conta de pedido: cancele o pedido");
-  if (conta.parcelas.some((p) => situacao(p).pagoCents > 0)) {
-    throw new ErroDeConta("a conta tem recebimentos: estorne ou reembolse antes de cancelar");
+  const recebido = conta.parcelas.reduce((s, p) => s + (p.canceladaEm || p.reembolsadaEm ? 0 : situacao(p).pagoCents), 0);
+  if (recebido > 0) {
+    // "Excluir conta" (Believe, 14/10): a conta não vale mais — o que entrou
+    // volta como estorno, registrado, e então ela é cancelada. Sem pedir para
+    // estornar antes, que era o que travava a correção.
+    if (!input.estornar) throw new ErroDeConta("a conta tem recebimentos: estorne ou reembolse antes de cancelar");
+    await estornarNaConta(db, {
+      tenantId: input.tenantId,
+      contaId: conta.id,
+      valorCents: recebido,
+      observacao: `Estorno — conta excluída${input.motivo ? `: ${input.motivo}` : ""}`.slice(0, 300),
+      userId: input.userId,
+    });
+    conta = (await db.contaReceber.findFirst({
+      where: { id: input.contaId, tenantId: input.tenantId },
+      include: { parcelas: { include: { pagamentos: true } } },
+    }))!;
   }
   const agora = new Date();
   await db.parcela.updateMany({ where: { contaId: conta.id, canceladaEm: null }, data: { canceladaEm: agora } });
@@ -354,7 +378,16 @@ export async function cancelarConta(db: Db, input: { tenantId: string; contaId: 
  */
 export async function reparcelarConta(
   db: Db,
-  input: { tenantId: string; contaId: string; entradaCents?: number; numParcelas: number; periodicidade: PlanoDeParcelas["periodicidade"]; primeiroVencimento: Date; vencimentoEntrada?: Date }
+  input: {
+    tenantId: string;
+    contaId: string;
+    entradaCents?: number;
+    entradas?: PlanoDeParcelas["entradas"];
+    numParcelas: number;
+    periodicidade: PlanoDeParcelas["periodicidade"];
+    primeiroVencimento: Date;
+    vencimentoEntrada?: Date;
+  }
 ) {
   const conta = await carregarConta(db, input.tenantId, input.contaId);
   const intocadas = conta.parcelas.filter((p) => !p.canceladaEm && !p.reembolsadaEm && situacao(p).pagoCents === 0);
@@ -367,6 +400,7 @@ export async function reparcelarConta(
       totalCents: total,
       entradaCents: input.entradaCents,
       vencimentoEntrada: input.vencimentoEntrada,
+      entradas: input.entradas,
       numParcelas: input.numParcelas,
       periodicidade: input.periodicidade,
       primeiroVencimento: input.primeiroVencimento,
@@ -445,6 +479,8 @@ export type FiltrosDeContas = {
   cliente?: string;
   status: StatusParcela[];
   tipo?: TipoParcela;
+  /** Id da categoria, ou "sem" para as que não têm. */
+  categoria?: string;
 };
 
 export type LinhaDeParcela = {
@@ -455,6 +491,7 @@ export type LinhaDeParcela = {
   conversationId: string | null;
   origem: "MANUAL" | "PEDIDO";
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   contato: { id: string; name: string | null; waJid: string; phoneNumber: string | null };
   vencimento: Date | null;
   pagaEm: Date | null;
@@ -478,7 +515,7 @@ export async function listarParcelas(tenantId: string, f: FiltrosDeContas, agora
   const parcelas = await prisma.parcela.findMany({
     where: {
       tenantId,
-      conta: { canceladaEm: null, ...(f.cliente ? { contact: { OR: [{ name: { contains: f.cliente, mode: "insensitive" } }, { phoneNumber: { contains: f.cliente.replace(/\D/g, "") || "__x__" } }] } } : {}) },
+      conta: { canceladaEm: null, ...(f.categoria ? { categoriaId: f.categoria === "sem" ? null : f.categoria } : {}), ...(f.cliente ? { contact: { OR: [{ name: { contains: f.cliente, mode: "insensitive" } }, { phoneNumber: { contains: f.cliente.replace(/\D/g, "") || "__x__" } }] } } : {}) },
       ...(f.tipo ? { tipo: f.tipo } : {}),
       ...(janela
         ? porVencimento
@@ -493,6 +530,7 @@ export async function listarParcelas(tenantId: string, f: FiltrosDeContas, agora
           id: true,
           origem: true,
           descricao: true,
+          categoria: { select: { id: true, nome: true, grupo: true } },
           order: { select: { id: true, numero: true, conversationId: true } },
           contact: { select: { id: true, name: true, waJid: true, phoneNumber: true } },
         },
@@ -516,6 +554,7 @@ export async function listarParcelas(tenantId: string, f: FiltrosDeContas, agora
       conversationId: p.conta.order?.conversationId ?? null,
       origem: p.conta.origem,
       descricao: p.conta.descricao,
+      categoria: p.conta.categoria,
       contato: p.conta.contact,
       vencimento: p.vencimento,
       pagaEm: s.pagaEm,
@@ -552,6 +591,7 @@ export async function detalheDaConta(tenantId: string, contaId: string) {
     where: { id: contaId, tenantId },
     include: {
       contact: { select: { id: true, name: true, waJid: true, phoneNumber: true } },
+      categoria: { select: { id: true, nome: true, grupo: true } },
       order: { select: { id: true, numero: true, conversationId: true, totalCents: true, paymentMethod: true } },
       parcelas: { include: { pagamentos: { orderBy: { recebidoEm: "asc" }, include: { createdBy: { select: { name: true } } } } }, orderBy: [{ vencimento: { sort: "asc", nulls: "last" } }, { numero: "asc" }] },
     },
@@ -589,6 +629,7 @@ export async function detalheDaConta(tenantId: string, contaId: string) {
     id: conta.id,
     origem: conta.origem,
     descricao: conta.descricao,
+    categoria: conta.categoria,
     canceladaEm: conta.canceladaEm,
     createdAt: conta.createdAt,
     contato: conta.contact,

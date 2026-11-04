@@ -22,7 +22,8 @@ export type Resultado = "ATENDEU" | "NAO_ATENDEU" | "RECADO" | "NUMERO_INVALIDO"
 
 export type LigacaoIn = {
   id: string;
-  negociacaoId: string;
+  /** Nulo = ligação de tarefa geral, sem negociação. */
+  negociacaoId: string | null;
   responsavelId: string | null;
   venceEm: Date;
   concluidaEm: Date | null;
@@ -99,7 +100,7 @@ export function calcularLigacoes(args: {
   // (de qualquer pessoa), ordenadas pela conclusão.
   const porNegociacao = new Map<string, LigacaoIn[]>();
   for (const l of args.ligacoes) {
-    if (!l.concluidaEm || !l.resultado) continue;
+    if (!l.concluidaEm || !l.resultado || !l.negociacaoId) continue;
     const lista = porNegociacao.get(l.negociacaoId) ?? [];
     lista.push(l);
     porNegociacao.set(l.negociacaoId, lista);

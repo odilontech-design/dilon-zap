@@ -30,6 +30,8 @@ export async function GET(req: Request) {
     // antes de excluir quando o produto já tem venda no histórico.
     include: { _count: { select: { materiais: true, orderItems: true } } },
   });
+  // Valor de compra é da gestão: a consultora vê preço e saldo, não a margem.
+  if (!podeEditarCatalogo(user.role)) return NextResponse.json(produtos.map(({ custoCents: _c, ...p }) => p));
   return NextResponse.json(produtos);
 }
 
@@ -40,6 +42,8 @@ const criarSchema = z.object({
   // Recebe em centavos: a conversão de "19,90" pra 1990 é feita na tela, num
   // lugar só, e a API nunca vê número quebrado.
   priceCents: z.number().int().min(0),
+  // Valor de compra (custo unitário). Nulo = ainda não informado.
+  custoCents: z.number().int().min(0).nullable().optional(),
   tipo: z.enum(["PRODUTO", "SERVICO"]).default("PRODUTO"),
   cobranca: z.enum(["UNICA", "MENSAL"]).default("UNICA"),
   // Só faz sentido em serviço. Recusar duração em produto seria rigor sem
@@ -57,7 +61,7 @@ export async function POST(req: Request) {
   const parsed = criarSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
 
-  const { name, sku, categoria, priceCents, tipo, cobranca, duracaoMinutos } = parsed.data;
+  const { name, sku, categoria, priceCents, custoCents, tipo, cobranca, duracaoMinutos } = parsed.data;
 
   try {
     const criado = await prisma.product.create({
@@ -69,6 +73,7 @@ export async function POST(req: Request) {
         sku: sku || null,
         categoria: categoria || null,
         priceCents,
+        custoCents: custoCents ?? null,
         tipo,
         cobranca,
         // Duração só acompanha serviço (ver o schema acima).

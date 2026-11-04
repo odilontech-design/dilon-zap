@@ -1,5 +1,5 @@
 import { requireUser } from "@/lib/session";
-import { recursosDoTenant } from "@/lib/plano";
+import { recursosDoUsuario } from "@/lib/plano";
 import { ProductsPanel } from "./products-panel";
 import { ehGerencia } from "@/lib/papeis";
 
@@ -21,7 +21,7 @@ import { ehGerencia } from "@/lib/papeis";
 export default async function ProdutosPage() {
   const user = await requireUser();
   const gerencia = ehGerencia(user.role);
-  const recursos = await recursosDoTenant(user.tenantId);
+  const recursos = await recursosDoUsuario(user);
   return (
     <ProductsPanel
       podeEditar={gerencia}

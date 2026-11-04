@@ -1,4 +1,5 @@
 import { prisma } from "@dilon-zap/db";
+import { validarCategoria } from "@/lib/categorias-financeiras";
 import type { FormaPagamentoConta, Prisma } from "@prisma/client";
 import {
   alocarRecebimento,
@@ -67,19 +68,33 @@ export type NovaContaPagarInput = {
   fornecedorId?: string | null;
   fornecedorNome?: string | null;
   descricao?: string | null;
+  categoriaId?: string | null;
   forma: FormaPagamentoConta;
   plano: PlanoDeParcelas;
+  /**
+   * Parcelas digitadas uma a uma (data e valor de cada boleto). Quando vem, o
+   * plano só serviu de ponto de partida na tela e é ignorado aqui. Pedido da
+   * Believe: boletos do mesmo fornecedor com vencimentos que não seguem um
+   * intervalo fixo, inclusive meses anteriores.
+   */
+  parcelasManuais?: { vencimento: Date; valorCents: number }[];
   userId?: string;
 };
 
 export async function criarContaPagar(db: Db, input: NovaContaPagarInput) {
   const fornecedor = await achaOuCriaFornecedor(db, input.tenantId, { id: input.fornecedorId, nome: input.fornecedorNome });
 
-  let parcelas;
-  try {
-    parcelas = gerarParcelas(input.plano);
-  } catch (e) {
-    throw new ErroDePagar((e as Error).message);
+  let parcelas: { numero: number; totalParcelas: number; vencimento: Date; valorCents: number }[];
+  if (input.parcelasManuais?.length) {
+    if (input.parcelasManuais.some((p) => !(p.valorCents > 0))) throw new ErroDePagar("toda parcela precisa de valor");
+    const total = input.parcelasManuais.length;
+    parcelas = input.parcelasManuais.map((p, i) => ({ numero: i + 1, totalParcelas: total, vencimento: p.vencimento, valorCents: p.valorCents }));
+  } else {
+    try {
+      parcelas = gerarParcelas(input.plano);
+    } catch (e) {
+      throw new ErroDePagar((e as Error).message);
+    }
   }
 
   return db.contaPagar.create({
@@ -87,6 +102,7 @@ export async function criarContaPagar(db: Db, input: NovaContaPagarInput) {
       tenantId: input.tenantId,
       fornecedorId: fornecedor.id,
       descricao: input.descricao?.trim() || null,
+      categoriaId: await validarCategoria(db, input.tenantId, input.categoriaId, "DESPESA"),
       createdById: input.userId,
       parcelas: {
         create: parcelas.map((p) => ({
@@ -282,12 +298,15 @@ export type FiltrosDePagar = {
   fornecedorId?: string;
   status: StatusParcela[];
   forma?: FormaPagamentoConta;
+  /** Id da categoria, ou "sem" para as que não têm. */
+  categoria?: string;
 };
 
 export type LinhaPagar = {
   id: string;
   contaId: string;
   descricao: string | null;
+  categoria: { id: string; nome: string; grupo: string } | null;
   fornecedor: { id: string; nome: string };
   vencimento: Date | null;
   pagoEm: Date | null;
@@ -310,13 +329,14 @@ export async function listarParcelasPagar(tenantId: string, f: FiltrosDePagar, a
       tenantId,
       conta: {
         canceladaEm: null,
+        ...(f.categoria ? { categoriaId: f.categoria === "sem" ? null : f.categoria } : {}),
         ...(f.fornecedorId ? { fornecedorId: f.fornecedorId } : {}),
         ...(f.fornecedor ? { fornecedor: { nome: { contains: f.fornecedor, mode: "insensitive" } } } : {}),
       },
       ...(f.forma ? { forma: f.forma } : {}),
       ...(janela ? (f.tipoData === "vencimento" ? { vencimento: janela } : { pagamentos: { some: { pagoEm: janela, valorCents: { gt: 0 } } } }) : {}),
     },
-    include: { pagamentos: true, conta: { select: { id: true, descricao: true, fornecedor: { select: { id: true, nome: true } } } } },
+    include: { pagamentos: true, conta: { select: { id: true, descricao: true, categoria: { select: { id: true, nome: true, grupo: true } }, fornecedor: { select: { id: true, nome: true } } } } },
     orderBy: [{ vencimento: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
     take: 1000,
   });
@@ -331,6 +351,7 @@ export async function listarParcelasPagar(tenantId: string, f: FiltrosDePagar, a
       id: p.id,
       contaId: p.conta.id,
       descricao: p.conta.descricao,
+      categoria: p.conta.categoria,
       fornecedor: p.conta.fornecedor,
       vencimento: p.vencimento,
       pagoEm: s.pagaEm,
@@ -365,6 +386,7 @@ export async function detalheDaContaPagar(tenantId: string, contaId: string) {
     where: { id: contaId, tenantId },
     include: {
       fornecedor: { select: { id: true, nome: true, telefone: true } },
+      categoria: { select: { id: true, nome: true, grupo: true } },
       parcelas: { include: { pagamentos: { orderBy: { pagoEm: "asc" }, include: { createdBy: { select: { name: true } } } } } },
     },
   });
@@ -391,6 +413,7 @@ export async function detalheDaContaPagar(tenantId: string, contaId: string) {
   return {
     id: conta.id,
     descricao: conta.descricao,
+    categoria: conta.categoria,
     canceladaEm: conta.canceladaEm,
     createdAt: conta.createdAt,
     fornecedor: conta.fornecedor,

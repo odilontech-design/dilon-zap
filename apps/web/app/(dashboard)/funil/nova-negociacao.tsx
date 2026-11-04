@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { reaisParaCentavos, type Etapa, type Usuario } from "./tipos";
+import { CampoOrigem } from "@/components/campo-origem";
 
 type ContatoBusca = { id: string; nome: string | null; telefone: string | null };
 
@@ -16,6 +17,8 @@ export function NovaNegociacao({
   usuarios,
   origens,
   etapaInicial,
+  exigirDados = false,
+  meuId,
   onFechar,
   onCriada,
 }: {
@@ -24,6 +27,9 @@ export function NovaNegociacao({
   usuarios: Usuario[];
   origens: string[];
   etapaInicial?: string;
+  /** Empresa que exige responsável, valor e origem em toda negociação nova. */
+  exigirDados?: boolean;
+  meuId?: string;
   onFechar: () => void;
   onCriada: () => void;
 }) {
@@ -36,7 +42,8 @@ export function NovaNegociacao({
   const [valor, setValor] = useState("");
   const [recorrencia, setRecorrencia] = useState<"UNICA" | "MENSAL">("UNICA");
   const [stageId, setStageId] = useState(etapaInicial ?? etapas[0]?.id ?? "");
-  const [responsavelId, setResponsavelId] = useState("");
+  // Quem cria costuma ser quem vai cuidar: já vem marcado, dá para trocar.
+  const [responsavelId, setResponsavelId] = useState(exigirDados && meuId ? meuId : "");
   const [origem, setOrigem] = useState("");
   const [previsao, setPrevisao] = useState("");
 
@@ -63,6 +70,10 @@ export function NovaNegociacao({
 
     const valorCents = reaisParaCentavos(valor);
     if (valorCents === null) return setErro("valor inválido");
+    if (exigirDados) {
+      const falta = [!responsavelId && "responsável", !valorCents && "valor", !origem.trim() && "origem"].filter(Boolean);
+      if (falta.length) return setErro(`Informe ${falta.join(", ")} para criar a negociação.`);
+    }
 
     setSalvando(true);
     try {
@@ -178,8 +189,8 @@ export function NovaNegociacao({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-neutral-700 mb-1">Valor (R$)</label>
-              <input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" inputMode="decimal" className={campo} />
+              <label className="block text-xs font-medium text-neutral-700 mb-1">Valor (R$){exigirDados ? " *" : ""}</label>
+              <input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="0,00" inputMode="decimal" required={exigirDados} className={campo} />
             </div>
             <div>
               <label className="block text-xs font-medium text-neutral-700 mb-1">Cobrança</label>
@@ -202,9 +213,9 @@ export function NovaNegociacao({
               </select>
             </div>
             <div>
-              <label className="block text-xs font-medium text-neutral-700 mb-1">Responsável</label>
-              <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)} className={campo}>
-                <option value="">Ninguém</option>
+              <label className="block text-xs font-medium text-neutral-700 mb-1">Responsável{exigirDados ? " *" : ""}</label>
+              <select value={responsavelId} onChange={(e) => setResponsavelId(e.target.value)} required={exigirDados} className={campo}>
+                <option value="">{exigirDados ? "Escolha…" : "Ninguém"}</option>
                 {usuarios.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.name}
@@ -216,19 +227,8 @@ export function NovaNegociacao({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-neutral-700 mb-1">Origem</label>
-              <input
-                value={origem}
-                onChange={(e) => setOrigem(e.target.value)}
-                list="origens-sugeridas"
-                placeholder="Instagram, indicação…"
-                className={campo}
-              />
-              <datalist id="origens-sugeridas">
-                {origens.map((o) => (
-                  <option key={o} value={o} />
-                ))}
-              </datalist>
+              <label className="block text-xs font-medium text-neutral-700 mb-1">Origem{exigirDados ? " *" : ""}</label>
+              <CampoOrigem value={origem} onChange={setOrigem} origens={origens} obrigatorio={exigirDados} className={campo} />
             </div>
             <div>
               <label className="block text-xs font-medium text-neutral-700 mb-1">Previsão de fechamento</label>

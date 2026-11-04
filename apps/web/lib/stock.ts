@@ -1,5 +1,5 @@
 import { prisma } from "@dilon-zap/db";
-import type { StockMovementType } from "@prisma/client";
+import type { Prisma, StockMovementType } from "@prisma/client";
 
 /**
  * Única porta de escrita do estoque.
@@ -26,10 +26,24 @@ export type MovimentoInput = {
   quantidade: number;
   motivo?: string;
   createdById?: string;
+  /**
+   * Custo unitário desta entrada (Compra). Informado, fica na movimentação e
+   * passa a ser o custo do cadastro — o "último custo de compra".
+   */
+  custoUnitCents?: number | null;
 };
 
 export async function registrarMovimento(entrada: MovimentoInput) {
-  const { tenantId, productId, tipo, motivo, createdById } = entrada;
+  return prisma.$transaction((tx) => movimentarNaTransacao(tx, entrada));
+}
+
+/**
+ * O mesmo, dentro de uma transação de quem chama: a importação da nota fiscal
+ * dá entrada em vários produtos e lança a conta a pagar de uma vez só — ou
+ * entra tudo, ou nada.
+ */
+export async function movimentarNaTransacao(tx: Prisma.TransactionClient, entrada: MovimentoInput) {
+  const { tenantId, productId, tipo, motivo, createdById, custoUnitCents } = entrada;
 
   const delta =
     tipo === "AJUSTE"
@@ -40,14 +54,14 @@ export async function registrarMovimento(entrada: MovimentoInput) {
 
   if (delta === 0) return null;
 
-  return prisma.$transaction(async (tx) => {
+  {
     // Confere o produto DENTRO da transação e travando a linha: sem isso,
     // duas vendas do mesmo item ao mesmo tempo leriam o mesmo saldo e
     // gravariam saldoDepois iguais, deixando o histórico inconsistente
     // mesmo com o total certo.
     const produto = await tx.product.findFirst({
       where: { id: productId, tenantId },
-      select: { id: true, stockQty: true, tipo: true, name: true },
+      select: { id: true, stockQty: true, tipo: true, name: true, custoCents: true },
     });
     if (!produto) throw new Error("produto não encontrado");
 
@@ -61,9 +75,10 @@ export async function registrarMovimento(entrada: MovimentoInput) {
 
     // O incremento é atômico no banco (stockQty = stockQty + delta), então o
     // total nunca se perde numa corrida. É daqui que sai o saldo real.
+    const custoDaCompra = tipo === "COMPRA" && custoUnitCents != null ? custoUnitCents : null;
     const atualizado = await tx.product.update({
       where: { id: produto.id },
-      data: { stockQty: { increment: delta } },
+      data: { stockQty: { increment: delta }, ...(custoDaCompra !== null ? { custoCents: custoDaCompra } : {}) },
       select: { stockQty: true },
     });
 
@@ -75,12 +90,13 @@ export async function registrarMovimento(entrada: MovimentoInput) {
         quantidade: delta,
         motivo: motivo?.trim() || null,
         saldoDepois: atualizado.stockQty,
+        custoUnitCents: custoDaCompra ?? produto.custoCents ?? null,
         createdById: createdById ?? null,
       },
     });
 
     return { movimento, saldo: atualizado.stockQty };
-  });
+  }
 }
 
 /**

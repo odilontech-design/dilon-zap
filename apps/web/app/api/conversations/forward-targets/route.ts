@@ -14,7 +14,7 @@ export async function GET() {
       // Grupo ativo recebe encaminhamento; o desativado nem está sendo
       // acompanhado, e mandar pra ele seria falar num grupo que ninguém lê aqui.
       contact: { OR: [{ grupo: false }, { grupoAtivadoEm: { not: null } }] },
-      ...(await conversationVisibilityWhere(user)),
+      ...(await conversationVisibilityWhere(user, { listagem: true })),
     },
     orderBy: { lastMessageAt: "desc" },
     select: {

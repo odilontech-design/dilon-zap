@@ -2,7 +2,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { telefoneConhecido } from "@/lib/contact";
-import { montarRecibo } from "@/lib/recibo";
+import { montarRecibo, parcelasDoRecibo } from "@/lib/recibo";
 import { ReciboTermico } from "@/components/recibo-termico";
 import { ReciboAcoes } from "./recibo-acoes";
 
@@ -100,6 +100,16 @@ export default async function ReciboPage({
           orderBy: { id: "asc" },
         },
         pagamentos: { select: { valorCents: true } },
+        conta: {
+    select: {
+      canceladaEm: true,
+      parcelas: {
+        where: { canceladaEm: null, reembolsadaEm: null },
+        orderBy: { vencimento: "asc" },
+        select: { tipo: true, numero: true, totalParcelas: true, vencimento: true, valorCents: true, pagamentos: { select: { valorCents: true } } },
+      },
+    },
+  },
         contact: {
           select: {
             name: true,
@@ -128,6 +138,7 @@ export default async function ReciboPage({
       ...pedido,
       vendedor: pedido.createdBy?.name ?? null,
       itens: pedido.items,
+      parcelas: parcelasDoRecibo(pedido.conta),
     },
     cliente: {
       nome: pedido.contact.name,

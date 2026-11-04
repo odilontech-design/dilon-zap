@@ -10,6 +10,11 @@ export const metadata: Metadata = {
   // o Safari não entrega notificação push pra site que não foi instalado.
   appleWebApp: { capable: true, title: "Dilon Zap", statusBarStyle: "default" },
   icons: { apple: "/icone-192.png" },
+  // Hemoderi, 28/10: o Chrome da Ana achou que a página era espanhol e
+  // "traduziu" para português — "Pendentes" virou "Brincos" e o nome dela
+  // virou "Caverna". Além do texto errado, a tradução reescreve o DOM por
+  // baixo do React e pode quebrar a tela. O sistema já é em português.
+  other: { google: "notranslate" },
 };
 
 export const viewport: Viewport = {
@@ -36,7 +41,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     // suppressHydrationWarning: o script acima mexe no data-theme do <html>
     // antes do React hidratar, então o atributo legitimamente difere do que
     // veio do servidor.
-    <html lang="pt-BR" suppressHydrationWarning>
+    <html lang="pt-BR" translate="no" className="notranslate" suppressHydrationWarning>
       {/* O script fica como primeiro filho do <body>, e não num <head>
           declarado à mão: no App Router o <head> é montado pelo Next, e
           declarar um concorrente atrapalha a hidratação — o efeito colateral
