@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { ehGerencia } from "@/lib/papeis";
+import { NavRelatorios } from "../nav-relatorios";
 import { CrmReportsPanel } from "./crm-reports-panel";
 
 export default async function RelatoriosCrmPage() {
@@ -13,12 +13,7 @@ export default async function RelatoriosCrmPage() {
     <div className="p-4 md:p-8">
       <div className="flex items-center gap-4 mb-6 flex-wrap">
         <h1 className="text-lg font-semibold">Relatórios</h1>
-        <nav className="flex gap-1 text-sm">
-          <Link href="/relatorios" className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
-            Atendimento
-          </Link>
-          <span className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">CRM</span>
-        </nav>
+        <NavRelatorios ativa="crm" gestao />
       </div>
       <CrmReportsPanel />
     </div>
