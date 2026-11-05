@@ -49,6 +49,7 @@ export function ContaPagarDrawer({ contaId, focoParcelaId, onFechar, onMudou }: 
   const [editando, setEditando] = useState<ParcelaDetalhe | null>(null);
   const [reparcelando, setReparcelando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [novoNome, setNovoNome] = useState<string | null>(null);
 
   function recarregar() {
     mutate();
@@ -60,6 +61,16 @@ export function ContaPagarDrawer({ contaId, focoParcelaId, onFechar, onMudou }: 
     setAviso(null);
     const r = await chamar(`/api/parcelas-pagar/${parcelaId}`, "PATCH", corpo);
     if (!r.ok) return setAviso(r.erro ?? "não deu pra concluir");
+    recarregar();
+  }
+
+  async function salvarNome(fornecedorId: string) {
+    const nome = (novoNome ?? "").trim();
+    if (!nome) return setAviso("informe o nome do fornecedor");
+    setAviso(null);
+    const r = await chamar(`/api/fornecedores/${fornecedorId}`, "PATCH", { nome });
+    if (!r.ok) return setAviso(r.erro ?? "não deu pra salvar o nome");
+    setNovoNome(null);
     recarregar();
   }
 
@@ -95,7 +106,38 @@ export function ContaPagarDrawer({ contaId, focoParcelaId, onFechar, onMudou }: 
     <>
       <div className="flex flex-col gap-1">
         <p className="text-xs text-neutral-500">Conta a pagar</p>
-        <h2 className="text-base font-semibold break-words">{data.fornecedor.nome}</h2>
+        {novoNome === null ? (
+          <div className="flex items-start gap-2">
+            <h2 className="text-base font-semibold break-words">{data.fornecedor.nome}</h2>
+            <button onClick={() => setNovoNome(data.fornecedor.nome)} className="text-xs text-neutral-500 hover:text-accent mt-0.5" aria-label="Editar nome do fornecedor">
+              Editar
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1">
+            <input
+              value={novoNome}
+              onChange={(e) => setNovoNome(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") salvarNome(data.fornecedor.id);
+                if (e.key === "Escape") setNovoNome(null);
+              }}
+              maxLength={120}
+              autoFocus
+              aria-label="Nome do fornecedor"
+              className="text-sm rounded-md border border-neutral-300 px-2 py-1.5 bg-surface"
+            />
+            <p className="text-[11px] text-neutral-400">O novo nome vale para todas as contas deste fornecedor.</p>
+            <div className="flex gap-3 text-xs">
+              <button onClick={() => salvarNome(data.fornecedor.id)} className="text-accent font-medium">
+                Salvar
+              </button>
+              <button onClick={() => setNovoNome(null)} className="text-neutral-500 hover:text-neutral-800">
+                Cancelar
+              </button>
+            </div>
+          </div>
+        )}
         {data.descricao && <p className="text-sm text-neutral-600">{data.descricao}</p>}
         <p className="text-xs text-neutral-400">Criada em {dataHoraBR(data.createdAt)}</p>
         <TrocarCategoria tipo="DESPESA" url={`/api/contas-pagar/${contaId}`} atual={data.categoria?.id ?? null} disabled={cancelada} onMudou={recarregar} />
