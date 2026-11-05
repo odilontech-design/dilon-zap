@@ -28,8 +28,26 @@ export async function GET(req: Request) {
       fechadoEm: { not: null, ...(desde ? { gte: desde } : {}), ...(ate ? { lte: ate } : {}) },
       ...(gestao ? {} : { createdById: user.id }),
     },
-    select: { totalCents: true, status: true, createdById: true, fechadoEm: true },
+    select: {
+      numero: true,
+      totalCents: true,
+      status: true,
+      createdById: true,
+      fechadoEm: true,
+      contact: { select: { name: true, phoneNumber: true, waJid: true } },
+    },
+    orderBy: { fechadoEm: "desc" },
   });
+
+  // O detalhe de cada linha: os mesmos pedidos que entraram na soma, para a
+  // consultora poder conferir o total em vez de confiar no número.
+  const detalhe = pedidos.map((p) => ({
+    numero: p.numero,
+    cliente: p.contact.name?.trim() || p.contact.phoneNumber || p.contact.waJid.split("@")[0],
+    fechadoEm: p.fechadoEm,
+    totalCents: p.totalCents,
+    usuarioId: p.createdById,
+  }));
 
   const linhas = comissaoPorConsultora(pedidos);
   const usuarios = await prisma.user.findMany({
@@ -40,6 +58,7 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     linhas,
+    pedidos: detalhe,
     usuarios,
     faixas: FAIXAS_PADRAO,
     gestao,
