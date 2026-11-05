@@ -1,13 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
 import { intervaloDoPeriodo, ROTULO_PERIODO, type Periodo } from "@/lib/periodo";
 import type { Faixa, LinhaComissao } from "@/lib/comissao";
 
+type PedidoDetalhe = { numero: number; cliente: string; fechadoEm: string; totalCents: number; usuarioId: string | null };
+
 type Resposta = {
   linhas: LinhaComissao[];
+  pedidos: PedidoDetalhe[];
   usuarios: { id: string; name: string }[];
   faixas: Faixa[];
   gestao: boolean;
@@ -62,6 +65,7 @@ export function ComissaoPanel() {
   const [periodo, setPeriodo] = useState<Periodo>("mes");
   const [de, setDe] = useState("");
   const [ate, setAte] = useState("");
+  const [aberta, setAberta] = useState<string | null>(null);
   const campo = "text-sm rounded-md border border-neutral-300 px-2 py-1.5 bg-surface";
 
   const { desde, ate: fim } = intervaloDoPeriodo(periodo, de, ate);
@@ -117,18 +121,72 @@ export function ComissaoPanel() {
             </tr>
           </thead>
           <tbody>
-            {linhas.map((l) => (
-              <tr key={l.usuarioId ?? "sem"} className="border-b border-neutral-100 last:border-0">
-                <td className="px-4 py-2.5">{nome(l.usuarioId)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{l.pedidos}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{reais(l.vendidoCents)}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums">{l.faixa ? pct(l.taxaBp) : "—"}</td>
-                <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{reais(l.comissaoCents)}</td>
-                <td className="px-4 py-2.5">
-                  <Progresso l={l} />
-                </td>
-              </tr>
-            ))}
+            {linhas.map((l) => {
+              const chave = l.usuarioId ?? "sem";
+              const aberto = aberta === chave;
+              const doUsuario = data.pedidos.filter((p) => p.usuarioId === l.usuarioId);
+              return (
+                <Fragment key={chave}>
+                  <tr className="border-b border-neutral-100 last:border-0">
+                    <td className="px-4 py-2.5">
+                      <button
+                        onClick={() => setAberta(aberto ? null : chave)}
+                        aria-expanded={aberto}
+                        className="flex items-center gap-2 text-left hover:text-accent"
+                      >
+                        <span className="text-[10px] text-neutral-400">{aberto ? "▼" : "▶"}</span>
+                        {nome(l.usuarioId)}
+                      </button>
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{l.pedidos}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{reais(l.vendidoCents)}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums">{l.faixa ? pct(l.taxaBp) : "—"}</td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-semibold">{reais(l.comissaoCents)}</td>
+                    <td className="px-4 py-2.5">
+                      <Progresso l={l} />
+                    </td>
+                  </tr>
+                  {aberto && (
+                    <tr className="border-b border-neutral-100 bg-neutral-50/60">
+                      <td colSpan={6} className="px-4 py-3">
+                        {doUsuario.length === 0 ? (
+                          <p className="text-xs text-neutral-400">Nenhum pedido fechado no período.</p>
+                        ) : (
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-left text-[11px] text-neutral-500">
+                                <th className="py-1 pr-3 font-medium">Pedido</th>
+                                <th className="py-1 pr-3 font-medium">Cliente</th>
+                                <th className="py-1 pr-3 font-medium">Fechado em</th>
+                                <th className="py-1 font-medium text-right">Total</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {doUsuario.map((p) => (
+                                <tr key={p.numero} className="border-t border-neutral-100">
+                                  <td className="py-1.5 pr-3 tabular-nums">#{p.numero}</td>
+                                  <td className="py-1.5 pr-3">{p.cliente}</td>
+                                  <td className="py-1.5 pr-3 tabular-nums">{new Date(p.fechadoEm).toLocaleDateString("pt-BR")}</td>
+                                  <td className="py-1.5 text-right tabular-nums">{reais(p.totalCents)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t border-neutral-200 font-semibold">
+                                <td colSpan={3} className="py-1.5 pr-3">
+                                  Total ({doUsuario.length} {doUsuario.length === 1 ? "pedido" : "pedidos"})
+                                </td>
+                                <td className="py-1.5 text-right tabular-nums">{reais(doUsuario.reduce((t, p) => t + p.totalCents, 0))}</td>
+                              </tr>
+                            </tfoot>
+                          </table>
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })}
             {linhas.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-xs text-neutral-400">
