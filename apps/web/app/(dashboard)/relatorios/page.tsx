@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { requireUser } from "@/lib/session";
 import { ehGerencia } from "@/lib/papeis";
+import { NavRelatorios } from "./nav-relatorios";
 import { ReportsPanel } from "./reports-panel";
 
 export default async function RelatoriosPage() {
@@ -9,15 +9,7 @@ export default async function RelatoriosPage() {
     <div className="p-4 md:p-8">
       <div className="flex items-center gap-4 mb-6 flex-wrap">
         <h1 className="text-lg font-semibold">Relatórios</h1>
-        {/* Os relatórios do CRM mostram o desempenho de cada pessoa: só a gestão os vê. */}
-        {ehGerencia(user.role) && (
-          <nav className="flex gap-1 text-sm">
-            <span className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">Atendimento</span>
-            <Link href="/relatorios/crm" className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
-              CRM
-            </Link>
-          </nav>
-        )}
+        <NavRelatorios ativa="atendimento" gestao={ehGerencia(user.role)} />
       </div>
       <ReportsPanel />
     </div>
