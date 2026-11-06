@@ -19,6 +19,9 @@ export async function GET(req: Request) {
       OR: [
         { name: { contains: q, mode: "insensitive" } },
         { waName: { contains: q, mode: "insensitive" } },
+        { email: { contains: q, mode: "insensitive" } },
+        { documento: { contains: q } },
+        ...(digitos.length >= 3 ? [{ documento: { contains: digitos } }] : []),
         ...(digitos.length >= 3
           ? [{ phoneNumber: { contains: digitos } }, { waJid: { startsWith: digitos } }]
           : []),

@@ -38,6 +38,8 @@ function onde(tenantId: string, f: FiltroPedidos): Prisma.OrderWhereInput {
             ...(numero !== null ? [{ numero }] : []),
             { contact: { name: { contains: termo, mode: "insensitive" as const } } },
             { contact: { phoneNumber: { contains: termo.replace(/\D/g, "") || termo } } },
+            { contact: { documento: { contains: termo } } },
+            ...(termo.replace(/\D/g, "").length >= 3 ? [{ contact: { documento: { contains: termo.replace(/\D/g, "") } } }] : []),
             { items: { some: { nomeProduto: { contains: termo, mode: "insensitive" as const } } } },
           ],
         }
