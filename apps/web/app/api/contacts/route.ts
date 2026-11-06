@@ -23,6 +23,9 @@ export async function GET() {
       name: true,
       waJid: true,
       phoneNumber: true,
+      // Só para a busca da página Contatos achar por CPF/CNPJ e e-mail.
+      documento: true,
+      email: true,
       avatarUrl: true,
       lastStatusAt: true,
       createdAt: true,

@@ -13,6 +13,8 @@ import { ContactCard } from "@/components/contact-card";
 type StageDef = { id: string; name: string; color: string };
 
 type Contact = ContactRef & {
+  documento?: string | null;
+  email?: string | null;
   stageId: string | null;
   stage: StageDef | null;
   dealValueCents: number;
@@ -91,8 +93,14 @@ export function ContactsPanel() {
       if (pagamentoFiltro === "pendente" && !c.pendencia) return false;
       if (pagamentoFiltro === "atraso" && !(c.pendencia && c.pendencia.vencidas > 0)) return false;
       if (!term) return true;
+      const digitos = term.replace(/\D/g, "");
+      const doc = (c.documento ?? "").toLowerCase();
       return (
-        contactLabel(c).toLowerCase().includes(term) || formatPhone(c.waJid).includes(term)
+        contactLabel(c).toLowerCase().includes(term) ||
+        formatPhone(c.waJid).includes(term) ||
+        (c.email ?? "").toLowerCase().includes(term) ||
+        doc.includes(term) ||
+        (digitos.length >= 3 && doc.replace(/\D/g, "").includes(digitos))
       );
     });
   }, [contacts, search, stageFilter, pagamentoFiltro, dupeOnly, duplicateReasons]);
@@ -245,7 +253,7 @@ export function ContactsPanel() {
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar por nome ou número..."
+          placeholder="Buscar por nome, número, CPF ou e-mail..."
           className="flex-1 min-w-[180px] max-w-xs rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
         />
         <select
