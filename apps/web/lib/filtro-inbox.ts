@@ -57,6 +57,10 @@ export async function filtroDoInbox(user: CurrentUser, params: URLSearchParams):
           OR: [
             { contact: { name: { contains: t, mode: "insensitive" as const } } },
             ...(telefone ? [{ contact: { waJid: { contains: digitos } } }, { contact: { phoneNumber: { contains: digitos } } }] : []),
+            // CPF/CNPJ (guardado com ou sem pontuação) e e-mail do cadastro.
+            ...(digitos.length >= 4 ? [{ contact: { documento: { contains: digitos } } }] : []),
+            { contact: { documento: { contains: t } } },
+            { contact: { email: { contains: t, mode: "insensitive" as const } } },
             { messages: { some: { body: { contains: t, mode: "insensitive" as const } } } },
           ],
         };
