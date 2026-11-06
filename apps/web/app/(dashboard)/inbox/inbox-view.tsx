@@ -32,6 +32,7 @@ import {
 import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 import { OrderPanel, type Pedido } from "@/components/order-panel";
 import { EtapasPorFunil } from "@/components/etapas-por-funil";
+import { ContactCard } from "@/components/contact-card";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 import { MOTIVOS_FECHAMENTO, MOTIVO_OUTRO } from "@/lib/close-reasons";
 import {
@@ -3207,6 +3208,8 @@ function ContactPanel({
 }) {
   const [name, setName] = useState(contact.name ?? "");
   const [notes, setNotes] = useState(contact.notes ?? "");
+  // A mesma ficha completa da página Contatos (CPF, e-mail, endereço, pedidos).
+  const [fichaAberta, setFichaAberta] = useState(false);
 
   async function save(body: Record<string, unknown>) {
     await fetch(`/api/contacts/${contact.id}`, {
@@ -3242,6 +3245,21 @@ function ContactPanel({
         <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone</label>
         <p className="text-sm text-neutral-600">{formatPhoneDisplay(contact)}</p>
       </div>
+      <button
+        onClick={() => setFichaAberta(true)}
+        className="text-xs rounded-md border border-accent text-accent px-2.5 py-1.5 hover:bg-accent/5"
+      >
+        Ver ficha completa
+      </button>
+      {fichaAberta && (
+        <ContactCard
+          contactId={contact.id}
+          onFechar={() => {
+            setFichaAberta(false);
+            onSaved();
+          }}
+        />
+      )}
       {/* Tarefas na própria conversa (Believe, 23/10): o próximo passo nasce aqui. */}
       <EtapasPorFunil contactId={contact.id} onSalvo={onSaved} compacto comTarefas />
       <div>
