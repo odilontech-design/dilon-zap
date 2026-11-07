@@ -7,7 +7,7 @@ import { FormularioCadastro } from "@/components/formulario-cadastro";
 import { LogoDilon } from "../login/logo-dilon";
 
 /**
- * Página de cadastro do teste grátis — o destino do anúncio e do link que a
+ * Página de solicitação da demonstração gratuita — o destino do anúncio e do link que a
  * Dilon Tech manda no WhatsApp.
  *
  * Existe separada do /login porque lá o formulário fica recolhido no fim da
@@ -20,9 +20,9 @@ import { LogoDilon } from "../login/logo-dilon";
  */
 
 export const metadata: Metadata = {
-  title: "Teste o Dilon Zap grátis por 14 dias",
+  title: "Solicite sua demonstração gratuita do Dilon Zap",
   description:
-    "Sua equipe inteira atendendo no mesmo WhatsApp, com funil, pedidos e relatórios. 14 dias grátis, sem cartão.",
+    "Sua equipe inteira atendendo no mesmo WhatsApp, com funil, pedidos e relatórios. Demonstração gratuita, sem cartão.",
 };
 
 const BENEFICIOS = [
@@ -49,7 +49,7 @@ export default async function CadastroPage() {
         <div className="flex flex-col gap-3">
           <h1 className="text-3xl font-semibold leading-tight tracking-tight text-neutral-900">
             Sua equipe inteira num só WhatsApp.{" "}
-            <span className="text-accent">Teste grátis.</span>
+            <span className="text-accent">Demonstração gratuita.</span>
           </h1>
           <ul className="flex flex-col gap-1.5 text-sm text-neutral-600">
             {BENEFICIOS.map((b) => (

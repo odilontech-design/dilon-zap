@@ -23,7 +23,7 @@ export function SolicitarAcesso({ numero }: { numero: string }) {
         onClick={() => setAberto(true)}
         className="w-full rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700 transition hover:border-accent hover:text-accent"
       >
-        Quero testar grátis por 14 dias
+        Solicite sua demonstração gratuita
       </button>
     );
   }
