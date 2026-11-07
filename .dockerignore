@@ -8,3 +8,15 @@ tsconfig.tsbuildinfo
 .env
 .env.local
 .env.*.local
+
+# O contexto de build é a pasta do projeto NA VPS, que guarda coisa que nunca
+# pode ir para dentro de uma imagem: os backups do banco (quase 600 MB, copiados
+# em cada deploy) e as cópias do .env (.env.bak-*, com os segredos). Só ficam os
+# exemplos, que não têm segredo.
+backups
+saida
+docs
+*.dump
+.env*
+!.env.example
+!.env.production.example
