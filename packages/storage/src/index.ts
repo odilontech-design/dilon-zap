@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, ListObjectsV2Command, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 // Cloudflare R2 é compatível com a API do S3 — mesmo SDK, só muda o endpoint
@@ -80,4 +80,29 @@ export async function getMediaReadUrl(
 
 export async function deleteMedia(key: string) {
   await client().send(new DeleteObjectCommand({ Bucket: bucketName(), Key: key }));
+}
+
+/**
+ * Apaga todos os objetos que começam com o prefixo (ex.: "<tenantId>/"). Usado
+ * ao excluir uma empresa: toda mídia dela vive sob o id do tenant. Devolve
+ * quantos objetos saíram. Exige prefixo com pelo menos 10 caracteres para um
+ * descuido não esvaziar o bucket inteiro.
+ */
+export async function deleteMediaPrefix(prefix: string): Promise<number> {
+  if (prefix.length < 10) throw new Error("prefixo curto demais para apagar em lote");
+  const s3 = client();
+  let apagados = 0;
+  let token: string | undefined;
+  do {
+    const lista = await s3.send(
+      new ListObjectsV2Command({ Bucket: bucketName(), Prefix: prefix, ContinuationToken: token, MaxKeys: 1000 })
+    );
+    const chaves = (lista.Contents ?? []).flatMap((o) => (o.Key ? [{ Key: o.Key }] : []));
+    if (chaves.length) {
+      await s3.send(new DeleteObjectsCommand({ Bucket: bucketName(), Delete: { Objects: chaves, Quiet: true } }));
+      apagados += chaves.length;
+    }
+    token = lista.IsTruncated ? lista.NextContinuationToken : undefined;
+  } while (token);
+  return apagados;
 }

@@ -4,6 +4,10 @@ import { prisma } from "@dilon-zap/db";
 import { requireSuperAdmin } from "@/lib/session";
 import { logAudit } from "@/lib/audit";
 import { slugUnico } from "@/lib/tenant-slug";
+import { excluirEmpresaNoBanco, impactoDaExclusao } from "@/lib/excluir-empresa";
+import { disconnectWhatsApp } from "@/lib/worker-client";
+import { esquecerSuspensao } from "@/lib/suspensao";
+import { deleteMediaPrefix, isStorageConfigured } from "@dilon-zap/storage";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   await requireSuperAdmin();
@@ -77,4 +81,78 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   });
 
   return NextResponse.json(atualizado);
+}
+
+const excluirSchema = z.object({ confirmaNome: z.string() });
+
+/**
+ * Exclui a empresa e tudo que é dela (empresa que não usa a ferramenta).
+ *
+ * Definitivo: o único caminho de volta é o backup diário do banco. Por isso a
+ * confirmação exige o nome da empresa digitado, os impeditivos do
+ * impactoDaExclusao valem aqui de novo (a tela pode estar desatualizada) e a
+ * ação fica no log de auditoria, que não é apagado junto.
+ *
+ * Ordem: 1) desconecta o WhatsApp (tira o aparelho vinculado e impede o worker
+ * de manter o socket de uma sessão que vai sumir); 2) apaga no banco, em
+ * cascata; 3) apaga as mídias do R2. Falha no R2 não desfaz o banco: vira
+ * aviso no log para limpar depois.
+ */
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  const admin = await requireSuperAdmin();
+
+  const parsed = excluirSchema.safeParse(await req.json().catch(() => ({})));
+  if (!parsed.success) return NextResponse.json({ error: "confirmação ausente" }, { status: 400 });
+
+  const impacto = await impactoDaExclusao(params.id, admin.tenantId);
+  if (!impacto) return NextResponse.json({ error: "empresa não encontrada" }, { status: 404 });
+
+  if (impacto.impeditivos.length) {
+    return NextResponse.json({ error: impacto.impeditivos.join(" "), impeditivos: impacto.impeditivos }, { status: 409 });
+  }
+  if (parsed.data.confirmaNome.trim().toLowerCase() !== impacto.nome.trim().toLowerCase()) {
+    return NextResponse.json({ error: "o nome digitado não confere com o da empresa" }, { status: 400 });
+  }
+
+  const sessoes = await prisma.whatsAppSession.findMany({ where: { tenantId: impacto.id }, select: { id: true, status: true } });
+  for (const sessao of sessoes) {
+    if (sessao.status === "CONNECTED" || sessao.status === "DISCONNECTED") {
+      await disconnectWhatsApp(impacto.id, sessao.id).catch(() => undefined);
+    }
+  }
+  if (sessoes.length) await new Promise((r) => setTimeout(r, 2500));
+
+  // Auditoria antes: se o banco recusar, o registro diz que foi tentado; se
+  // der certo, é o único rastro da empresa.
+  await logAudit({
+    actor: admin,
+    action: "tenant.excluir",
+    targetTenantId: impacto.id,
+    targetTenantName: impacto.nome,
+    metadata: {
+      usuarios: impacto.usuarios,
+      contatos: impacto.contatos,
+      conversas: impacto.conversas,
+      mensagens: impacto.mensagens,
+      pedidos: impacto.pedidos,
+      sessoes: impacto.sessoes,
+      ultimaMensagemEm: impacto.ultimaMensagemEm,
+    },
+  });
+
+  await excluirEmpresaNoBanco(impacto.id);
+  esquecerSuspensao(impacto.id);
+
+  let midiasApagadas: number | null = null;
+  let avisoMidia: string | null = null;
+  if (isStorageConfigured()) {
+    try {
+      midiasApagadas = await deleteMediaPrefix(`${impacto.id}/`);
+    } catch (err) {
+      avisoMidia = (err as Error).message;
+      console.error("[admin] empresa excluída, mas falhou limpar as mídias do R2", impacto.id, err);
+    }
+  }
+
+  return NextResponse.json({ ok: true, midiasApagadas, avisoMidia });
 }

@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { PlanoPanel } from "./plano-panel";
 import { ErpPanel } from "./erp-panel";
 import { AjustesEmpresa } from "./ajustes-empresa";
+import { ExcluirEmpresa } from "./excluir-empresa";
 import type { Recurso } from "@/lib/plano-regras";
 import { formatDate, formatTime } from "@/lib/contact";
 import { centsToBRL, effectiveInvoiceStatus } from "@/lib/billing";
@@ -303,6 +304,8 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
           ))}
         </div>
       </section>
+
+      <ExcluirEmpresa tenantId={tenant.id} tenantName={tenant.name} />
     </div>
   );
 }
