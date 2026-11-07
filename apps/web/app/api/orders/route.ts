@@ -38,6 +38,7 @@ export async function GET(req: Request) {
         ate: fimDoDiaBR(url.searchParams.get("ate")),
         forma: url.searchParams.get("forma"),
         pagamento: (url.searchParams.get("pagamento") as "pago" | "aberto" | null) || null,
+        vendedor: url.searchParams.get("vendedor"),
       },
       SELECT_PEDIDO
     );

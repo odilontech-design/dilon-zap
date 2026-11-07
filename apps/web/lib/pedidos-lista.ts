@@ -18,6 +18,8 @@ export type FiltroPedidos = {
   ate?: Date;
   forma?: string | null;
   pagamento?: "pago" | "aberto" | null;
+  /** Quem criou o pedido (id do usuário), ou "sem" para os que não têm criador. Reunião Believe, 06/11. */
+  vendedor?: string | null;
 };
 
 const LIMITE = 200;
@@ -31,6 +33,8 @@ function onde(tenantId: string, f: FiltroPedidos): Prisma.OrderWhereInput {
     tenantId,
     ...(f.status ? { status: f.status as never } : { status: { not: "CANCELADO" } }),
     ...(f.forma ? { paymentMethod: f.forma as never } : {}),
+    // O tenantId acima já limita: um id de usuário de outra empresa não acha pedido nenhum.
+    ...(f.vendedor ? { createdById: f.vendedor === "sem" ? null : f.vendedor } : {}),
     ...(f.de || f.ate ? { [campoData]: { ...(f.de ? { gte: f.de } : {}), ...(f.ate ? { lte: f.ate } : {}) } } : {}),
     ...(termo
       ? {
