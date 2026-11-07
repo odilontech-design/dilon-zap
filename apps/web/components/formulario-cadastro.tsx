@@ -5,7 +5,7 @@ import { linkComMensagem } from "@/lib/suporte";
 import { FAIXAS_ATENDENTES, RAMOS } from "@/lib/qualificacao";
 
 /**
- * Formulário de autocadastro do teste grátis — o mesmo na tela de login e na
+ * Formulário de solicitação da demonstração gratuita — o mesmo na tela de login e na
  * página /cadastro, que é para onde o anúncio e o WhatsApp mandam o lead.
  *
  * Desenhado para o celular de quem acabou de tocar no anúncio:
@@ -88,7 +88,7 @@ export function FormularioCadastro({
   }
 
   if (enviado) {
-    const texto = `Olá! Acabei de me cadastrar no Dilon Zap como ${empresa.trim()} e quero liberar meu teste grátis.`;
+    const texto = `Olá! Acabei de me cadastrar no Dilon Zap como ${empresa.trim()} e quero a minha demonstração gratuita.`;
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-neutral-200 bg-surface p-5 text-center">
         <p className="text-base font-semibold">Cadastro recebido! 🎉</p>
@@ -120,7 +120,7 @@ export function FormularioCadastro({
     <form onSubmit={enviar} className="flex flex-col gap-4 rounded-lg border border-neutral-200 bg-surface p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-base font-semibold">Teste grátis por 14 dias</p>
+          <p className="text-base font-semibold">Solicite sua demonstração gratuita</p>
           <p className="text-xs text-neutral-500">Sem cartão de crédito. Leva 1 minuto.</p>
         </div>
         {aoFechar && (
@@ -238,7 +238,7 @@ export function FormularioCadastro({
         disabled={!podeEnviar}
         className="rounded-md bg-accent px-4 py-3 text-base font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
       >
-        {enviando ? "Enviando..." : "Liberar meu teste grátis"}
+        {enviando ? "Enviando..." : "Solicitar minha demonstração"}
       </button>
     </form>
   );
