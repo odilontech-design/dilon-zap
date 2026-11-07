@@ -31,15 +31,52 @@ fuso da empresa (`Tenant.timezone`), não no do aparelho.
 
 ## Implantação
 
-1. `npm run db:push` — cria as tabelas `OticaConfig`, `Laboratorio`,
-   `ReceitaOtica`, `OrdemServico`, `EventoOS`, o enum `EtapaOS` e o valor
-   `OTICA` no enum `Recurso`. Nada existente muda.
-2. Redeploy do web. O worker não muda.
-3. No Super Admin, ficha da empresa → plano → ligar **Ótica (ordens de serviço
-   e receitas)**. É recurso sob demanda: não vem em plano nenhum.
-4. Na empresa, em Ótica → Laboratórios e avisos: cadastrar os laboratórios,
-   ajustar o **próximo número de OS** para continuar o talão de papel (a
-   Visuallis estava na 0498) e revisar os textos dos avisos.
+Sem build na VPS e sem tocar no worker do WhatsApp (preparação única em
+`docs/deploy-sem-build.md`). Um bloco por vez, conferindo a saída antes do próximo.
+Em qualquer dúvida, parar: até o passo 5 nada mudou para os clientes.
+
+```bash
+# 1. Trazer o código. Não muda nada em execução.
+cd /opt/dilon-zap && git pull origin main
+
+# 2. Backup antes de mexer no banco.
+scripts/backup-db.sh
+
+# 3. Baixar a imagem pronta do GitHub. O site antigo continua no ar.
+scripts/deploy-web-imagem.sh baixar otica
+
+# 4. Ensaio, SOMENTE LEITURA: o SQL que o db push executaria no banco real.
+#    Tem de ser igual a docs/otica-ddl-referencia.sql (fora os comentários).
+#    Qualquer DROP ou ALTER em tabela existente: PARAR.
+docker compose -f docker-compose.prod.yml run --rm --no-deps -T web sh -c \
+  'npx prisma migrate diff --from-url "$DATABASE_URL" --to-schema-datamodel packages/db/prisma/schema.prisma --script'
+
+# 5. Banco. SOZINHO. Só cria tabelas: o site antigo continua funcionando.
+docker compose -f docker-compose.prod.yml run --rm --no-deps -T web \
+  npx prisma db push --skip-generate --schema packages/db/prisma/schema.prisma
+#    Conferir "Your database is now in sync". NUNCA usar --accept-data-loss.
+
+# 6. Trocar o site (volta sozinho para o anterior se o login falhar).
+scripts/deploy-web-imagem.sh trocar otica
+```
+
+Depois do passo 6: login responde 200, sessões do WhatsApp conectadas no
+painel, logs do web sem erro.
+
+**7. Ligar para a Visuallis — só depois do passo 6.** Super Admin → ficha da
+empresa → plano → **Ótica (ordens de serviço e receitas)**. Antes disso não: com
+uma linha `OTICA` em `TenantRecurso`, a imagem antiga do site quebraria ao ler a
+tabela (a mesma pegadinha do enum do SDR).
+
+**8. Na conta da Visuallis**, em Ótica → Laboratórios e avisos: cadastrar os
+laboratórios com o prazo, pôr o próximo número de OS em **499** (o talão parou
+na 0498) e revisar os textos dos avisos.
+
+### Rollback
+- Site: `docker tag dilon-zap-web:antes-otica dilon-zap-web:latest` e
+  `docker compose -f docker-compose.prod.yml up -d --no-deps --no-build web`.
+  Desligue o recurso OTICA antes (passo 7 ao contrário).
+- Banco: as tabelas novas podem ficar; o site antigo não as usa.
 
 ## Ainda não faz (próximas fases)
 
