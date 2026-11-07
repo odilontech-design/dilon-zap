@@ -45,6 +45,14 @@ const NAV_ITEMS = [
     icon: icon(<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z" />),
   },
   {
+    // Logo abaixo do Inbox: para uma ótica, a OS é o trabalho do dia inteiro.
+    // Quem não tem o recurso nem vê o item.
+    href: "/otica",
+    recurso: "OTICA" as Recurso,
+    label: "Ótica",
+    icon: icon(<><circle cx="6.5" cy="14" r="3.5" /><circle cx="17.5" cy="14" r="3.5" /><path d="M10 14h4M3 14l1.5-6h2M21 14l-1.5-6h-2" /></>),
+  },
+  {
     href: "/grupos",
     recurso: "GRUPOS" as Recurso,
     label: "Grupos",
