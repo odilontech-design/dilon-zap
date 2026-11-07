@@ -218,6 +218,10 @@ model Tenant {
   sdrAbordagens         SdrAbordagem[]
   sdrInteracoes         SdrInteracao[]
   sdrEnviosEmail        SdrEnvioEmail[]
+  oticaConfig           OticaConfig?
+  laboratorios          Laboratorio[]
+  receitasOticas        ReceitaOtica[]
+  ordensServico         OrdemServico[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -459,6 +463,8 @@ model User {
   atendimentosEncerrados         Atendimento[]         @relation("AtendimentoEncerradoPor")
   teamMessages                   TeamMessage[]         @relation("TeamMessageAuthor")
   teamMessagesRecebidas          TeamMessage[]         @relation("TeamMessageDestinatario")
+  ordensServicoConsultor         OrdemServico[]        @relation("OSConsultor")
+  eventosOS                      EventoOS[]            @relation("EventoOSPor")
 
   @@index([tenantId])
 }
@@ -857,9 +863,11 @@ model Contact {
 
   createdAt DateTime @default(now())
 
-  conversations Conversation[]
-  orders        Order[]
-  contasReceber ContaReceber[]
+  conversations  Conversation[]
+  orders         Order[]
+  contasReceber  ContaReceber[]
+  receitasOticas ReceitaOtica[]
+  ordensServico  OrdemServico[]
 
   @@unique([tenantId, waJid])
   @@index([tenantId])
@@ -1708,6 +1716,11 @@ enum Recurso {
   // plano nenhum nem no painel de exceções (ver RECURSOS_RESTRITOS em
   // lib/plano-regras). Só existe para a empresa com a linha em TenantRecurso.
   SDR
+  // Gestão de ótica: ordens de serviço, receitas, laboratórios e o aviso ao
+  // cliente pelo WhatsApp quando o óculos muda de etapa. Sob demanda: é um
+  // produto vertical (a Visuallis foi a primeira), não algo que toda empresa
+  // precise ver no menu.
+  OTICA
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -3200,4 +3213,180 @@ model ContratacaoErp {
   @@index([status, criadoEm])
   @@index([email])
   @@index([cnpj])
+}
+
+// ---------------------------------------------------------------------------
+// Ótica (recurso OTICA)
+//
+// A ordem de serviço é o centro: é o papel que hoje a ótica preenche à mão no
+// balcão (talão numerado, via do cliente e ficha do montador) e que viaja até
+// o laboratório. Os campos seguem esse talão de propósito — quem atende passa
+// do papel para a tela sem ter que reaprender o que anotar.
+// ---------------------------------------------------------------------------
+
+// Onde o óculos está. A ordem do enum é a ordem do quadro na tela.
+enum EtapaOS {
+  ABERTA // venda feita, lente ainda não pedida ao laboratório
+  LABORATORIO // pedido enviado ao laboratório
+  MONTAGEM // lente chegou, montando na armação
+  CONFERENCIA // conferindo grau e medidas antes de chamar o cliente
+  PRONTA // pronta para retirada
+  ENTREGUE
+  CANCELADA
+}
+
+// Configuração da ótica, uma por empresa.
+model OticaConfig {
+  tenantId String @id
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Próximo número de OS. Começa onde o talão de papel parou (a Visuallis
+  // estava na 0498), para o cliente que tem a via antiga não ver a numeração
+  // voltar para 1 e a equipe não ter duas OS com o mesmo número na gaveta.
+  proximoNumeroOS Int @default(1)
+
+  // Mensagem de cada etapa ao cliente: { [etapa]: { ativo, texto } }. Json e
+  // não tabela porque é lido inteiro, de uma vez, sempre que uma OS muda de
+  // etapa — e etapa sem entrada aqui usa o texto padrão do código.
+  avisos Json?
+
+  // Por quantos meses uma receita vale. Define o aviso de "receita vencendo"
+  // e o selo de vencida na ficha.
+  validadeReceitaMeses Int @default(12)
+
+  updatedAt DateTime @updatedAt
+}
+
+model Laboratorio {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  nome      String
+  telefone  String?
+  contato   String?
+  // Prazo que o laboratório costuma cumprir. Preenche a previsão de entrega
+  // da OS sozinho; a atendente ainda pode mudar.
+  prazoDias Int?
+  // Arquivar em vez de apagar: OS antigas continuam dizendo de onde veio a lente.
+  ativo     Boolean @default(true)
+
+  createdAt DateTime       @default(now())
+  ordens    OrdemServico[]
+
+  @@unique([tenantId, nome])
+}
+
+// Receita de óculos de um cliente. Separada da OS porque o cliente volta: a
+// próxima OS reaproveita a receita se ainda vale, e o aviso de "faz um ano do
+// seu exame" sai da receita, não da venda.
+model ReceitaOtica {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  // Quem usa os óculos quando não é quem compra (a mãe que compra para o
+  // filho). Vazio = o próprio cliente — no talão é o "a mesma".
+  usuarioNome       String?
+  usuarioNascimento DateTime?
+
+  medico       String?
+  crm          String?
+  dataConsulta DateTime?
+  validaAte    DateTime?
+
+  // Grau de longe e de perto, olho direito e esquerdo, e a adição. Json porque
+  // a receita é lida e impressa sempre inteira, nunca filtrada por grau; o
+  // formato e a validação moram em lib/otica-regras (dioptria em centésimos,
+  // eixo em graus, DNP e altura em décimos de milímetro — inteiros, para
+  // +2,25 não virar 2.2499999 no caminho).
+  graus Json
+
+  observacoes String?
+
+  createdAt DateTime       @default(now())
+  ordens    OrdemServico[]
+
+  @@index([tenantId, contactId])
+}
+
+model OrdemServico {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Número do talão, por empresa (ver OticaConfig.proximoNumeroOS).
+  numero   Int
+
+  contactId String
+  contact   Contact       @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  receitaId String?
+  receita   ReceitaOtica? @relation(fields: [receitaId], references: [id], onDelete: SetNull)
+
+  laboratorioId     String?
+  laboratorio       Laboratorio? @relation(fields: [laboratorioId], references: [id], onDelete: SetNull)
+  // Número do pedido no sistema do laboratório ("Pedido" no talão). É o que
+  // a ótica cita quando liga cobrando a lente.
+  pedidoLaboratorio String?
+
+  // Quem vendeu ("Consultor" no talão).
+  consultorId String?
+  consultor   User?   @relation("OSConsultor", fields: [consultorId], references: [id], onDelete: SetNull)
+
+  etapa      EtapaOS  @default(ABERTA)
+  etapaDesde DateTime @default(now())
+
+  // Dia e hora prometidos ao cliente ("Para o dia ... à partir das").
+  previsaoEntrega DateTime?
+
+  lentes          String?
+  materialLente   String? // Resina, Policarbonato, Trivex, Cristal
+  indiceLente     String? // 1.60, 1.67, 1.74
+  tratamentos     String[]
+  tratamentoCor   String?
+  armacao         String?
+  materialArmacao String? // Acetato, Metal, Fio de nylon, Nylon
+  // Serviços pedidos ao laboratório (montagem, VTA, slim).
+  servicos        String[]
+  // Medidas da armação em décimos de mm: { ponte, diagonal, horizontal, vertical }.
+  medidas         Json?
+  observacoes     String?
+
+  valorCents Int       @default(0)
+  sinalCents Int       @default(0)
+  // Quando o saldo foi recebido. Nulo com saldo > 0 = ainda deve.
+  quitadaEm  DateTime?
+
+  // Outra pessoa autorizada a retirar ("Autorizo a retirada pelo portador").
+  portadorAutorizado String?
+
+  entregueEm         DateTime?
+  canceladaEm        DateTime?
+  motivoCancelamento String?
+
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  eventos   EventoOS[]
+
+  @@unique([tenantId, numero])
+  @@index([tenantId, etapa])
+  @@index([contactId])
+}
+
+// Histórico de etapas de uma OS: quem mudou, quando, e se o cliente foi avisado.
+model EventoOS {
+  id      String       @id @default(cuid())
+  ordemId String
+  ordem   OrdemServico @relation(fields: [ordemId], references: [id], onDelete: Cascade)
+  de      EtapaOS?
+  para    EtapaOS
+  porId   String?
+  por     User?        @relation("EventoOSPor", fields: [porId], references: [id], onDelete: SetNull)
+  // "enviado", ou o motivo de não ter avisado (aviso desligado, sem número
+  // conectado). Sem isto, "o cliente diz que não recebeu" não tem resposta.
+  aviso   String?
+
+  createdAt DateTime @default(now())
+
+  @@index([ordemId])
 }

@@ -24,7 +24,8 @@ export type Recurso =
   | "MATERIAIS"
   | "MULTI_NUMERO"
   | "FUNIL_SAAS"
-  | "SDR";
+  | "SDR"
+  | "OTICA";
 
 /** O que a escada dos planos distribui — e o que a regra antiga entrega inteiro. */
 export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API", "MATERIAIS"];
@@ -39,7 +40,10 @@ export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS",
  * Vai Viajar sem ninguém pedir. Cada número a mais é um chip, um socket e
  * mais superfície de bloqueio no WhatsApp — tem que ser decisão explícita.
  */
-export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS"];
+// A ótica é um produto vertical: só faz sentido para quem é ótica, e entrar
+// em `TODOS_RECURSOS` encheria o menu da Believe e da Hemoderi de ordens de
+// serviço que elas nunca vão usar.
+export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS", "OTICA"];
 
 /**
  * Recursos fora também do painel do superadmin. O SDR está em validação na
@@ -101,6 +105,7 @@ export const ROTULO_RECURSO: Record<Recurso, string> = {
   MULTI_NUMERO: "Mais de um número de WhatsApp",
   FUNIL_SAAS: "Indicadores de SaaS no funil",
   SDR: "Prospecção comercial (SDR)",
+  OTICA: "Ótica (ordens de serviço e receitas)",
 };
 
 export type Assinatura = {
