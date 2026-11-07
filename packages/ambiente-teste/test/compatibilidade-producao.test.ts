@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import fs from "node:fs";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -17,14 +17,31 @@ import { BANCO_TESTE } from "../src/config";
  * criado com o schema do commit que está na VPS.
  */
 
-/** O commit que está em produção (último push). Mudar aqui quando a produção mudar. */
+/** O schema que estava em produção ANTES do SQL de referência (ponto de partida do ensaio). */
 const COMMIT_EM_PRODUCAO = "100ee4f";
+/**
+ * O schema logo DEPOIS das mudanças do SDR por e-mail e WhatsApp: o ponto de chegada do SQL de referência.
+ *
+ * Fixado em um commit de propósito. O SQL já foi aplicado em produção (SdrEnvioEmail e o valor WHATSAPP de
+ * CanalSdr existem lá, conferido em 07/11/2026), e este ensaio é o registro de que ele só acrescentava. Comparar
+ * com o schema que muda a cada release (como era antes) quebrava o teste a cada tabela nova de qualquer outro
+ * recurso — foi o que o ERP fez — sem ter nada a ver com o SDR.
+ */
+const COMMIT_DO_SDR = "5ef5d54";
 
 const executar = promisify(execFile);
 const aqui = path.dirname(fileURLToPath(import.meta.url));
 const raiz = path.resolve(aqui, "../../..");
 const docs = (nome: string) => fs.readFileSync(path.join(raiz, "docs", nome), "utf8").replace(/\r\n/g, "\n");
-const schemaAtual = path.join(raiz, "packages/db/prisma/schema.prisma");
+// O schema do ponto de chegada, tirado do git para dentro de node_modules/.cache (ignorado pelo git; o Prisma acha o
+// @prisma/client subindo as pastas e não tenta instalá-lo pela rede).
+const schemaAlvo = (() => {
+  const pasta = path.join(raiz, "node_modules", ".cache", "dilon-schema-sdr");
+  fs.mkdirSync(pasta, { recursive: true });
+  const arquivo = path.join(pasta, "schema.prisma");
+  fs.writeFileSync(arquivo, execFileSync("git", ["show", `${COMMIT_DO_SDR}:packages/db/prisma/schema.prisma`], { cwd: raiz, maxBuffer: 16 * 1024 * 1024 }));
+  return arquivo;
+})();
 const cliPrisma = createRequire(import.meta.url).resolve("prisma/build/index.js");
 const senha = decodeURIComponent(new URL(process.env.DATABASE_URL!).password);
 
@@ -93,11 +110,11 @@ describe("o SQL de referência do SDR", () => {
     const { stdout: producao } = await executar("git", ["show", `${COMMIT_EM_PRODUCAO}:packages/db/prisma/schema.prisma`], { cwd: raiz, maxBuffer: 16 * 1024 * 1024 });
     const modelos = (texto: string) => [...texto.matchAll(/^model (Sdr\w+) /gm)].map((m) => m[1]);
     const jaExistem = modelos(producao);
-    const novas = modelos(fs.readFileSync(schemaAtual, "utf8")).filter((m) => !jaExistem.includes(m)).sort();
+    const novas = modelos(fs.readFileSync(schemaAlvo, "utf8")).filter((m) => !jaExistem.includes(m)).sort();
     assert.deepEqual(criadas, novas);
     assert.deepEqual(novas, ["SdrEnvioEmail"]);
   });
-  test("está em dia com o schema atual (senão, regerar antes do deploy)", async () => {
+  test("está em dia com o schema de chegada do SDR (o ensaio é fixado em dois commits)", async () => {
     // Dentro de node_modules/.cache (ignorado pelo git): o Prisma acha o @prisma/client subindo as pastas e
     // não tenta instalá-lo pela rede. Fora do repositório ele rodava `npm install`, que o bloqueio de rede
     // do ambiente de teste deixava pendurado.
@@ -107,7 +124,7 @@ describe("o SQL de referência do SDR", () => {
     const { stdout: antigoSchema } = await executar("git", ["show", `${COMMIT_EM_PRODUCAO}:packages/db/prisma/schema.prisma`], { cwd: raiz, maxBuffer: 16 * 1024 * 1024 });
     antigo = path.join(tmp, "schema-antigo.prisma");
     fs.writeFileSync(antigo, antigoSchema);
-    const gerado = await prismaCli(["migrate", "diff", "--from-schema-datamodel", antigo, "--to-schema-datamodel", schemaAtual, "--script"], tmp);
+    const gerado = await prismaCli(["migrate", "diff", "--from-schema-datamodel", antigo, "--to-schema-datamodel", schemaAlvo, "--script"], tmp);
     assert.equal(semComentarios(gerado.replace(/\r\n/g, "\n")), semComentarios(ddl()));
   });
 });
@@ -208,7 +225,7 @@ const fase = process.argv[2];
   });
   test("o schema fica em sincronia com o banco depois do SQL (o db push não teria mais nada a fazer)", async () => {
     // Exit code 0 = nenhuma diferença; 2 = ainda há diferença.
-    const saida = await prismaCli(["migrate", "diff", "--from-url", urlDe(BANCO_ANTES), "--to-schema-datamodel", schemaAtual, "--exit-code"], tmp);
+    const saida = await prismaCli(["migrate", "diff", "--from-url", urlDe(BANCO_ANTES), "--to-schema-datamodel", schemaAlvo, "--exit-code"], tmp);
     assert.match(saida, /No difference detected/);
   });
   test("com o SDR já no enum, o cliente de produção segue lendo com a linha SDR; apagando a linha, volta", async () => {
@@ -320,7 +337,7 @@ const fase = process.argv[2];
     const totais = async () => (await consultar(BANCO_ENSAIO, `SELECT (SELECT count(*) FROM "Contact")::int AS contatos, (SELECT count(*) FROM "Negociacao")::int AS negociacoes, (SELECT count(*) FROM "Conversation")::int AS conversas, (SELECT count(*) FROM "Message")::int AS mensagens, (SELECT count(*) FROM "ScheduledMessage")::int AS agendadas, (SELECT count(*) FROM "SdrSupressao")::int AS supressoes`))[0];
 
     before(async () => {
-      const original = fs.readFileSync(schemaAtual, "utf8");
+      const original = fs.readFileSync(schemaAlvo, "utf8");
       assert.equal(original.split('env("DATABASE_URL")').length, 2);
       schemaDoEnsaio = path.join(tmp, "schema-ensaio.prisma");
       fs.writeFileSync(schemaDoEnsaio, original.replace('env("DATABASE_URL")', JSON.stringify(urlEnsaio)));
@@ -349,7 +366,7 @@ const fase = process.argv[2];
       assert.match(await diff(urlEnsaio, ["--to-url", urlDe(BANCO_ANTES)]), /No difference detected/);
     });
     test("depois do push, o banco bate com o schema novo e um segundo push não tem nada a fazer", async () => {
-      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]), /No difference detected/);
+      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAlvo]), /No difference detected/);
       assert.match(await push(), /already in sync/i);
     });
     test("os dados que já existiam seguem iguais", async () => {
@@ -459,14 +476,14 @@ const fase = process.argv[2];
          INSERT INTO "SdrInteracao" (id, "tenantId", "empresaId", tipo) VALUES ('ens-in', '${tidEnsaio}', 'ens-emp', 'NOTA');`
       );
       assert.equal(semeadas.erro, null);
-      const esquemaAntes = await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]);
+      const esquemaAntes = await diff(urlEnsaio, ["--to-schema-datamodel", schemaAlvo]);
       const r = await lerComCliente("sdr-antigo", { URL_ANTES: urlEnsaio, TID: tidEnsaio, EMP: "ens-emp" });
       assert.equal(r.erro, undefined, r.erro);
       assert.equal(r.depois, r.antes); // criou uma e apagou outra
       const sobra = await consultar(BANCO_ENSAIO, `SELECT (SELECT count(*)::int FROM "SdrAcompanhamento" WHERE id = 'ens-ac') + (SELECT count(*)::int FROM "SdrAbordagem" WHERE id = 'ens-ab') + (SELECT count(*)::int FROM "SdrInteracao" WHERE id = 'ens-in') AS n`);
       assert.equal(sobra[0].n, 0); // a cascata do banco cuidou das tabelas que o código antigo nem conhece
       assert.match(esquemaAntes, /No difference detected/);
-      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]), /No difference detected/);
+      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAlvo]), /No difference detected/);
       assert.deepEqual((await lerComCliente("ler", { URL_ANTES: urlEnsaio })).recursos, antesDoPush.recursos);
     });
   });
