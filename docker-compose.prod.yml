@@ -78,6 +78,14 @@ services:
     restart: unless-stopped
     logging: *log
     env_file: .env
+    # A memória do worker sobe de ~190 para ~410 MB em 20 h com o heap do JS
+    # parado em ~60 MB: crescimento fora do heap, típico de fragmentação do
+    # malloc da glibc. Poucas arenas seguram isso. O teto existe para um
+    # estouro derrubar só este contêiner (o restart do compose o devolve), e não
+    # a VPS inteira. Medir o rssMB do log "memoria" de novo depois de aplicar.
+    environment:
+      MALLOC_ARENA_MAX: "2"
+    mem_limit: 700m
     expose:
       - "4001"
     depends_on:

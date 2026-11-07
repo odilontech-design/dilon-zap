@@ -1,6 +1,17 @@
 # Contexto de build é a raiz do monorepo (precisa dos workspaces
 # packages/db e packages/storage, consumidos como TS fonte, sem etapa de
 # compilação própria).
+# Cada release muda a versão no package.json da raiz, e o COPY dele invalidava a
+# camada do "npm install" (~1 GB refeito a cada deploy, e guardado nas imagens de
+# rollback). Aqui a versão é zerada só para a instalação: o conteúdo do arquivo
+# copiado fica igual entre releases e a camada é reaproveitada. O package.json
+# de verdade entra no "COPY . ." mais abaixo, então o build e o rodapé do menu
+# continuam com a versão certa.
+FROM node:20-slim AS manifestos
+WORKDIR /m
+COPY package.json ./
+RUN node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.version='0.0.0';fs.writeFileSync('package.json',JSON.stringify(p,null,2))"
+
 FROM node:20-slim
 WORKDIR /app
 
@@ -14,7 +25,8 @@ WORKDIR /app
 # verdade do outro lado, porque o contêiner webm não é o que um ptt espera.
 RUN apt-get update && apt-get install -y openssl ffmpeg && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
+COPY --from=manifestos /m/package.json ./package.json
+COPY package-lock.json ./
 COPY apps/web/package.json apps/web/package.json
 COPY apps/worker/package.json apps/worker/package.json
 COPY apps/esquadrias/package.json apps/esquadrias/package.json
@@ -38,7 +50,10 @@ RUN npm run db:generate
 # serviço de push); a privada continua só no servidor, em runtime.
 ARG NEXT_PUBLIC_VAPID_PUBLIC_KEY=""
 ENV NEXT_PUBLIC_VAPID_PUBLIC_KEY=$NEXT_PUBLIC_VAPID_PUBLIC_KEY
-RUN npm run build -w apps/web
+# O cache do webpack só serve a um build seguinte na mesma pasta; na imagem era
+# peso morto (centenas de MB por deploy). Apagado na MESMA camada, senão a
+# camada anterior continua guardando o arquivo.
+RUN npm run build -w apps/web && rm -rf apps/web/.next/cache
 
 ENV NODE_ENV=production
 EXPOSE 3000
