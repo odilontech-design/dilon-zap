@@ -195,8 +195,22 @@ type TenantUser = { id: string; name: string };
 // dado válido — sem isso, um { error: "..." } de um 404/400 era tratado como
 // se fosse o objeto esperado (ex: a conversa), e a tela quebrava tentando ler
 // campos que não existem nesse corpo de erro.
+// Sessão que acabou (logout em outra aba, cookie vencido): as rotas respondem com um
+// redirecionamento para /login e o navegador devolve a página de login com status 200.
+// Sem reconhecer isso, a tela tentava ler a página de login como se fosse a conversa e
+// dizia que a conversa "não está mais disponível" (relatado em 07/11).
+class SessaoExpirada extends Error {
+  constructor() {
+    super("sessão expirada");
+    this.name = "SessaoExpirada";
+  }
+}
+
 async function fetcher(url: string) {
   const res = await fetch(url);
+  if (res.status === 401 || (res.redirected && new URL(res.url).pathname.startsWith("/login"))) {
+    throw new SessaoExpirada();
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(typeof body.error === "string" ? body.error : `falha ao buscar ${url}`);
@@ -259,11 +273,20 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
   if (assigneeFilter) query.set("assignedToId", assigneeFilter);
   if (unreadOnly) query.set("unreadOnly", "1");
 
-  const { data: conversations, mutate: mutateList } = useSWR<ConversationSummary[]>(
+  const {
+    data: conversations,
+    error: erroDaLista,
+    mutate: mutateList,
+  } = useSWR<ConversationSummary[]>(
     `/api/conversations?${query.toString()}`,
     fetcher,
     { refreshInterval: CONVERSATION_LIST_INTERVAL }
   );
+  // Sessão expirada: volta para o login em vez de ficar com a lista parada. A página de login só
+  // é a resposta da API quando NÃO há sessão, então não há laço possível.
+  useEffect(() => {
+    if (erroDaLista?.name === "SessaoExpirada") window.location.assign("/login");
+  }, [erroDaLista]);
   const { data: users } = useSWR<TenantUser[]>("/api/users", fetcher);
   const { data: tagDefs } = useSWR<TagDef[]>("/api/tags", fetcher);
   // Mesmo filtro da lista, sem o status: o número de cada aba bate com o que
@@ -1404,6 +1427,17 @@ export function ConversationThread({
   // de você) enquanto estava aberta — ela sai da sua visibilidade na hora e
   // o servidor passa a responder 404. Sem esse aviso, a tela quebrava tentando
   // ler os dados de uma conversa que o fetch nem trouxe.
+  if (conversationError?.name === "SessaoExpirada") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">
+        <p className="text-sm text-neutral-600">Sua sessão expirou. Entre de novo para continuar.</p>
+        <a href="/login" className="text-sm text-accent hover:underline">
+          Entrar de novo
+        </a>
+      </div>
+    );
+  }
+
   if (conversationError) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center">

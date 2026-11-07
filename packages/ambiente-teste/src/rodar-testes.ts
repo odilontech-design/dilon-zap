@@ -40,6 +40,7 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         "test/canais.test.ts",
         "test/comissao.test.ts",
         "test/exclusao-empresa.test.ts",
+        "test/links.test.ts",
         "test/fila-diaria.test.ts",
         "test/compatibilidade-producao.test.ts",
       ],

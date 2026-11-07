@@ -1,4 +1,5 @@
 import { Fragment, type ReactNode } from "react";
+import { partirEmLinks } from "@/lib/links";
 
 /**
  * Desenha a formatação do WhatsApp no texto da mensagem: *negrito*,
@@ -9,7 +10,8 @@ import { Fragment, type ReactNode } from "react";
  * Mesma regra do WhatsApp: a marca precisa encostar no texto (sem espaço logo
  * depois de abrir nem logo antes de fechar) e não pode estar grudada numa
  * letra por fora — "2*3*4" continua conta, "nome_do_arquivo" continua nome.
- * Endereço de site passa intacto. Gera elementos React, nunca HTML cru.
+ * Endereço de site vira link clicável (com ou sem https://) e passa intacto pela
+ * formatação: o "_" de um link não é itálico. Gera elementos React, nunca HTML cru.
  */
 export function TextoWhatsApp({ texto }: { texto: string }) {
   return <>{formatar(texto)}</>;
@@ -21,8 +23,6 @@ export function semMarcacao(texto: string): string {
     .replace(/```([\s\S]+?)```/g, "$1")
     .replace(/(^|[^\p{L}\p{N}])([*_~`])(?!\s)([^\n]*?[^\s])\2(?![\p{L}\p{N}])/gu, "$1$3");
 }
-
-const URL = /(https?:\/\/[^\s]+|www\.[^\s]+)/g;
 
 function formatar(texto: string): ReactNode[] {
   // Bloco ``` primeiro (pode ter várias linhas e não é formatado por dentro).
@@ -37,13 +37,23 @@ function formatar(texto: string): ReactNode[] {
       );
     } else {
       // Endereços de site ficam de fora da formatação (o "_" de um link não é itálico).
-      bloco.split(URL).forEach((trecho, j) => {
-        if (URL.test(trecho)) {
-          URL.lastIndex = 0;
-          partes.push(<Fragment key={`u${i}-${j}`}>{trecho}</Fragment>);
+      partirEmLinks(bloco).forEach((trecho, j) => {
+        if (trecho.tipo === "link") {
+          partes.push(
+            <a
+              key={`u${i}-${j}`}
+              href={trecho.href}
+              target="_blank"
+              rel="noopener noreferrer nofollow"
+              // A bolha não pode tratar o clique no link como clique na mensagem (selecionar, responder).
+              onClick={(e) => e.stopPropagation()}
+              className="underline underline-offset-2 break-all hover:opacity-80"
+            >
+              {trecho.texto}
+            </a>
+          );
         } else {
-          URL.lastIndex = 0;
-          partes.push(<Fragment key={`t${i}-${j}`}>{emLinha(trecho)}</Fragment>);
+          partes.push(<Fragment key={`t${i}-${j}`}>{emLinha(trecho.texto)}</Fragment>);
         }
       });
     }
