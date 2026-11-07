@@ -66,6 +66,9 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
   const [ate, setAte] = useState("");
   const [forma, setForma] = useState("");
   const [pagamento, setPagamento] = useState<"" | "pago" | "aberto">("");
+  // Por vendedor(a): quem criou o pedido (Believe, 06/11).
+  const [vendedor, setVendedor] = useState("");
+  const { data: equipe } = useSWR<{ id: string; name: string }[]>("/api/users", fetcher);
 
   const params = new URLSearchParams({ formato: "lista", status: aba });
   if (busca.trim()) params.set("q", busca.trim());
@@ -73,6 +76,7 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
   if (ate) params.set("ate", ate);
   if (forma) params.set("forma", forma);
   if (pagamento && aba === "FECHADO") params.set("pagamento", pagamento);
+  if (vendedor) params.set("vendedor", vendedor);
 
   const { data, error, mutate } = useSWR<Resposta>(`/api/orders?${params.toString()}`, fetcher, {
     // A fila é uma tela de espera: a consultora manda e o financeiro precisa
@@ -82,7 +86,7 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
   });
   const pedidos = data?.pedidos;
   const t = data?.totais;
-  const filtrando = !!(busca.trim() || de || ate || forma || pagamento);
+  const filtrando = !!(busca.trim() || de || ate || forma || pagamento || vendedor);
   const campo = "rounded-md border border-neutral-300 bg-surface px-2 py-1.5 text-sm";
 
   return (
@@ -153,6 +157,16 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
             </select>
           </label>
         )}
+        <label className="text-xs text-neutral-500">
+          Vendedor(a)
+          <select value={vendedor} onChange={(e) => setVendedor(e.target.value)} className={`${campo} block mt-0.5`}>
+            <option value="">Todos</option>
+            {(equipe ?? []).map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+            <option value="sem">Sem vendedor</option>
+          </select>
+        </label>
         {filtrando && (
           <button
             onClick={() => {
@@ -161,6 +175,7 @@ export function OrdersQueue({ ehFinanceiro }: { ehFinanceiro: boolean }) {
               setAte("");
               setForma("");
               setPagamento("");
+              setVendedor("");
             }}
             className="text-xs text-accent hover:underline pb-2"
           >
