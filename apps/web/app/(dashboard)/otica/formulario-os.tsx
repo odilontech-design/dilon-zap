@@ -36,6 +36,7 @@ const SERVICOS = ["Montagem", "VTA", "Slim"];
 
 type Opcoes = { laboratorios: { id: string; nome: string; prazoDias: number | null }[]; equipe: { id: string; name: string }[]; eu: string; timezone: string; gestao: boolean };
 type Parcela = { id: string; tipo: string; numero: number; totalParcelas: number; vencimento: string | null; valorCents: number; pagoCents: number; status: "PAGA" | "ABERTA" | "PARCIAL" | "CANCELADA" | "REEMBOLSADA"; vencida: boolean };
+type ArmacaoEscolhida = { id: string; codigo: string; descricao: string; precoCents: number | null; material?: string | null };
 type Financeiro = { contaId: string; devidoCents: number; recebidoCents: number; saldoCents: number; proximoVencimento: string | null; emAberto: number; parcelas: Parcela[] };
 type Contato = { id: string; nome: string | null; telefone: string | null };
 type ReceitaSalva = {
@@ -76,6 +77,7 @@ type OSCompleta = {
   motivoCancelamento: string | null;
   contact: Record<string, string | null> & { id: string };
   receita: ReceitaSalva | null;
+  armacaoEstoque: ArmacaoEscolhida | null;
   eventos: { id: string; de: Etapa | null; para: Etapa; aviso: string | null; createdAt: string; por: { name: string } | null }[];
 };
 
@@ -170,6 +172,9 @@ export function FormularioOS({ id }: { id?: string }) {
     vertical: "",
   });
   const [meioSinal, setMeioSinal] = useState<"" | "DINHEIRO" | "PIX" | "CARTAO">("");
+  const [armacaoSel, setArmacaoSel] = useState<ArmacaoEscolhida | null>(null);
+  const [buscaArm, setBuscaArm] = useState("");
+  const [achadasArm, setAchadasArm] = useState<(ArmacaoEscolhida & { cor: string | null; medidas: string | null; quantidade: number })[]>([]);
   const [tratamentos, setTratamentos] = useState<string[]>([]);
   const [servicos, setServicos] = useState<string[]>([]);
 
@@ -217,6 +222,7 @@ export function FormularioOS({ id }: { id?: string }) {
       vertical: mm(os.medidas?.vertical),
     });
     setTratamentos(os.tratamentos);
+    setArmacaoSel(os.armacaoEstoque);
     setServicos(os.servicos);
   }, [os?.id]);
 
@@ -226,6 +232,28 @@ export function FormularioOS({ id }: { id?: string }) {
     const { dia, hora } = diaHoraNoFuso(new Date(os.previsaoEntrega), opcoes.timezone);
     setF((x) => ({ ...x, previsaoDia: dia, previsaoHora: hora }));
   }, [os?.id, os?.previsaoEntrega, opcoes]);
+
+  // Busca da armação no estoque, esperando a pessoa parar de digitar.
+  useEffect(() => {
+    if (armacaoSel || buscaArm.trim().length < 1) {
+      setAchadasArm([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      const r = await fetch(`/api/otica/armacoes?disponiveis=1&limite=15&q=${encodeURIComponent(buscaArm.trim())}`);
+      if (r.ok) setAchadasArm((await r.json()).itens);
+    }, 250);
+    return () => clearTimeout(t);
+  }, [buscaArm, armacaoSel]);
+
+  function escolherArmacao(a: ArmacaoEscolhida & { cor: string | null; medidas: string | null }) {
+    setArmacaoSel({ id: a.id, codigo: a.codigo, descricao: a.descricao, precoCents: a.precoCents });
+    setBuscaArm("");
+    // O texto impresso na OS já sai preenchido: código, modelo, cor e medidas.
+    const texto = [a.codigo, a.descricao, a.cor, a.medidas].filter(Boolean).join(" · ");
+    const material = MATERIAIS_ARMACAO.find((m) => m.toLowerCase() === (a.material ?? "").toLowerCase());
+    setF((x) => ({ ...x, armacao: texto, materialArmacao: material ?? x.materialArmacao }));
+  }
 
   // Consultor padrão: quem está abrindo a OS.
   useEffect(() => {
@@ -365,6 +393,7 @@ export function FormularioOS({ id }: { id?: string }) {
       tratamentos,
       tratamentoCor: f.tratamentoCor,
       armacao: f.armacao,
+      armacaoEstoqueId: armacaoSel?.id ?? null,
       materialArmacao: f.materialArmacao,
       servicos,
       medidas: { ponte: val(medidas.ponte), diagonal: val(medidas.diagonal), horizontal: val(medidas.horizontal), vertical: val(medidas.vertical) },
@@ -499,7 +528,36 @@ export function FormularioOS({ id }: { id?: string }) {
             <Escolha rotulo="Índice" opcoes={INDICES} valor={f.indiceLente} mudar={(v) => setF({ ...f, indiceLente: v })} />
             <Varias rotulo="Tratamentos" opcoes={TRATAMENTOS} valores={tratamentos} mudar={setTratamentos} />
             <Campo rotulo="Tratamento / cor" id="os-cor" valor={f.tratamentoCor} mudar={(v) => setF({ ...f, tratamentoCor: v })} />
-            <Campo rotulo="Armação" id="os-armacao" valor={f.armacao} mudar={(v) => setF({ ...f, armacao: v })} dica="Modelo, cor e código. ex.: Armação preta 3R9237 C4 52□19-145" />
+            <div className="flex flex-col gap-1.5">
+              <span className={rotulo}>Armação do estoque</span>
+              {armacaoSel ? (
+                <div className="flex items-center justify-between rounded-md border border-accent/40 bg-accent/5 px-3 py-2 text-sm">
+                  <span>
+                    <b className="tabular-nums">{armacaoSel.codigo}</b> · {armacaoSel.descricao}
+                    {armacaoSel.precoCents ? <span className="text-neutral-500"> · {centsToBRL(armacaoSel.precoCents)}</span> : null}
+                  </span>
+                  <button type="button" onClick={() => setArmacaoSel(null)} className="text-xs text-accent hover:underline">Trocar</button>
+                </div>
+              ) : (
+                <>
+                  <input id="os-busca-armacao" value={buscaArm} onChange={(e) => setBuscaArm(e.target.value)} placeholder="Digite o código da etiqueta ou o modelo (só aparecem as que ainda estão à venda)" className={campo} />
+                  {achadasArm.length > 0 && (
+                    <ul className="rounded-md border border-neutral-200 divide-y divide-neutral-100 max-h-56 overflow-y-auto">
+                      {achadasArm.map((a) => (
+                        <li key={a.id}>
+                          <button type="button" onClick={() => escolherArmacao(a)} className="w-full text-left px-3 py-2 text-sm hover:bg-neutral-50">
+                            <b className="tabular-nums">{a.codigo}</b> · {a.descricao}
+                            <span className="text-xs text-neutral-400">{[a.cor, a.medidas, a.precoCents ? centsToBRL(a.precoCents) : null].filter(Boolean).map((x) => ` · ${x}`).join("")}{a.quantidade > 1 ? ` · ${a.quantidade} peças` : ""}</span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="text-[11px] text-neutral-500">Armação do cliente ou que não está na lista? Deixe em branco e escreva abaixo. Escolhida daqui, a peça sai do estoque ao abrir a OS.</p>
+                </>
+              )}
+            </div>
+            <Campo rotulo="Armação (texto da OS)" id="os-armacao" valor={f.armacao} mudar={(v) => setF({ ...f, armacao: v })} dica="Modelo, cor e código. ex.: Armação preta 3R9237 C4 52□19-145" />
             <Escolha rotulo="Material da armação" opcoes={MATERIAIS_ARMACAO} valor={f.materialArmacao} mudar={(v) => setF({ ...f, materialArmacao: v })} />
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <Campo rotulo="Ponte (mm)" id="os-ponte" valor={f.ponte} mudar={(v) => setF({ ...f, ponte: v })} />

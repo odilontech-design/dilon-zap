@@ -76,6 +76,8 @@ export const camposOS = {
   tratamentos: z.array(z.string().trim().min(1).max(40)).max(12).optional(),
   tratamentoCor: texto(120),
   armacao: texto(200),
+  // A armação do estoque (lista de Armações). Escolhida, é vendida: sai do estoque.
+  armacaoEstoqueId: z.string().nullable().optional(),
   materialArmacao: texto(40),
   servicos: z.array(z.string().trim().min(1).max(40)).max(8).optional(),
   medidas: medidasSchema,
@@ -129,6 +131,32 @@ export const laboratorioSchema = z.object({
   contato: texto(80),
   prazoDias: z.number().int().min(0).max(90).nullable().optional(),
   ativo: z.boolean().optional(),
+});
+
+const reais = z.number().int().min(0).max(100_000_00).nullable().optional();
+
+export const armacaoSchema = z.object({
+  codigo: z.string().trim().min(1).max(40),
+  descricao: z.string().trim().min(1).max(200),
+  marca: texto(80),
+  cor: texto(60),
+  material: texto(40),
+  medidas: texto(30),
+  custoCents: reais,
+  precoCents: reais,
+  quantidade: z.number().int().min(0).max(999).optional(),
+});
+
+export const editarArmacaoSchema = armacaoSchema.partial().omit({ quantidade: true }).extend({
+  ativo: z.boolean().optional(),
+  // Contagem: leva o saldo a este número e registra a diferença.
+  novaQuantidade: z.number().int().min(0).max(999).optional(),
+  motivo: texto(200),
+});
+
+export const importarArmacoesSchema = z.object({
+  texto: z.string().min(1).max(400_000),
+  simular: z.boolean().default(true),
 });
 
 export const avisoSchema = z.object({ ativo: z.boolean(), texto: z.string().max(1000) });

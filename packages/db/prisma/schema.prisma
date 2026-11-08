@@ -222,6 +222,8 @@ model Tenant {
   laboratorios          Laboratorio[]
   receitasOticas        ReceitaOtica[]
   ordensServico         OrdemServico[]
+  armacoes              Armacao[]
+  movimentosArmacao     MovimentoArmacao[]
 }
 
 // Um setor da empresa: Fiscal, Contábil, Departamento Pessoal.
@@ -3370,6 +3372,12 @@ model OrdemServico {
   contaId String?
   conta   ContaReceber? @relation(fields: [contaId], references: [id], onDelete: SetNull)
 
+  // A armação do estoque da loja, quando foi escolhida na lista. O campo de
+  // texto `armacao` continua existindo: é o que vai impresso e o que a loja
+  // escreve quando a armação não está cadastrada (do cliente, de fora).
+  armacaoEstoqueId String?
+  armacaoEstoque   Armacao? @relation(fields: [armacaoEstoqueId], references: [id], onDelete: SetNull)
+
   // Outra pessoa autorizada a retirar ("Autorizo a retirada pelo portador").
   portadorAutorizado String?
 
@@ -3385,6 +3393,7 @@ model OrdemServico {
   @@index([tenantId, etapa])
   @@index([contactId])
   @@index([contaId])
+  @@index([armacaoEstoqueId])
 }
 
 // Histórico de etapas de uma OS: quem mudou, quando, e se o cliente foi avisado.
@@ -3402,5 +3411,72 @@ model EventoOS {
 
   createdAt DateTime @default(now())
 
+  @@index([ordemId])
+}
+
+// Estoque de armações da ótica.
+//
+// Não usa o catálogo de Produtos de propósito: aquele é do fluxo de Pedidos, e
+// a ótica não vende por pedido. Armação de ótica de bairro também não é item de
+// prateleira com 40 unidades — a maior parte é peça única, com etiqueta
+// própria. Por isso o cadastro é por CÓDIGO da etiqueta, a quantidade quase
+// sempre é 1, e vender a última a tira da lista de disponíveis.
+enum TipoMovimentoArmacao {
+  ENTRADA // chegou ou foi cadastrada
+  SAIDA_OS // vendida numa OS
+  ESTORNO_OS // a OS foi cancelada ou trocou de armação: volta para o estoque
+  AJUSTE // contagem, quebra, perda
+}
+
+model Armacao {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // O número da etiqueta colada na armação. É o que a atendente digita ou lê.
+  codigo    String
+  descricao String // modelo e referência: "Acetato preta redonda 3R9237"
+  marca     String?
+  cor       String?
+  material  String? // Acetato, Metal, Nylon...
+  // Como vem na haste: "52□19-145" (aro, ponte, haste).
+  medidas   String?
+
+  custoCents Int?
+  precoCents Int?
+
+  // Cache do saldo. A verdade é a soma de MovimentoArmacao; o saldo existe
+  // para listar 250 armações sem 250 somas, e só é escrito junto com um
+  // movimento, na mesma transação.
+  quantidade Int     @default(1)
+  ativo      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  movimentos MovimentoArmacao[]
+  ordens     OrdemServico[]
+
+  @@unique([tenantId, codigo])
+  @@index([tenantId, ativo])
+}
+
+model MovimentoArmacao {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  armacaoId String
+  armacao   Armacao @relation(fields: [armacaoId], references: [id], onDelete: Cascade)
+
+  tipo       TipoMovimentoArmacao
+  // Com sinal: venda é -1, estorno é +1, entrada +N, ajuste a diferença.
+  quantidade Int
+  ordemId    String?
+  porId      String?
+  observacao String?
+
+  createdAt DateTime @default(now())
+
+  @@index([armacaoId])
   @@index([ordemId])
 }

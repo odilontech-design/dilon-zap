@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { ehGerencia } from "@/lib/papeis";
 
-type Aba = "os" | "configuracoes";
+type Aba = "os" | "armacoes" | "configuracoes";
 
 /** Cabeçalho da Ótica. Configurações só para a gestão, como as rotas. */
 export function AbasOtica({ atual, role }: { atual: Aba; role: string }) {
   const abas: { id: Aba; href: string; rotulo: string }[] = [
     { id: "os", href: "/otica", rotulo: "Ordens de serviço" },
+    { id: "armacoes", href: "/otica/armacoes", rotulo: "Armações" },
     ...(ehGerencia(role) ? [{ id: "configuracoes" as Aba, href: "/otica/configuracoes", rotulo: "Laboratórios e avisos" }] : []),
   ];
   return (

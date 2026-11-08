@@ -285,6 +285,105 @@ export const MEIOS_DO_SINAL = ["DINHEIRO", "PIX", "CARTAO"] as const;
 export type MeioDoSinal = (typeof MEIOS_DO_SINAL)[number];
 export const ROTULO_MEIO: Record<string, string> = { DINHEIRO: "Dinheiro", PIX: "Pix", CARTAO: "Cartão", BOLETO: "Boleto" };
 
+// ---------------------------------------------------------------------------
+// Estoque de armações: lista colada de planilha
+// ---------------------------------------------------------------------------
+
+export type ArmacaoLida = {
+  linha: number;
+  codigo: string;
+  descricao: string;
+  marca: string | null;
+  cor: string | null;
+  material: string | null;
+  medidas: string | null;
+  custoCents: number | null;
+  precoCents: number | null;
+  quantidade: number;
+};
+
+export const MAX_ARMACOES_POR_IMPORTACAO = 1000;
+
+const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
+const COLUNAS: Record<string, keyof Omit<ArmacaoLida, "linha">> = {
+  codigo: "codigo", cod: "codigo", etiqueta: "codigo", ref: "descricao", referencia: "descricao",
+  descricao: "descricao", modelo: "descricao", marca: "marca", cor: "cor", material: "material",
+  medidas: "medidas", medida: "medidas", tamanho: "medidas", custo: "custoCents", preco: "precoCents",
+  valor: "precoCents", venda: "precoCents", quantidade: "quantidade", qtd: "quantidade", qtde: "quantidade", estoque: "quantidade",
+};
+const ORDEM_PADRAO: (keyof Omit<ArmacaoLida, "linha">)[] = ["codigo", "descricao", "marca", "cor", "material", "medidas", "custoCents", "precoCents", "quantidade"];
+
+/** "R$ 1.250,00", "85,5", "85.50", "85" → centavos; vazio → null; lixo → undefined. */
+export function lerReais(texto: string): number | null | undefined {
+  const t = texto.replace(/R\$|\s/g, "");
+  if (!t) return null;
+  const normal = t.includes(",") ? t.replace(/\./g, "").replace(",", ".") : t;
+  if (!/^\d+(\.\d{1,2})?$/.test(normal)) return undefined;
+  return Math.round(Number(normal) * 100);
+}
+
+/**
+ * Lê uma lista de armações colada de planilha (Excel, Google Sheets ou CSV).
+ *
+ * Separador: tabulação (é o que o Excel copia), senão ponto e vírgula, senão
+ * vírgula. A primeira linha pode ser o cabeçalho — "Código", "Modelo", "Preço",
+ * em qualquer ordem e com ou sem acento. Sem cabeçalho vale a ordem:
+ * código, descrição, marca, cor, material, medidas, custo, preço, quantidade.
+ *
+ * Devolve o que deu para ler e, à parte, o que não deu, com o número da linha:
+ * uma linha ruim não derruba as outras 249. Código repetido na lista fica só a
+ * primeira vez (a segunda é erro, não substitui em silêncio).
+ */
+export function lerListaDeArmacoes(texto: string): { linhas: ArmacaoLida[]; erros: { linha: number; erro: string }[]; separador: string } {
+  const brutas = texto.split(/\r?\n/).map((l, i) => ({ l, n: i + 1 })).filter((x) => x.l.trim());
+  const sep = brutas.some((x) => x.l.includes("\t")) ? "\t" : brutas.some((x) => x.l.includes(";")) ? ";" : ",";
+  const erros: { linha: number; erro: string }[] = [];
+  const linhas: ArmacaoLida[] = [];
+  if (brutas.length === 0) return { linhas, erros: [{ linha: 0, erro: "a lista está vazia" }], separador: sep };
+
+  const celulas = (l: string) => l.split(sep).map((c) => c.trim().replace(/^"|"$/g, "").trim());
+  let colunas = ORDEM_PADRAO;
+  let inicio = 0;
+  const primeira = celulas(brutas[0].l).map(semAcento);
+  if (primeira.some((c) => COLUNAS[c] === "codigo" || COLUNAS[c] === "descricao")) {
+    colunas = primeira.map((c) => COLUNAS[c] ?? ("ignorar" as never));
+    inicio = 1;
+    if (!colunas.includes("codigo")) return { linhas, erros: [{ linha: brutas[0].n, erro: 'o cabeçalho precisa de uma coluna "Código"' }], separador: sep };
+  }
+
+  if (brutas.length - inicio > MAX_ARMACOES_POR_IMPORTACAO) {
+    return { linhas, erros: [{ linha: 0, erro: `no máximo ${MAX_ARMACOES_POR_IMPORTACAO} armações por vez` }], separador: sep };
+  }
+
+  const vistos = new Set<string>();
+  for (const { l, n } of brutas.slice(inicio)) {
+    const c = celulas(l);
+    const v: Record<string, string> = {};
+    colunas.forEach((nome, i) => { if (nome && (nome as string) !== "ignorar") v[nome] = c[i] ?? ""; });
+    const codigo = (v.codigo ?? "").trim();
+    const descricao = (v.descricao ?? "").trim();
+    if (!codigo) { erros.push({ linha: n, erro: "sem código da etiqueta" }); continue; }
+    if (codigo.length > 40) { erros.push({ linha: n, erro: `código muito longo: "${codigo.slice(0, 20)}…"` }); continue; }
+    if (!descricao) { erros.push({ linha: n, erro: `${codigo}: sem descrição (modelo)` }); continue; }
+    if (vistos.has(codigo.toLowerCase())) { erros.push({ linha: n, erro: `${codigo}: código repetido na lista` }); continue; }
+    const custo = lerReais(v.custoCents ?? "");
+    const preco = lerReais(v.precoCents ?? "");
+    if (custo === undefined) { erros.push({ linha: n, erro: `${codigo}: custo inválido ("${v.custoCents}")` }); continue; }
+    if (preco === undefined) { erros.push({ linha: n, erro: `${codigo}: preço inválido ("${v.precoCents}")` }); continue; }
+    const qtdTexto = (v.quantidade ?? "").trim();
+    const quantidade = qtdTexto === "" ? 1 : Number(qtdTexto);
+    if (!Number.isInteger(quantidade) || quantidade < 0 || quantidade > 999) { erros.push({ linha: n, erro: `${codigo}: quantidade inválida ("${qtdTexto}")` }); continue; }
+    vistos.add(codigo.toLowerCase());
+    linhas.push({
+      linha: n, codigo, descricao: descricao.slice(0, 200),
+      marca: v.marca?.trim() || null, cor: v.cor?.trim() || null, material: v.material?.trim() || null, medidas: v.medidas?.trim() || null,
+      custoCents: custo, precoCents: preco, quantidade,
+    });
+  }
+  return { linhas, erros, separador: sep };
+}
+
 /** Quanto o fuso está à frente (ou atrás) do UTC naquele instante, em ms. */
 function deslocamentoDoFuso(instante: number, timezone: string): number {
   const partes = new Intl.DateTimeFormat("en-US", {

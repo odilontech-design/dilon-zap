@@ -7,6 +7,7 @@ import { validadeDaReceita } from "@/lib/otica-regras";
 import { editarOSSchema, paraData } from "@/lib/otica-schemas";
 import { corrigirValor, criarContaDaOS, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
 import { ErroDeConta } from "@/lib/contas-receber";
+import { baixarParaOS, estornarDaOS } from "@/lib/otica-estoque";
 
 /** Tudo de uma OS: a ficha do cliente, a receita, os valores e o histórico. */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -36,6 +37,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         },
       },
       receita: true,
+      armacaoEstoque: { select: { id: true, codigo: true, descricao: true, precoCents: true } },
       conta: { select: { id: true, parcelas: { select: SELECT_PARCELAS } } },
       laboratorio: { select: { id: true, nome: true, telefone: true } },
       consultor: { select: { id: true, name: true } },
@@ -61,7 +63,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const ordem = await prisma.ordemServico.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
-    select: { id: true, numero: true, contactId: true, receitaId: true, valorCents: true, contaId: true, previsaoEntrega: true, etapa: true },
+    select: { id: true, numero: true, contactId: true, receitaId: true, valorCents: true, contaId: true, previsaoEntrega: true, etapa: true, armacaoEstoqueId: true },
   });
   if (!ordem) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
   if (ordem.etapa === "CANCELADA") return NextResponse.json({ error: "OS cancelada não pode ser editada" }, { status: 409 });
@@ -130,6 +132,24 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       },
     });
   });
+
+  // Armação do estoque trocada: a antiga volta, a nova sai — na mesma transação.
+  if (d.armacaoEstoqueId !== undefined && (d.armacaoEstoqueId || null) !== ordem.armacaoEstoqueId) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (ordem.armacaoEstoqueId) {
+          await estornarDaOS(tx, { tenantId: user.tenantId, armacaoId: ordem.armacaoEstoqueId, ordemId: ordem.id, numeroOS: ordem.numero, userId: user.id, motivo: "armação trocada" });
+        }
+        if (d.armacaoEstoqueId) {
+          await baixarParaOS(tx, { tenantId: user.tenantId, armacaoId: d.armacaoEstoqueId, ordemId: ordem.id, numeroOS: ordem.numero, userId: user.id });
+        }
+        await tx.ordemServico.update({ where: { id: ordem.id }, data: { armacaoEstoqueId: d.armacaoEstoqueId || null } });
+      });
+    } catch (e) {
+      if (e instanceof ErroDeConta) return NextResponse.json({ error: `As demais alterações foram salvas, mas a armação não: ${e.message}` }, { status: e.status });
+      throw e;
+    }
+  }
 
   // Dinheiro: o valor da venda mora na conta a receber. Mudar o valor é
   // corrigir a parcela em aberto; OS que ainda não tinha valor ganha a conta agora.
