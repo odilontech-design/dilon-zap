@@ -41,10 +41,50 @@ fuso da empresa (`Tenant.timezone`), não no do aparelho.
    ajustar o **próximo número de OS** para continuar o talão de papel (a
    Visuallis estava na 0498) e revisar os textos dos avisos.
 
+## Financeiro (v1.40.0)
+
+A venda da OS é uma **conta a receber** do Zap — a mesma do Financeiro —, e não
+um segundo caderno de dinheiro:
+
+- Ao abrir a OS com valor, nasce a conta: o **sinal** é uma parcela de entrada já
+  recebida (dinheiro, Pix ou cartão — informar a forma é obrigatório) e o **saldo**
+  é uma parcela que vence na data de entrega. Sinal à vista cobrindo tudo = uma
+  parcela só, quitada.
+- **Receber** na tela da OS (saldo ou parte) cai no **Caixa do dia** por forma de
+  pagamento e abate as parcelas da mais antiga para a mais nova. O que falta
+  aparece em **Financeiro → A receber**, com o lembrete de vencimento que já existe.
+- **Crediário próprio:** "Parcelar o saldo" (só a gestão) divide o que falta em
+  parcelas semanais, quinzenais ou mensais. As telas de atraso e cobrança são as
+  do Financeiro.
+- **Corrigir o valor** da venda só quando há uma única parcela em aberto sem
+  recebimento; já parcelada ou quitada, o ajuste é parcela por parcela no Financeiro.
+- **Cancelar** a OS encerra o dinheiro na mesma transação: ou a loja **fica com o
+  sinal** (como diz o talão: lente sob medida não tem cancelamento) e só o saldo
+  deixa de ser cobrado, ou o sinal é **estornado** (sai do Caixa como estorno).
+- O aviso "pronta para retirada" cita o saldo que vem da conta.
+- A Ótica liga o **Financeiro** junto (Contas a receber), sem segunda exceção —
+  salvo se alguém desligou Contas a receber de propósito.
+
+**Banco:** só `OrdemServico.contaId` (coluna anônima, índice e chave estrangeira).
+SQL esperado do `db push` desta versão:
+
+```sql
+ALTER TABLE "OrdemServico" ADD COLUMN "contaId" TEXT;
+CREATE INDEX "OrdemServico_contaId_idx" ON "OrdemServico"("contaId");
+ALTER TABLE "OrdemServico" ADD CONSTRAINT "OrdemServico_contaId_fkey"
+  FOREIGN KEY ("contaId") REFERENCES "ContaReceber"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+```
+
+Não há índice único na coluna **de propósito**: o `db push` trata índice único novo
+como risco de perda de dados e se recusa a rodar sem `--accept-data-loss`, que é
+proibido neste projeto. Uma conta por OS é garantido no código (`criarContaDaOS`).
+Siga o mesmo roteiro da implantação acima (backup, ensaio somente leitura, `db push`
+sozinho, troca do site) — o ensaio tem de mostrar só esse SQL.
+
 ## Ainda não faz (próximas fases)
 
-- OS não gera Pedido nem lança no Caixa/A receber: valor, sinal e saldo ficam
-  na própria OS.
+- A armação ainda é texto: não baixa estoque.
+- A OS não cria negociação no CRM nem Pedido (a OS já faz o papel de pedido).
 - Lembrete de retirada, ajuste em 30 dias, pesquisa de satisfação e receita
   vencendo.
 - Agenda de exames, importação das planilhas e emissão de nota fiscal.

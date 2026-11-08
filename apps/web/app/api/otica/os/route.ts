@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { configDaOtica, consultorValido, dadosDoCliente, previsaoDaTela, reservarNumeroOS } from "@/lib/otica";
+import { criarContaDaOS, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
+import { ErroDeConta } from "@/lib/contas-receber";
 import { validadeDaReceita } from "@/lib/otica-regras";
 import { criarOSSchema, paraData, telefoneParaWhatsApp } from "@/lib/otica-schemas";
 
@@ -53,15 +55,22 @@ export async function GET(req: Request) {
       armacao: true,
       valorCents: true,
       sinalCents: true,
-      quitadaEm: true,
       pedidoLaboratorio: true,
+      // O dinheiro vem das parcelas da conta a receber.
+      conta: { select: { parcelas: { select: SELECT_PARCELAS } } },
       contact: { select: { id: true, name: true, waName: true, phoneNumber: true } },
       laboratorio: { select: { nome: true } },
       consultor: { select: { name: true } },
     },
   });
 
-  return NextResponse.json(ordens);
+  return NextResponse.json(
+    ordens.map(({ conta, ...o }) => {
+      // OS sem conta (sem valor lançado) não deve nada.
+      const r = conta ? resumoDasParcelas(conta.parcelas) : null;
+      return { ...o, recebidoCents: r?.recebidoCents ?? 0, saldoCents: r?.saldoCents ?? 0 };
+    })
+  );
 }
 
 export async function POST(req: Request) {
@@ -100,8 +109,12 @@ export async function POST(req: Request) {
 
   const cfg = await configDaOtica(user.tenantId);
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: user.tenantId }, select: { timezone: true } });
+  await prepararFinanceiro(user.tenantId);
+  const previsao = previsaoDaTela(d.previsao, tenant.timezone) ?? null;
 
-  const ordem = await prisma.$transaction(async (tx) => {
+  let ordem;
+  try {
+    ordem = await prisma.$transaction(async (tx) => {
     if (d.cliente) await tx.contact.update({ where: { id: contactId }, data: dadosDoCliente(d.cliente) });
 
     let receitaId = d.receitaId ?? null;
@@ -135,7 +148,7 @@ export async function POST(req: Request) {
         laboratorioId: d.laboratorioId || null,
         pedidoLaboratorio: d.pedidoLaboratorio || null,
         consultorId,
-        previsaoEntrega: previsaoDaTela(d.previsao, tenant.timezone) ?? null,
+        previsaoEntrega: previsao,
         lentes: d.lentes || null,
         materialLente: d.materialLente || null,
         indiceLente: d.indiceLente || null,
@@ -153,8 +166,27 @@ export async function POST(req: Request) {
       select: { id: true, numero: true },
     });
     await tx.eventoOS.create({ data: { ordemId: criada.id, para: "ABERTA", porId: user.id } });
+
+    // O dinheiro: a venda vira conta a receber, com o sinal já recebido.
+    const cliente = await tx.contact.findUniqueOrThrow({ where: { id: contactId! }, select: { name: true, waName: true } });
+    await criarContaDaOS(tx, {
+      tenantId: user.tenantId,
+      ordemId: criada.id,
+      numero,
+      contactId: contactId!,
+      nomeCliente: cliente.name ?? cliente.waName,
+      valorCents: d.valorCents ?? 0,
+      sinalCents: d.sinalCents ?? 0,
+      meioDoSinal: d.meioDoSinal ?? null,
+      vencimentoDoSaldo: previsao,
+      userId: user.id,
+    });
     return criada;
   });
+  } catch (e) {
+    if (e instanceof ErroDeConta) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
 
   return NextResponse.json(ordem, { status: 201 });
 }

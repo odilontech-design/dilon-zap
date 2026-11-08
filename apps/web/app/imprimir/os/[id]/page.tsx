@@ -16,6 +16,7 @@ import {
   type Graus,
   type Olho,
 } from "@/lib/otica-regras";
+import { SELECT_PARCELAS, resumoDasParcelas } from "@/lib/otica-financeiro";
 import { BotaoImprimir } from "./botao-imprimir";
 
 /**
@@ -37,6 +38,7 @@ export default async function ImprimirOSPage({ params, searchParams }: { params:
       receita: true,
       laboratorio: true,
       consultor: { select: { name: true } },
+      conta: { select: { parcelas: { select: SELECT_PARCELAS } } },
       tenant: { select: { name: true, timezone: true } },
     },
   });
@@ -54,7 +56,7 @@ export default async function ImprimirOSPage({ params, searchParams }: { params:
   const via = searchParams.via === "montador" || searchParams.via === "laboratorio" ? searchParams.via : "loja";
   const telefone = telefoneConhecido(os.contact);
   const nome = os.contact.name ?? os.contact.waName ?? "";
-  const saldo = os.quitadaEm ? 0 : saldoCents(os.valorCents, os.sinalCents);
+  const saldo = os.conta ? resumoDasParcelas(os.conta.parcelas).saldoCents : saldoCents(os.valorCents, os.sinalCents);
   const lente = [os.lentes, os.materialLente, os.indiceLente].filter(Boolean).join(" · ");
   const tratamento = [...os.tratamentos, os.tratamentoCor].filter(Boolean).join(" · ");
   const armacao = [os.armacao, os.materialArmacao].filter(Boolean).join(" · ");
@@ -82,7 +84,7 @@ export default async function ImprimirOSPage({ params, searchParams }: { params:
             <TabelaGraus graus={graus} colunas={["esferico", "cilindrico", "eixo", "dnp", "altura"]} adicao />
             <Medidas medidas={medidas} />
             <Bloco>
-              <Linha itens={[["Valor final", centsToBRL(os.valorCents)], ["Sinal", centsToBRL(os.sinalCents)], ["Saldo a receber", os.quitadaEm ? "Pago" : centsToBRL(saldo)]]} />
+              <Linha itens={[["Valor final", centsToBRL(os.valorCents)], ["Sinal", centsToBRL(os.sinalCents)], ["Saldo a receber", saldo === 0 && os.valorCents > 0 ? "Pago" : centsToBRL(saldo)]]} />
               <Linha itens={[["Autorizo a retirada pelo portador", os.portadorAutorizado || "não"]]} />
               {os.observacoes && <Linha itens={[["Obs.", os.observacoes]]} />}
             </Bloco>
@@ -101,7 +103,7 @@ export default async function ImprimirOSPage({ params, searchParams }: { params:
               <Linha itens={[["Cliente", nome]]} />
               <Linha itens={[["Compra", dia(os.createdAt)], ["Entrega", diaHora(os.previsaoEntrega)]]} />
               <Linha itens={[["Produto", [lente, armacao].filter(Boolean).join(" + ")]]} />
-              <Linha itens={[["Valor", centsToBRL(os.valorCents)], ["Sinal", centsToBRL(os.sinalCents)], ["A receber", os.quitadaEm ? "Pago" : centsToBRL(saldo)]]} />
+              <Linha itens={[["Valor", centsToBRL(os.valorCents)], ["Sinal", centsToBRL(os.sinalCents)], ["A receber", saldo === 0 && os.valorCents > 0 ? "Pago" : centsToBRL(saldo)]]} />
             </Bloco>
           </>
         )}

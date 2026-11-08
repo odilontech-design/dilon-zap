@@ -10,7 +10,6 @@ import {
   estaAtrasada,
   numeroOS,
   proximaEtapa,
-  saldoCents,
   type Etapa,
 } from "@/lib/otica-regras";
 import { erroDaResposta, fetcher, previsaoCurta } from "./formatos";
@@ -23,8 +22,8 @@ type Cartao = {
   lentes: string | null;
   armacao: string | null;
   valorCents: number;
-  sinalCents: number;
-  quitadaEm: string | null;
+  recebidoCents: number;
+  saldoCents: number;
   pedidoLaboratorio: string | null;
   contact: { id: string; name: string | null; waName: string | null; phoneNumber: string | null };
   laboratorio: { nome: string } | null;
@@ -58,7 +57,7 @@ export function QuadroOS() {
 
   const atrasadas = ordens.filter((o) => estaAtrasada(o.etapa, o.previsaoEntrega ? new Date(o.previsaoEntrega) : null, agora));
   const prontas = porEtapa.get("PRONTA") ?? [];
-  const aReceberProntas = prontas.reduce((s, o) => s + (o.quitadaEm ? 0 : saldoCents(o.valorCents, o.sinalCents)), 0);
+  const aReceberProntas = prontas.reduce((s, o) => s + o.saldoCents, 0);
 
   async function avancar(o: Cartao) {
     const para = proximaEtapa(o.etapa);
@@ -154,7 +153,7 @@ export function QuadroOS() {
                   </h2>
                   {itens.map((o) => {
                     const atrasada = estaAtrasada(o.etapa, o.previsaoEntrega ? new Date(o.previsaoEntrega) : null, agora);
-                    const saldo = o.quitadaEm ? 0 : saldoCents(o.valorCents, o.sinalCents);
+                    const saldo = o.saldoCents;
                     const prox = proximaEtapa(o.etapa);
                     return (
                       <article
@@ -176,7 +175,7 @@ export function QuadroOS() {
                             {atrasada ? "Atrasada · " : ""}
                             {previsaoCurta(o.previsaoEntrega, opcoes?.timezone)}
                           </span>
-                          <span className={saldo ? "text-amber-700" : "text-neutral-400"}>{saldo ? `falta ${centsToBRL(saldo)}` : "quitada"}</span>
+                          <span className={saldo ? "text-amber-700" : "text-neutral-400"}>{saldo ? `falta ${centsToBRL(saldo)}` : o.valorCents ? "quitada" : "sem valor"}</span>
                         </div>
                         {prox && (
                           <button

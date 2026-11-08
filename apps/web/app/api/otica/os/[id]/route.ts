@@ -5,6 +5,8 @@ import { exigirRecurso } from "@/lib/plano";
 import { configDaOtica, consultorValido, dadosDoCliente, previsaoDaTela } from "@/lib/otica";
 import { validadeDaReceita } from "@/lib/otica-regras";
 import { editarOSSchema, paraData } from "@/lib/otica-schemas";
+import { corrigirValor, criarContaDaOS, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
+import { ErroDeConta } from "@/lib/contas-receber";
 
 /** Tudo de uma OS: a ficha do cliente, a receita, os valores e o histórico. */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -34,13 +36,18 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
         },
       },
       receita: true,
+      conta: { select: { id: true, parcelas: { select: SELECT_PARCELAS } } },
       laboratorio: { select: { id: true, nome: true, telefone: true } },
       consultor: { select: { id: true, name: true } },
       eventos: { orderBy: { createdAt: "desc" }, include: { por: { select: { name: true } } } },
     },
   });
   if (!ordem) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
-  return NextResponse.json(ordem);
+  const { conta, ...resto } = ordem;
+  return NextResponse.json({
+    ...resto,
+    financeiro: conta ? { contaId: conta.id, ...resumoDasParcelas(conta.parcelas), parcelas: parcelasParaTela(conta.parcelas) } : null,
+  });
 }
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
@@ -54,7 +61,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const ordem = await prisma.ordemServico.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
-    select: { id: true, contactId: true, receitaId: true, valorCents: true, sinalCents: true, etapa: true },
+    select: { id: true, numero: true, contactId: true, receitaId: true, valorCents: true, contaId: true, previsaoEntrega: true, etapa: true },
   });
   if (!ordem) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
   if (ordem.etapa === "CANCELADA") return NextResponse.json({ error: "OS cancelada não pode ser editada" }, { status: 409 });
@@ -66,9 +73,6 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   const consultorId = d.consultorId === undefined ? undefined : await consultorValido(user.tenantId, d.consultorId);
   const cfg = await configDaOtica(user.tenantId);
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: user.tenantId }, select: { timezone: true } });
-
-  const valor = d.valorCents ?? ordem.valorCents;
-  const sinal = Math.min(d.sinalCents ?? ordem.sinalCents, valor);
 
   await prisma.$transaction(async (tx) => {
     if (d.cliente) await tx.contact.update({ where: { id: ordem.contactId }, data: dadosDoCliente(d.cliente) });
@@ -122,13 +126,44 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         servicos: d.servicos,
         medidas: d.medidas === undefined ? undefined : d.medidas ?? undefined,
         observacoes: d.observacoes === undefined ? undefined : d.observacoes || null,
-        valorCents: valor,
-        sinalCents: sinal,
         portadorAutorizado: d.portadorAutorizado === undefined ? undefined : d.portadorAutorizado || null,
-        quitadaEm: d.quitada === undefined ? undefined : d.quitada ? new Date() : null,
       },
     });
   });
+
+  // Dinheiro: o valor da venda mora na conta a receber. Mudar o valor é
+  // corrigir a parcela em aberto; OS que ainda não tinha valor ganha a conta agora.
+  if (d.valorCents !== undefined && d.valorCents !== ordem.valorCents) {
+    try {
+      if (ordem.contaId) {
+        await corrigirValor({ tenantId: user.tenantId, ordemId: ordem.id, valorCents: d.valorCents });
+      } else if (d.valorCents > 0) {
+        await prepararFinanceiro(user.tenantId);
+        const atual = await prisma.ordemServico.findUniqueOrThrow({
+          where: { id: ordem.id },
+          select: { previsaoEntrega: true, contact: { select: { name: true, waName: true } } },
+        });
+        await prisma.$transaction(async (tx) => {
+          await tx.ordemServico.update({ where: { id: ordem.id }, data: { valorCents: d.valorCents, sinalCents: Math.min(d.sinalCents ?? 0, d.valorCents!) } });
+          await criarContaDaOS(tx, {
+            tenantId: user.tenantId,
+            ordemId: ordem.id,
+            numero: ordem.numero,
+            contactId: ordem.contactId,
+            nomeCliente: atual.contact.name ?? atual.contact.waName,
+            valorCents: d.valorCents!,
+            sinalCents: d.sinalCents ?? 0,
+            meioDoSinal: d.meioDoSinal ?? null,
+            vencimentoDoSaldo: atual.previsaoEntrega,
+            userId: user.id,
+          });
+        });
+      }
+    } catch (e) {
+      if (e instanceof ErroDeConta) return NextResponse.json({ error: `As demais alterações foram salvas, mas o valor não: ${e.message}` }, { status: e.status });
+      throw e;
+    }
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -3,6 +3,7 @@ import { wakeOutbox } from "@/lib/worker-client";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { dadosClienteSchema, paraData } from "@/lib/otica-schemas";
 import type { z } from "zod";
+import { SELECT_PARCELAS, encerrarConta, resumoDasParcelas } from "@/lib/otica-financeiro";
 import {
   avisoDaEtapa,
   instanteNoFuso,
@@ -70,7 +71,8 @@ export async function avisarCliente(ordemId: string, etapa: Etapa): Promise<stri
       previsaoEntrega: true,
       valorCents: true,
       sinalCents: true,
-      quitadaEm: true,
+      // O que ainda falta vem da conta a receber (sinal, saldo, parcelas).
+      conta: { select: { parcelas: { select: SELECT_PARCELAS } } },
       contact: { select: { id: true, name: true, waName: true, grupo: true } },
       tenant: { select: { name: true, timezone: true, oticaConfig: { select: { avisos: true } } } },
     },
@@ -89,7 +91,7 @@ export async function avisarCliente(ordemId: string, etapa: Etapa): Promise<stri
     nome: primeiroNome(ordem.contact.name ?? ordem.contact.waName),
     os: numeroOS(ordem.numero),
     previsao: previsaoParaCliente(ordem.previsaoEntrega, ordem.tenant.timezone),
-    saldoCents: ordem.quitadaEm ? 0 : saldoCents(ordem.valorCents, ordem.sinalCents),
+    saldoCents: ordem.conta ? resumoDasParcelas(ordem.conta.parcelas).saldoCents : saldoCents(ordem.valorCents, ordem.sinalCents),
     loja: ordem.tenant.name,
   });
 
@@ -130,11 +132,13 @@ export async function moverEtapa(input: {
   porId: string;
   avisar: boolean;
   motivoCancelamento?: string;
+  /** Só no cancelamento: estornar o sinal. Sem isto a loja fica com o que já recebeu. */
+  devolverSinal?: boolean;
 }): Promise<{ aviso: string | null }> {
   const agora = new Date();
   const anterior = await prisma.ordemServico.findFirst({
     where: { id: input.ordemId, tenantId: input.tenantId },
-    select: { etapa: true },
+    select: { etapa: true, contaId: true },
   });
   if (!anterior) throw new Error("OS não encontrada");
 
@@ -150,6 +154,17 @@ export async function moverEtapa(input: {
         motivoCancelamento: input.para === "CANCELADA" ? input.motivoCancelamento ?? null : null,
       },
     });
+    // Cancelar a venda encerra o dinheiro na MESMA transação: ou as duas
+    // coisas acontecem, ou nenhuma (um estorno que falha não deixa a OS cancelada).
+    if (input.para === "CANCELADA" && anterior.contaId) {
+      await encerrarConta(tx, {
+        tenantId: input.tenantId,
+        contaId: anterior.contaId,
+        devolverSinal: input.devolverSinal === true,
+        motivo: input.motivoCancelamento,
+        userId: input.porId,
+      });
+    }
     return tx.eventoOS.create({
       data: { ordemId: input.ordemId, de: anterior.etapa, para: input.para, porId: input.porId },
       select: { id: true },

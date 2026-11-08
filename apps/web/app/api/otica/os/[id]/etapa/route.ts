@@ -5,6 +5,7 @@ import { exigirRecurso } from "@/lib/plano";
 import { moverEtapa } from "@/lib/otica";
 import { podeMover } from "@/lib/otica-regras";
 import { etapaSchema } from "@/lib/otica-schemas";
+import { ErroDeConta } from "@/lib/contas-receber";
 
 /**
  * Muda a OS de etapa e, se a etapa tiver aviso ligado, manda a mensagem ao
@@ -18,7 +19,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const parsed = etapaSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
-  const { para, avisar, motivoCancelamento } = parsed.data;
+  const { para, avisar, motivoCancelamento, devolverSinal } = parsed.data;
 
   const ordem = await prisma.ordemServico.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
@@ -32,13 +33,19 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     );
   }
 
-  const { aviso } = await moverEtapa({
-    tenantId: user.tenantId,
-    ordemId: ordem.id,
-    para,
-    porId: user.id,
-    avisar,
-    motivoCancelamento,
-  });
-  return NextResponse.json({ ok: true, aviso });
+  try {
+    const { aviso } = await moverEtapa({
+      tenantId: user.tenantId,
+      ordemId: ordem.id,
+      para,
+      porId: user.id,
+      avisar,
+      motivoCancelamento,
+      devolverSinal,
+    });
+    return NextResponse.json({ ok: true, aviso });
+  } catch (e) {
+    if (e instanceof ErroDeConta) return NextResponse.json({ error: e.message }, { status: e.status });
+    throw e;
+  }
 }

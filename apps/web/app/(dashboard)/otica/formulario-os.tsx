@@ -34,7 +34,9 @@ const TRATAMENTOS = ["Antirreflexo", "Antirrisco", "Fotossensível", "Filtro azu
 const MATERIAIS_ARMACAO = ["Acetato", "Metal", "Fio de nylon", "Nylon"];
 const SERVICOS = ["Montagem", "VTA", "Slim"];
 
-type Opcoes = { laboratorios: { id: string; nome: string; prazoDias: number | null }[]; equipe: { id: string; name: string }[]; eu: string; timezone: string };
+type Opcoes = { laboratorios: { id: string; nome: string; prazoDias: number | null }[]; equipe: { id: string; name: string }[]; eu: string; timezone: string; gestao: boolean };
+type Parcela = { id: string; tipo: string; numero: number; totalParcelas: number; vencimento: string | null; valorCents: number; pagoCents: number; status: "PAGA" | "ABERTA" | "PARCIAL" | "CANCELADA" | "REEMBOLSADA"; vencida: boolean };
+type Financeiro = { contaId: string; devidoCents: number; recebidoCents: number; saldoCents: number; proximoVencimento: string | null; emAberto: number; parcelas: Parcela[] };
 type Contato = { id: string; nome: string | null; telefone: string | null };
 type ReceitaSalva = {
   id: string;
@@ -69,7 +71,7 @@ type OSCompleta = {
   observacoes: string | null;
   valorCents: number;
   sinalCents: number;
-  quitadaEm: string | null;
+  financeiro: Financeiro | null;
   portadorAutorizado: string | null;
   motivoCancelamento: string | null;
   contact: Record<string, string | null> & { id: string };
@@ -167,6 +169,7 @@ export function FormularioOS({ id }: { id?: string }) {
     horizontal: "",
     vertical: "",
   });
+  const [meioSinal, setMeioSinal] = useState<"" | "DINHEIRO" | "PIX" | "CARTAO">("");
   const [tratamentos, setTratamentos] = useState<string[]>([]);
   const [servicos, setServicos] = useState<string[]>([]);
 
@@ -314,6 +317,7 @@ export function FormularioOS({ id }: { id?: string }) {
     if (lida.erros.length) return setErro(`Confira a receita: ${lida.erros.join(" · ")}`);
     if (valorCents === null || sinalCents === null) return setErro("Confira o valor e o sinal.");
     if (sinalCents > valorCents) return setErro("O sinal não pode ser maior que o valor.");
+    if (!os?.financeiro && sinalCents > 0 && !meioSinal) return setErro("Diga como o sinal foi pago: dinheiro, Pix ou cartão.");
     const medidas = {
       ponte: lerMilimetros(f.ponte),
       diagonal: lerMilimetros(f.diagonal),
@@ -366,7 +370,9 @@ export function FormularioOS({ id }: { id?: string }) {
       medidas: { ponte: val(medidas.ponte), diagonal: val(medidas.diagonal), horizontal: val(medidas.horizontal), vertical: val(medidas.vertical) },
       observacoes: f.observacoes,
       valorCents,
-      sinalCents,
+      // Sinal e forma só valem quando a venda ainda não tem conta: depois, o
+      // dinheiro mexe pelos botões de receber e parcelar.
+      ...(os?.financeiro ? {} : { sinalCents, meioDoSinal: meioSinal || null }),
       portadorAutorizado: f.portadorAutorizado,
     };
 
@@ -532,15 +538,36 @@ export function FormularioOS({ id }: { id?: string }) {
           </Secao>
 
           <Secao titulo="Valores">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
-              <Campo rotulo="Valor final (R$)" id="os-valor" valor={f.valor} mudar={(v) => setF({ ...f, valor: v })} modo="decimal" />
-              <Campo rotulo="Sinal (R$)" id="os-sinal" valor={f.sinal} mudar={(v) => setF({ ...f, sinal: v })} modo="decimal" />
-              <div className="text-sm">
-                <span className={rotulo}>Saldo a receber</span>
-                <p className="py-2 font-semibold tabular-nums">{os?.quitadaEm ? "Quitada" : saldo === null ? "—" : centsToBRL(saldo)}</p>
-              </div>
-              {os && saldo !== null && saldo > 0 && <BotaoQuitar os={os} aoMudar={() => mutate()} />}
-            </div>
+            {os?.financeiro ? (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                  <Campo rotulo="Valor da venda (R$)" id="os-valor" valor={f.valor} mudar={(v) => setF({ ...f, valor: v })} modo="decimal" />
+                </div>
+                <p className="text-[11px] text-neutral-500">Mudar o valor e salvar corrige a parcela em aberto. Já parcelada ou quitada, ajuste em Financeiro → A receber.</p>
+                <PainelFinanceiro os={os} gestao={!!opcoes?.gestao} aoMudar={() => mutate()} />
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
+                  <Campo rotulo="Valor final (R$)" id="os-valor" valor={f.valor} mudar={(v) => setF({ ...f, valor: v })} modo="decimal" />
+                  <Campo rotulo="Sinal (R$)" id="os-sinal" valor={f.sinal} mudar={(v) => setF({ ...f, sinal: v })} modo="decimal" />
+                  <label className={rotulo}>
+                    Sinal pago em
+                    <select id="os-meio-sinal" value={meioSinal} onChange={(e) => setMeioSinal(e.target.value as typeof meioSinal)} className={`${campo} mt-1`}>
+                      <option value="">—</option>
+                      <option value="DINHEIRO">Dinheiro</option>
+                      <option value="PIX">Pix</option>
+                      <option value="CARTAO">Cartão</option>
+                    </select>
+                  </label>
+                  <div className="text-sm">
+                    <span className={rotulo}>Saldo a receber</span>
+                    <p className="py-2 font-semibold tabular-nums">{saldo === null ? "—" : centsToBRL(saldo)}</p>
+                  </div>
+                </div>
+                <p className="text-[11px] text-neutral-500">Ao abrir a OS, o sinal entra no Caixa e o saldo fica em Financeiro → A receber, para a data da entrega.</p>
+              </>
+            )}
             <Campo rotulo="Autorizado a retirar (além do cliente)" id="os-portador" valor={f.portadorAutorizado} mudar={(v) => setF({ ...f, portadorAutorizado: v })} />
           </Secao>
 
@@ -684,6 +711,7 @@ function BarraEtapas({ os, aoMudar }: { os: OSCompleta; aoMudar: () => void }) {
   const [msg, setMsg] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [cancelando, setCancelando] = useState(false);
   const [motivo, setMotivo] = useState("");
+  const [devolver, setDevolver] = useState(false);
 
   async function mover(para: Etapa) {
     setMovendo(true);
@@ -691,7 +719,7 @@ function BarraEtapas({ os, aoMudar }: { os: OSCompleta; aoMudar: () => void }) {
     const r = await fetch(`/api/otica/os/${os.id}/etapa`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ para, avisar: para === "CANCELADA" ? false : avisar, motivoCancelamento: motivo || undefined }),
+      body: JSON.stringify({ para, avisar: para === "CANCELADA" ? false : avisar, motivoCancelamento: motivo || undefined, devolverSinal: para === "CANCELADA" ? devolver : undefined }),
     });
     setMovendo(false);
     if (!r.ok) return setMsg({ texto: await erroDaResposta(r), erro: true });
@@ -727,6 +755,14 @@ function BarraEtapas({ os, aoMudar }: { os: OSCompleta; aoMudar: () => void }) {
       {cancelando ? (
         <div className="flex flex-wrap gap-2">
           <input id="os-motivo-cancel" value={motivo} onChange={(e) => setMotivo(e.target.value)} placeholder="Motivo do cancelamento" className={`${campo} flex-1 min-w-[200px]`} />
+          {(os.financeiro?.recebidoCents ?? 0) > 0 && (
+            <label className="flex w-full items-start gap-2 text-xs text-neutral-700">
+              <input type="checkbox" checked={devolver} onChange={(e) => setDevolver(e.target.checked)} className="mt-0.5 accent-[rgb(var(--accent))]" />
+              <span>
+                Devolver o que já foi recebido ({centsToBRL(os.financeiro!.recebidoCents)}). Marcado, o valor sai do Caixa como estorno. Desmarcado, a loja fica com o sinal, como diz o talão (lente sob medida não tem cancelamento), e só o saldo deixa de ser cobrado.
+              </span>
+            </label>
+          )}
           <button type="button" onClick={() => mover("CANCELADA")} disabled={movendo} className="rounded-md bg-red-600 px-3 py-2 text-xs font-medium text-white">Confirmar cancelamento</button>
           <button type="button" onClick={() => setCancelando(false)} className="rounded-md border border-neutral-300 px-3 py-2 text-xs">Manter OS</button>
         </div>
@@ -737,22 +773,117 @@ function BarraEtapas({ os, aoMudar }: { os: OSCompleta; aoMudar: () => void }) {
   );
 }
 
-function BotaoQuitar({ os, aoMudar }: { os: OSCompleta; aoMudar: () => void }) {
+const MEIOS = [
+  ["DINHEIRO", "Dinheiro"],
+  ["PIX", "Pix"],
+  ["CARTAO", "Cartão"],
+] as const;
+
+const ROTULO_STATUS: Record<Parcela["status"], string> = { PAGA: "Paga", ABERTA: "Em aberto", PARCIAL: "Parcial", CANCELADA: "Cancelada", REEMBOLSADA: "Reembolsada" };
+
+/**
+ * O dinheiro da venda: o que entrou, o que falta e as parcelas. Receber aqui
+ * cai no Caixa do dia; parcelar o saldo é o crediário próprio.
+ */
+function PainelFinanceiro({ os, gestao, aoMudar }: { os: OSCompleta; gestao: boolean; aoMudar: () => void }) {
+  const fin = os.financeiro!;
+  const [valor, setValor] = useState("");
+  const [meio, setMeio] = useState<"DINHEIRO" | "PIX" | "CARTAO">("PIX");
+  const [n, setN] = useState("3");
+  const [periodo, setPeriodo] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">("MENSAL");
+  const [primeiro, setPrimeiro] = useState("");
+  const [parcelando, setParcelando] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const [msg, setMsg] = useState<{ texto: string; erro?: boolean } | null>(null);
+  const cancelada = os.etapa === "CANCELADA";
+  const dia = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR", { timeZone: "UTC" }) : "—");
+
+  async function chamar(rota: string, corpo: unknown, sucesso: (r: any) => string) {
+    setEnviando(true);
+    setMsg(null);
+    const r = await fetch(`/api/otica/os/${os.id}/${rota}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+    setEnviando(false);
+    if (!r.ok) return setMsg({ texto: await erroDaResposta(r), erro: true });
+    setMsg({ texto: sucesso(await r.json()) });
+    aoMudar();
+  }
+
+  async function receber() {
+    const cents = valor.trim() ? reaisParaCentavos(valor) : fin.saldoCents;
+    if (!cents || cents <= 0) return setMsg({ texto: "Informe um valor maior que zero.", erro: true });
+    await chamar("receber", { valorCents: cents, meio }, (r) => (r.quitado ? `Recebido ${centsToBRL(cents)}. A venda está quitada.` : `Recebido ${centsToBRL(cents)}. Falta ${centsToBRL(r.saldoDepois)}.`));
+    setValor("");
+  }
+
+  async function parcelar() {
+    if (!primeiro) return setMsg({ texto: "Escolha o vencimento da primeira parcela.", erro: true });
+    await chamar("parcelar", { numParcelas: Number(n), periodicidade: periodo, primeiroVencimento: primeiro }, (r) => `Saldo dividido em ${r.parcelas} parcela(s).`);
+    setParcelando(false);
+  }
+
   return (
-    <button
-      type="button"
-      disabled={enviando}
-      onClick={async () => {
-        setEnviando(true);
-        await fetch(`/api/otica/os/${os.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ quitada: true }) });
-        setEnviando(false);
-        aoMudar();
-      }}
-      className="rounded-md border border-accent px-3 py-2 text-xs font-medium text-accent hover:bg-accent hover:text-white disabled:opacity-50"
-    >
-      Marcar saldo como recebido
-    </button>
+    <div className="flex flex-col gap-3 rounded-md border border-neutral-200 p-3">
+      <div className="grid grid-cols-3 gap-3 text-sm">
+        <div><span className={rotulo}>Valor</span><p className="font-semibold tabular-nums">{centsToBRL(fin.devidoCents)}</p></div>
+        <div><span className={rotulo}>Recebido</span><p className="font-semibold tabular-nums text-accent">{centsToBRL(fin.recebidoCents)}</p></div>
+        <div><span className={rotulo}>Falta</span><p className={`font-semibold tabular-nums ${fin.saldoCents ? "text-amber-700" : ""}`}>{fin.saldoCents ? centsToBRL(fin.saldoCents) : "Quitada"}</p></div>
+      </div>
+
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="text-left text-neutral-500"><th className="py-1 font-medium">Parcela</th><th className="py-1 font-medium">Vence</th><th className="py-1 text-right font-medium">Valor</th><th className="py-1 text-right font-medium">Situação</th></tr>
+        </thead>
+        <tbody>
+          {fin.parcelas.map((p) => (
+            <tr key={p.id} className="border-t border-neutral-100">
+              <td className="py-1.5">{p.tipo === "ENTRADA" ? "Sinal" : p.totalParcelas > 1 ? `${p.numero} de ${p.totalParcelas}` : "Saldo"}</td>
+              <td className={`py-1.5 ${p.vencida ? "font-medium text-red-600" : ""}`}>{dia(p.vencimento)}{p.vencida ? " · atrasada" : ""}</td>
+              <td className="py-1.5 text-right tabular-nums">{centsToBRL(p.valorCents)}</td>
+              <td className="py-1.5 text-right">{ROTULO_STATUS[p.status]}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      {!cancelada && fin.saldoCents > 0 && (
+        <div className="flex flex-wrap items-end gap-2">
+          <label className={rotulo}>
+            Receber (R$)
+            <input id="os-receber-valor" value={valor} onChange={(e) => setValor(e.target.value)} placeholder={(fin.saldoCents / 100).toFixed(2).replace(".", ",")} inputMode="decimal" className={`${campo} mt-1 w-32`} />
+          </label>
+          <label className={rotulo}>
+            Em
+            <select id="os-receber-meio" value={meio} onChange={(e) => setMeio(e.target.value as typeof meio)} className={`${campo} mt-1 w-32`}>
+              {MEIOS.map(([v, r]) => <option key={v} value={v}>{r}</option>)}
+            </select>
+          </label>
+          <button type="button" onClick={receber} disabled={enviando} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">Receber</button>
+          {gestao && !parcelando && (
+            <button type="button" onClick={() => setParcelando(true)} className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:border-accent">Parcelar o saldo</button>
+          )}
+        </div>
+      )}
+
+      {parcelando && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md bg-neutral-50 p-3">
+          <label className={rotulo}>Parcelas<input id="os-parc-n" value={n} onChange={(e) => setN(e.target.value)} inputMode="numeric" className={`${campo} mt-1 w-20`} /></label>
+          <label className={rotulo}>
+            A cada
+            <select id="os-parc-periodo" value={periodo} onChange={(e) => setPeriodo(e.target.value as typeof periodo)} className={`${campo} mt-1 w-36`}>
+              <option value="MENSAL">Mês</option>
+              <option value="QUINZENAL">15 dias</option>
+              <option value="SEMANAL">Semana</option>
+            </select>
+          </label>
+          <label className={rotulo}>1º vencimento<input id="os-parc-primeiro" type="date" value={primeiro} onChange={(e) => setPrimeiro(e.target.value)} className={`${campo} mt-1`} /></label>
+          <button type="button" onClick={parcelar} disabled={enviando} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white disabled:opacity-50">Parcelar</button>
+          <button type="button" onClick={() => setParcelando(false)} className="rounded-md border border-neutral-300 px-4 py-2 text-sm">Fechar</button>
+        </div>
+      )}
+
+      {msg && <p role="status" className={`text-xs ${msg.erro ? "text-red-600" : "text-accent"}`}>{msg.texto}</p>}
+      <a href="/receber" className="self-start text-xs text-neutral-500 hover:text-accent">Ver no Financeiro →</a>
+    </div>
   );
 }
 

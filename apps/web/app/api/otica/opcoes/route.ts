@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
+import { ehGerencia } from "@/lib/papeis";
 
 /**
  * O que as telas da ótica precisam para os campos de escolha: laboratórios
@@ -26,5 +27,5 @@ export async function GET() {
     prisma.tenant.findUniqueOrThrow({ where: { id: user.tenantId }, select: { timezone: true } }),
   ]);
   // O fuso da loja: as datas da tela são lidas e mostradas no relógio dela.
-  return NextResponse.json({ laboratorios, equipe, eu: user.id, timezone: tenant.timezone });
+  return NextResponse.json({ laboratorios, equipe, eu: user.id, timezone: tenant.timezone, gestao: ehGerencia(user.role) });
 }
