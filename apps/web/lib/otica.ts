@@ -4,6 +4,7 @@ import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { dadosClienteSchema, paraData } from "@/lib/otica-schemas";
 import type { z } from "zod";
 import { SELECT_PARCELAS, encerrarConta, resumoDasParcelas } from "@/lib/otica-financeiro";
+import { estornarDaOS } from "@/lib/otica-estoque";
 import {
   avisoDaEtapa,
   instanteNoFuso,
@@ -138,7 +139,7 @@ export async function moverEtapa(input: {
   const agora = new Date();
   const anterior = await prisma.ordemServico.findFirst({
     where: { id: input.ordemId, tenantId: input.tenantId },
-    select: { etapa: true, contaId: true },
+    select: { etapa: true, contaId: true, numero: true, armacaoEstoqueId: true },
   });
   if (!anterior) throw new Error("OS não encontrada");
 
@@ -164,6 +165,10 @@ export async function moverEtapa(input: {
         motivo: input.motivoCancelamento,
         userId: input.porId,
       });
+    }
+    // A armação da venda cancelada volta para a lista de disponíveis.
+    if (input.para === "CANCELADA" && anterior.armacaoEstoqueId) {
+      await estornarDaOS(tx, { tenantId: input.tenantId, armacaoId: anterior.armacaoEstoqueId, ordemId: input.ordemId, numeroOS: anterior.numero, userId: input.porId, motivo: "OS cancelada" });
     }
     return tx.eventoOS.create({
       data: { ordemId: input.ordemId, de: anterior.etapa, para: input.para, porId: input.porId },

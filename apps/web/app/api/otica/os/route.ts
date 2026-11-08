@@ -6,6 +6,7 @@ import { upsertContactByPhone } from "@/lib/contact-server";
 import { configDaOtica, consultorValido, dadosDoCliente, previsaoDaTela, reservarNumeroOS } from "@/lib/otica";
 import { criarContaDaOS, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
 import { ErroDeConta } from "@/lib/contas-receber";
+import { baixarParaOS } from "@/lib/otica-estoque";
 import { validadeDaReceita } from "@/lib/otica-regras";
 import { criarOSSchema, paraData, telefoneParaWhatsApp } from "@/lib/otica-schemas";
 
@@ -155,6 +156,7 @@ export async function POST(req: Request) {
         tratamentos: d.tratamentos ?? [],
         tratamentoCor: d.tratamentoCor || null,
         armacao: d.armacao || null,
+        armacaoEstoqueId: d.armacaoEstoqueId || null,
         materialArmacao: d.materialArmacao || null,
         servicos: d.servicos ?? [],
         medidas: d.medidas ?? undefined,
@@ -166,6 +168,12 @@ export async function POST(req: Request) {
       select: { id: true, numero: true },
     });
     await tx.eventoOS.create({ data: { ordemId: criada.id, para: "ABERTA", porId: user.id } });
+
+    // A armação escolhida do estoque é vendida: sai da lista de disponíveis.
+    // Falha (peça já vendida) derruba a OS inteira, e o número reservado volta.
+    if (d.armacaoEstoqueId) {
+      await baixarParaOS(tx, { tenantId: user.tenantId, armacaoId: d.armacaoEstoqueId, ordemId: criada.id, numeroOS: numero, userId: user.id });
+    }
 
     // O dinheiro: a venda vira conta a receber, com o sinal já recebido.
     const cliente = await tx.contact.findUniqueOrThrow({ where: { id: contactId! }, select: { name: true, waName: true } });

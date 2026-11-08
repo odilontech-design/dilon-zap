@@ -81,9 +81,46 @@ proibido neste projeto. Uma conta por OS é garantido no código (`criarContaDaO
 Siga o mesmo roteiro da implantação acima (backup, ensaio somente leitura, `db push`
 sozinho, troca do site) — o ensaio tem de mostrar só esse SQL.
 
+## Estoque de armações (v1.41.0)
+
+Aba **Ótica → Armações**. Não usa o catálogo de Produtos de propósito: aquele é do
+fluxo de Pedidos, e armação de ótica de bairro é, na maior parte, **peça única com
+etiqueta** — então o cadastro é por **código da etiqueta**, a quantidade quase sempre
+é 1 e vender a última peça a tira da escolha.
+
+- **Importar da planilha** (só a gestão): cole as linhas copiadas do Excel. Aceita
+  cabeçalho (Código, Modelo, Marca, Cor, Material, Medidas, Custo, Preço, Qtd, em
+  qualquer ordem, com ou sem acento) ou a ordem padrão. A tela **confere antes**:
+  mostra quantas são novas, quantas já existem e as linhas com problema (com o
+  número da linha); linha ruim não impede as boas. Código que já existe é mantido,
+  nunca sobrescrito — reimportar a mesma planilha não duplica estoque.
+- **Cadastro e contagem:** cadastrar uma a uma, editar a quantidade na própria linha
+  (vira um movimento de ajuste) e desativar.
+- **Na OS**, a armação é escolhida pela etiqueta ou modelo (só aparecem as que ainda
+  estão à venda) e o texto impresso já sai preenchido. Ao abrir a OS a peça **sai do
+  estoque**; trocar a armação devolve a antiga e tira a nova; cancelar a OS devolve a
+  peça. A saída é atômica: duas atendentes vendendo a mesma peça única ao mesmo tempo
+  não conseguem as duas — a segunda recebe "já foi vendida" e a OS dela não é criada
+  (nem o número, nem a conta a receber). Armação do cliente ou fora da lista continua
+  sendo só texto.
+- Cada entrada, saída, estorno e ajuste fica em `MovimentoArmacao`; a quantidade da
+  armação é o cache desse saldo e só muda junto com um movimento.
+
+**Banco:** duas tabelas novas (`Armacao`, `MovimentoArmacao`), o enum
+`TipoMovimentoArmacao` e a coluna `OrdemServico.armacaoEstoqueId` com índice e chave
+estrangeira. O único índice único é de tabela **nova** (`Armacao`), que o `db push`
+aceita sem pedir confirmação. O ensaio somente leitura deve mostrar só isso:
+
+```
+CREATE TYPE "TipoMovimentoArmacao" ...
+ALTER TABLE "OrdemServico" ADD COLUMN "armacaoEstoqueId" TEXT;
+CREATE TABLE "Armacao" ...        CREATE TABLE "MovimentoArmacao" ...
+CREATE INDEX / CREATE UNIQUE INDEX (tabelas novas) e OrdemServico_armacaoEstoqueId_idx
+ALTER TABLE ... ADD CONSTRAINT (chaves estrangeiras das tabelas novas e de OrdemServico_armacaoEstoqueId_fkey)
+```
+
 ## Ainda não faz (próximas fases)
 
-- A armação ainda é texto: não baixa estoque.
 - A OS não cria negociação no CRM nem Pedido (a OS já faz o papel de pedido).
 - Lembrete de retirada, ajuste em 30 dias, pesquisa de satisfação e receita
   vencendo.

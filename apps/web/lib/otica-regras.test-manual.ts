@@ -11,6 +11,8 @@ import {
   formatarMilimetros,
   grausVazios,
   lerDioptria,
+  lerListaDeArmacoes,
+  lerReais,
   lerEixo,
   lerMilimetros,
   montarAviso,
@@ -144,6 +146,26 @@ checa("cancelada: a loja fica com o sinal e não cobra o saldo", [canceladaComSi
 const pagouAMais = resumoFinanceiro([parc(10000, "2026-11-07", [12000])]);
 checa("recebeu a mais: saldo não fica negativo", pagouAMais.saldoCents, 0);
 checa("sem parcelas", resumoFinanceiro([]).saldoCents, 0);
+
+// Lista de armações colada de planilha
+checa("reais com R$ e milhar", lerReais("R$ 1.250,00"), 125000);
+checa("reais com ponto decimal", lerReais("85.5"), 8550);
+checa("reais vazio é null", lerReais(" "), null);
+checa("reais lixo é undefined", lerReais("caro"), undefined);
+const tab = lerListaDeArmacoes("Código\tModelo\tMarca\tCor\tMedidas\tCusto\tPreço\tQtd\nA001\tAcetato redonda\tTopRay\tPreta\t52□19-145\tR$ 85,00\tR$ 290,00\t1\nA002\tMetal aviador\t\tDourada\t54□17-140\t72\t260\t2");
+checa("cabeçalho com acento e tabulação", [tab.separador, tab.linhas.length, tab.erros.length], ["\t", 2, 0]);
+checa("lê preço, custo e quantidade", [tab.linhas[0].custoCents, tab.linhas[0].precoCents, tab.linhas[0].quantidade], [8500, 29000, 1]);
+checa("lê medidas com □", tab.linhas[0].medidas, "52□19-145");
+checa("campo vazio vira null", tab.linhas[1].marca, null);
+const semCab = lerListaDeArmacoes("B001;Nylon fio;Ray;Azul;Nylon;50□18-140;60;200;1");
+checa("sem cabeçalho usa a ordem padrão", [semCab.separador, semCab.linhas[0].codigo, semCab.linhas[0].precoCents], [";", "B001", 20000]);
+const ruim = lerListaDeArmacoes("Código;Modelo;Preço\nC1;Boa;100\n;Sem código;50\nC3;;50\nC1;Repetida;80\nC5;Preço ruim;caro\nC6;Boa 2;90");
+checa("linhas boas passam e as ruins viram erro", [ruim.linhas.map((x) => x.codigo), ruim.erros.length], [["C1", "C6"], 4]);
+checa("erro traz o número da linha", ruim.erros.map((e) => e.linha), [3, 4, 5, 6]);
+checa("quantidade ausente vale 1", ruim.linhas[0].quantidade, 1);
+checa("quantidade zero é aceita (já vendida)", lerListaDeArmacoes("D1;Vendida;;;;;;;0").linhas[0].quantidade, 0);
+checa("lista vazia", lerListaDeArmacoes("  \n ").erros.length, 1);
+checa("cabeçalho sem código recusa", lerListaDeArmacoes("Modelo;Preço\nX;10").erros[0].erro.includes("Código"), true);
 
 console.log(falhas ? `\n${falhas} falha(s)` : "\nTudo certo");
 if (falhas) process.exit(1);
