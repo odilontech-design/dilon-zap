@@ -82,6 +82,8 @@ export const camposOS = {
   observacoes: texto(2000),
   valorCents: z.number().int().min(0).max(100_000_00).optional(),
   sinalCents: z.number().int().min(0).max(100_000_00).optional(),
+  // Como o sinal foi pago. Obrigatório quando há sinal (o Caixa precisa saber se foi dinheiro).
+  meioDoSinal: z.enum(["DINHEIRO", "PIX", "CARTAO"]).nullable().optional(),
   portadorAutorizado: texto(120),
 };
 
@@ -99,14 +101,26 @@ export const criarOSSchema = z
 export const editarOSSchema = z.object({
   cliente: dadosClienteSchema,
   receita: receitaSchema.nullable().optional(),
-  quitada: z.boolean().optional(),
   ...camposOS,
+});
+
+export const receberSchema = z.object({
+  valorCents: z.number().int().min(1).max(100_000_00),
+  meio: z.enum(["DINHEIRO", "PIX", "CARTAO"]),
+});
+
+export const parcelarSchema = z.object({
+  numParcelas: z.number().int().min(1).max(24),
+  periodicidade: z.enum(["SEMANAL", "QUINZENAL", "MENSAL"]),
+  primeiroVencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 export const etapaSchema = z.object({
   para: z.enum(["ABERTA", "LABORATORIO", "MONTAGEM", "CONFERENCIA", "PRONTA", "ENTREGUE", "CANCELADA"]),
   avisar: z.boolean().default(true),
   motivoCancelamento: z.string().trim().max(300).optional(),
+  // Só no cancelamento: devolver o sinal ou a loja ficar com ele.
+  devolverSinal: z.boolean().optional(),
 });
 
 export const laboratorioSchema = z.object({

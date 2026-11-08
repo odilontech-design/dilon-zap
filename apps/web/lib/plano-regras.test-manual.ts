@@ -108,5 +108,22 @@ checa(
 );
 checa("sem assinatura: não trava quem já opera", limiteDeAtendentes(null), null);
 
+// Ótica: a venda recebe, então o Financeiro vem junto
+checa(
+  "Essencial com Ótica ligada ganha Contas a receber",
+  lista(recursosEfetivos({ plano: "ESSENCIAL", plataformaCompleta: false }, [{ recurso: "OTICA", ativo: true }])),
+  lista(new Set<Recurso>(["OTICA", "CONTAS_RECEBER"]))
+);
+checa(
+  "Ótica desligada não traz Contas a receber",
+  lista(recursosEfetivos({ plano: "ESSENCIAL", plataformaCompleta: false }, [])).includes("CONTAS_RECEBER"),
+  false
+);
+checa(
+  "quem desligou Contas a receber de propósito continua sem",
+  lista(recursosEfetivos({ plano: "ESSENCIAL", plataformaCompleta: false }, [{ recurso: "OTICA", ativo: true }, { recurso: "CONTAS_RECEBER", ativo: false }])).includes("CONTAS_RECEBER"),
+  false
+);
+
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);

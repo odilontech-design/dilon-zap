@@ -227,6 +227,64 @@ export function previsaoPeloPrazo(inicio: Date, prazoDias: number): Date {
   return d;
 }
 
+// ---------------------------------------------------------------------------
+// Conta a receber da OS
+// ---------------------------------------------------------------------------
+
+export type ParcelaDaConta = {
+  valorCents: number;
+  vencimento: Date | null;
+  canceladaEm: Date | null;
+  reembolsadaEm: Date | null;
+  /** O que entrou nesta parcela; estorno é negativo. */
+  pagamentos: { valorCents: number }[];
+};
+
+export type ResumoFinanceiro = {
+  /** O que a conta cobra hoje (parcelas vivas). */
+  devidoCents: number;
+  recebidoCents: number;
+  saldoCents: number;
+  /** Vencimento da próxima parcela em aberto, ou null. */
+  proximoVencimento: Date | null;
+  /** Quantas parcelas ainda têm saldo. */
+  emAberto: number;
+};
+
+/**
+ * Onde a venda está no dinheiro, a partir das parcelas da conta. É calculado
+ * sempre de novo — o que se grava é o recebimento, nunca "está paga".
+ *
+ * Parcela cancelada ou reembolsada não cobra mais. Parcela cancelada que JÁ
+ * recebeu (o sinal que a loja ficou ao cancelar a venda) também não entra:
+ * esse dinheiro é da loja, não é saldo de ninguém.
+ */
+export function resumoFinanceiro(parcelas: ParcelaDaConta[]): ResumoFinanceiro {
+  let devido = 0;
+  let recebido = 0;
+  let saldo = 0;
+  let emAberto = 0;
+  let proximo: Date | null = null;
+  for (const p of parcelas) {
+    if (p.canceladaEm || p.reembolsadaEm) continue;
+    const pago = p.pagamentos.reduce((s, x) => s + x.valorCents, 0);
+    const falta = Math.max(0, p.valorCents - pago);
+    devido += p.valorCents;
+    recebido += pago;
+    saldo += falta;
+    if (falta > 0) {
+      emAberto++;
+      if (p.vencimento && (!proximo || p.vencimento < proximo)) proximo = p.vencimento;
+    }
+  }
+  return { devidoCents: devido, recebidoCents: recebido, saldoCents: saldo, proximoVencimento: proximo, emAberto };
+}
+
+/** Como o cliente pagou o sinal. */
+export const MEIOS_DO_SINAL = ["DINHEIRO", "PIX", "CARTAO"] as const;
+export type MeioDoSinal = (typeof MEIOS_DO_SINAL)[number];
+export const ROTULO_MEIO: Record<string, string> = { DINHEIRO: "Dinheiro", PIX: "Pix", CARTAO: "Cartão", BOLETO: "Boleto" };
+
 /** Quanto o fuso está à frente (ou atrás) do UTC naquele instante, em ms. */
 function deslocamentoDoFuso(instante: number, timezone: string): number {
   const partes = new Intl.DateTimeFormat("en-US", {

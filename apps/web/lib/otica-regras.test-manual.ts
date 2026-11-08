@@ -17,6 +17,7 @@ import {
   normalizarGraus,
   numeroOS,
   podeMover,
+  resumoFinanceiro,
   previsaoPeloPrazo,
   primeiroNome,
   proximaEtapa,
@@ -122,6 +123,27 @@ const quitada = montarAviso(avisoDaEtapa("PRONTA", null)!.texto, { ...vars, sald
 checa("pronta quitada não cobra", quitada.includes("Saldo"), false);
 checa("sem previsão diz a combinar", montarAviso("Previsão: {previsao}", { ...vars, previsao: "" }), "Previsão: a combinar");
 checa("número da OS com 4 dígitos", numeroOS(7), "0007");
+
+// Conta a receber da OS
+const dia = (d: string) => new Date(`${d}T12:00:00Z`);
+const parc = (valor: number, venc: string, pagos: number[], extra: object = {}) => ({
+  valorCents: valor, vencimento: dia(venc), canceladaEm: null, reembolsadaEm: null, pagamentos: pagos.map((v) => ({ valorCents: v })), ...extra,
+});
+const sinalESaldo = resumoFinanceiro([parc(10000, "2026-11-07", [10000]), parc(39000, "2026-11-14", [])]);
+checa("sinal pago e saldo aberto", [sinalESaldo.devidoCents, sinalESaldo.recebidoCents, sinalESaldo.saldoCents, sinalESaldo.emAberto], [49000, 10000, 39000, 1]);
+checa("próximo vencimento é o do saldo", sinalESaldo.proximoVencimento?.toISOString().slice(0, 10), "2026-11-14");
+const contaQuitada = resumoFinanceiro([parc(10000, "2026-11-07", [10000]), parc(39000, "2026-11-14", [39000])]);
+checa("quitada não tem saldo nem vencimento", [contaQuitada.saldoCents, contaQuitada.emAberto, contaQuitada.proximoVencimento], [0, 0, null]);
+const parcelada = resumoFinanceiro([parc(10000, "2026-11-07", [10000]), parc(19500, "2026-12-14", [19500]), parc(19500, "2027-01-14", [])]);
+checa("parcelada: falta a última", [parcelada.saldoCents, parcelada.emAberto], [19500, 1]);
+checa("próximo vencimento da parcelada", parcelada.proximoVencimento?.toISOString().slice(0, 10), "2027-01-14");
+const estornada = resumoFinanceiro([parc(10000, "2026-11-07", [10000, -10000])]);
+checa("sinal estornado volta a dever", [estornada.recebidoCents, estornada.saldoCents], [0, 10000]);
+const canceladaComSinal = resumoFinanceiro([parc(10000, "2026-11-07", [10000]), parc(39000, "2026-11-14", [], { canceladaEm: new Date() })]);
+checa("cancelada: a loja fica com o sinal e não cobra o saldo", [canceladaComSinal.saldoCents, canceladaComSinal.recebidoCents], [0, 10000]);
+const pagouAMais = resumoFinanceiro([parc(10000, "2026-11-07", [12000])]);
+checa("recebeu a mais: saldo não fica negativo", pagouAMais.saldoCents, 0);
+checa("sem parcelas", resumoFinanceiro([]).saldoCents, 0);
 
 console.log(falhas ? `\n${falhas} falha(s)` : "\nTudo certo");
 if (falhas) process.exit(1);

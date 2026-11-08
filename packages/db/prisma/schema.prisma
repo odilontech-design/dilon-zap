@@ -2237,6 +2237,9 @@ model ContaReceber {
   parcelas   Parcela[]
   pagamentos Pagamento[]
 
+  // A OS da ótica que gerou esta conta, se foi ela.
+  ordensServico OrdemServico[]
+
   @@index([tenantId, createdAt])
   @@index([contactId])
 }
@@ -3352,10 +3355,20 @@ model OrdemServico {
   medidas         Json?
   observacoes     String?
 
+  // O que foi vendido e o sinal combinado na venda. O DINHEIRO mora na conta a
+  // receber abaixo (sinal e saldo viram parcelas e recebimentos, e aparecem no
+  // Financeiro e no Caixa); estes dois campos são o combinado, para imprimir a
+  // OS e conferir. `quitadaEm` ficou da primeira versão e não é mais escrito.
   valorCents Int       @default(0)
   sinalCents Int       @default(0)
-  // Quando o saldo foi recebido. Nulo com saldo > 0 = ainda deve.
   quitadaEm  DateTime?
+
+  // A conta a receber desta venda. Nula só para OS sem valor. Uma conta por
+  // OS é garantido pelo código (criarContaDaOS), e não por índice único: o
+  // `db push` do Prisma trata um índice único novo como risco de perda de dados
+  // e se recusa a rodar sem --accept-data-loss, que aqui é proibido.
+  contaId String?
+  conta   ContaReceber? @relation(fields: [contaId], references: [id], onDelete: SetNull)
 
   // Outra pessoa autorizada a retirar ("Autorizo a retirada pelo portador").
   portadorAutorizado String?
@@ -3371,6 +3384,7 @@ model OrdemServico {
   @@unique([tenantId, numero])
   @@index([tenantId, etapa])
   @@index([contactId])
+  @@index([contaId])
 }
 
 // Histórico de etapas de uma OS: quem mudou, quando, e se o cliente foi avisado.

@@ -138,6 +138,10 @@ export function recursosEfetivos(assinatura: Assinatura, excecoes: Excecao[]): S
     if (e.ativo) efetivos.add(e.recurso);
     else efetivos.delete(e.recurso);
   }
+  // A ótica vende e recebe: a OS lança o sinal no Caixa e o saldo em A receber,
+  // então as telas do Financeiro vêm junto — sem pedir uma segunda exceção ao
+  // superadmin. Se alguém desligou "Contas a receber" de propósito, vale a escolha.
+  if (efetivos.has("OTICA") && !excecoes.some((e) => e.recurso === "CONTAS_RECEBER")) efetivos.add("CONTAS_RECEBER");
   return efetivos;
 }
 
