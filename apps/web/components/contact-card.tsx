@@ -8,6 +8,7 @@ import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact
 import { corDoMotivo } from "@/lib/close-reasons";
 import { EtapasPorFunil } from "@/components/etapas-por-funil";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
+import { salvarContato } from "@/lib/salvar-contato";
 
 /**
  * Ficha do cliente: tudo sobre uma pessoa num lugar só, com os campos
@@ -118,12 +119,13 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
   const [valor, setValor] = useState<string | null>(null);
   const [anotacoes, setAnotacoes] = useState<string | null>(null);
 
+  // Quando a gravação falha, a atendente precisa ver: sem aviso ela acha que salvou e perde o que digitou.
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+
   async function salvar(campos: Record<string, unknown>) {
-    await fetch(`/api/contacts/${contactId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(campos),
-    });
+    setErroSalvar(null);
+    const r = await salvarContato(contactId, campos);
+    if (!r.ok) setErroSalvar(`${r.erro} O que você digitou não foi gravado.`);
     mutate();
   }
 
@@ -164,6 +166,11 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
         onClick={(e) => e.stopPropagation()}
         className="bg-surface rounded-lg border border-neutral-200 w-full max-w-2xl max-h-[90vh] flex flex-col"
       >
+        {erroSalvar && (
+          <p role="alert" className="mx-5 mt-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-800 border border-red-200">
+            {erroSalvar}
+          </p>
+        )}
         <header className="flex items-start gap-3 p-5 border-b border-neutral-200">
           <Avatar contact={ficha} size={52} />
           <div className="flex-1 min-w-0">

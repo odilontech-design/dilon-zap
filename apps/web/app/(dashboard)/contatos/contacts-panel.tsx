@@ -9,6 +9,7 @@ import { readableTextColor, tagColor, type TagDef } from "@/lib/tags";
 import { LISTING_INTERVAL } from "@/lib/polling";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 import { ContactCard } from "@/components/contact-card";
+import { salvarContato } from "@/lib/salvar-contato";
 
 type StageDef = { id: string; name: string; color: string };
 
@@ -440,15 +441,16 @@ function ContactFormModal({
 
     if (contact) {
       const dealValueCents = Math.round(parseFloat(dealValue.replace(",", ".")) * 100);
-      await fetch(`/api/contacts/${contact.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: name.trim() || null,
-          stageId: stageId || null,
-          dealValueCents: Number.isFinite(dealValueCents) ? dealValueCents : 0,
-        }),
+      const r = await salvarContato(contact.id, {
+        name: name.trim() || null,
+        stageId: stageId || null,
+        dealValueCents: Number.isFinite(dealValueCents) ? dealValueCents : 0,
       });
+      if (!r.ok) {
+        setError(r.erro);
+        setSaving(false);
+        return;
+      }
     } else {
       const res = await fetch("/api/contacts", {
         method: "POST",
