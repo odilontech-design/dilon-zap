@@ -42,6 +42,7 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         "test/exclusao-empresa.test.ts",
         "test/links.test.ts",
         "test/alerta-sem-resposta.test.ts",
+        "test/juncao-contatos-e-salvar.test.ts",
         "test/pedidos-vendedor.test.ts",
         "test/fila-diaria.test.ts",
         "test/compatibilidade-producao.test.ts",

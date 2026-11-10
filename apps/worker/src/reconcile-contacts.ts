@@ -1,5 +1,6 @@
 import pino from "pino";
 import { prisma } from "@dilon-zap/db";
+import { fichaMesclada, SELECT_FICHA, type FichaDoContato } from "./mesclar-campos";
 
 const logger = pino({ level: process.env.LOG_LEVEL ?? "warn" });
 
@@ -32,10 +33,9 @@ function arquivoDaFoto(url: string | null): string | null {
   }
 }
 
-type Candidato = {
+export type Candidato = FichaDoContato & {
   id: string;
   tenantId: string;
-  name: string | null;
   waJid: string;
   phoneNumber: string | null;
   avatarUrl: string | null;
@@ -43,7 +43,7 @@ type Candidato = {
   dealValueCents: number;
 };
 
-async function mesclar(vive: Candidato, morre: Candidato) {
+export async function mesclar(vive: Candidato, morre: Candidato) {
   const conversas = await prisma.conversation.findMany({
     where: { contactId: { in: [vive.id, morre.id] } },
     select: {
@@ -91,6 +91,8 @@ async function mesclar(vive: Candidato, morre: Candidato) {
   const jidAtivo = maisRecente?.contactId === morre.id ? morre.waJid : vive.waJid;
   const telefone = vive.phoneNumber ?? (vive.waJid.endsWith("@s.whatsapp.net") ? vive.waJid.split("@")[0] : null);
 
+  const ficha = fichaMesclada(vive, morre);
+
   await prisma.$transaction(async (tx) => {
     if (convSai) {
       await tx.message.updateMany({ where: { conversationId: convSai.id }, data: { conversationId: convFica.id } });
@@ -117,11 +119,17 @@ async function mesclar(vive: Candidato, morre: Candidato) {
     // As negociações do duplicado passam para o sobrevivente: o contato tem
     // cascade, e apagá-lo sem isso levaria o funil e o histórico junto.
     await tx.negociacao.updateMany({ where: { contactId: morre.id }, data: { contactId: vive.id } });
+    // Pedidos, contas a receber, receitas e ordens de serviço também têm cascade no contato: sem estas
+    // linhas o delete abaixo apagaria o financeiro e o histórico de compras do duplicado.
+    await tx.order.updateMany({ where: { contactId: morre.id }, data: { contactId: vive.id } });
+    await tx.contaReceber.updateMany({ where: { contactId: morre.id }, data: { contactId: vive.id } });
+    await tx.receitaOtica.updateMany({ where: { contactId: morre.id }, data: { contactId: vive.id } });
+    await tx.ordemServico.updateMany({ where: { contactId: morre.id }, data: { contactId: vive.id } });
     await tx.contact.delete({ where: { id: morre.id } });
     await tx.contact.update({
       where: { id: vive.id },
       data: {
-        name: vive.name ?? morre.name,
+        ...ficha,
         phoneNumber: telefone,
         waJid: jidAtivo,
         stageId: vive.stageId ?? morre.stageId,
@@ -140,8 +148,9 @@ export async function reconcileDuplicateContacts() {
   const contatos: Candidato[] = await prisma.contact.findMany({
     where: { avatarUrl: { not: null } },
     select: {
-      id: true, tenantId: true, name: true, waJid: true,
+      id: true, tenantId: true, waJid: true,
       phoneNumber: true, avatarUrl: true, stageId: true, dealValueCents: true,
+      ...SELECT_FICHA,
     },
   });
 

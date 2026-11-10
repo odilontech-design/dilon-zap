@@ -2,6 +2,7 @@
 
 import { rotuloDeData } from "@/lib/rotulo-data";
 import { esperaSemResposta, textoDaEspera } from "@/lib/sem-resposta";
+import { salvarContato } from "@/lib/salvar-contato";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRecurso, useTermoPedido } from "@/components/recursos-context";
 import { TextoWhatsApp, semMarcacao } from "@/components/texto-whatsapp";
@@ -3257,12 +3258,12 @@ function ContactPanel({
   // A mesma ficha completa da página Contatos (CPF, e-mail, endereço, pedidos).
   const [fichaAberta, setFichaAberta] = useState(false);
 
+  const [erroSalvar, setErroSalvar] = useState<string | null>(null);
+
   async function save(body: Record<string, unknown>) {
-    await fetch(`/api/contacts/${contact.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    setErroSalvar(null);
+    const r = await salvarContato(contact.id, body);
+    if (!r.ok) setErroSalvar(`${r.erro} O que você digitou não foi gravado.`);
     onSaved();
   }
 
@@ -3287,6 +3288,11 @@ function ContactPanel({
           className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
         />
       </div>
+      {erroSalvar && (
+        <p role="alert" className="rounded-md bg-red-50 px-3 py-2 text-xs text-red-800 border border-red-200">
+          {erroSalvar}
+        </p>
+      )}
       <div>
         <label className="block text-xs font-medium text-neutral-700 mb-1">Telefone</label>
         <p className="text-sm text-neutral-600">{formatPhoneDisplay(contact)}</p>
