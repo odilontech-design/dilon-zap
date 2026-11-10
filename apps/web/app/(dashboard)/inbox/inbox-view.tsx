@@ -1728,7 +1728,7 @@ export function ConversationThread({
 
         <div
           ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
+          className="fundo-conversa flex-1 overflow-y-auto px-3 md:px-6 py-4 flex flex-col gap-2"
           onScroll={handleMessagesScroll}
         >
           {historicoOculto && (
@@ -1770,7 +1770,7 @@ export function ConversationThread({
               ))}
               {mudouDeDia && <SeparadorDeData iso={m.createdAt} />}
               <div
-                className={`flex items-center gap-2 ${m.direction === "OUTBOUND" ? "self-end" : "self-start"} ${hasReaction ? "mb-2" : ""}`}
+                className={`flex items-center gap-2 max-w-[88%] md:max-w-[70%] ${m.direction === "OUTBOUND" ? "self-end" : "self-start"} ${hasReaction ? "mb-2" : ""}`}
               >
                 {selectionMode && !m.isDeleted && (
                   <input
@@ -1780,11 +1780,11 @@ export function ConversationThread({
                     className="shrink-0"
                   />
                 )}
-                <div className="relative">
+                <div className="relative min-w-0">
                 <div
                   id={`msg-${m.id}`}
-                  className={`max-w-[85%] md:max-w-md rounded-lg px-3 py-2 text-sm transition-shadow duration-500 ${
-                    m.direction === "OUTBOUND" ? "bg-accent text-white" : "bg-neutral-100 text-neutral-900"
+                  className={`max-w-full md:max-w-md rounded-2xl px-3.5 py-2 text-sm shadow-sm transition-shadow duration-500 ${
+                    m.direction === "OUTBOUND" ? "rounded-tr-md bg-accent text-white" : "rounded-tl-md bg-surface text-neutral-900"
                   } ${
                     destacada === m.id || resultadoAtual === m.id
                       ? "ring-4 ring-amber-400"
