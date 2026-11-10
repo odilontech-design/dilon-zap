@@ -74,3 +74,14 @@ body {
   background: rgb(var(--canvas));
   color: rgb(var(--n-900));
 }
+
+/* Fundo da conversa no estilo do WhatsApp: cor de areia com desenhos discretos (arte própria). */
+.fundo-conversa {
+  background-color: #efeae2;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%27160%27 viewBox=%270 0 160 160%27 fill=%27none%27 stroke=%27%23b9ae9c%27 stroke-width=%271.4%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Ccircle cx=%2724%27 cy=%2728%27 r=%278%27/%3E%3Cpath d=%27M92 20l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z%27/%3E%3Cpath d=%27M130 60c6-8 14 8 20 0%27/%3E%3Crect x=%2748%27 y=%2778%27 width=%2716%27 height=%2712%27 rx=%273%27/%3E%3Cpath d=%27M110 112a10 10 0 1 0 14 0%27/%3E%3Cpath d=%27M20 120l8-10 8 10z%27/%3E%3Cpath d=%27M76 140c4-6 10-6 14 0%27/%3E%3Ccircle cx=%27140%27 cy=%27128%27 r=%274%27/%3E%3Cpath d=%27M14 76h14M21 69v14%27/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+[data-theme="dark"] .fundo-conversa {
+  background-color: #0b141a;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27160%27 height=%27160%27 viewBox=%270 0 160 160%27 fill=%27none%27 stroke=%27%23324048%27 stroke-width=%271.4%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Ccircle cx=%2724%27 cy=%2728%27 r=%278%27/%3E%3Cpath d=%27M92 20l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z%27/%3E%3Cpath d=%27M130 60c6-8 14 8 20 0%27/%3E%3Crect x=%2748%27 y=%2778%27 width=%2716%27 height=%2712%27 rx=%273%27/%3E%3Cpath d=%27M110 112a10 10 0 1 0 14 0%27/%3E%3Cpath d=%27M20 120l8-10 8 10z%27/%3E%3Cpath d=%27M76 140c4-6 10-6 14 0%27/%3E%3Ccircle cx=%27140%27 cy=%27128%27 r=%274%27/%3E%3Cpath d=%27M14 76h14M21 69v14%27/%3E%3C/svg%3E");
+}
