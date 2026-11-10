@@ -79,6 +79,14 @@ model Tenant {
   // organizar. Ligado à mão no banco, como restringirFilaGeral.
   conversasAbertasATodos Boolean @default(false)
 
+  // Alerta de conversa sem resposta: depois de tantos MINUTOS com a última
+  // mensagem do cliente sem resposta de uma pessoa, a conversa ganha o selo
+  // "sem resposta" no Inbox e o responsável recebe um aviso (push); ao dobro
+  // do tempo a gestão também. Nulo = desligado. Só conta no horário de
+  // atendimento. Ligado à mão no banco, como restringirFilaGeral — nasceu do
+  // caso Guttierres (10/11): cliente escreveu 6 vezes e ninguém respondeu.
+  alertaSemRespostaMin Int?
+
   // Pedidos e o quanto cada cliente deve ficam só com o Responsável e o
   // Financeiro: o atendente perde o botão Pedido, o menu e o selo "Deve R$".
   // Pedido da Guttierres (19/10) — numa contabilidade a dívida do cliente não

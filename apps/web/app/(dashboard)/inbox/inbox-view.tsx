@@ -1,6 +1,7 @@
 "use client";
 
 import { rotuloDeData } from "@/lib/rotulo-data";
+import { esperaSemResposta, textoDaEspera } from "@/lib/sem-resposta";
 import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRecurso, useTermoPedido } from "@/components/recursos-context";
 import { TextoWhatsApp, semMarcacao } from "@/components/texto-whatsapp";
@@ -255,7 +256,7 @@ function playNotificationSound() {
   }
 }
 
-export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuId: string }) {
+export function InboxView({ ehFinanceiro, meuId, alertaSemRespostaMin = null }: { ehFinanceiro: boolean; meuId: string; alertaSemRespostaMin?: number | null }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<ConversationStatus>("OPEN");
@@ -514,6 +515,17 @@ export function InboxView({ ehFinanceiro, meuId }: { ehFinanceiro: boolean; meuI
                         ⤷ transferida pra você
                       </span>
                     )}
+                    {(() => {
+                      const espera = esperaSemResposta(c.status, c.messages[0], alertaSemRespostaMin);
+                      return espera !== null ? (
+                        <span
+                          className="text-[10px] rounded-full bg-red-100 text-red-800 px-2 py-0.5 font-medium"
+                          title="O cliente escreveu e ainda ninguém respondeu"
+                        >
+                          ⏰ sem resposta há {textoDaEspera(espera)}
+                        </span>
+                      ) : null;
+                    })()}
                     {c.assignedTo && (
                       <span className="text-[10px] rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-600">
                         {c.assignedTo.name}
