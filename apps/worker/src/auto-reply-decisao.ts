@@ -151,6 +151,20 @@ export type DecisaoDeRoteamento = {
  *
  * Vive aqui, e não solto no meio do session-manager, pra ter nome e teste.
  */
+/**
+ * Quanto tempo a equipe "segura" a conversa depois de falar por último.
+ *
+ * O reinício por inatividade da empresa (uraReinicioAposMinutos — 60 min na
+ * Guttierres) é pensado para o cliente que some e volta com outro assunto. Ele
+ * não serve para a conversa que a EQUIPE puxou: o atendente manda uma pergunta,
+ * o cliente responde horas ou dias depois, e é a resposta àquela pergunta. Com
+ * 60 min valendo para os dois casos, 103 de 117 menus mandados pela Guttierres
+ * entre 20/10 e 11/11 saíram logo depois de uma mensagem da equipe. Quando a
+ * equipe falou por último, a triagem só volta depois desta janela (ou da
+ * inatividade configurada, se for maior).
+ */
+export const JANELA_EQUIPE_FALOU_MS = 7 * 24 * 60 * 60 * 1000;
+
 export function avaliarAutomacao(
   conversa: { assignedToId: string | null; setorId: string | null },
   antes: EstadoAntesDaMensagem,
@@ -175,9 +189,12 @@ export function avaliarAutomacao(
   //
   // A inatividade longa continua valendo: cliente que some por semanas e volta
   // com outro assunto precisa da triagem de novo, tenha quem tiver falado por
-  // último antes de ele sumir.
-  if (antes?.equipeFalouPorUltimo && !semInteracaoHaMuito) {
-    return { podeFalar: false, reiniciarRoteamento: false };
+  // último antes de ele sumir. Quando foi a equipe, a janela é a de
+  // JANELA_EQUIPE_FALOU_MS (7 dias), e não a inatividade curta da empresa.
+  if (antes?.equipeFalouPorUltimo) {
+    const janela = Math.max(reinicioAposInatividadeMs, JANELA_EQUIPE_FALOU_MS);
+    const equipeAindaSegura = agora.getTime() - antes.lastMessageAt.getTime() < janela;
+    if (equipeAindaSegura) return { podeFalar: false, reiniciarRoteamento: false };
   }
 
   const semDono = !conversa.assignedToId && !conversa.setorId;
