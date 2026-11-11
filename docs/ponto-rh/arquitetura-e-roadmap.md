@@ -198,6 +198,12 @@ Portaria MTP 671/2021 pede, entre outros pontos:
 | 7 | Fechamento em passos, espelho em PDF e assinatura eletrônica |
 | 8 | 10 relatórios, exportação AFD/AEJ, cobrança e entrada dos pilotos |
 
+**O plano Essencial (R$ 59,90, até 10 colaboradores) fica pronto para venda
+no fim desta fase.** Os limites por plano (colaboradores, turnos, CNPJs e
+recursos) moram num único arquivo, `apps/ponto/lib/planos.ts`, como no
+Esquadrias, e são verificados no servidor ao cadastrar, não só escondidos na
+tela.
+
 **Saída:** os 3 pilotos fecham um mês inteiro no sistema e o resultado bate com
 a conferência manual feita em paralelo.
 

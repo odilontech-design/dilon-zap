@@ -91,10 +91,58 @@ fidelidade: o desconto vem do plano anual, não de multa. A cobrança usa o
 pacote `@dilon-zap/receivables` e os gateways que o Zap já usa (Mercado Pago e
 Asaas).
 
+### 5.1 Plano Essencial — porta de entrada (1 a 10 colaboradores)
+
+**R$ 59,90 por mês, preço fechado** para empresas de 1 a 10 colaboradores. É o
+plano que tira a microempresa do papel. Também é o primeiro plano que dá para
+vender, porque tudo nele cabe no MVP (Fase 1).
+
+| Inclui | Detalhe |
+| --- | --- |
+| 📲 Registro de ponto | App no celular do colaborador ou web no computador, com geolocalização |
+| Modos de registro | Registro simples e registro simples com foto (sem reconhecimento facial) |
+| 📊 Contabilização automática | Horas trabalhadas, horas faltantes, atrasos, faltas, hora extra, banco de horas, adicional noturno etc. |
+| Espelho de ponto | Disponível para o colaborador e para a empresa |
+| Ajustes | Ajustes manuais no ponto, sempre como tratamento com motivo (a marcação original é preservada) |
+| Relatórios | Emissão de relatórios completos |
+| Limites | Até **10 colaboradores**, até **2 turnos** (modelos de jornada) e **1 CNPJ** |
+| Implantação | Treinamento online e ao vivo incluso, acesso liberado logo após a contratação e passo a passo para incluir os colaboradores |
+| 📞 Suporte | 100% humanizado, por telefone e chat, sem custo e sem limite de atendimentos |
+| 💳 Pagamento | Boleto bancário no ato da contratação |
+
+**Fica de fora do Essencial** (motivo para subir de plano): reconhecimento
+facial, cerca virtual, quiosque coletivo, ponto pelo WhatsApp, solicitações com
+aprovação do gestor, fechamento com assinatura digital do espelho, alertas,
+exportação para a folha, mais de 2 turnos e mais de 1 CNPJ.
+
+**Cuidados para o Essencial dar lucro e não dar dor de cabeça:**
+
+- **Custo direto baixo:** sem biometria e sem WhatsApp, o custo fica em torno de
+  R$ 0,30 por colaborador de infraestrutura mais o suporte. Com 10
+  colaboradores, a margem bruta fica perto de 75%, **desde que o suporte não
+  exploda**.
+- **"Suporte sem limite" é o maior risco de custo.** R$ 59,90 paga cerca de 30
+  minutos de atendimento por mês. Para isso fechar a conta, a configuração
+  guiada, a base de ajuda e o passo a passo precisam resolver a maioria das
+  dúvidas antes de alguém ligar. Acompanhe os minutos de suporte por cliente
+  desde o primeiro mês.
+- **Treinamento ao vivo em turma:** faça sessões coletivas em horário fixo (por
+  exemplo, terça e quinta às 10h), não uma sessão por cliente. Uma por cliente
+  só a partir do plano Ponto.
+- **Boleto × liberação imediata:** o boleto leva de 1 a 3 dias úteis para
+  compensar. Para cumprir o "acesso liberado logo após a contratação", libere o
+  acesso **na emissão do boleto**, com bloqueio automático se não for pago em 5
+  dias. Ofereça também Pix, que compensa na hora e evita o problema.
+- **O 11º colaborador:** ao cadastrar o 11º, o sistema oferece a troca para o
+  plano Ponto. O mínimo do Ponto foi baixado para R$ 99 (11 × R$ 9) para o
+  salto não ser de R$ 59,90 para R$ 149 de uma vez.
+
+### 5.2 Planos por colaborador (acima de 10)
+
 | | **Ponto** | **Ponto + DP** | **RH Completo** |
 | --- | --- | --- | --- |
 | Preço por funcionário/mês | R$ 9 | R$ 14 | R$ 19 |
-| Mínimo mensal | R$ 149 | R$ 249 | R$ 399 |
+| Mínimo mensal | R$ 99 | R$ 249 | R$ 399 |
 | Registro (app, web, quiosque, WhatsApp) | ✓ | ✓ | ✓ |
 | Reconhecimento facial e cerca virtual | ✓ | ✓ | ✓ |
 | Banco de horas, hora extra, adicional noturno | ✓ | ✓ | ✓ |
@@ -116,7 +164,8 @@ Asaas).
 - **Implantação:** grátis até 50 funcionários. Acima disso, R$ 990 com
   importação da base e treinamento ao vivo.
 - **Anual:** 2 meses de desconto (paga 10).
-- **Teste:** 14 dias grátis, sem cartão, com até 10 funcionários.
+- **Teste:** 14 dias grátis, sem cartão, com até 10 funcionários. No fim do
+  teste, quem tem até 10 colaboradores cai direto no Essencial.
 - **Funcionário ativo** = teve pelo menos uma marcação ou estava com contrato
   ativo no mês. Desligado no meio do mês conta como ativo naquele mês.
 

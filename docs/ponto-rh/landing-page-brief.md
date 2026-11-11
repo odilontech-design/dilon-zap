@@ -84,8 +84,11 @@ sem aparelho novo e sem treinamento.
 
 ### 6. Planos
 
-Os três planos de [`plano-comercial.md`](./plano-comercial.md#5-planos-e-preços)
-em cards, com o preço por funcionário e o mínimo mensal. No piloto, um selo:
+Quatro cards, com os planos de [`plano-comercial.md`](./plano-comercial.md#5-planos-e-preços).
+O primeiro, em destaque, é o **Essencial: R$ 59,90/mês para até 10
+colaboradores**, com a lista de itens da seção 5.1 e os selos "Treinamento ao
+vivo incluso" e "Suporte humano por telefone e chat". Os outros três mostram o
+preço por colaborador e o mínimo mensal. No piloto, um selo:
 **"Pilotos: 50% por 6 meses"**.
 
 ### 7. Perguntas frequentes

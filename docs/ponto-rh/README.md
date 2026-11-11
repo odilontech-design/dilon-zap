@@ -41,16 +41,18 @@ CLT, o ponto é obrigatório a partir de 21 empregados por estabelecimento.
 2. **Venda pelo contador.** O ERP Dilon Contabilidade já está dentro de
    escritórios contábeis. O escritório indica o ponto aos clientes dele, e o
    fechamento chega pronto para a folha.
-3. **Preço e implantação de pequena empresa.** Sem fidelidade, sem taxa de
-   implantação até 50 funcionários, configurado em uma tarde.
+3. **Preço e implantação de pequena empresa.** Entrada a R$ 59,90 por mês para
+   até 10 colaboradores, sem fidelidade, com treinamento ao vivo e suporte
+   humano por telefone e chat.
 
 **Planos (hipótese a validar):**
 
-| Plano | Preço por funcionário/mês | Mínimo mensal |
+| Plano | Preço | Para quem |
 | --- | --- | --- |
-| **Ponto** | R$ 9 | R$ 149 |
-| **Ponto + DP** | R$ 14 | R$ 249 |
-| **RH Completo** | R$ 19 | R$ 399 |
+| **Essencial** | R$ 59,90/mês fechado | 1 a 10 colaboradores, 2 turnos, 1 CNPJ. Registro por app ou web com GPS, simples ou com foto, cálculos automáticos, espelho, ajustes e relatórios |
+| **Ponto** | R$ 9 por colaborador/mês (mín. R$ 99) | Acima de 10 colaboradores, com biometria, quiosque, WhatsApp, fechamento assinado e exportação para a folha |
+| **Ponto + DP** | R$ 14 por colaborador/mês (mín. R$ 249) | Mais admissão, documentos, GED e férias |
+| **RH Completo** | R$ 19 por colaborador/mês (mín. R$ 399) | Mais escalas e painel de risco |
 
 **Como construímos:** Next.js + Prisma + Postgres, como o Esquadrias. Banco
 próprio, motor de cálculo de jornada em um pacote puro e testável
