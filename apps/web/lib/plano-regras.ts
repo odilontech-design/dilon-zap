@@ -25,7 +25,8 @@ export type Recurso =
   | "MULTI_NUMERO"
   | "FUNIL_SAAS"
   | "SDR"
-  | "OTICA";
+  | "OTICA"
+  | "VEICULOS";
 
 /** O que a escada dos planos distribui — e o que a regra antiga entrega inteiro. */
 export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API", "MATERIAIS"];
@@ -43,7 +44,8 @@ export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS",
 // A ótica é um produto vertical: só faz sentido para quem é ótica, e entrar
 // em `TODOS_RECURSOS` encheria o menu da Believe e da Hemoderi de ordens de
 // serviço que elas nunca vão usar.
-export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS", "OTICA"];
+// A revenda de veículos segue a mesma regra: vertical, sob demanda.
+export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS", "OTICA", "VEICULOS"];
 
 /**
  * Recursos fora também do painel do superadmin. O SDR está em validação na
@@ -106,6 +108,7 @@ export const ROTULO_RECURSO: Record<Recurso, string> = {
   FUNIL_SAAS: "Indicadores de SaaS no funil",
   SDR: "Prospecção comercial (SDR)",
   OTICA: "Ótica (ordens de serviço e receitas)",
+  VEICULOS: "Revenda de veículos (estoque, custos e vendas)",
 };
 
 export type Assinatura = {
@@ -141,7 +144,9 @@ export function recursosEfetivos(assinatura: Assinatura, excecoes: Excecao[]): S
   // A ótica vende e recebe: a OS lança o sinal no Caixa e o saldo em A receber,
   // então as telas do Financeiro vêm junto — sem pedir uma segunda exceção ao
   // superadmin. Se alguém desligou "Contas a receber" de propósito, vale a escolha.
-  if (efetivos.has("OTICA") && !excecoes.some((e) => e.recurso === "CONTAS_RECEBER")) efetivos.add("CONTAS_RECEBER");
+  // A revenda de veículos também: o sinal e a venda viram conta a receber.
+  const vendeComFinanceiro = efetivos.has("OTICA") || efetivos.has("VEICULOS");
+  if (vendeComFinanceiro && !excecoes.some((e) => e.recurso === "CONTAS_RECEBER")) efetivos.add("CONTAS_RECEBER");
   return efetivos;
 }
 

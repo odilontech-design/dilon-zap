@@ -231,6 +231,10 @@ model Tenant {
   receitasOticas        ReceitaOtica[]
   ordensServico         OrdemServico[]
   armacoes              Armacao[]
+  veiculos              Veiculo[]
+  custosVeiculo         CustoVeiculo[]
+  fotosVeiculo          FotoVeiculo[]
+  vendasVeiculo         VendaVeiculo[]
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -475,6 +479,8 @@ model User {
   teamMessagesRecebidas          TeamMessage[]         @relation("TeamMessageDestinatario")
   ordensServicoConsultor         OrdemServico[]        @relation("OSConsultor")
   eventosOS                      EventoOS[]            @relation("EventoOSPor")
+  vendasDeVeiculo                VendaVeiculo[]        @relation("VendaVeiculoVendedor")
+  eventosVeiculo                 EventoVeiculo[]       @relation("EventoVeiculoPor")
 
   @@index([tenantId])
 }
@@ -873,11 +879,13 @@ model Contact {
 
   createdAt DateTime @default(now())
 
-  conversations  Conversation[]
-  orders         Order[]
-  contasReceber  ContaReceber[]
-  receitasOticas ReceitaOtica[]
-  ordensServico  OrdemServico[]
+  conversations       Conversation[]
+  orders              Order[]
+  contasReceber       ContaReceber[]
+  receitasOticas      ReceitaOtica[]
+  ordensServico       OrdemServico[]
+  veiculosConsignados Veiculo[]      @relation("VeiculoConsignante")
+  comprasDeVeiculo    VendaVeiculo[]
 
   @@unique([tenantId, waJid])
   @@index([tenantId])
@@ -1731,6 +1739,10 @@ enum Recurso {
   // produto vertical (a Visuallis foi a primeira), não algo que toda empresa
   // precise ver no menu.
   OTICA
+  // Revenda de veículos: estoque com custo e margem, fotos, FIPE, consignação,
+  // reserva com sinal e venda com troca e financiamento, ligadas ao Financeiro.
+  // Sob demanda, como a ótica: produto vertical. Ver docs/revenda-veiculos.md.
+  VEICULOS
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -2250,6 +2262,9 @@ model ContaReceber {
   // A OS da ótica que gerou esta conta, se foi ela.
   ordensServico OrdemServico[]
 
+  // A venda de veículo que gerou esta conta, se foi ela.
+  vendasVeiculo VendaVeiculo[]
+
   @@index([tenantId, createdAt])
   @@index([contactId])
 }
@@ -2398,6 +2413,10 @@ model ContaPagar {
 
   parcelas   ParcelaPagar[]
   pagamentos SaidaPagamento[]
+
+  // Custo de veículo (compra, oficina) ou repasse ao dono do consignado que gerou esta conta.
+  custosVeiculo   CustoVeiculo[]
+  repassesVeiculo VendaVeiculo[] @relation("VendaVeiculoRepasse")
 
   @@index([tenantId, createdAt])
   @@index([fornecedorId])
@@ -3487,4 +3506,227 @@ model MovimentoArmacao {
 
   @@index([armacaoId])
   @@index([ordemId])
+}
+
+// ---------------------------------------------------------------------------
+// Revenda de veículos (recurso VEICULOS). Ver docs/revenda-veiculos.md.
+//
+// O carro é a unidade do estoque: um registro por veículo físico, com o que
+// custou (CustoVeiculo), as fotos, a consignação e a venda. O dinheiro não
+// tem caderno próprio: a compra e a oficina viram contas a pagar, a venda
+// vira conta a receber, e o Caixa e o DRE já saem certos.
+// ---------------------------------------------------------------------------
+
+enum TipoVeiculo {
+  CARRO
+  MOTO
+  CAMINHAO
+}
+
+enum StatusVeiculo {
+  // Entrou e ainda está na oficina, no despachante ou na estética: não anuncia.
+  PREPARACAO
+  DISPONIVEL
+  // Cliente deu sinal (ou a loja segurou o carro): sai da vitrine até a data.
+  RESERVADO
+  VENDIDO
+  // Consignado devolvido ao dono sem vender.
+  DEVOLVIDO
+}
+
+enum OrigemVeiculo {
+  COMPRA
+  // Entrou como parte do pagamento de outra venda (ver VendaVeiculo.trocas).
+  TROCA
+  // Do dono, que recebe o valor combinado quando a loja vende.
+  CONSIGNACAO
+}
+
+enum TipoCustoVeiculo {
+  COMPRA
+  DESPACHANTE
+  MECANICA
+  FUNILARIA
+  ESTETICA
+  PNEUS
+  DOCUMENTACAO
+  IPVA
+  OUTRO
+}
+
+enum StatusVendaVeiculo {
+  RESERVA
+  CONCLUIDA
+  CANCELADA
+}
+
+model Veiculo {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  tipo    TipoVeiculo @default(CARRO)
+  // Não é único: o mesmo carro pode ser vendido e voltar meses depois numa
+  // troca. A duplicidade que importa (duas fichas do mesmo carro no pátio ao
+  // mesmo tempo) é conferida na rota.
+  placa   String?
+  chassi  String?
+  renavam String?
+
+  marca         String
+  modelo        String
+  versao        String?
+  anoFabricacao Int
+  anoModelo     Int
+  km            Int
+  cor           String?
+  combustivel   String?
+  cambio        String?
+  portas        Int?
+  opcionais     String[]
+
+  // Tabela FIPE: o código e o último valor consultado, para comparar com o preço.
+  codigoFipe     String?
+  fipeCents      Int?
+  fipeReferencia String? // "novembro de 2026"
+  fipeEm         DateTime?
+
+  // Preço de anúncio e o piso que a gestão aceita (o vendedor não vê o piso).
+  precoCents       Int
+  precoMinimoCents Int?
+
+  status      StatusVeiculo @default(PREPARACAO)
+  statusDesde DateTime      @default(now())
+  origem      OrigemVeiculo
+  // Base dos "dias em estoque" e do alerta de carro parado.
+  entradaEm   DateTime      @default(now())
+  saidaEm     DateTime?
+
+  // Texto do anúncio (vitrine, portais, WhatsApp).
+  descricao           String?
+  // Só para a equipe: "risco no para-choque", "chave reserva com o dono".
+  observacoesInternas String?
+
+  // Consignação: o dono do carro e o valor líquido que ele recebe na venda.
+  // O que passar disso é a margem da loja.
+  consignanteId         String?
+  consignante           Contact?  @relation("VeiculoConsignante", fields: [consignanteId], references: [id], onDelete: SetNull)
+  consignacaoValorCents Int?
+  consignacaoAte        DateTime?
+
+  // Carro que entrou como troca: a venda em que ele foi dado como pagamento.
+  vendaDeOrigemId String?
+  vendaDeOrigem   VendaVeiculo? @relation("TrocaDaVenda", fields: [vendaDeOrigemId], references: [id], onDelete: SetNull)
+
+  custos  CustoVeiculo[]
+  fotos   FotoVeiculo[]
+  vendas  VendaVeiculo[]  @relation("VendaDoVeiculo")
+  eventos EventoVeiculo[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, placa])
+}
+
+model CustoVeiculo {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  veiculoId String
+  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+
+  tipo       TipoCustoVeiculo
+  descricao  String?
+  valorCents Int
+  data       DateTime         @default(now())
+
+  // A conta a pagar lançada junto (compra a prazo, boleto da oficina). Nulo
+  // quando o custo foi só anotado: troca (paga com abatimento) ou despesa já
+  // lançada por fora.
+  contaPagarId String?
+  contaPagar   ContaPagar? @relation(fields: [contaPagarId], references: [id], onDelete: SetNull)
+
+  createdById String?
+  createdAt   DateTime @default(now())
+
+  @@index([veiculoId])
+}
+
+model FotoVeiculo {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  veiculoId String
+  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+  // Chave no R2. A primeira (menor ordem) é a capa.
+  key       String
+  ordem     Int     @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@index([veiculoId, ordem])
+}
+
+model VendaVeiculo {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  veiculoId String
+  veiculo   Veiculo @relation("VendaDoVeiculo", fields: [veiculoId], references: [id], onDelete: Cascade)
+
+  contactId  String
+  contact    Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  vendedorId String?
+  vendedor   User?   @relation("VendaVeiculoVendedor", fields: [vendedorId], references: [id], onDelete: SetNull)
+
+  status StatusVendaVeiculo @default(RESERVA)
+
+  // Valores combinados. O dinheiro de fato (o que entrou, o que falta) mora
+  // na conta a receber; estes campos são o combinado, para a ficha e o contrato.
+  precoCents      Int
+  sinalCents      Int       @default(0)
+  reservadaAte    DateTime?
+  trocaCents      Int       @default(0)
+  entradaCents    Int       @default(0)
+  financiadoCents Int       @default(0)
+  banco           String?
+  comissaoCents   Int?
+
+  contaId String?
+  conta   ContaReceber? @relation(fields: [contaId], references: [id], onDelete: SetNull)
+
+  // Consignado: a conta a pagar do repasse ao dono, lançada na venda.
+  repasseContaPagarId String?
+  repasseContaPagar   ContaPagar? @relation("VendaVeiculoRepasse", fields: [repasseContaPagarId], references: [id], onDelete: SetNull)
+
+  // Os carros dados como parte do pagamento.
+  trocas Veiculo[] @relation("TrocaDaVenda")
+
+  observacoes        String?
+  concluidaEm        DateTime?
+  canceladaEm        DateTime?
+  motivoCancelamento String?
+
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, status])
+  @@index([veiculoId])
+  @@index([contactId])
+}
+
+model EventoVeiculo {
+  id        String  @id @default(cuid())
+  veiculoId String
+  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+  // "entrada", "status", "preco", "custo", "reserva", "venda", "envio"…
+  tipo      String
+  descricao String
+  porId     String?
+  por       User?   @relation("EventoVeiculoPor", fields: [porId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+
+  @@index([veiculoId, createdAt])
 }

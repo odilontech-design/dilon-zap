@@ -5,7 +5,8 @@ vertical do Zap para vender a lojas de seminovos. Segue o mesmo molde da Ótica
 (`docs/otica.md`): recurso sob demanda, que reaproveita contato, Inbox, funil,
 financeiro e caixa que já existem, e acrescenta só o que é do ramo.
 
-> Estado: **proposta**. Nada aqui está implementado.
+> Estado: **fase 1 em andamento** (v1.43.0). O que já existe está na seção
+> "Implementado"; o resto do documento continua sendo proposta.
 > Data da pesquisa: 11/11/2026. Os dados de concorrentes são o que os próprios
 > fornecedores divulgam. Não foram testados e os preços podem ter mudado.
 
@@ -34,6 +35,85 @@ estoque com custo e margem, vitrine, follow-up) e **integrar** o que é
 regulatório ou comoditizado (NF-e, RENAVE, consultas veiculares, assinatura,
 portais), com parceiros homologados. Homologar RENAVE ou um emissor fiscal
 próprio custa meses e não vende um carro a mais.
+
+---
+
+## Implementado (v1.43.0): núcleo da fase 1
+
+Menu **Veículos** (`/veiculos`), visível só para empresa com o recurso
+`VEICULOS` ligado.
+
+- **Estoque**: cartões com capa, preço × FIPE, dias em estoque com cor (30
+  dias amarelo, 60 laranja, 90 vermelho) e, para a gestão, custo e margem. Os
+  chips do topo mostram os filtros, quantos carros estão parados há 60+ dias
+  e o capital empatado no estoque. A aba **Vendidos** soma a margem bruta.
+- **Entrada** (`/veiculos/novo`, só gestão), de dois tipos:
+  - **Compra:** o valor pago vira o custo "Compra do veículo" e, se marcado,
+    uma conta a pagar ao vendedor, já quitada quando foi pago na hora.
+  - **Consignação:** o dono (um contato) e o valor líquido que ele recebe.
+  Placa repetida no pátio é recusada. O carro entra **em preparação** ou já
+  **disponível**.
+- **FIPE**: na entrada e na ficha, "Preencher pela tabela FIPE" (marca, modelo
+  e ano) traz o código, o valor e a referência. Usa a API pública da Parallelum
+  (`lib/fipe.ts`), com cache de 12 h. Se ela não responder, tudo se digita à mão.
+- **Ficha** (`/veiculos/[id]`): fotos, custos, margem, venda, dados e histórico.
+  - **Fotos:** várias por envio, 10 MB cada, até 40 por carro. A primeira é a
+    capa, e qualquer foto pode virar capa.
+  - **Custos** (só a gestão): oficina, despachante, estética etc., com conta a
+    pagar opcional. Tirar um custo cancela a conta lançada junto, desde que
+    ela não tenha pagamento.
+  - **O que o vendedor não vê:** custo, margem, piso de negociação, valor do
+    consignado e observações internas. A rota nem manda esses dados.
+- **Enviar pelo WhatsApp**: a ficha vai como legenda da capa, sem custo e só com
+  o final da placa, e as outras fotos seguem (até 10). Sai pelo número geral da
+  loja, na fila normal de saída, e a conversa aparece no Inbox. A rota também
+  aceita `conversationId`, para o botão no Inbox (fase seguinte).
+- **Reserva**: o cliente fica com o carro até uma data, com sinal ou sem. O
+  sinal cai no **Caixa** e abre a conta a receber da venda. Ao cancelar, a loja
+  escolhe entre devolver o sinal (estorno) e ficar com ele.
+- **Venda** (direta ou concluindo a reserva):
+  - **A conta a receber** vale preço − troca, e se divide em:
+    - **sinal** (já recebido na reserva);
+    - **entrada** (recebida agora, cai no Caixa);
+    - **financiamento** (uma parcela, na data em que o banco paga a loja);
+    - **crediário da loja** (o restante, em parcelas).
+  - **A troca** entra no estoque em preparação, com o valor dela como custo de
+    compra e sem conta a pagar, porque foi paga com abatimento.
+  - **Consignado:** a venda lança a conta a pagar do **repasse ao dono**.
+  - **Comissão do vendedor:** fica registrada e entra na margem da venda.
+
+Código: `lib/veiculos.ts` (banco e dinheiro), `lib/veiculos-regras.ts`
+(regras puras), `lib/veiculos-schemas.ts`, `app/api/veiculos/**` e
+`app/(dashboard)/veiculos/**`.
+
+Testes: `npx tsx apps/web/lib/veiculos-regras.test-manual.ts` (regras) e
+`npx tsx apps/web/lib/plano-regras.test-manual.ts` (o recurso traz o
+Financeiro junto). Os fluxos de dinheiro foram conferidos contra um Postgres
+local: compra paga, reserva com sinal, venda com troca, financiamento e
+crediário, consignado, cancelamento com e sem devolução e envio pelo WhatsApp.
+
+### Implantação
+
+1. `npm run db:push`. Cria `Veiculo`, `CustoVeiculo`, `FotoVeiculo`,
+   `VendaVeiculo`, `EventoVeiculo`, os enums e o valor `VEICULOS` em `Recurso`.
+   Nada existente muda.
+2. Redeploy do web. O worker não muda.
+3. Opcional: `FIPE_TOKEN` no `.env`, se o limite gratuito da FIPE apertar
+   (cadastro grátis em fipe.parallelum.com.br).
+4. No Super Admin, ficha da empresa → plano → ligar **Revenda de veículos**.
+   O recurso é sob demanda, como a Ótica, e liga Contas a receber junto.
+
+### Falta para fechar a fase 1
+
+- Botão **"Enviar carro" no Inbox** (a rota já existe).
+- **Vitrine pública** da loja com link de WhatsApp que identifica o carro.
+- **Contratos** de compra, venda e consignação em PDF, e recibo do sinal.
+- **Alerta de carro parado** por push/aviso à gestão. Hoje ele é só visual.
+- **Vínculo carro ↔ negociação do CRM** (`Negociacao.veiculoId`).
+- **Desfazer venda concluída**: hoje só a reserva é cancelável. Venda errada se
+  corrige no Financeiro e com a gestão.
+- **RENAVE e NF-e** via parceiros (fase 1b), que dependem de contratar a
+  integradora e o emissor.
 
 ---
 
