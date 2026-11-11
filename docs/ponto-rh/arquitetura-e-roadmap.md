@@ -243,12 +243,14 @@ Escalas rotativas, painel de risco de jornada e API pública.
 - **`packages/ponto-core`:** motor com testes (`npm run test:ponto`).
 - **`packages/ponto-db`:** schema, migração com gatilho de imutabilidade,
   NSR, cadeia de hash e seed de demonstração.
-- **`apps/ponto`:** plano Essencial completo. O que ainda falta para vender
+- **`apps/ponto`:** plano Essencial completo, com a cobrança mensal por
+  boleto (Asaas) e o bloqueio do painel por falta de pagamento. O que ainda falta para vender
   está em [`apps/ponto/README.md`](../../apps/ponto/README.md#o-que-ainda-falta-para-vender).
 
 Próximos passos:
 
-1. Ligar a cobrança (boleto) e a recuperação de senha.
+1. Testar a cobrança por boleto no sandbox do Asaas com chave real e ligar a
+   recuperação de senha por email.
 2. Levar os casos de teste do motor para um profissional de DP conferir e
    acrescentar 2 ou 3 meses reais fechados à mão como teste de regressão.
 3. Colocar os 3 pilotos para usar e comparar o primeiro mês com a conferência

@@ -1,9 +1,12 @@
 import { MenuAdmin } from "@/components/menu";
 import { PLANOS } from "@/lib/planos";
 import { requireAdmin } from "@/lib/session";
+import { situacaoDaEmpresa } from "@/lib/cobranca";
+import { AvisoAssinatura } from "@/components/aviso-assinatura";
 
 export default async function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const u = await requireAdmin();
+  const situacao = await situacaoDaEmpresa(u.empresaId);
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
       <MenuAdmin
@@ -12,7 +15,10 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
         plano={PLANOS[u.empresa.plano].nome}
         temColaborador={Boolean(u.colaboradorId)}
       />
-      <main className="flex-1 min-w-0 p-5 md:p-8">{children}</main>
+      <main className="flex-1 min-w-0 p-5 md:p-8">
+        <AvisoAssinatura situacao={situacao} />
+        {children}
+      </main>
     </div>
   );
 }

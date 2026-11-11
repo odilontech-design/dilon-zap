@@ -55,6 +55,8 @@ async function main() {
       cnpj: CNPJ,
       plano: "ESSENCIAL",
       bancoDeHoras: true,
+      // Empresa de demonstração não gera boleto nem é bloqueada.
+      formaCobranca: "ISENTA",
       // A demonstração tem duas semanas de histórico: o controle começa com elas.
       criadoEm: local(somarDias(hojeSaoPaulo(), -14), "00:00"),
     },

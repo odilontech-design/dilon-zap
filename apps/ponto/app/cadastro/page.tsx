@@ -38,7 +38,7 @@ export default function PaginaCadastro() {
             ))}
           </ul>
           <p className="text-xs text-neutral-500 mt-6">
-            O acesso é liberado assim que a conta é criada. Pagamento por boleto bancário.
+            O acesso é liberado assim que a conta é criada. O boleto do primeiro mês vence em 3 dias e fica na tela Assinatura (e chega no seu email). Sem fidelidade.
           </p>
         </section>
 

@@ -13,6 +13,7 @@ const ITENS = [
   { href: "/jornadas", rotulo: "Jornadas" },
   { href: "/relatorios", rotulo: "Relatórios" },
   { href: "/configuracoes", rotulo: "Configurações" },
+  { href: "/assinatura", rotulo: "Assinatura" },
 ];
 
 export function MenuAdmin({ nome, empresa, plano, temColaborador }: { nome: string; empresa: string; plano: string; temColaborador: boolean }) {

@@ -7,6 +7,7 @@ import { feriadosNacionais } from "@dilon-zap/ponto-core";
 import { cnpjValido, soDigitos } from "@/lib/documentos";
 import { hojeNoFuso } from "@/lib/datas";
 import type { Resultado } from "@/lib/acoes";
+import { iniciarCobranca } from "@/lib/cobranca";
 
 const schema = z.object({
   razaoSocial: z.string().trim().min(3, "Informe a razão social"),
@@ -20,7 +21,8 @@ const schema = z.object({
 /**
  * Contratação do Essencial: cria a empresa, o administrador e os feriados
  * nacionais deste ano e do próximo, tudo numa transação. O acesso já sai
- * liberado (é o que o plano promete); a cobrança por boleto é emitida à parte.
+ * liberado (é o que o plano promete) e logo depois a assinatura por boleto é
+ * criada no Asaas, com o primeiro vencimento em poucos dias.
  */
 export async function criarConta(dados: z.input<typeof schema>): Promise<Resultado> {
   if (process.env.PONTO_CADASTRO_FECHADO === "1") return { ok: false, erro: "Contratação pelo site pausada." };
@@ -40,8 +42,10 @@ export async function criarConta(dados: z.input<typeof schema>): Promise<Resulta
   const ano = Number(hojeNoFuso("America/Sao_Paulo").slice(0, 4));
   const senhaHash = await bcrypt.hash(p.data.senha, 10);
 
-  await prisma.$transaction(async (tx) => {
-    const empresa = await tx.empresa.create({ data: { razaoSocial: p.data.razaoSocial, cnpj, plano: "ESSENCIAL" } });
+  const empresa = await prisma.$transaction(async (tx) => {
+    const empresa = await tx.empresa.create({
+      data: { razaoSocial: p.data.razaoSocial, cnpj, plano: "ESSENCIAL", emailCobranca: p.data.email },
+    });
     await tx.usuario.create({
       data: { empresaId: empresa.id, nome: p.data.nome, login: p.data.email, senhaHash, papel: "ADMIN" },
     });
@@ -52,7 +56,11 @@ export async function criarConta(dados: z.input<typeof schema>): Promise<Resulta
         nome: f.nome,
       })),
     });
+    return empresa;
   });
 
+  // O acesso já está liberado. O boleto sai em seguida; se o Asaas falhar, a
+  // conta continua de pé e a tela de assinatura oferece gerar de novo.
+  await iniciarCobranca(empresa.id);
   return { ok: true };
 }

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { usuarioAtual } from "@/lib/session";
+import { situacaoDaEmpresa } from "@/lib/cobranca";
 import { validarMes } from "@/lib/datas";
 import { gerarRelatorio, paraCsv, RELATORIOS, type TipoRelatorio } from "@/lib/relatorios";
 
@@ -8,6 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(req: Request, { params }: { params: { tipo: string } }) {
   const u = await usuarioAtual();
   if (!u || u.papel !== "ADMIN") return new NextResponse("sem permissão", { status: 403 });
+  if ((await situacaoDaEmpresa(u.empresaId)).painelBloqueado) return new NextResponse("painel bloqueado: mensalidade em aberto", { status: 402 });
   if (!(params.tipo in RELATORIOS)) return new NextResponse("relatório desconhecido", { status: 404 });
 
   const mes = validarMes(new URL(req.url).searchParams.get("mes") ?? undefined, u.empresa.timezone);

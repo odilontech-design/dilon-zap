@@ -68,7 +68,12 @@ export default async function PaginaConfiguracoes() {
                 {plano.maxJornadas ? ` de ${plano.maxJornadas}` : ""}
               </li>
               <li>CNPJ: {plano.maxCnpjs === 1 ? "1 (esta empresa)" : `até ${plano.maxCnpjs}`}</li>
-              <li>Pagamento: boleto bancário</li>
+              <li>
+                Pagamento: boleto bancário ·{" "}
+                <a href="/assinatura" className="text-accent">
+                  ver mensalidades
+                </a>
+              </li>
               <li>Suporte humano por telefone e chat, sem limite</li>
             </ul>
             {empresa.plano === "ESSENCIAL" && (

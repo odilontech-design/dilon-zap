@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { UsuarioAtual } from "@/lib/session";
 import { usuarioAtual } from "@/lib/session";
+import { situacaoDaEmpresa } from "@/lib/cobranca";
 
 /** Resultado padrão das server actions: a tela mostra `erro` ou segue. */
 export type Resultado<T = void> = { ok: true; dados?: T; mensagem?: string } | { ok: false; erro: string };
@@ -15,6 +16,9 @@ export class ErroDeAcao extends Error {}
 export async function acaoDeAdmin<T>(fn: (u: UsuarioAtual) => Promise<T>): Promise<Resultado<T>> {
   const u = await usuarioAtual();
   if (!u || u.papel !== "ADMIN") return { ok: false, erro: "Sem permissão. Entre de novo como administrador." };
+  if ((await situacaoDaEmpresa(u.empresaId)).painelBloqueado) {
+    return { ok: false, erro: "Painel bloqueado por mensalidade em aberto. Veja a tela Assinatura." };
+  }
   try {
     const dados = await fn(u);
     return { ok: true, dados };

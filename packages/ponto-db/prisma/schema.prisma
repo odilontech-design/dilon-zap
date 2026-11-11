@@ -26,25 +26,38 @@ enum Plano {
   RH_COMPLETO
 }
 
+/// Como a empresa paga a assinatura.
+enum FormaCobranca {
+  BOLETO_ASAAS // boleto mensal pela conta Asaas da Dilon Tech
+  ISENTA // demonstração, piloto cortesia, parceiro: nunca bloqueia
+}
+
+enum StatusFatura {
+  PENDENTE
+  PAGA
+  VENCIDA
+  CANCELADA
+}
+
 enum Papel {
-  ADMIN        // configura tudo, ajusta ponto, vê relatórios
-  GESTOR       // (planos acima do Essencial) aprova solicitações da equipe
-  COLABORADOR  // bate ponto e vê o próprio espelho
+  ADMIN // configura tudo, ajusta ponto, vê relatórios
+  GESTOR // (planos acima do Essencial) aprova solicitações da equipe
+  COLABORADOR // bate ponto e vê o próprio espelho
 }
 
 enum ModoRegistro {
-  SIMPLES   // só o botão (com localização, se a empresa exigir)
-  COM_FOTO  // selfie guardada para auditoria, sem reconhecimento facial
+  SIMPLES // só o botão (com localização, se a empresa exigir)
+  COM_FOTO // selfie guardada para auditoria, sem reconhecimento facial
 }
 
 enum CanalMarcacao {
-  APP  // celular do colaborador (PWA)
-  WEB  // computador
+  APP // celular do colaborador (PWA)
+  WEB // computador
 }
 
 enum TipoTratamento {
-  INCLUSAO          // marcação que faltou (esqueceu de bater)
-  DESCONSIDERACAO   // marcação que não vale (bateu duas vezes, bateu errado)
+  INCLUSAO // marcação que faltou (esqueceu de bater)
+  DESCONSIDERACAO // marcação que não vale (bateu duas vezes, bateu errado)
 }
 
 /// Uma Empresa = um CNPJ assinante. É o tenant.
@@ -76,8 +89,22 @@ model Empresa {
   /// assim (a Portaria 671 não admite impedir o registro) e fica para revisão.
   exigirLocalizacao        Boolean @default(true)
 
+  // ── Assinatura ────────────────────────────────────────────────────────────
+  // A situação (em dia, vencida, bloqueada) não é guardada: é calculada das
+  // faturas em apps/ponto/lib/cobranca-regras.ts, para nunca ficar
+  // desencontrada de um pagamento que acabou de chegar.
+  formaCobranca       FormaCobranca @default(BOLETO_ASAAS)
+  emailCobranca       String?
+  asaasCustomerId     String?
+  asaasSubscriptionId String?       @unique
+  /// Último erro ao falar com o Asaas (para a tela e o suporte), ou null.
+  erroCobranca        String?
+  /// Cancelada pela Dilon: ninguém entra mais (os dados ficam guardados).
+  canceladaEm         DateTime?
+
   criadoEm DateTime @default(now())
 
+  faturas       Fatura[]
   usuarios      Usuario[]
   colaboradores Colaborador[]
   jornadas      Jornada[]
@@ -89,15 +116,15 @@ model Empresa {
 }
 
 model Usuario {
-  id        String  @id @default(cuid())
-  empresaId String
-  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  nome      String
+  id          String  @id @default(cuid())
+  empresaId   String
+  empresa     Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome        String
   /// Email (administrador) ou CPF só com dígitos (colaborador). Muito
   /// colaborador não tem email, e o CPF ele sabe de cor.
-  login     String  @unique
-  senhaHash String
-  papel     Papel
+  login       String  @unique
+  senhaHash   String
+  papel       Papel
   /// Obriga trocar a senha no primeiro acesso (senha provisória).
   trocarSenha Boolean @default(false)
 
@@ -112,15 +139,15 @@ model Usuario {
 
 /// Horário de trabalho ("turno"). O Essencial permite 2 por empresa.
 model Jornada {
-  id        String  @id @default(cuid())
+  id        String   @id @default(cuid())
   empresaId String
-  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   nome      String
   /// Semana: { "0": [], "1": [["08:00","12:00"],["13:00","17:00"]], ... }
   /// 0 = domingo. Fim menor que o início = termina no dia seguinte.
   /// Dia sem período = folga/descanso. Validado por apps/ponto/lib/jornada.ts.
   semana    Json
-  ativa     Boolean @default(true)
+  ativa     Boolean  @default(true)
   criadoEm  DateTime @default(now())
 
   colaboradores Colaborador[]
@@ -129,22 +156,22 @@ model Jornada {
 }
 
 model Colaborador {
-  id            String       @id @default(cuid())
-  empresaId     String
-  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  nome          String
+  id           String       @id @default(cuid())
+  empresaId    String
+  empresa      Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome         String
   /// Só dígitos.
-  cpf           String
-  pis           String?
-  matricula     String?
-  cargo         String?
-  admissao      DateTime     @db.Date
-  jornadaId     String
-  jornada       Jornada      @relation(fields: [jornadaId], references: [id])
-  modoRegistro  ModoRegistro @default(SIMPLES)
-  ativo         Boolean      @default(true)
-  desligadoEm   DateTime?    @db.Date
-  criadoEm      DateTime     @default(now())
+  cpf          String
+  pis          String?
+  matricula    String?
+  cargo        String?
+  admissao     DateTime     @db.Date
+  jornadaId    String
+  jornada      Jornada      @relation(fields: [jornadaId], references: [id])
+  modoRegistro ModoRegistro @default(SIMPLES)
+  ativo        Boolean      @default(true)
+  desligadoEm  DateTime?    @db.Date
+  criadoEm     DateTime     @default(now())
 
   usuario     Usuario?
   marcacoes   Marcacao[]
@@ -158,32 +185,32 @@ model Colaborador {
 /// Marcação de ponto. IMUTÁVEL: um gatilho no banco recusa UPDATE e DELETE
 /// (ver a migração inicial). Correção é Tratamento, nunca edição.
 model Marcacao {
-  id            String        @id @default(cuid())
-  empresaId     String
-  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict)
-  colaboradorId String
-  colaborador   Colaborador   @relation(fields: [colaboradorId], references: [id], onDelete: Restrict)
-  nsr           Int
+  id                  String        @id @default(cuid())
+  empresaId           String
+  empresa             Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  colaboradorId       String
+  colaborador         Colaborador   @relation(fields: [colaboradorId], references: [id], onDelete: Restrict)
+  nsr                 Int
   /// Hora do servidor (a que vale).
-  instante      DateTime
+  instante            DateTime
   /// Hora do aparelho, quando a marcação foi feita sem internet e enviada depois.
   instanteDispositivo DateTime?
-  offline       Boolean       @default(false)
-  canal         CanalMarcacao
-  latitude      Float?
-  longitude     Float?
-  precisaoM     Float?
+  offline             Boolean       @default(false)
+  canal               CanalMarcacao
+  latitude            Float?
+  longitude           Float?
+  precisaoM           Float?
   /// Chave no R2, ou "db:<id>" quando a foto ficou em MarcacaoFoto.
-  fotoChave     String?
+  fotoChave           String?
   /// Motivo para revisão (sem localização, sem foto, offline). Não impede o registro.
-  revisar       String?
-  ip            String?
-  userAgent     String?
+  revisar             String?
+  ip                  String?
+  userAgent           String?
   /// Evita marcação duplicada quando o aparelho reenvia a mesma batida.
-  idempotencia  String        @unique
-  hashAnterior  String
-  hash          String
-  criadoEm      DateTime      @default(now())
+  idempotencia        String        @unique
+  hashAnterior        String
+  hash                String
+  criadoEm            DateTime      @default(now())
 
   foto        MarcacaoFoto?
   tratamentos Tratamento[]
@@ -256,16 +283,38 @@ model Feriado {
 }
 
 model LogAuditoria {
-  id         String   @id @default(cuid())
-  empresaId  String
-  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  usuarioId  String
+  id          String   @id @default(cuid())
+  empresaId   String
+  empresa     Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId   String
   usuarioNome String
-  acao       String
-  entidade   String
-  entidadeId String?
-  dados      Json?
-  criadoEm   DateTime @default(now())
+  acao        String
+  entidade    String
+  entidadeId  String?
+  dados       Json?
+  criadoEm    DateTime @default(now())
 
   @@index([empresaId, criadoEm])
+}
+
+/// Mensalidade. Espelho local das cobranças do Asaas, atualizado pelo
+/// webhook e pelo botão "Atualizar situação".
+model Fatura {
+  id             String       @id @default(cuid())
+  empresaId      String
+  empresa        Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  asaasPaymentId String       @unique
+  valorCentavos  Int
+  vencimento     DateTime     @db.Date
+  status         StatusFatura
+  /// Página da cobrança no Asaas (boleto e Pix).
+  urlFatura      String?
+  /// PDF do boleto.
+  urlBoleto      String?
+  linhaDigitavel String?
+  pagaEm         DateTime?
+  atualizadaEm   DateTime     @updatedAt
+  criadoEm       DateTime     @default(now())
+
+  @@index([empresaId, vencimento])
 }

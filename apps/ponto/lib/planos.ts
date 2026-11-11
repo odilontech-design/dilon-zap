@@ -30,6 +30,8 @@ export interface DefinicaoPlano {
   maxJornadas: number | null;
   maxCnpjs: number;
   precoDescricao: string;
+  /** Mensalidade fixa cobrada por boleto. null = preço por colaborador, cobrado à parte. */
+  precoMensalCentavos: number | null;
   recursos: Recurso[];
 }
 
@@ -59,6 +61,7 @@ export const PLANOS: Record<Plano, DefinicaoPlano> = {
     maxJornadas: 2,
     maxCnpjs: 1,
     precoDescricao: "R$ 59,90/mês, de 1 a 10 colaboradores",
+    precoMensalCentavos: 5990,
     recursos: ESSENCIAL,
   },
   PONTO: {
@@ -67,6 +70,7 @@ export const PLANOS: Record<Plano, DefinicaoPlano> = {
     maxJornadas: null,
     maxCnpjs: 1,
     precoDescricao: "R$ 9 por colaborador/mês (mínimo R$ 99)",
+    precoMensalCentavos: null,
     recursos: PONTO,
   },
   PONTO_DP: {
@@ -75,6 +79,7 @@ export const PLANOS: Record<Plano, DefinicaoPlano> = {
     maxJornadas: null,
     maxCnpjs: 3,
     precoDescricao: "R$ 14 por colaborador/mês (mínimo R$ 249)",
+    precoMensalCentavos: null,
     recursos: PONTO,
   },
   RH_COMPLETO: {
@@ -83,6 +88,7 @@ export const PLANOS: Record<Plano, DefinicaoPlano> = {
     maxJornadas: null,
     maxCnpjs: 10,
     precoDescricao: "R$ 19 por colaborador/mês (mínimo R$ 399)",
+    precoMensalCentavos: null,
     recursos: PONTO,
   },
 };

@@ -17,6 +17,7 @@ especificação e roadmap: [`docs/ponto-rh/`](../../docs/ponto-rh/README.md).
 | Até 2 turnos e 1 CNPJ | `lib/planos.ts`, conferido no servidor ao cadastrar |
 | Até 10 colaboradores | Idem. O 11º é recusado com o convite para o plano Ponto |
 | Liberação imediata após a contratação | `/cadastro` cria a empresa e o administrador e já entra |
+| Pagamento via boleto bancário | Assinatura mensal por boleto no Asaas, criada na contratação (ver "Cobrança" abaixo) |
 | Passo a passo para incluir os colaboradores | Checklist no `/painel` e, ao cadastrar cada colaborador, o texto pronto para enviar (copiar ou WhatsApp) com o CPF e a senha provisória |
 
 ## Garantias que não dependem do código das telas
@@ -32,6 +33,51 @@ especificação e roadmap: [`docs/ponto-rh/`](../../docs/ponto-rh/README.md).
   internet, enviada em até 72 horas.
 - **Sessão relida do banco a cada requisição.** O colaborador desligado perde
   o acesso na hora, sem esperar o token expirar.
+
+## Cobrança (boleto pelo Asaas)
+
+Usa a **mesma conta Asaas** que cobra o Zap (`ASAAS_API_KEY`, `ASAAS_ENV`).
+
+- **Na contratação:** cria o cliente (pelo CNPJ) e uma assinatura mensal por
+  **boleto** de R$ 59,90. O primeiro vence em 3 dias
+  (`PONTO_DIAS_PRIMEIRO_BOLETO`). O acesso já está liberado, e a página da
+  cobrança no Asaas também aceita Pix.
+- **Pagamentos:** chegam pelo webhook (`/api/webhooks/asaas`) e viram
+  `Fatura` aqui. Na tela **Assinatura**, o botão "Já paguei: atualizar
+  situação" consulta o Asaas direto, para quando o webhook atrasar.
+- **Bloqueio:** a situação é calculada das faturas
+  (`lib/cobranca-regras.ts`, com testes: `npm test -w apps/ponto`).
+  - Até o vencimento, só um aviso.
+  - Depois dele, mais 5 dias de prazo (`PONTO_TOLERANCIA_DIAS`) com contagem
+    regressiva.
+  - Passado o prazo, **só o painel do administrador** bloqueia (abre direto a
+    tela Assinatura). Os colaboradores continuam batendo ponto, porque um
+    buraco no registro de jornada prejudicaria o trabalhador e a empresa numa
+    fiscalização.
+  - Pagou, desbloqueia sozinho.
+- **Se o Asaas falhar** na contratação, a conta é criada mesmo assim. O erro
+  fica guardado e a tela Assinatura mostra o botão "Gerar boleto". Essa
+  situação não bloqueia, porque a falha é nossa.
+- **Empresa de demonstração ou cortesia:** `formaCobranca = ISENTA` (o seed
+  já cria assim).
+
+Para ligar em produção:
+
+1. No `.env` do servidor: `ASAAS_API_KEY` (já existe, é a do Zap),
+   `ASAAS_ENV="production"` e `PONTO_ASAAS_WEBHOOK_TOKEN` (valor aleatório:
+   `openssl rand -base64 32`).
+2. No Asaas, em **Integrações > Webhooks**, crie um **segundo** webhook (o
+   primeiro é o do Zap) para `https://<domínio do ponto>/api/webhooks/asaas`,
+   com o mesmo token e os eventos de cobrança (`PAYMENT_*`).
+3. Confira no Asaas se as notificações por email ao cliente estão ligadas:
+   é por elas que o boleto chega no email do administrador.
+
+Como os dois produtos usam a mesma conta, cada webhook recebe também os
+pagamentos do outro. O do Ponto ignora o que não é dele (200, "não é do
+Ponto"). O do Zap registra no log um "pagamento sem subscription
+correspondente" para cada boleto do Ponto. Esse aviso não tem efeito, mas
+polui o log, e dá para filtrar lá pelo `externalReference` com prefixo
+`ponto:`.
 
 ## Rodando
 
@@ -56,9 +102,11 @@ que torna a marcação imutável.
 
 ## O que ainda falta para vender
 
-- **Cobrança.** O `/cadastro` libera o acesso, mas ainda não emite o boleto.
-  Ligar ao `@dilon-zap/receivables` (Asaas ou Mercado Pago), com bloqueio
-  automático se o boleto não for pago.
+- **Testar a cobrança no sandbox do Asaas** com uma chave real antes do
+  primeiro cliente. Os testes automáticos usaram um servidor falso que imita
+  a API.
+- **Troca de plano e cancelamento pela tela.** Hoje são feitos pela Dilon:
+  no Asaas e no banco (`plano`, `canceladaEm`).
 - **Recuperação de senha por email.** Hoje o administrador gera uma nova senha
   para o colaborador. O administrador que esquecer a própria senha precisa do
   suporte.

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { prisma, type Papel, type Plano } from "@dilon-zap/ponto-db";
 import { authOptions } from "@/lib/auth";
 import { temRecurso, type Recurso } from "@/lib/planos";
+import { situacaoDaEmpresa } from "@/lib/cobranca";
 
 export type UsuarioAtual = {
   id: string;
@@ -30,11 +31,11 @@ export async function usuarioAtual(): Promise<UsuarioAtual | null> {
   const u = await prisma.usuario.findUnique({
     where: { id },
     include: {
-      empresa: { select: { razaoSocial: true, nomeFantasia: true, cnpj: true, plano: true, timezone: true, ativa: true } },
+      empresa: { select: { razaoSocial: true, nomeFantasia: true, cnpj: true, plano: true, timezone: true, ativa: true, canceladaEm: true } },
       colaborador: { select: { ativo: true } },
     },
   });
-  if (!u || u.desativadoEm || !u.empresa.ativa || (u.colaborador && !u.colaborador.ativo)) return null;
+  if (!u || u.desativadoEm || !u.empresa.ativa || u.empresa.canceladaEm || (u.colaborador && !u.colaborador.ativo)) return null;
 
   return {
     id: u.id,
@@ -43,7 +44,13 @@ export async function usuarioAtual(): Promise<UsuarioAtual | null> {
     trocarSenha: u.trocarSenha,
     empresaId: u.empresaId,
     colaboradorId: u.colaboradorId,
-    empresa: u.empresa,
+    empresa: {
+      razaoSocial: u.empresa.razaoSocial,
+      nomeFantasia: u.empresa.nomeFantasia,
+      cnpj: u.empresa.cnpj,
+      plano: u.empresa.plano,
+      timezone: u.empresa.timezone,
+    },
   };
 }
 
@@ -54,7 +61,15 @@ export async function requireUsuario(): Promise<UsuarioAtual> {
   return u;
 }
 
+/** Administrador com o painel liberado (assinatura em dia ou dentro do prazo). */
 export async function requireAdmin(): Promise<UsuarioAtual> {
+  const u = await requireAdminMesmoBloqueado();
+  if ((await situacaoDaEmpresa(u.empresaId)).painelBloqueado) redirect("/assinatura");
+  return u;
+}
+
+/** Administrador, mesmo com o painel bloqueado por falta de pagamento (tela da assinatura). */
+export async function requireAdminMesmoBloqueado(): Promise<UsuarioAtual> {
   const u = await requireUsuario();
   if (u.papel !== "ADMIN") redirect("/bater");
   return u;
