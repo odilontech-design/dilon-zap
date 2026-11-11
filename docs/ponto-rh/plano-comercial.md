@@ -91,6 +91,23 @@ fidelidade: o desconto vem do plano anual, não de multa. A cobrança usa o
 pacote `@dilon-zap/receivables` e os gateways que o Zap já usa (Mercado Pago e
 Asaas).
 
+### Estratégia de preço: não competir por preço
+
+A decisão é **não ser o mais barato**. Os primeiros clientes vão exigir mais
+trabalho de implantação, treinamento e ajuste, e a tabela precisa pagar isso.
+
+- **A tabela é o teto, não o preço de briga.** Os valores abaixo deixam
+  margem para negociar sem chegar perto do custo.
+- **A venda principal é a combinada.** Ponto junto com outra solução da Dilon:
+  Zap + Ponto para quem atende pelo WhatsApp, ou ERP Contabilidade + Ponto no
+  canal contador. O desconto aparece no pacote, não no produto avulso, e o
+  cliente com duas soluções cancela menos.
+- **Limite de desconto:** até 15% no avulso e até 25% no pacote combinado,
+  sempre condicionado a algo em troca (plano anual, depoimento, indicação ou
+  caso de sucesso). Acima disso, só com aprovação.
+- **Argumento de venda é valor, não preço:** horas de fechamento economizadas
+  e o risco trabalhista reduzido.
+
 ### 5.1 Plano Essencial — porta de entrada (1 a 10 colaboradores)
 
 **R$ 59,90 por mês, preço fechado** para empresas de 1 a 10 colaboradores. É o

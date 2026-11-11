@@ -21,6 +21,7 @@
     "erp:studio": "npm run db:studio -w packages/erp-db",
     "erp:seed": "npm run db:seed -w packages/erp-db",
     "test:core": "npm run test -w packages/esquadrias-core",
+    "test:ponto": "npm run test -w packages/ponto-core",
     "test:sdr": "npm run test -w packages/ambiente-teste",
     "sdr:site": "npm run site -w packages/ambiente-teste",
     "sdr:build": "npm run build -w packages/ambiente-teste",

@@ -41,9 +41,9 @@ CLT, o ponto é obrigatório a partir de 21 empregados por estabelecimento.
 2. **Venda pelo contador.** O ERP Dilon Contabilidade já está dentro de
    escritórios contábeis. O escritório indica o ponto aos clientes dele, e o
    fechamento chega pronto para a folha.
-3. **Preço e implantação de pequena empresa.** Entrada a R$ 59,90 por mês para
-   até 10 colaboradores, sem fidelidade, com treinamento ao vivo e suporte
-   humano por telefone e chat.
+3. **Atendimento próximo, não preço baixo.** Treinamento ao vivo, suporte
+   humano por telefone e chat e implantação acompanhada. A tabela deixa margem
+   para negociar, principalmente na venda combinada com outra solução da Dilon.
 
 **Planos (hipótese a validar):**
 

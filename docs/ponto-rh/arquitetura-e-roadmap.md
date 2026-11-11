@@ -242,5 +242,8 @@ Escalas rotativas, painel de risco de jornada e API pública.
 
 1. Fechar o nome e checar a marca no INPI e o domínio.
 2. Publicar a landing e começar as conversas (Fase 0).
-3. Em paralelo, criar `packages/ponto-core` com os testes da seção 3. É a parte
-   que mais demora para ficar certa e independe de validação comercial.
+3. ~~Criar `packages/ponto-core` com os testes da seção 3.~~ Feito: 61 testes
+   (`npm run test:ponto`). O que ainda falta no motor está em
+   [`packages/ponto-core/README.md`](../../packages/ponto-core/README.md#ainda-não-faz-próximos-passos).
+4. Levar os casos de teste para um profissional de DP conferir e acrescentar
+   2 ou 3 meses reais fechados à mão como teste de regressão.
