@@ -107,9 +107,23 @@ npm run test:core        # testes do motor de cálculo
 
 Detalhes, decisões de projeto e o que ainda falta: [`apps/esquadrias/README.md`](apps/esquadrias/README.md).
 
-## Em planejamento: Dilon Ponto (controle de ponto e RH digital)
+## Dilon Ponto (controle de ponto e RH digital)
 
-Quarta vertical, ainda em validação comercial: registro de ponto por app, web,
-quiosque e WhatsApp, com banco de horas, fechamento e espelho assinado, e
-depois módulos de departamento pessoal. Plano comercial, especificação,
-arquitetura e roadmap em [`docs/ponto-rh/`](docs/ponto-rh/README.md).
+Quarta vertical. O **plano Essencial** já roda em `apps/ponto`: registro de
+ponto pelo celular ou pela web, com localização e foto opcional, cálculo
+automático (extras, banco de horas, noturno), espelho, ajustes manuais e
+relatórios, para até 10 colaboradores.
+
+```
+apps/ponto/           Next.js — painel do administrador e app do colaborador (PWA)
+packages/ponto-core/  Motor de apuração de jornada, sem banco (npm run test:ponto)
+packages/ponto-db/    Schema Prisma (banco próprio) + seed de demonstração
+```
+
+```bash
+npm run ponto:generate && npm run ponto:deploy && npm run ponto:seed
+npm run dev:ponto        # http://localhost:3002
+```
+
+Detalhes: [`apps/ponto/README.md`](apps/ponto/README.md). Plano comercial,
+especificação e roadmap: [`docs/ponto-rh/`](docs/ponto-rh/README.md).

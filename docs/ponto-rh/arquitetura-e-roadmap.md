@@ -238,12 +238,18 @@ Escalas rotativas, painel de risco de jornada e API pública.
 | 1–2 | 2 desenvolvedores full-stack, 1 pessoa de DP como consultora (meio período, para validar cálculos) e suporte pelo próprio fundador |
 | 3+ | Mais 1 desenvolvedor e 1 pessoa de suporte e implantação |
 
-## 8. Próximos passos concretos
+## 8. Estado atual
 
-1. Fechar o nome e checar a marca no INPI e o domínio.
-2. Publicar a landing e começar as conversas (Fase 0).
-3. ~~Criar `packages/ponto-core` com os testes da seção 3.~~ Feito: 61 testes
-   (`npm run test:ponto`). O que ainda falta no motor está em
-   [`packages/ponto-core/README.md`](../../packages/ponto-core/README.md#ainda-não-faz-próximos-passos).
-4. Levar os casos de teste para um profissional de DP conferir e acrescentar
-   2 ou 3 meses reais fechados à mão como teste de regressão.
+- **`packages/ponto-core`:** motor com testes (`npm run test:ponto`).
+- **`packages/ponto-db`:** schema, migração com gatilho de imutabilidade,
+  NSR, cadeia de hash e seed de demonstração.
+- **`apps/ponto`:** plano Essencial completo. O que ainda falta para vender
+  está em [`apps/ponto/README.md`](../../apps/ponto/README.md#o-que-ainda-falta-para-vender).
+
+Próximos passos:
+
+1. Ligar a cobrança (boleto) e a recuperação de senha.
+2. Levar os casos de teste do motor para um profissional de DP conferir e
+   acrescentar 2 ou 3 meses reais fechados à mão como teste de regressão.
+3. Colocar os 3 pilotos para usar e comparar o primeiro mês com a conferência
+   manual.

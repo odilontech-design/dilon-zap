@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Tema claro/escuro — mesma estratégia do apps/web e do Esquadrias: em vez de espalhar
+ * `dark:` por centenas de classes, a própria paleta `neutral` do Tailwind é
+ * variável CSS. As classes já escritas (`text-neutral-700`, `border-neutral-200`)
+ * respondem ao tema sozinhas, e não existe "esquecer um dark:" deixando uma
+ * mancha branca no meio da tela escura.
+ *
+ * Os valores são os CANAIS RGB soltos, sem `rgb()`, porque o Tailwind injeta
+ * o alfa depois: `bg-accent/10` vira `rgb(var(--accent) / 0.1)`.
+ *
+ * O acento é laranja: é a cor do Dilon Ponto na família de produtos (verde é
+ * o Zap, azul é o Esquadrias). Ver docs/ponto-rh/landing-page-brief.md.
+ */
+:root {
+  --canvas: 244 246 249;
+  --surface: 255 255 255;
+  --accent: 199 94 6;
+
+  --n-50: 250 250 250;
+  --n-100: 245 245 245;
+  --n-200: 229 229 229;
+  --n-300: 212 212 212;
+  --n-400: 163 163 163;
+  --n-500: 115 115 115;
+  --n-600: 82 82 82;
+  --n-700: 64 64 64;
+  --n-800: 38 38 38;
+  --n-900: 23 23 23;
+  --n-950: 10 10 10;
+}
+
+[data-theme="dark"] {
+  --canvas: 15 18 22;
+  --surface: 25 29 35;
+  /* Laranja mais claro no escuro: o do tema claro some sobre o card escuro. */
+  --accent: 245 150 70;
+
+  --n-50: 33 37 42;
+  --n-100: 39 44 50;
+  --n-200: 50 56 64;
+  --n-300: 61 68 77;
+  --n-400: 141 148 156;
+  --n-500: 165 172 180;
+  --n-600: 188 195 202;
+  --n-700: 215 220 225;
+  --n-800: 232 235 238;
+  --n-900: 243 245 247;
+  --n-950: 253 253 254;
+
+  color-scheme: dark;
+}
+
+body {
+  background: rgb(var(--canvas));
+  color: rgb(var(--n-900));
+}
+
+/* Impressão: o espelho de ponto sai em papel para o colaborador conferir e
+   assinar. Navegação some e o fundo vira branco. */
+@media print {
+  .nao-imprimir {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+    color: #000;
+  }
+  .quebra-pagina {
+    break-before: page;
+  }
+}

@@ -1,0 +1,271 @@
+// Schema do Dilon Ponto (controle de ponto e jornada).
+//
+// Banco PRÓPRIO, separado do Zap e do Esquadrias: os clientes são outros e os
+// dados são sensíveis (localização, foto, atestado). Isolar reduz o estrago de
+// qualquer erro e simplifica o relatório de impacto da LGPD.
+//
+// O client é gerado em `@prisma-ponto/client` porque `.prisma/client` já é do
+// Zap e `@prisma-erp/client` é do Esquadrias.
+generator client {
+  provider      = "prisma-client-js"
+  output        = "../../../node_modules/@prisma-ponto/client"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("PONTO_DATABASE_URL")
+  directUrl = env("PONTO_DIRECT_URL")
+}
+
+/// Os limites de cada plano moram em apps/ponto/lib/planos.ts.
+enum Plano {
+  ESSENCIAL
+  PONTO
+  PONTO_DP
+  RH_COMPLETO
+}
+
+enum Papel {
+  ADMIN        // configura tudo, ajusta ponto, vê relatórios
+  GESTOR       // (planos acima do Essencial) aprova solicitações da equipe
+  COLABORADOR  // bate ponto e vê o próprio espelho
+}
+
+enum ModoRegistro {
+  SIMPLES   // só o botão (com localização, se a empresa exigir)
+  COM_FOTO  // selfie guardada para auditoria, sem reconhecimento facial
+}
+
+enum CanalMarcacao {
+  APP  // celular do colaborador (PWA)
+  WEB  // computador
+}
+
+enum TipoTratamento {
+  INCLUSAO          // marcação que faltou (esqueceu de bater)
+  DESCONSIDERACAO   // marcação que não vale (bateu duas vezes, bateu errado)
+}
+
+/// Uma Empresa = um CNPJ assinante. É o tenant.
+model Empresa {
+  id           String  @id @default(cuid())
+  razaoSocial  String
+  nomeFantasia String?
+  /// Só dígitos. O Essencial tem 1 CNPJ por conta: CNPJ é a própria empresa.
+  cnpj         String  @unique
+  timezone     String  @default("America/Sao_Paulo")
+  plano        Plano   @default(ESSENCIAL)
+  ativa        Boolean @default(true)
+
+  /// Número sequencial de registro (NSR) da última marcação. Incrementado
+  /// dentro da transação que grava a marcação (UPDATE ... RETURNING trava a
+  /// linha), então não há dois registros com o mesmo número nem buraco.
+  nsrAtual Int @default(0)
+
+  // ── Regras de cálculo ─────────────────────────────────────────────────────
+  // Padrões da CLT. Convenção coletiva muda vários deles.
+  toleranciaPorMarcacaoMin Int     @default(5)
+  toleranciaDiariaMin      Int     @default(10)
+  percentualExtraBp        Int     @default(5000)
+  percentualDescansoBp     Int     @default(10000)
+  percentualNoturnoBp      Int     @default(2000)
+  bancoDeHoras             Boolean @default(false)
+  validadeBancoDias        Int     @default(180)
+  /// Pede a localização ao bater ponto. Sem ela, a marcação é gravada mesmo
+  /// assim (a Portaria 671 não admite impedir o registro) e fica para revisão.
+  exigirLocalizacao        Boolean @default(true)
+
+  criadoEm DateTime @default(now())
+
+  usuarios      Usuario[]
+  colaboradores Colaborador[]
+  jornadas      Jornada[]
+  feriados      Feriado[]
+  marcacoes     Marcacao[]
+  tratamentos   Tratamento[]
+  abonos        Abono[]
+  auditoria     LogAuditoria[]
+}
+
+model Usuario {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome      String
+  /// Email (administrador) ou CPF só com dígitos (colaborador). Muito
+  /// colaborador não tem email, e o CPF ele sabe de cor.
+  login     String  @unique
+  senhaHash String
+  papel     Papel
+  /// Obriga trocar a senha no primeiro acesso (senha provisória).
+  trocarSenha Boolean @default(false)
+
+  colaboradorId String?      @unique
+  colaborador   Colaborador? @relation(fields: [colaboradorId], references: [id], onDelete: SetNull)
+
+  desativadoEm DateTime?
+  criadoEm     DateTime  @default(now())
+
+  @@index([empresaId])
+}
+
+/// Horário de trabalho ("turno"). O Essencial permite 2 por empresa.
+model Jornada {
+  id        String  @id @default(cuid())
+  empresaId String
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome      String
+  /// Semana: { "0": [], "1": [["08:00","12:00"],["13:00","17:00"]], ... }
+  /// 0 = domingo. Fim menor que o início = termina no dia seguinte.
+  /// Dia sem período = folga/descanso. Validado por apps/ponto/lib/jornada.ts.
+  semana    Json
+  ativa     Boolean @default(true)
+  criadoEm  DateTime @default(now())
+
+  colaboradores Colaborador[]
+
+  @@index([empresaId])
+}
+
+model Colaborador {
+  id            String       @id @default(cuid())
+  empresaId     String
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  nome          String
+  /// Só dígitos.
+  cpf           String
+  pis           String?
+  matricula     String?
+  cargo         String?
+  admissao      DateTime     @db.Date
+  jornadaId     String
+  jornada       Jornada      @relation(fields: [jornadaId], references: [id])
+  modoRegistro  ModoRegistro @default(SIMPLES)
+  ativo         Boolean      @default(true)
+  desligadoEm   DateTime?    @db.Date
+  criadoEm      DateTime     @default(now())
+
+  usuario     Usuario?
+  marcacoes   Marcacao[]
+  tratamentos Tratamento[]
+  abonos      Abono[]
+
+  @@unique([empresaId, cpf])
+  @@index([empresaId, ativo])
+}
+
+/// Marcação de ponto. IMUTÁVEL: um gatilho no banco recusa UPDATE e DELETE
+/// (ver a migração inicial). Correção é Tratamento, nunca edição.
+model Marcacao {
+  id            String        @id @default(cuid())
+  empresaId     String
+  empresa       Empresa       @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  colaboradorId String
+  colaborador   Colaborador   @relation(fields: [colaboradorId], references: [id], onDelete: Restrict)
+  nsr           Int
+  /// Hora do servidor (a que vale).
+  instante      DateTime
+  /// Hora do aparelho, quando a marcação foi feita sem internet e enviada depois.
+  instanteDispositivo DateTime?
+  offline       Boolean       @default(false)
+  canal         CanalMarcacao
+  latitude      Float?
+  longitude     Float?
+  precisaoM     Float?
+  /// Chave no R2, ou "db:<id>" quando a foto ficou em MarcacaoFoto.
+  fotoChave     String?
+  /// Motivo para revisão (sem localização, sem foto, offline). Não impede o registro.
+  revisar       String?
+  ip            String?
+  userAgent     String?
+  /// Evita marcação duplicada quando o aparelho reenvia a mesma batida.
+  idempotencia  String        @unique
+  hashAnterior  String
+  hash          String
+  criadoEm      DateTime      @default(now())
+
+  foto        MarcacaoFoto?
+  tratamentos Tratamento[]
+
+  @@unique([empresaId, nsr])
+  @@index([colaboradorId, instante])
+}
+
+/// Foto guardada no próprio banco quando o R2 não está configurado
+/// (desenvolvimento, demonstração). Em produção, use o R2.
+model MarcacaoFoto {
+  marcacaoId String   @id
+  marcacao   Marcacao @relation(fields: [marcacaoId], references: [id], onDelete: Restrict)
+  mime       String
+  bytes      Bytes
+}
+
+/// Ajuste manual: inclui uma marcação que faltou ou desconsidera uma que não
+/// vale. A marcação original continua lá; o espelho mostra os dois.
+model Tratamento {
+  id            String         @id @default(cuid())
+  empresaId     String
+  empresa       Empresa        @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaboradorId String
+  colaborador   Colaborador    @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoTratamento
+  /// INCLUSAO: o horário incluído.
+  instante      DateTime?
+  /// DESCONSIDERACAO: a marcação desconsiderada.
+  marcacaoId    String?
+  marcacao      Marcacao?      @relation(fields: [marcacaoId], references: [id], onDelete: Restrict)
+  motivo        String
+  autorId       String
+  autorNome     String
+  /// Desfazer um ajuste também deixa rastro: preenche aqui em vez de apagar.
+  revogadoEm    DateTime?
+  revogadoPor   String?
+  criadoEm      DateTime       @default(now())
+
+  @@index([colaboradorId, instante])
+  @@index([marcacaoId])
+}
+
+/// Abono (atestado, consulta, folga concedida): cobre débito do dia.
+model Abono {
+  id            String      @id @default(cuid())
+  empresaId     String
+  empresa       Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaboradorId String
+  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  data          DateTime    @db.Date
+  minutos       Int
+  motivo        String
+  autorId       String
+  autorNome     String
+  revogadoEm    DateTime?
+  criadoEm      DateTime    @default(now())
+
+  @@index([colaboradorId, data])
+}
+
+model Feriado {
+  id        String   @id @default(cuid())
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  data      DateTime @db.Date
+  nome      String
+
+  @@unique([empresaId, data])
+}
+
+model LogAuditoria {
+  id         String   @id @default(cuid())
+  empresaId  String
+  empresa    Empresa  @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  usuarioId  String
+  usuarioNome String
+  acao       String
+  entidade   String
+  entidadeId String?
+  dados      Json?
+  criadoEm   DateTime @default(now())
+
+  @@index([empresaId, criadoEm])
+}
