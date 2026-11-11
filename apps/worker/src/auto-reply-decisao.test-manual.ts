@@ -645,14 +645,32 @@ checa(
 // O reinicio por inatividade continua existindo: quem some por semanas e volta
 // com outro assunto precisa da triagem de novo, tenha quem tiver falado antes.
 checa(
-  "atendente falou por ultimo, mas faz tempo demais — reinicia do mesmo jeito",
+  "atendente falou por ultimo e o cliente respondeu 16h depois — e resposta a ele, o robo cala (Guttierres, 11/11)",
   avaliarAutomacao(donoQualquer, estado("OPEN", 999, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "atendente falou por ultimo, cliente voltou 6 dias depois — ainda cala",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 6 * 24 * 60, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "atendente falou por ultimo, mas o cliente so voltou depois de 8 dias — reinicia",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 8 * 24 * 60, true), AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: true }
 );
 
 checa(
-  "conversa sem dono, inativa ha muito, atendente falou por ultimo — volta a falar",
-  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 999, true), AGORA, UMA_HORA_MS, true),
+  "inatividade configurada maior que 7 dias vale quando a equipe falou",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 8 * 24 * 60, true), AGORA, 10 * 24 * 60 * 60_000, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "conversa sem dono, atendente falou por ultimo ha mais de 7 dias — volta a falar",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 8 * 24 * 60, true), AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: false }
 );
 
@@ -710,6 +728,12 @@ checa(
   false
 );
 
+checa(
+  "conversa aberta pelo celular, cliente respondeu no dia seguinte: o robô cala",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, { status: "RESOLVED", lastMessageAt: new Date(AGORA.getTime() - 20 * 60 * 60_000), equipeFalouPorUltimo: true }, AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
 // O cenário completo, ponta a ponta na decisão: a pessoa escreveu pelo celular
 // e o cliente respondeu logo depois, numa conversa ainda sem dono.
 const semDono = { assignedToId: null, setorId: null };
@@ -730,8 +754,8 @@ checa(
 );
 // Quem escreveu pelo celular e o cliente só voltou dias depois: é outro assunto.
 checa(
-  "celular falou, mas o cliente só voltou muito depois: triagem de novo",
-  avaliarAutomacao(semDono, veioDoCelular(999), AGORA, UMA_HORA_MS, true),
+  "celular falou, mas o cliente só voltou depois de 8 dias: triagem de novo",
+  avaliarAutomacao(semDono, veioDoCelular(8 * 24 * 60), AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: false }
 );
 
