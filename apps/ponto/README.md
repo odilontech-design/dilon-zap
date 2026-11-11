@@ -79,6 +79,10 @@ correspondente" para cada boleto do Ponto. Esse aviso não tem efeito, mas
 polui o log, e dá para filtrar lá pelo `externalReference` com prefixo
 `ponto:`.
 
+## Colocar no ar
+
+Passo a passo (Vercel + Neon + R2 + Asaas): [`docs/deploy-ponto.md`](../../docs/deploy-ponto.md).
+
 ## Rodando
 
 Da raiz do monorepo, com o Postgres do `docker compose` no ar:

@@ -19,6 +19,10 @@ export function normalizarLogin(bruto: string): string {
 const producao = process.env.NODE_ENV === "production";
 
 export const authOptions: NextAuthOptions = {
+  // Explícito: na Vercel o next.config.js só roda no BUILD, e a cópia de
+  // PONTO_NEXTAUTH_SECRET para NEXTAUTH_SECRET que ele faz não chega às
+  // funções que atendem o login. Lendo aqui, vale nos dois mundos.
+  secret: process.env.PONTO_NEXTAUTH_SECRET || process.env.NEXTAUTH_SECRET,
   session: { strategy: "jwt", maxAge: 30 * 24 * 3600 },
   pages: { signIn: "/login" },
   cookies: {
