@@ -80,23 +80,54 @@ CRM de verdade ou automação de WhatsApp.
 
 ### RPM Systems (rpmsystems.com.br)
 
-O site não abriu nesta sessão, porque a rede bloqueia o domínio. O resumo abaixo
-vem do índice de busca e **precisa ser conferido**. Uma segunda busca não achou
-outras fontes sobre o produto, o que sugere uma empresa nova ou pequena.
+Os planos abaixo foram conferidos na página de planos do site, em print enviado
+em 11/11/2026. As funcionalidades da última tabela vieram do índice de busca.
+
+| Plano | Preço | Estoque | CNPJs | Acessos | R$ por vaga de carro |
+|---|---|---|---|---|---|
+| Start | R$ 189,90/mês | até 25 veículos | 1 | 3 | 7,60 |
+| Profissional ("mais popular") | R$ 299,90/mês | até 50 veículos | 1 | 5 | 6,00 |
+| Avançado | R$ 499,90/mês | até 100 veículos | 2 | 10 | 5,00 |
+
+**Incluído em todos os planos:** CRM com funil kanban, assistente virtual com
+IA, site próprio em domínio personalizado, financeiro (contas a pagar e
+receber), relatórios essenciais, vistoria digital com fotos, contratos digitais
+em PDF, **Ordem de Serviço e Sinal de Negócio**, alertas e notificações, central
+de suporte com chamados, SSL, backups e conformidade LGPD, **consulta veicular
+integrada (CheckTudo)**, **integração RENAVE** e **simulação de financiamento
+multibanco (F&I) com créditos vendidos por pacote**.
+
+O menu do site tem **RENAVE, Consulta Veicular, Blog e FIPE como páginas à parte**,
+marcadas com o ícone ↗ de link externo. São ferramentas públicas usadas como
+isca de busca (SEO): o lojista vai consultar uma placa ou o valor FIPE e acaba
+conhecendo o sistema.
+
+Funcionalidades citadas no índice de busca (não conferidas):
 
 | Área | O que diz oferecer |
 |---|---|
 | Estoque | Fotos, **precificação automática pela FIPE**, histórico de custos, **margem em tempo real**, **alerta de carro parado há mais de 30 dias** |
 | Consignação | Proprietário, valor acordado, comissão e prazo |
-| Fiscal / regulatório | NF-e e RENAVE |
-| Operação | **Vistoria digital com laudo em PDF**, contratos de compra e venda com **assinatura eletrônica**, consultas veiculares |
+| Fiscal | NF-e |
+| Operação | Contratos com **assinatura eletrônica** |
 | Integrações | OLX, Mercado Livre, Webmotors, **WhatsApp Business oficial** |
-| Outros | CRM, várias filiais, **assistente de IA**, app (rpmsystems.com.br/app), 100% nuvem, teste de 7 dias sem cartão |
+| Outros | App (rpmsystems.com.br/app), 100% nuvem, teste de 7 dias sem cartão |
 
-**Leitura:** é o concorrente mais parecido com a nossa tese, porque tem CRM,
-WhatsApp e IA. Ainda assim, o WhatsApp parece ser uma integração e não o centro
-do produto. Vale criar uma conta de teste dos dois e cronometrar o caminho
-"lead do portal → resposta → visita → venda".
+**Leitura:**
+
+- É o concorrente mais parecido com a nossa tese (CRM, IA, WhatsApp) e é
+  **agressivo no preço**. Com 50 carros por R$ 299,90, empata com o valor de
+  referência do Click Garage, entregando mais coisa.
+- **Ponto fraco: limita acessos** (3, 5 ou 10). Uma revenda com 4 vendedores,
+  1 gerente e 1 pessoa no financeiro já estoura o plano Profissional. Para um
+  produto centrado no WhatsApp com vários atendentes, **usuários ilimitados é o
+  nosso argumento direto**, e o Click Garage já usa esse argumento.
+- **Modelo de receita por uso:** F&I em créditos por pacote e consulta veicular
+  via parceiro (CheckTudo). Isso confirma a recomendação da seção 7 de integrar
+  e revender por uso.
+- **Isca de busca:** as páginas gratuitas de RENAVE, consulta veicular e FIPE
+  trazem cliente. Click Garage e RPM fazem isso, e nós devemos fazer também
+  (seção 8).
 
 ### Outros do mercado (preços divulgados pelos próprios fornecedores)
 
@@ -135,6 +166,8 @@ Legenda: ✅ o Zap já tem, 🟡 tem a base e precisa adaptar, ❌ não tem.
 | 10 | Avaliação de carro na troca (checklist, fotos, proposta) | ❌ | Novo: `AvaliacaoVeiculo` |
 | 11 | Consignação (dono, valor líquido, comissão, prazo, prestação de contas) | ❌ | Novo: `Consignacao`, repasse gerando `ContaPagar` |
 | 12 | Venda do veículo: entrada, troca, financiamento, comissão do vendedor | 🟡 | Novo `VendaVeiculo` gerando `ContaReceber`, como a OS da ótica |
+| 12b | **Sinal de negócio / reserva** (cliente paga sinal e o carro sai da vitrine) | 🟡 | `VendaVeiculo` em rascunho com o sinal como parcela recebida (mesmo mecanismo do sinal da OS da ótica) e status `RESERVADO` com prazo; o recibo do sinal vai pelo WhatsApp |
+| 12c | **OS de preparação** (mecânica, funilaria, estética antes de anunciar) | 🟡 | Reaproveitar a ideia de etapas da OS da ótica: o carro anda por etapas até ficar `DISPONIVEL`, e cada serviço vira `CustoVeiculo` |
 | 13 | Contratos (compra, venda, consignação, procuração) com assinatura eletrônica | ❌ | Modelo próprio, assinatura via parceiro |
 | 14 | Recibos e impressões | 🟡 | Já existem `/recibo` e `/imprimir` |
 | 15 | **NF-e de entrada e saída** (inclusive consignado e emissão para pessoa física) | ❌ | Parceiro emissor (API) |
@@ -278,10 +311,10 @@ Ligações com o que já existe:
 | **FIPE** | Integrar já na fase 1 | Há APIs públicas da tabela FIPE (não oficiais) e serviços pagos com SLA. Guarde o código FIPE e faça cache mensal, porque a tabela muda uma vez por mês |
 | **RENAVE** | **Integradora homologada** via API (fase 1 ou 2) | Homologar-se como integradora é processo longo junto à Senatran. Negocie a revenda do serviço: custo por operação repassado com margem, ou incluído no plano |
 | **NF-e** | Emissor via API (Focus NFe, PlugNotas, NFe.io e similares) | Revenda tem regras próprias (CFOP de veículo usado, entrada de pessoa física, consignação, Convênio ICMS para usados). **Validar as regras com um contador**. A Dilon Contabilidade é uma ponte natural |
-| **Consultas veiculares** | Parceiro, cobrado por consulta | Débitos, gravame, leilão, roubo e furto. Revender com margem |
+| **Consultas veiculares** | Parceiro, cobrado por consulta | Débitos, gravame, leilão, roubo e furto. Revender com margem. A RPM usa a CheckTudo; cote-a junto com uma ou duas alternativas |
 | **Portais** | Fase 2: começar por **um integrador de anúncios**; APIs diretas depois, para os portais que mais trazem lead | Cada portal tem API, credenciamento e formato próprio. O que mais importa é **capturar o lead** (webhook ou leitura do e-mail do portal) e jogá-lo no Inbox |
 | **Assinatura eletrônica** | Parceiro com API (Clicksign, ZapSign, Autentique etc.) | Enviar o link de assinatura pelo próprio WhatsApp |
-| **Financiamento** | Fase 3, via correspondente parceiro | Começar com simulação simples (taxa × prazo) gerada no Inbox |
+| **Financiamento (F&I)** | Fase 3, via correspondente ou plataforma parceira | Começar com simulação simples (taxa × prazo) gerada no Inbox. A RPM já tem simulação **multibanco** vendida em **créditos por pacote**; considere o mesmo modelo |
 | **IA ("ainda tem?")** | Fase 2 | Reaproveitar o padrão de uso de IA do SDR (`SdrIaConfig`, `SdrIaUso`, cache) para controlar custo por empresa |
 
 ---
@@ -293,32 +326,47 @@ Ligações com o que já existe:
 | **0. Validação** | 2 semanas | Entrevistar 5 a 10 revendas, testar Click Garage e RPM, fechar 1 ou 2 lojas piloto (como a Visuallis na ótica) | Confirmar dor e preço antes de codar |
 | **1. MVP** | 6 a 8 semanas | Estoque, custos e margem, fotos, FIPE, entrada, venda, consignação, financeiro integrado, "Enviar carro" no Inbox, vitrine, contratos em PDF, alerta de carro parado | Piloto rodando a operação |
 | **1b. Regulatório** | em paralelo | RENAVE e NF-e via parceiros | **Sem isso não dá para vender fora do piloto** |
+| **1c. Isca de busca** | em paralelo, curto | Páginas públicas gratuitas de consulta FIPE e "minha loja está pronta para o RENAVE?", com captura de contato direto no Zap e no SDR | Gerar lead de lojista sem mídia paga, como Click Garage e RPM fazem |
 | **2. Diferenciais** | +6 semanas | Captura de leads de portais no Inbox, publicação via integrador, IA "ainda tem?", interesse sem estoque, pós-venda automático, assinatura eletrônica, relatórios (giro, margem, vendedor) | Argumento de venda contra os concorrentes |
 | **3. Escala** | depois | Avaliação no celular (PWA com câmera), multi-loja/CNPJ, simulação e ficha de financiamento, app do consignante, API oficial do WhatsApp como opção | Lojas médias e redes |
 
 ---
 
-## 9. Preço e empacotamento (hipótese a validar)
+## 9. Preço e empacotamento (revisado com os preços da RPM)
 
-O mercado cobra por **faixa de estoque**, então siga o mesmo padrão para facilitar
-a comparação. Mantenha usuários ilimitados ou generosos, já que o Click Garage
-usa isso como argumento.
+A primeira hipótese (R$ 249 por 30 carros) ficava **acima da RPM na entrada**,
+que cobra R$ 189,90 por 25 carros. Revisão:
 
-| Plano | Estoque | Inclui | Preço sugerido |
-|---|---|---|---|
-| **Garagem** | até 30 carros | Estoque, financeiro, Inbox (1 número), vitrine, FIPE | R$ 249/mês |
-| **Revenda** | até 80 carros | + portais, captura de leads, IA, pós-venda, contratos | R$ 449/mês |
-| **Revenda+** | até 200 carros | + multi-loja, relatórios avançados, SDR | R$ 749/mês |
+| Plano | Estoque | Usuários | Inclui | Preço sugerido | R$ por vaga de carro |
+|---|---|---|---|---|---|
+| **Garagem** | até 30 carros | **ilimitados** | Estoque, custos e margem, financeiro, Inbox (1 número), vitrine, FIPE, contratos, sinal/reserva | **R$ 197/mês** | 6,57 |
+| **Revenda** | até 70 carros | **ilimitados** | + captura de leads dos portais, IA "ainda tem?", pós-venda, interesse sem estoque, relatórios | **R$ 347/mês** | 4,96 |
+| **Revenda+** | até 150 carros | **ilimitados** | + multi-loja/CNPJ, SDR, relatórios avançados, opção de API oficial do WhatsApp | **R$ 597/mês** | 3,98 |
 
-Cobrados à parte, por uso e com margem: emissão de NF-e acima de uma franquia,
-operações RENAVE (ou franquia inclusa, já que o Click Garage diz incluir sem
-custo), consultas veiculares, assinaturas e números de WhatsApp extras
-(`MULTI_NUMERO`).
+Por que esses números:
+
+- **Contra a RPM, o argumento principal são os usuários ilimitados.** Uma loja
+  com 6 pessoas precisaria do plano Avançado da RPM (R$ 499,90) só por causa dos
+  acessos; no Zap, ela fica no Revenda (R$ 347). Mostre essa conta na página de
+  planos.
+- Com o mesmo número de carros, ficamos a R$ 5 a 10 da RPM, e não abaixo dela.
+  Não vale brigar por centavos: o que justifica a diferença é o Inbox com vários
+  atendentes, que a RPM não tem.
+- **RENAVE incluso em todos os planos**, com franquia de operações, porque RPM e
+  Click Garage dizem incluir e cobrar à parte viraria objeção.
+
+Cobrados por uso, em créditos ou pacotes com margem, como a RPM faz com F&I:
+consultas veiculares, simulações de financiamento, NF-e acima da franquia,
+assinaturas eletrônicas e números de WhatsApp extras (`MULTI_NUMERO`).
 
 Para entrar no mercado: implantação gratuita com migração da planilha ou do
-sistema anterior, de 14 a 15 dias grátis e sem fidelidade, que é o padrão do
-mercado. O argumento de troca é *"traga seu estoque e seu WhatsApp, estamos
-rodando em 1 dia"*.
+sistema anterior, 14 dias grátis sem cartão (a RPM dá 7 e o Click Garage dá 15)
+e sem fidelidade. O argumento de troca é *"traga seu estoque e seu WhatsApp,
+estamos rodando em 1 dia"*.
+
+Antes de fechar os preços, valide com as lojas piloto se elas pagariam
+**R$ 50 a R$ 100 a mais** por "nenhum lead sem resposta". Se pagarem, o plano
+Revenda pode subir para R$ 397.
 
 ---
 
@@ -346,9 +394,9 @@ rodando em 1 dia"*.
 
 ## 11. Próximos passos
 
-1. Liberar `clickgarage.com.br` e `rpmsystems.com.br` na rede da sessão, ou
-   criar contas de teste, para uma comparação tela a tela. A análise acima veio
-   do índice de busca.
+1. Criar contas de teste na RPM (7 dias) e no Click Garage (15 dias) e
+   cronometrar o caminho "lead → resposta → visita → venda". Os planos da RPM já
+   foram conferidos; o restante veio do índice de busca.
 2. Escolher 1 ou 2 revendas piloto da rede de contatos.
 3. Pedir proposta a duas integradoras de RENAVE e a dois emissores de NF-e (preço
    por operação, SLA e suporte a consignação).
