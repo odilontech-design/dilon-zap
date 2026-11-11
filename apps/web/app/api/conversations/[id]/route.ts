@@ -10,6 +10,7 @@ import { contactLabel } from "@/lib/contact";
 import { camposDoContato, NEGOCIACAO_ABERTA_DO_CONTATO } from "@/lib/negociacoes";
 import { pendenciaDoContato } from "@/lib/contas-receber";
 import { podeVerPendencia } from "@/lib/plano";
+import { membroUnicoDoSetor } from "@/lib/setor-unico";
 
 const bodySchema = z.object({
   status: z.enum(["OPEN", "PENDING", "RESOLVED"]).optional(),
@@ -123,6 +124,15 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     dados.assignedToId = null;
   }
 
+  // Setor de uma pessoa só: a conversa vai direto para ela, como a URA já faz.
+  // Sem isso ficava numa fila sem dono que só essa pessoa enxerga e ninguém
+  // era avisado (ver lib/setor-unico.ts).
+  let membroUnico: { id: string; name: string } | null = null;
+  if (mudouSetorExplicitamente && dados.assignedToId === null && parsed.data.setorId) {
+    membroUnico = await membroUnicoDoSetor(parsed.data.setorId);
+    if (membroUnico) dados.assignedToId = membroUnico.id;
+  }
+
   // Atribuir a uma pessoa sem trocar o setor junto foi o que deixou a
   // conversa #9871 desencontrada: o Gabriel (Departamento Pessoal) virou
   // responsável por uma conversa que continuava marcada Fiscal, e o
@@ -175,7 +185,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       // Quando o setor mudou PORQUE a conversa foi pra uma pessoa, o marcador
       // precisa dizer o nome dela — "foi pro Fiscal" esconde quem está com o
       // cliente agora.
-      paraPessoaNome: passouPraOutraPessoa ? (agente?.name ?? null) : null,
+      paraPessoaNome: passouPraOutraPessoa ? (agente?.name ?? null) : (membroUnico?.name ?? null),
       motivo: motivoTransferencia ?? `Assumida por ${agente?.name ?? user.name}`,
       porNome: user.name,
     };
