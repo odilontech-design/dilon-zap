@@ -64,6 +64,8 @@ type Ficha = Record<string, unknown> & {
   anoFabricacao: number;
   anoModelo: number;
   km: number;
+  kmInformado: boolean;
+  siteOrigemId: string | null;
   placa: string | null;
   precoCents: number;
   fipeCents: number | null;
@@ -138,7 +140,7 @@ export function FichaVeiculo({ id }: { id: string }) {
             <span className="rounded-full bg-accent/10 px-2 py-0.5 font-medium text-accent">{ROTULO_STATUS[v.status]}</span>
             <span className="text-neutral-500">{ROTULO_ORIGEM[v.origem]}</span>
             {v.placa && <span className="text-neutral-500">{placaParaTela(v.placa)}</span>}
-            <span className="text-neutral-500">{v.km.toLocaleString("pt-BR")} km</span>
+            <span className="text-neutral-500">{v.kmInformado ? `${v.km.toLocaleString("pt-BR")} km` : "km não informado"}</span>
             <span className={`rounded-full px-2 py-0.5 ${COR_FAIXA[faixa]}`}>
               {v.dias} dia(s) {v.status === "VENDIDO" ? "até vender" : "em estoque"}
             </span>
@@ -170,6 +172,13 @@ export function FichaVeiculo({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      {gerencia && v.status === "PREPARACAO" && v.siteOrigemId && (v.precoCents <= 0 || !v.kmInformado) && (
+        <p role="status" className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
+          Carro importado do site antigo: falta informar {[v.precoCents <= 0 && "o preço", !v.kmInformado && "a quilometragem", !v.placa && "a placa"].filter(Boolean).join(", ")} em “Ficha do carro”
+          (abaixo). Só depois dá para clicar em “Pronto para vender”.
+        </p>
+      )}
 
       <div className="flex flex-wrap gap-2">
         {(aVenda || v.status === "RESERVADO") && (

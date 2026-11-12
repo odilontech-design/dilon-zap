@@ -36,7 +36,7 @@ export function ipInterno(ip: string): boolean {
   return v6 === "::" || v6 === "::1" || v6.startsWith("fc") || v6.startsWith("fd") || v6.startsWith("fe80") || v6.startsWith("ff");
 }
 
-async function conferirEndereco(url: URL, permitirRedeInterna: boolean) {
+export async function conferirEndereco(url: URL, permitirRedeInterna: boolean) {
   if (url.protocol !== "http:" && url.protocol !== "https:") throw new ErroImagem("endereço precisa começar com http ou https");
   if (url.username || url.password) throw new ErroImagem("endereço com usuário e senha não é aceito");
   if (permitirRedeInterna) return;

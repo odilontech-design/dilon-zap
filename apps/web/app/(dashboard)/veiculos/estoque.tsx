@@ -164,7 +164,7 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
                   {v.origem !== "COMPRA" ? ` · ${ROTULO_ORIGEM[v.origem]}` : ""}
                 </span>
                 <div className="mt-1 flex items-baseline justify-between gap-2">
-                  <span className="text-base font-semibold tabular-nums">{brl(v.precoCents)}</span>
+                  <span className="text-base font-semibold tabular-nums">{v.precoCents > 0 ? brl(v.precoCents) : <span className="text-amber-700">sem preço</span>}</span>
                   {fipe !== null && !vendidos && (
                     <span className={`text-[11px] ${fipe > 0 ? "text-amber-700" : "text-emerald-700"}`}>
                       {fipe > 0 ? "+" : ""}

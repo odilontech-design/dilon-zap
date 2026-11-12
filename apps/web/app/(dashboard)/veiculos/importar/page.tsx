@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/session";
 import { recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { AbasVeiculos } from "../comum";
-import { ImportarEstoque } from "./importar-estoque";
+import { ImportarTudo } from "./importar-tudo";
 
 export default async function ImportarVeiculosPage() {
   const user = await requireUser();
@@ -12,7 +12,7 @@ export default async function ImportarVeiculosPage() {
   return (
     <div className="p-4 md:p-8">
       <AbasVeiculos atual="importar" gerencia />
-      <ImportarEstoque />
+      <ImportarTudo />
     </div>
   );
 }
