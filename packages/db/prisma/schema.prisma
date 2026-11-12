@@ -236,6 +236,9 @@ model Tenant {
   fotosVeiculo          FotoVeiculo[]
   vendasVeiculo         VendaVeiculo[]
   veiculosConfig        VeiculosConfig?
+  vendedorIaConfig      VendedorIaConfig?
+  vendedorIaConversas   VendedorIaConversa[]
+  vendedorIaUsos        VendedorIaUso[]
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -1744,6 +1747,10 @@ enum Recurso {
   // reserva com sinal e venda com troca e financiamento, ligadas ao Financeiro.
   // Sob demanda, como a ótica: produto vertical. Ver docs/revenda-veiculos.md.
   VEICULOS
+  // Vendedor IA: atende o WhatsApp da revenda com o estoque, manda carro,
+  // agenda e passa para um vendedor. Sob demanda (tem custo de API por
+  // conversa). Roda em processo próprio (apps/vendedor-ia-worker).
+  VENDEDOR_IA
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -3757,4 +3764,90 @@ model VeiculosConfig {
   mostrarReservados Boolean @default(true)
 
   updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Vendedor IA (recurso VENDEDOR_IA). Ver docs/vendedor-ia.md.
+// ---------------------------------------------------------------------------
+
+model VendedorIaConfig {
+  tenantId String @id
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  ativo     Boolean   @default(false)
+  // Só conversas com mensagem do cliente depois disto: ligar a IA não faz
+  // ela sair respondendo conversas antigas.
+  ativadoEm DateTime?
+
+  nomeAssistente String  @default("Assistente")
+  // O que a loja quer que a IA saiba e siga: endereço, horário, formas de
+  // pagamento, se aceita troca, tom. Vai no prompt.
+  instrucoes     String?
+
+  // Modelo e esforço da API. O padrão é o Opus atual; a tela mostra o custo
+  // estimado de cada opção para a loja escolher.
+  modelo  String @default("claude-opus-5-5")
+  esforco String @default("low")
+
+  // Para onde vai a conversa quando a IA passa para uma pessoa. Nulo = fila geral.
+  setorTransferenciaId String?
+
+  // Travas de custo do mês: passou de uma delas, a IA para de assumir
+  // conversas novas (as que já está atendendo seguem até passar para alguém).
+  limiteLeadsMes      Int  @default(1000)
+  limiteCustoMesCents Int? // centavos de dólar
+
+  // Ligar a IA desliga as automações (saudação, menu, ausência) do número
+  // geral, para não falarem os dois. Guarda como estava para devolver.
+  semAutomacoesAntes Boolean?
+
+  updatedAt DateTime @updatedAt
+}
+
+enum StatusConversaIa {
+  ATIVA
+  // A IA passou para uma pessoa (pediu o cliente, negociação, ou a equipe respondeu).
+  TRANSFERIDA
+}
+
+model VendedorIaConversa {
+  conversationId String @id
+  tenantId       String
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  status StatusConversaIa @default(ATIVA)
+  // Por que saiu da IA: "pedido do cliente", "equipe respondeu", "limite de turnos".
+  motivo String?
+  // Resumo que a IA deixou para o vendedor ao transferir.
+  resumo String?
+
+  // Até onde a IA já respondeu (createdAt da última mensagem do cliente tratada).
+  respondidoAte DateTime?
+  turnos        Int       @default(0)
+
+  iniciadaEm    DateTime  @default(now())
+  transferidaEm DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId, iniciadaEm])
+  @@index([tenantId, status])
+}
+
+/// Uma chamada à API: os tokens e o custo. É daqui que sai o custo real por lead.
+model VendedorIaUso {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  conversationId   String
+  modelo           String
+  inputTokens      Int
+  cacheWriteTokens Int
+  cacheReadTokens  Int
+  outputTokens     Int
+  // Milionésimos de dólar: centavo é grosso demais para uma chamada.
+  custoMicrosUsd   Int
+  createdAt        DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([conversationId])
 }

@@ -1,6 +1,6 @@
 {
   "name": "dilon-zap",
-  "version": "1.45.0",
+  "version": "1.46.0",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -26,7 +26,9 @@
     "sdr:build": "npm run build -w packages/ambiente-teste",
     "erp:deploy": "npm run db:deploy -w packages/erp-db",
     "erp:baseline": "npm run db:baseline -w packages/erp-db",
-    "erp:senha": "npm run db:senha -w packages/erp-db --"
+    "erp:senha": "npm run db:senha -w packages/erp-db --",
+    "dev:vendedor-ia": "npm run start -w apps/vendedor-ia-worker",
+    "test:vendedor-ia": "npm run test -w packages/vendedor-ia"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,

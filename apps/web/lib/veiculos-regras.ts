@@ -143,47 +143,9 @@ export function placaParaTela(placa: string | null | undefined): string {
   return placa.length === 7 ? `${placa.slice(0, 3)}-${placa.slice(3)}` : placa;
 }
 
-/** "Onix LT 1.0 2021/2022" — como o carro aparece em lista e mensagem. */
-export function nomeDoVeiculo(v: { marca: string; modelo: string; versao?: string | null; anoFabricacao: number; anoModelo: number }): string {
-  const nome = [v.marca, v.modelo, v.versao].filter(Boolean).join(" ");
-  return `${nome} ${v.anoFabricacao}/${v.anoModelo}`;
-}
-
-function brl(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-/**
- * A ficha que vai para o cliente no WhatsApp. Sem custo, sem piso, sem placa
- * inteira (o final basta para o cliente achar o carro no pátio, e a placa
- * completa num print circula por aí).
- */
-export function fichaParaCliente(v: {
-  marca: string;
-  modelo: string;
-  versao?: string | null;
-  anoFabricacao: number;
-  anoModelo: number;
-  km: number;
-  cor?: string | null;
-  combustivel?: string | null;
-  cambio?: string | null;
-  opcionais?: string[];
-  precoCents: number;
-  descricao?: string | null;
-  placa?: string | null;
-}): string {
-  const linhas = [
-    `*${nomeDoVeiculo(v)}*`,
-    `💰 ${brl(v.precoCents)}`,
-    `📍 ${v.km.toLocaleString("pt-BR")} km`,
-    [v.cambio, v.combustivel, v.cor].filter(Boolean).join(" · "),
-    v.opcionais?.length ? `✅ ${v.opcionais.join(", ")}` : "",
-    v.placa ? `Final de placa ${v.placa.slice(-1)}` : "",
-    v.descricao?.trim() ?? "",
-  ];
-  return linhas.filter(Boolean).join("\n");
-}
+// A ficha do WhatsApp e o nome do carro moram no pacote do Vendedor IA, que
+// roda em outro processo e precisa mandar exatamente a mesma ficha.
+export { fichaParaCliente, nomeDoVeiculo } from "@dilon-zap/vendedor-ia/src/ficha";
 
 /** "R$ 85.900,00" → 8590000. Aceita "85900", "85.900", "85.900,50". */
 export function reaisParaCentavos(texto: string): number | null {
