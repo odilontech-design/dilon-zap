@@ -8,7 +8,11 @@ import { botaoPrimario, botaoSecundario, campo, erroDaResposta, fetcher, rotulo,
 
 type Painel = {
   configurada: boolean;
-  conta: { status: "CONECTADA" | "ERRO" | "DESCONECTADA"; contaNome: string | null; contaEmail: string | null; erro: string | null; conectadaEm: string } | null;
+  conta: { status: "CONECTADA" | "ERRO" | "DESCONECTADA"; contaNome: string | null; contaEmail: string | null; erro: string | null; conectadaEm: string; leadConfigId: string | null; leadErro: string | null; leadEm: string | null } | null;
+  leads: {
+    total30d: number;
+    recentes: { id: string; origem: string; nome: string; telefone: string | null; email: string | null; mensagem: string; semTelefone: boolean; negociacaoId: string | null; recebidoEm: string }[];
+  };
   config: { cep: string | null; telefone: string | null; whatsapp: string | null };
   contagem: Record<string, number>;
   disponiveis: number;
@@ -17,12 +21,15 @@ type Painel = {
 };
 
 const RETORNO: Record<string, { texto: string; erro?: boolean }> = {
-  conectada: { texto: "Conta da OLX conectada. Agora é só escolher os carros." },
+  conectada: { texto: "Conta da OLX conectada. Agora é só escolher os carros; os contatos dos compradores vão cair no CRM." },
+  "conectada-sem-leads": { texto: "Conta da OLX conectada, mas a OLX não aceitou o endereço dos contatos de compradores. Veja o motivo abaixo e tente de novo.", erro: true },
   negada: { texto: "A autorização foi negada na OLX.", erro: true },
   invalida: { texto: "O retorno da OLX não confere com o pedido. Tente conectar de novo.", erro: true },
   falhou: { texto: "A OLX não confirmou a conexão. Tente de novo em instantes.", erro: true },
   "nao-configurada": { texto: "A integração com a OLX ainda não foi configurada no servidor.", erro: true },
 };
+
+const ORIGEM: Record<string, string> = { whatsapp: "WhatsApp", telefone: "Telefone", chat: "Chat", financing: "Financiamento", olx: "OLX" };
 
 const ROTULOS: [string, string][] = [
   ["PUBLICADO", "No ar"],
@@ -188,6 +195,64 @@ export function PainelPortais() {
             </div>
           )}
           <p className="text-xs text-neutral-500">A sincronização roda a cada minuto. Carro vendido, reservado ou devolvido sai do ar sozinho.</p>
+        </section>
+      )}
+
+      {conectada && (
+        <section className={secao}>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold">Contatos de compradores</h2>
+            {conta?.leadConfigId && !conta.leadErro ? (
+              <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-xs text-emerald-700">Recebendo</span>
+            ) : (
+              <span className="rounded-full bg-red-500/10 px-2 py-0.5 text-xs text-red-600">Não configurado</span>
+            )}
+          </div>
+          <p className="text-xs text-neutral-500">
+            WhatsApp, telefone, chat e simulação de financiamento da OLX viram negociação no CRM, com o carro, o valor e a tarefa de chamar.
+            O chat da OLX chega só como aviso: para responder no próprio chat, use o portal. Para continuar a conversa, chame o comprador pelo telefone dele.
+          </p>
+          {conta?.leadErro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-600">{conta.leadErro}</p>}
+          {(!conta?.leadConfigId || conta.leadErro) && (
+            <div>
+              <button
+                className={botaoSecundario}
+                disabled={ocupado}
+                onClick={async () => {
+                  const r = await chamar("/api/portais/olx/leads", "POST");
+                  if (r) setAviso({ texto: "Pronto: a OLX vai entregar os contatos no CRM." });
+                }}
+              >
+                Tentar de novo
+              </button>
+              <span className="ml-2 text-xs text-neutral-500">Se a OLX recusar, desconecte e conecte de novo para renovar a autorização.</span>
+            </div>
+          )}
+          {data.leads.recentes.length > 0 ? (
+            <>
+              <p className="text-sm">{data.leads.total30d} contato(s) nos últimos 30 dias.</p>
+              <ul className="flex flex-col divide-y divide-neutral-100 text-sm">
+                {data.leads.recentes.map((l) => (
+                  <li key={l.id} className="flex flex-col gap-0.5 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{l.nome}</span>
+                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600">{ORIGEM[l.origem] ?? l.origem}</span>
+                      <span className="text-xs text-neutral-500">{new Date(l.recebidoEm).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })}</span>
+                      {l.negociacaoId && (
+                        <Link href="/funil" className="text-xs text-accent hover:underline">
+                          ver no CRM
+                        </Link>
+                      )}
+                    </div>
+                    {l.mensagem && <span className="text-xs text-neutral-600">{l.mensagem}</span>}
+                    {l.semTelefone && <span className="text-xs text-amber-700">Sem telefone: chame por e-mail{l.email ? ` (${l.email})` : ""}, ou pelo portal.</span>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="text-sm text-neutral-500">Nenhum contato ainda.</p>
+          )}
         </section>
       )}
 

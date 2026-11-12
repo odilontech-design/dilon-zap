@@ -6,6 +6,10 @@ import {
   decifrar,
   escolhaSegura,
   idParaOlx,
+  credencialDoLead,
+  novoTokenDeLead,
+  registrarEnderecoDeLeads,
+  removerEnderecoDeLeads,
   sugerir,
   type CatalogoOlx,
   type OpcaoCatalogo,
@@ -45,7 +49,7 @@ export async function painelPortais(tenantId: string) {
   const [conta, config, porStatus, disponiveis, comAnuncio] = await Promise.all([
     prisma.portalConta.findUnique({
       where: { tenantId_portal: { tenantId, portal: "OLX" } },
-      select: { status: true, contaNome: true, contaEmail: true, erro: true, conectadaEm: true },
+      select: { status: true, contaNome: true, contaEmail: true, erro: true, conectadaEm: true, leadConfigId: true, leadErro: true, leadEm: true },
     }),
     prisma.veiculosConfig.findUnique({ where: { tenantId }, select: { cepAnuncios: true, telefoneAnuncios: true, whatsapp: true } }),
     prisma.publicacaoPortal.groupBy({ by: ["status"], where: { tenantId, portal: "OLX", ativo: true }, _count: true }),
@@ -58,7 +62,18 @@ export async function painelPortais(tenantId: string) {
     take: 50,
     select: { id: true, veiculoId: true, status: true, erro: true, veiculo: { select: { marca: true, modelo: true, versao: true, anoModelo: true, placa: true } } },
   });
+  const desde = new Date(Date.now() - 30 * 86_400_000);
+  const [leadsTotal, leadsRecentes] = await Promise.all([
+    prisma.leadPortal.count({ where: { tenantId, portal: "OLX", recebidoEm: { gte: desde } } }),
+    prisma.leadPortal.findMany({
+      where: { tenantId, portal: "OLX" },
+      orderBy: { recebidoEm: "desc" },
+      take: 10,
+      select: { id: true, origem: true, nome: true, telefone: true, email: true, mensagem: true, semTelefone: true, negociacaoId: true, recebidoEm: true },
+    }),
+  ]);
   return {
+    leads: { total30d: leadsTotal, recentes: leadsRecentes },
     configurada: integracaoOlxConfigurada(),
     conta,
     config: { cep: config?.cepAnuncios ?? null, telefone: config?.telefoneAnuncios ?? null, whatsapp: config?.whatsapp ?? null },
@@ -132,4 +147,39 @@ export async function opcoesDoCatalogo(
   const sugeridas = procurado ? sugerir(procurado, dados, 5) : [];
   const ids = new Set(sugeridas.map((s) => s.id));
   return [...sugeridas, ...sugerir(null, dados).filter((o) => !ids.has(o.id))];
+}
+
+/**
+ * Registra na OLX o endereço que recebe os leads desta loja. Cada loja tem o
+ * seu (token na URL), gerado na primeira vez e mantido nas seguintes: trocar o
+ * endereço a cada reconexão deixaria a OLX entregando para um token morto.
+ */
+export async function registrarLeadsNaOlx(tenantId: string, urlBase: string): Promise<{ ok: boolean; erro?: string }> {
+  const segredo = segredoDosPortais();
+  const conta = await prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId, portal: "OLX" } } });
+  if (!segredo || !conta || conta.status !== "CONECTADA") return { ok: false, erro: "conecte a conta da OLX primeiro" };
+  const leadToken = conta.leadToken ?? novoTokenDeLead();
+  try {
+    const token = decifrar(conta.accessTokenCripto, chaveDoAmbiente());
+    const url = `${urlBase.replace(/\/$/, "")}/api/portais/olx/lead/${leadToken}`;
+    const configId = await registrarEnderecoDeLeads(token, url, credencialDoLead(leadToken, segredo), conta.leadConfigId);
+    await prisma.portalConta.update({ where: { id: conta.id }, data: { leadToken, leadConfigId: configId, leadErro: null, leadEm: new Date() } });
+    return { ok: true };
+  } catch (e) {
+    const erro = e instanceof Error ? e.message : "falha ao registrar o endereço de leads";
+    await prisma.portalConta.update({ where: { id: conta.id }, data: { leadToken, leadErro: erro.slice(0, 500) } });
+    return { ok: false, erro };
+  }
+}
+
+/** Tira o endereço de leads da OLX (ao desconectar), sem travar se ela não responder. */
+export async function removerLeadsDaOlx(tenantId: string) {
+  const conta = await prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId, portal: "OLX" } } });
+  if (!conta?.leadConfigId || !conta.accessTokenCripto) return;
+  try {
+    await removerEnderecoDeLeads(decifrar(conta.accessTokenCripto, chaveDoAmbiente()), conta.leadConfigId);
+    await prisma.portalConta.update({ where: { id: conta.id }, data: { leadConfigId: null, leadEm: null } });
+  } catch {
+    // A OLX continua chamando o endereço, que passa a responder 404 enquanto a conta está desconectada.
+  }
 }

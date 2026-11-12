@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
 import { chaveDoAmbiente, cifrar, credenciaisDoAmbiente, dadosDoUsuario, lerEstado, trocarCodigo } from "@dilon-zap/portais";
+import { registrarLeadsNaOlx } from "@/lib/portais";
 import { requireUser } from "@/lib/session";
 import { segredoDosPortais } from "@/lib/portais";
 import { logAudit } from "@/lib/audit";
@@ -38,7 +39,10 @@ export async function GET(req: Request) {
       update: { status: "CONECTADA", accessTokenCripto, contaNome: dados.nome, contaEmail: dados.email, erro: null, conectadaEm: agora },
     });
     await logAudit({ actor: user, action: "portais.olx.conectar", metadata: { conta: dados.email } });
-    return voltar("olx=conectada");
+    // Leads: falhar aqui não desfaz a conexão (os anúncios funcionam sem isso);
+    // o motivo fica na tela e a loja tenta de novo pelo botão.
+    const leads = await registrarLeadsNaOlx(user.tenantId, base);
+    return voltar(leads.ok ? "olx=conectada" : "olx=conectada-sem-leads");
   } catch (e) {
     console.error("[portais] retorno da OLX falhou:", e instanceof Error ? e.message : e);
     return voltar("olx=falhou");

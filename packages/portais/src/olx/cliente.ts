@@ -42,7 +42,7 @@ export function urlDeAutorizacao(app: CredenciaisApp, estado: string): string {
     client_id: app.clientId,
     redirect_uri: app.redirectUri,
     response_type: "code",
-    scope: "autoupload basic_user_info",
+    scope: "autoupload autoservice basic_user_info",
     state: estado,
   });
   return `${authUrl()}/oauth?${q}`;
@@ -144,3 +144,37 @@ export async function catalogo(token: string, marca?: string, modelo?: string): 
 
 /** Tamanho máximo do corpo do import (1 MB), com folga. */
 export const LIMITE_LOTE_BYTES = 900_000;
+
+const cabecalho = (token: string) => ({ "Content-Type": "application/json", Authorization: `Bearer ${token}` });
+
+/**
+ * Registra na OLX o endereço que recebe os leads da loja. A OLX chama essa
+ * URL a cada contato de comprador, mandando `credencial` no header
+ * Authorization. Precisa do escopo "autoservice" na autorização da conta.
+ */
+export async function registrarEnderecoDeLeads(token: string, url: string, credencial: string, configId?: string | null): Promise<string> {
+  if (configId) {
+    const res = await fetch(`${apiUrl()}/autoservice/v1/lead/${encodeURIComponent(configId)}`, {
+      method: "PUT",
+      headers: cabecalho(token),
+      body: JSON.stringify({ url, token: credencial }),
+      signal: tempo(),
+    });
+    if (res.ok) return configId;
+    if (res.status !== 404) await json(res, "atualização do endereço de leads");
+  }
+  const res = await fetch(`${apiUrl()}/autoservice/v1/lead`, {
+    method: "POST",
+    headers: cabecalho(token),
+    body: JSON.stringify({ url, token: credencial }),
+    signal: tempo(),
+  });
+  const d = await json<{ id?: string }>(res, "cadastro do endereço de leads");
+  if (!d.id) throw new ErroOlx("A OLX não devolveu o identificador do endereço de leads");
+  return d.id;
+}
+
+export async function removerEnderecoDeLeads(token: string, configId: string): Promise<void> {
+  const res = await fetch(`${apiUrl()}/autoservice/v1/lead/${encodeURIComponent(configId)}`, { method: "DELETE", headers: cabecalho(token), signal: tempo() });
+  if (!res.ok && res.status !== 404) throw new ErroOlx(`OLX respondeu ${res.status} ao remover o endereço de leads`, res.status);
+}

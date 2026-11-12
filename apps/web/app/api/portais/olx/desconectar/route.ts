@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { logAudit } from "@/lib/audit";
+import { removerLeadsDaOlx } from "@/lib/portais";
 
 /**
  * Para de sincronizar com a OLX. Os anúncios que já estão lá ficam como
@@ -15,6 +16,7 @@ export async function POST() {
   const bloqueio = await exigirRecurso(user, "VEICULOS");
   if (bloqueio) return bloqueio;
   if (!ehGerencia(user.role)) return NextResponse.json({ error: "só a gestão desconecta portais" }, { status: 403 });
+  await removerLeadsDaOlx(user.tenantId);
   await prisma.portalConta.updateMany({
     where: { tenantId: user.tenantId, portal: "OLX" },
     data: { status: "DESCONECTADA", accessTokenCripto: "", erro: null },

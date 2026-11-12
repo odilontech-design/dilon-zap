@@ -241,6 +241,7 @@ model Tenant {
   vendedorIaUsos        VendedorIaUso[]
   portaisContas         PortalConta[]
   publicacoesPortal     PublicacaoPortal[]
+  leadsPortal           LeadPortal[]
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -3919,6 +3920,14 @@ model PortalConta {
   contaEmail String?
   erro       String?
 
+  // Leads: a OLX chama /api/portais/olx/lead/<leadToken> a cada contato de
+  // comprador. O token na URL identifica a loja (um endereço único por
+  // anunciante, como a OLX exige). leadConfigId é o registro dessa URL lá.
+  leadToken    String?   @unique
+  leadConfigId String?
+  leadErro     String?
+  leadEm       DateTime?
+
   conectadaEm DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -3971,4 +3980,33 @@ model PublicacaoPortal {
 
   @@unique([veiculoId, portal])
   @@index([tenantId, portal, status])
+}
+
+/// Contato de comprador que veio de um portal (OLX: WhatsApp, telefone, chat,
+/// simulação de financiamento). Guarda o que chegou e o que virou no CRM: o
+/// portal não reenvia, então o que não for registrado aqui se perde.
+model LeadPortal {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  portal   Portal
+
+  // externalId do portal, ou um hash estável do contato: o mesmo lead
+  // entregue duas vezes não vira duas negociações.
+  chave        String
+  origem       String // whatsapp | telefone | chat | financing | olx
+  nome         String
+  email        String?
+  telefone     String? // só dígitos, com DDI
+  mensagem     String
+  idNoPortal   String? // listId do anúncio
+  linkAnuncio  String?
+  veiculoId    String?
+  negociacaoId String?
+  // Sem telefone não há como chamar no WhatsApp: fica aqui para a equipe ver.
+  semTelefone  Boolean  @default(false)
+  recebidoEm   DateTime @default(now())
+
+  @@unique([tenantId, portal, chave])
+  @@index([tenantId, recebidoEm])
 }

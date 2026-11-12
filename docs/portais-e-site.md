@@ -130,6 +130,33 @@ contra um servidor falso da OLX: `packages/portais/src/sincronizar.test-manual.t
   a conta fica "precisa de atenção" e o Zap para de insistir até a loja
   reconectar.
 
+**Contatos de compradores (leads e chat):**
+
+- **Entrada:** a OLX chama `/api/portais/olx/lead/<token>` a cada contato
+  (WhatsApp, telefone, chat, simulação de financiamento). O Zap registra esse
+  endereço na OLX sozinho ao conectar a conta (escopo `autoservice`); cada loja
+  tem o seu, como a OLX exige.
+- **No CRM:** vira negociação com origem "OLX", o carro no título, o valor dele
+  e a tarefa de chamar agora (WhatsApp para celular, ligação para fixo). O
+  mesmo comprador perguntando de novo pelo mesmo carro soma uma tarefa, sem
+  abrir outra negociação. O carro é achado pelo número do anúncio na OLX.
+- **Sem duplicar:** a OLX não reenvia o que falha, e pode entregar duas vezes.
+  A chave do lead (o `externalId`, ou um hash do contato) é única por loja.
+- **Sem telefone:** o lead fica guardado e aparece na aba Portais, com o e-mail.
+- **Chat:** a OLX entrega o chat só como aviso ("há uma conversa"). Responder
+  no próprio chat, hoje, só no portal; o Inbox não recebe nem responde o chat
+  da OLX. A API de chat da OLX (receber e responder por webhook) existe, mas
+  o Inbox é amarrado a sessões de WhatsApp, e levar isso para dentro do worker
+  do WhatsApp contraria o isolamento que escolhemos. Fica como próxima etapa
+  separada, se valer a pena.
+- **Segurança do endereço:** token na URL mais uma credencial no header
+  `Authorization`, derivada de `PORTAIS_CHAVE`. Sem as duas, 404 ou 401.
+- **Loja conectada antes desta versão:** precisa desconectar e conectar de
+  novo, para autorizar o escopo dos contatos. O botão "Tentar de novo" na aba
+  só repete o registro.
+- **Homologação:** a OLX pode pedir para testar o endereço com um anunciante
+  real antes de liberar a integração de leads em produção (suporteintegrador@olxbr.com).
+
 **Segurança:**
 
 - **Token da loja:** guardado no banco em AES-256-GCM, com a chave
@@ -153,7 +180,7 @@ contra um servidor falso da OLX: `packages/portais/src/sincronizar.test-manual.t
 **Limites desta versão:**
 
 - **Só carros (categoria 2020).** Moto e caminhão usam outros parâmetros na OLX.
-- **Leads do chat da OLX** ainda não entram no Inbox.
+- **Chat da OLX no Inbox:** não (ver acima). O contato chega no CRM.
 
 ### Mercado Livre e Webmotors (próximos)
 

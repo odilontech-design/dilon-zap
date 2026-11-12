@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "tsx src/seguranca.test-manual.ts && tsx src/olx/mapa.test-manual.ts && tsx src/olx/catalogo.test-manual.ts && tsx src/decisao.test-manual.ts",
+    "test": "tsx src/seguranca.test-manual.ts && tsx src/olx/mapa.test-manual.ts && tsx src/olx/catalogo.test-manual.ts && tsx src/olx/lead.test-manual.ts && tsx src/decisao.test-manual.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
