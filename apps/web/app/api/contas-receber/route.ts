@@ -38,17 +38,18 @@ export async function GET(req: Request) {
   const desde = tipoData === "vencimento" ? parseDia(q.get("desde")) : inicioDoDiaBR(q.get("desde"));
   const ate = tipoData === "vencimento" ? parseDia(q.get("ate")) : fimDoDiaBR(q.get("ate"));
 
+  const filtros = {
+    desde,
+    ate,
+    tipoData,
+    cliente: q.get("cliente")?.trim() || undefined,
+    tipo,
+    categoria: q.get("categoria")?.trim() || undefined,
+  } as const;
   const [linhas, resumo] = await Promise.all([
-    listarParcelas(user.tenantId, {
-      desde,
-      ate,
-      tipoData,
-      cliente: q.get("cliente")?.trim() || undefined,
-      status: status.length ? status : ["PENDENTE"],
-      tipo,
-      categoria: q.get("categoria")?.trim() || undefined,
-    }),
-    resumoDoAReceber(user.tenantId),
+    listarParcelas(user.tenantId, { ...filtros, status: status.length ? status : ["PENDENTE"] }),
+    // Os cartões seguem os mesmos filtros da lista (ver resumoDoAReceber).
+    resumoDoAReceber(user.tenantId, filtros),
   ]);
 
   return NextResponse.json({
