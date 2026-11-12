@@ -44,6 +44,7 @@ import {
   STATUS_COUNTS_INTERVAL,
   UNREAD_COUNT_INTERVAL,
 } from "@/lib/polling";
+import { EscolherVeiculo } from "@/components/escolher-veiculo";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
@@ -881,6 +882,9 @@ export function ConversationThread({
   // Produtos). Em grupo não aparece: é material pra mandar a cliente.
   const temMateriais = useRecurso("MATERIAIS");
   const [escolhendoMaterial, setEscolhendoMaterial] = useState(false);
+  // Revenda de veículos: mandar um carro do estoque na conversa.
+  const temVeiculos = useRecurso("VEICULOS");
+  const [escolhendoVeiculo, setEscolhendoVeiculo] = useState(false);
   const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
     temPedidos && !modoGrupo ? `/api/orders?conversationId=${conversationId}` : null,
     fetcher,
@@ -1660,6 +1664,15 @@ export function ConversationThread({
                   Material
                 </button>
               )}
+              {temVeiculos && !modoGrupo && (
+                <button
+                  onClick={() => setEscolhendoVeiculo(true)}
+                  title="Enviar um carro do estoque"
+                  className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
+                >
+                  Carro
+                </button>
+              )}
               {/* Bloquear é de pessoa: num grupo travaria a fila de envio pra
                   todo mundo dele. Pra parar de acompanhar, Gerenciar grupos. */}
               {!modoGrupo && (
@@ -2394,6 +2407,17 @@ export function ConversationThread({
             }
             setEnviandoContato(false);
             mutateMessages();
+          }}
+        />
+      )}
+      {escolhendoVeiculo && (
+        <EscolherVeiculo
+          conversationId={conversationId}
+          onFechar={() => setEscolhendoVeiculo(false)}
+          onEnviado={() => mutateMessages()}
+          onUsarTexto={(texto) => {
+            setDraft((atual) => (atual.trim() ? `${atual}\n\n${texto}` : texto));
+            setEscolhendoVeiculo(false);
           }}
         />
       )}

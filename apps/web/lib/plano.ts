@@ -8,6 +8,7 @@ import {
   type Recurso,
   type Assinatura,
 } from "./plano-regras";
+import { PLANOS_VEICULOS, ganhaMultiNumero } from "./veiculos-planos";
 
 /**
  * Onde o plano é aplicado de verdade: no servidor.
@@ -19,7 +20,7 @@ import {
  */
 
 async function carregarAssinatura(tenantId: string) {
-  const [assinatura, excecoes] = await Promise.all([
+  const [assinatura, excecoes, revenda] = await Promise.all([
     prisma.subscription.findUnique({
       where: { tenantId },
       select: { plano: true, plataformaCompleta: true },
@@ -28,13 +29,19 @@ async function carregarAssinatura(tenantId: string) {
       where: { tenantId },
       select: { recurso: true, ativo: true },
     }),
+    // O plano da revenda de veículos muda dois pontos do plano do Zap:
+    // usuários ilimitados e, no Revenda+, mais de um número.
+    prisma.veiculosConfig.findUnique({ where: { tenantId }, select: { plano: true } }),
   ]);
-  return { assinatura: assinatura as Assinatura, excecoes };
+  return { assinatura: assinatura as Assinatura, excecoes, planoVeiculos: revenda?.plano ?? null };
 }
 
 export async function recursosDoTenant(tenantId: string) {
-  const { assinatura, excecoes } = await carregarAssinatura(tenantId);
-  return recursosEfetivos(assinatura, excecoes);
+  const { assinatura, excecoes, planoVeiculos } = await carregarAssinatura(tenantId);
+  const efetivos = recursosEfetivos(assinatura, excecoes);
+  const excecaoMulti = excecoes.find((e) => e.recurso === "MULTI_NUMERO")?.ativo ?? null;
+  if (ganhaMultiNumero(planoVeiculos, efetivos.has("VEICULOS"), excecaoMulti)) efetivos.add("MULTI_NUMERO");
+  return efetivos;
 }
 
 /** Recursos que somem para o atendente quando a empresa liga pedidosSoGerencia. */
@@ -126,8 +133,11 @@ export async function exigirAlgumRecurso(
  * uma empresa que trocou de funcionário ficaria travada pra sempre.
  */
 export async function vagaDeAtendente(tenantId: string) {
-  const { assinatura } = await carregarAssinatura(tenantId);
-  const limite = limiteDeAtendentes(assinatura);
+  const { assinatura, excecoes, planoVeiculos } = await carregarAssinatura(tenantId);
+  // Revenda com plano de tabela: usuários ilimitados (é o que a página vende),
+  // seja qual for o plano do Zap por baixo.
+  const revendaComPlano = !!planoVeiculos && recursosEfetivos(assinatura, excecoes).has("VEICULOS");
+  const limite = revendaComPlano ? null : limiteDeAtendentes(assinatura);
 
   const ativos = await prisma.user.count({
     where: { tenantId, deactivatedAt: null, role: { not: "SUPERADMIN" } },
@@ -137,6 +147,6 @@ export async function vagaDeAtendente(tenantId: string) {
     cabe: limite === null || ativos < limite,
     ativos,
     limite,
-    plano: assinatura ? PLANOS[assinatura.plano].nome : null,
+    plano: revendaComPlano ? PLANOS_VEICULOS[planoVeiculos!].nome : assinatura ? PLANOS[assinatura.plano].nome : null,
   };
 }

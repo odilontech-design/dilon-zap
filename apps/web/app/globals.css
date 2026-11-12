@@ -43,6 +43,34 @@
   --n-950: 10 10 10;
 }
 
+/*
+ * Páginas comerciais públicas (ex.: /revenda-de-veiculos): sempre claras,
+ * com o acento da vertical, mesmo para quem usa o sistema em modo escuro.
+ * Fica DEPOIS do :root e do [data-theme="dark"] não importa: a classe é mais
+ * específica que o seletor do <html>, e as variáveis herdam do elemento mais
+ * próximo.
+ */
+.tema-comercial {
+  /* Paleta do site da Dilon Tech: cinza-claro de fundo e navy como acento
+     (o teal do site é claro demais para botão com texto branco). */
+  --canvas: 244 246 249;
+  --surface: 255 255 255;
+  --accent: 3 37 76;
+
+  --n-50: 250 250 250;
+  --n-100: 245 245 245;
+  --n-200: 229 229 229;
+  --n-300: 212 212 212;
+  --n-400: 163 163 163;
+  --n-500: 115 115 115;
+  --n-600: 82 82 82;
+  --n-700: 64 64 64;
+  --n-800: 38 38 38;
+  --n-900: 23 23 23;
+  --n-950: 10 10 10;
+  color-scheme: light;
+}
+
 [data-theme="dark"] {
   --canvas: 16 18 21;
   --surface: 26 29 33;

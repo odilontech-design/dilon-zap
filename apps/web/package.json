@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@dilon-zap/db": "*",
+    "@dilon-zap/portais": "*",
     "@dilon-zap/push": "*",
     "@dilon-zap/receivables": "*",
     "@dilon-zap/sdr-core": "*",
     "@dilon-zap/storage": "*",
+    "@dilon-zap/vendedor-ia": "*",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "emoji-picker-react": "^4.12.0",

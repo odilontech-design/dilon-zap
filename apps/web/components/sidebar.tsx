@@ -53,6 +53,13 @@ const NAV_ITEMS = [
     icon: icon(<><circle cx="6.5" cy="14" r="3.5" /><circle cx="17.5" cy="14" r="3.5" /><path d="M10 14h4M3 14l1.5-6h2M21 14l-1.5-6h-2" /></>),
   },
   {
+    // Para a revenda, o estoque é o trabalho do dia, como a OS para a ótica.
+    href: "/veiculos",
+    recurso: "VEICULOS" as Recurso,
+    label: "Veículos",
+    icon: icon(<><path d="M5 17h14M3 17v-4l2-5a2 2 0 0 1 1.9-1.4h10.2A2 2 0 0 1 19 8l2 5v4" /><circle cx="7.5" cy="17" r="2" /><circle cx="16.5" cy="17" r="2" /><path d="M4 12h16" /></>),
+  },
+  {
     href: "/grupos",
     recurso: "GRUPOS" as Recurso,
     label: "Grupos",

@@ -120,6 +120,53 @@ services:
       postgres:
         condition: service_healthy
 
+  # Vendedor IA: atende o WhatsApp das revendas com o estoque, pela API da
+  # Anthropic. Processo próprio, como o do SDR: se a API ficar lenta, a chave
+  # vencer ou o processo cair, o WhatsApp de todos os clientes segue normal
+  # (só a IA para de responder). Não usa env_file: recebe só o que usa.
+  #
+  # Subir só DEPOIS do db push do Vendedor IA.
+  vendedor-ia-worker:
+    build:
+      context: .
+      dockerfile: apps/vendedor-ia-worker/Dockerfile
+    restart: unless-stopped
+    logging: *log
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # Para acordar a fila de saída do worker do WhatsApp na hora.
+      WORKER_INTERNAL_URL: ${WORKER_INTERNAL_URL}
+      WORKER_INTERNAL_SECRET: ${WORKER_INTERNAL_SECRET}
+      # Endereço do site, para o link do carro na vitrine.
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NODE_OPTIONS: --max-old-space-size=256
+    mem_limit: 384m
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # Sincronização do estoque com os portais (OLX). Processo próprio: se cair,
+  # só os anúncios atrasam; WhatsApp, CRM e vitrine seguem normais.
+  portais-worker:
+    build:
+      context: .
+      dockerfile: apps/portais-worker/Dockerfile
+    restart: unless-stopped
+    logging: *log
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      PORTAIS_CHAVE: ${PORTAIS_CHAVE}
+      # Endereço público do Zap: a OLX baixa as fotos dos anúncios por ele.
+      NEXTAUTH_URL: ${NEXTAUTH_URL}
+      NODE_OPTIONS: --max-old-space-size=256
+    mem_limit: 384m
+    stop_grace_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   # Segundo produto, container próprio. Compartilha o Postgres da VPS, mas em
   # banco separado (ESQUADRIAS_DATABASE_URL no .env) — são clientes
   # diferentes, e um dump do Zap não pode arrastar dado de serralheria junto.
