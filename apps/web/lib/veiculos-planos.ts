@@ -16,9 +16,9 @@ export const PLANOS_VEICULOS: Record<
   PlanoVeiculos,
   { nome: string; mensalCents: number; carrosNoPatio: number; catalogoMeta: boolean; multiNumero: boolean }
 > = {
-  GARAGEM: { nome: "Garagem", mensalCents: 19_700, carrosNoPatio: 30, catalogoMeta: false, multiNumero: false },
-  REVENDA: { nome: "Revenda", mensalCents: 34_700, carrosNoPatio: 70, catalogoMeta: true, multiNumero: false },
-  REVENDA_MAIS: { nome: "Revenda+", mensalCents: 59_700, carrosNoPatio: 150, catalogoMeta: true, multiNumero: true },
+  GARAGEM: { nome: "Garagem", mensalCents: 39_700, carrosNoPatio: 30, catalogoMeta: false, multiNumero: false },
+  REVENDA: { nome: "Revenda", mensalCents: 59_700, carrosNoPatio: 70, catalogoMeta: true, multiNumero: false },
+  REVENDA_MAIS: { nome: "Revenda+", mensalCents: 89_700, carrosNoPatio: 150, catalogoMeta: true, multiNumero: true },
 };
 
 /** O adicional do Vendedor IA: teto de leads atendidos no mês e preço. */

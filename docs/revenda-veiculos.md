@@ -177,7 +177,7 @@ plano na ficha da empresa, no bloco "Revenda de veículos".
 
 | | Garagem | Revenda | Revenda+ |
 |---|---|---|---|
-| Preço | R$ 197 | R$ 347 | R$ 597 |
+| Preço | R$ 397 | R$ 597 | R$ 897 |
 | Carros no estoque (preparação, disponível e reservado) | 30 | 70 | 150 |
 | Catálogo do Facebook e Instagram | não | sim | sim |
 | Mais de um número de WhatsApp | não | não | sim |
@@ -517,7 +517,22 @@ Ligações com o que já existe:
 
 ---
 
-## 9. Preço e empacotamento (revisado com os preços da RPM)
+## 9. Preço e empacotamento
+
+> **Tabela em vigor (12/11/2026): Garagem R$ 397, Revenda R$ 597, Revenda+
+> R$ 897**, aplicada em `apps/web/lib/veiculos-planos.ts`. Os planos da
+> revenda incluem o Zap inteiro (com usuários ilimitados), então nenhum pode
+> custar menos que o Zap equivalente (Essencial R$ 297, Profissional R$ 497,
+> Escala R$ 797). Os primeiros números (R$ 197/347/597) ficavam abaixo do
+> próprio Zap e foram descartados. O histórico abaixo fica como registro do
+> raciocínio contra a RPM.
+>
+> Contra o mercado, a tabela fica acima da RPM (R$ 189,90 a R$ 499,90, com
+> 3, 5 e 10 acessos) e abaixo da AutoCerto completa (R$ 909, ou R$ 2.109
+> com IA). O argumento de venda é a equipe inteira no WhatsApp da loja, não
+> o preço.
+
+### Histórico: primeira hipótese (descartada)
 
 A primeira hipótese (R$ 249 por 30 carros) ficava **acima da RPM na entrada**,
 que cobra R$ 189,90 por 25 carros. Revisão:

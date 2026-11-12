@@ -25,8 +25,11 @@ Endereço sugerido: **`dilontech.com.br/veiculos`**. Incluir também um card
 espaçamento, mesmos botões e cards. As páginas das verticais precisam parecer
 irmãs.
 
-Uma diferença deliberada: o **acento é laranja** (`#E8590C`). O Zap usa verde e
-esquadrias usa azul, e é a cor que distingue as verticais sem quebrar a família.
+**Cores: a paleta do site inteiro da Dilon Tech** (decisão de 12/11/2026, no
+lugar do laranja próprio): navy `#03254C` nas seções escuras e nos títulos,
+teal `#00F5D4` nos botões (com texto navy) e nos rótulos, fundo `#F4F6F9` e
+texto `#1A202C`. Sobre fundo branco, ícones e ✓ ficam navy, porque o teal não
+tem contraste para texto.
 
 Tom de voz: **direto, de quem conhece o pátio**. Nada de "solução inovadora" ou
 "revolucione sua revenda". Quem lê sabe o que é FIPE, consignado, sinal e repasse.
@@ -136,7 +139,7 @@ Três colunas, com a do meio destacada como "mais escolhido".
 
 | | **Garagem** | **Revenda** | **Revenda+** |
 |---|---|---|---|
-| | R$ 197/mês | R$ 347/mês | R$ 597/mês |
+| | R$ 397/mês | R$ 597/mês | R$ 897/mês |
 | Carros em estoque | até 30 | até 70 | até 150 |
 | Usuários | ilimitados | ilimitados | ilimitados |
 | Estoque com custo, margem e FIPE | ✓ | ✓ | ✓ |
@@ -195,7 +198,7 @@ tempo de resposta e margem por carro.
 - Título da aba: "Revenda de veículos — Dilon Tech". Descrição: "Estoque com
   custo e margem, WhatsApp da loja, vendas, financeiro e site para revendas de
   seminovos."
-- Cores: fundo claro `#F6F5F3`, texto `#1F2A30`, acento `#E8590C`, seções escuras `#1F2A30`.
+- Cores: fundo `#F4F6F9`, texto `#1A202C`, botões e rótulos teal `#00F5D4` (texto navy), seções escuras navy `#03254C`.
 - Sem depoimentos nem logos de clientes: o módulo é novo e não temos depoimento
   real. O primeiro caso (a loja do piloto) só entra com autorização por escrito
   da loja e com números reais.

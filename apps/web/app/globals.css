@@ -51,9 +51,11 @@
  * próximo.
  */
 .tema-comercial {
-  --canvas: 246 245 243;
+  /* Paleta do site da Dilon Tech: cinza-claro de fundo e navy como acento
+     (o teal do site é claro demais para botão com texto branco). */
+  --canvas: 244 246 249;
   --surface: 255 255 255;
-  --accent: 232 89 12;
+  --accent: 3 37 76;
 
   --n-50: 250 250 250;
   --n-100: 245 245 245;

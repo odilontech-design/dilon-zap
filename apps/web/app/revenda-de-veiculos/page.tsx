@@ -28,7 +28,9 @@ export const metadata: Metadata = {
   },
 };
 
-const LARANJA = "#E8590C";
+// Paleta do site da Dilon Tech (dilontech.com.br): navy, teal, cinza-claro e tinta.
+const NAVY = "#03254C";
+const TEAL = "#00F5D4";
 
 const brl = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 
@@ -39,7 +41,7 @@ function Botao({ href, children, claro }: { href: string; children: React.ReactN
     <a
       href={href}
       className={`inline-flex items-center justify-center rounded-lg px-5 py-3 text-sm font-semibold transition ${
-        claro ? "border border-[#1F2A30]/20 bg-white text-[#1F2A30] hover:border-[#1F2A30]/40" : "bg-[#E8590C] text-white hover:opacity-90"
+        claro ? "border border-[#1A202C]/20 bg-white text-[#1A202C] hover:border-[#1A202C]/40" : "bg-[#00F5D4] text-[#03254C] hover:brightness-110"
       }`}
     >
       {children}
@@ -49,7 +51,7 @@ function Botao({ href, children, claro }: { href: string; children: React.ReactN
 
 function Icone({ d }: { d: React.ReactNode }) {
   return (
-    <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#E8590C]/10 text-[#E8590C]">
+    <span className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-[#00F5D4]/20 text-[#03254C]">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="h-5 w-5" aria-hidden>
         {d}
       </svg>
@@ -67,31 +69,31 @@ function TelaDaVenda() {
     ["Financiado (banco paga em 15 dias)", "− R$ 40.000"],
   ];
   return (
-    <div className="w-full max-w-md rounded-2xl border border-[#1F2A30]/10 bg-white p-5 shadow-xl shadow-[#1F2A30]/10">
+    <div className="w-full max-w-md rounded-2xl border border-[#1A202C]/10 bg-white p-5 shadow-xl shadow-[#1A202C]/10">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-xs font-medium uppercase tracking-wide text-[#E8590C]">Reservado · 12 dias em estoque</p>
-          <p className="mt-1 text-lg font-semibold text-[#1F2A30]">Volkswagen Polo TSI 2022/2023</p>
-          <p className="text-xs text-[#1F2A30]/60">28.500 km · Automático · FIPE −2,1%</p>
+          <p className="text-xs font-medium uppercase tracking-wide text-[#03254C]/70">Reservado · 12 dias em estoque</p>
+          <p className="mt-1 text-lg font-semibold text-[#1A202C]">Volkswagen Polo TSI 2022/2023</p>
+          <p className="text-xs text-[#1A202C]/60">28.500 km · Automático · FIPE −2,1%</p>
         </div>
         <div className="text-right">
-          <p className="text-xl font-bold text-[#1F2A30]">R$ 92.900</p>
+          <p className="text-xl font-bold text-[#1A202C]">R$ 92.900</p>
           <p className="text-xs font-medium text-emerald-700">Margem R$ 11.300 (12,2%)</p>
         </div>
       </div>
-      <div className="mt-4 flex flex-col gap-1.5 border-t border-[#1F2A30]/10 pt-4 text-sm">
+      <div className="mt-4 flex flex-col gap-1.5 border-t border-[#1A202C]/10 pt-4 text-sm">
         {linhas.map(([k, v]) => (
-          <div key={k} className="flex justify-between gap-3 text-[#1F2A30]/80">
+          <div key={k} className="flex justify-between gap-3 text-[#1A202C]/80">
             <span>{k}</span>
             <span className="tabular-nums">{v}</span>
           </div>
         ))}
-        <div className="mt-2 flex justify-between rounded-lg bg-[#E8590C]/10 px-3 py-2 font-semibold text-[#9a3a07]">
+        <div className="mt-2 flex justify-between rounded-lg bg-[#00F5D4]/15 px-3 py-2 font-semibold text-[#03254C]">
           <span>Crediário da loja: 2 × mensal</span>
           <span className="tabular-nums">R$ 10.000</span>
         </div>
       </div>
-      <div className="mt-4 rounded-lg bg-[#1F2A30] py-2.5 text-center text-sm font-semibold text-white">Registrar venda</div>
+      <div className="mt-4 rounded-lg bg-[#03254C] py-2.5 text-center text-sm font-semibold text-white">Registrar venda</div>
     </div>
   );
 }
@@ -101,8 +103,8 @@ function Conversa() {
   const balao = "max-w-[85%] rounded-2xl px-3.5 py-2 text-sm shadow-sm";
   return (
     <div className="mx-auto flex w-full max-w-sm flex-col gap-2 rounded-2xl bg-[#ECE5DD] p-4">
-      <div className={`${balao} self-start rounded-tl-sm bg-white text-[#1F2A30]`}>Boa tarde! Ainda tem o Polo branco?</div>
-      <div className={`${balao} self-end rounded-tr-sm bg-[#DCF8C6] p-1.5 text-[#1F2A30]`}>
+      <div className={`${balao} self-start rounded-tl-sm bg-white text-[#1A202C]`}>Boa tarde! Ainda tem o Polo branco?</div>
+      <div className={`${balao} self-end rounded-tr-sm bg-[#DCF8C6] p-1.5 text-[#1A202C]`}>
         <div className="flex h-32 items-end rounded-xl bg-gradient-to-br from-slate-300 via-slate-200 to-slate-400 p-2">
           <span className="rounded bg-black/50 px-1.5 text-[10px] text-white">1/5</span>
         </div>
@@ -115,7 +117,7 @@ function Conversa() {
           <p className="text-[#0a6aa1] underline">www.sualoja.com.br/…</p>
         </div>
       </div>
-      <div className={`${balao} self-end rounded-tr-sm bg-[#DCF8C6] text-[#1F2A30]`}>Tem sim! Quer vir ver amanhã de manhã?</div>
+      <div className={`${balao} self-end rounded-tr-sm bg-[#DCF8C6] text-[#1A202C]`}>Tem sim! Quer vir ver amanhã de manhã?</div>
     </div>
   );
 }
@@ -177,15 +179,15 @@ export default function RevendaDeVeiculosPage() {
   const planos = Object.keys(PLANOS_VEICULOS) as PlanoVeiculos[];
 
   return (
-    <div className="tema-comercial min-h-screen bg-[#F6F5F3] text-[#1F2A30]">
+    <div className="tema-comercial min-h-screen bg-[#F4F6F9] text-[#1A202C]">
       {/* Topo */}
-      <header className="sticky top-0 z-20 border-b border-[#1F2A30]/10 bg-[#F6F5F3]/90 backdrop-blur">
+      <header className="sticky top-0 z-20 border-b border-[#1A202C]/10 bg-[#F4F6F9]/90 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <a href="https://dilontech.com.br" aria-label="Dilon Tech">
             <LogoDilon />
           </a>
           <nav className="flex items-center gap-4 text-sm">
-            <a href="/login" className="hidden text-[#1F2A30]/70 hover:text-[#1F2A30] sm:inline">
+            <a href="/login" className="hidden text-[#1A202C]/70 hover:text-[#1A202C] sm:inline">
               Entrar
             </a>
             <Botao href="#contato">Falar com a Dilon Tech</Botao>
@@ -196,11 +198,11 @@ export default function RevendaDeVeiculosPage() {
       {/* 1. Herói */}
       <section className="mx-auto grid max-w-6xl items-center gap-10 px-4 py-12 md:grid-cols-2 md:py-20">
         <div className="flex flex-col gap-5">
-          <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: LARANJA }}>
+          <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: TEAL }}>
             Para revendas de seminovos
           </p>
           <h1 className="text-4xl font-bold leading-tight tracking-tight md:text-5xl">A venda acontece no WhatsApp. O resto também devia.</h1>
-          <p className="text-lg text-[#1F2A30]/75">
+          <p className="text-lg text-[#1A202C]/75">
             Estoque com custo e margem, o WhatsApp da loja com toda a equipe, reserva, venda e financeiro num sistema só, mais o site da sua revenda no seu domínio.
           </p>
           <div className="flex flex-wrap gap-3">
@@ -216,7 +218,7 @@ export default function RevendaDeVeiculosPage() {
       </section>
 
       {/* 2. O problema */}
-      <section className="bg-[#1F2A30] text-white">
+      <section className="bg-[#03254C] text-white">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <h2 className="max-w-2xl text-3xl font-bold tracking-tight">Hoje a sua venda está espalhada em quatro lugares</h2>
           <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -240,7 +242,7 @@ export default function RevendaDeVeiculosPage() {
         </div>
         <div className="order-1 flex flex-col gap-4 md:order-2">
           <h2 className="text-3xl font-bold tracking-tight">O “ainda tem?” respondido em dois cliques</h2>
-          <p className="text-[#1F2A30]/75">
+          <p className="text-[#1A202C]/75">
             O sistema de revenda comum é feito para o escritório, e o WhatsApp fica de fora, como um botão. Aqui é o contrário: o WhatsApp da loja é o centro, e o estoque está
             dentro da conversa.
           </p>
@@ -251,7 +253,7 @@ export default function RevendaDeVeiculosPage() {
               "Se ninguém respondeu, o sistema avisa o vendedor e o dono.",
             ].map((t) => (
               <li key={t} className="flex gap-2">
-                <span aria-hidden style={{ color: LARANJA }}>
+                <span aria-hidden style={{ color: NAVY }}>
                   ✓
                 </span>
                 {t}
@@ -266,27 +268,27 @@ export default function RevendaDeVeiculosPage() {
         <h2 className="text-3xl font-bold tracking-tight">Tudo o que a revenda usa no dia</h2>
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {RECURSOS.map((r) => (
-            <div key={r.titulo} className="flex flex-col gap-3 rounded-xl border border-[#1F2A30]/10 bg-white p-5">
+            <div key={r.titulo} className="flex flex-col gap-3 rounded-xl border border-[#1A202C]/10 bg-white p-5">
               <Icone d={r.icone} />
               <p className="font-semibold">{r.titulo}</p>
-              <p className="text-sm text-[#1F2A30]/70">{r.texto}</p>
+              <p className="text-sm text-[#1A202C]/70">{r.texto}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* 5. Como funciona */}
-      <section id="como-funciona" className="scroll-mt-20 border-y border-[#1F2A30]/10 bg-white">
+      <section id="como-funciona" className="scroll-mt-20 border-y border-[#1A202C]/10 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-16">
           <h2 className="text-3xl font-bold tracking-tight">Como funciona</h2>
           <ol className="mt-8 grid gap-6 md:grid-cols-4">
             {PASSOS.map(([t, d], i) => (
               <li key={t} className="flex flex-col gap-2">
-                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: LARANJA }}>
+                <span className="inline-flex h-9 w-9 items-center justify-center rounded-full text-sm font-bold text-white" style={{ background: NAVY }}>
                   {i + 1}
                 </span>
                 <p className="font-semibold">{t}</p>
-                <p className="text-sm text-[#1F2A30]/70">{d}</p>
+                <p className="text-sm text-[#1A202C]/70">{d}</p>
               </li>
             ))}
           </ol>
@@ -294,10 +296,10 @@ export default function RevendaDeVeiculosPage() {
       </section>
 
       {/* 6. Vendedor IA */}
-      <section className="bg-[#1F2A30] text-white">
+      <section className="bg-[#03254C] text-white">
         <div className="mx-auto grid max-w-6xl gap-8 px-4 py-16 md:grid-cols-2">
           <div className="flex flex-col gap-4">
-            <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: LARANJA }}>
+            <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: TEAL }}>
               Vendedor IA
             </p>
             <h2 className="text-3xl font-bold tracking-tight">Lead respondido às 23h de domingo</h2>
@@ -328,24 +330,24 @@ export default function RevendaDeVeiculosPage() {
           {planos.map((p) => {
             const destaque = p === "REVENDA";
             return (
-              <div key={p} className={`relative flex flex-col rounded-2xl border bg-white p-6 ${destaque ? "border-[#E8590C] shadow-lg shadow-[#E8590C]/10" : "border-[#1F2A30]/10"}`}>
+              <div key={p} className={`relative flex flex-col rounded-2xl border bg-white p-6 ${destaque ? "border-[#00F5D4] border-2 shadow-lg shadow-[#00F5D4]/20" : "border-[#1A202C]/10"}`}>
                 {destaque && (
-                  <span className="absolute -top-3 left-6 rounded-full px-3 py-0.5 text-xs font-semibold text-white" style={{ background: LARANJA }}>
+                  <span className="absolute -top-3 left-6 rounded-full px-3 py-0.5 text-xs font-semibold" style={{ background: TEAL, color: NAVY }}>
                     mais escolhido
                   </span>
                 )}
                 <p className="text-lg font-semibold">{PLANOS_VEICULOS[p].nome}</p>
                 <p className="mt-1">
                   <span className="text-3xl font-bold">{brl(PLANOS_VEICULOS[p].mensalCents)}</span>
-                  <span className="text-sm text-[#1F2A30]/60">/mês</span>
+                  <span className="text-sm text-[#1A202C]/60">/mês</span>
                 </p>
                 <ul className="mt-5 flex flex-col gap-2 text-sm">
                   {LINHAS_DO_PLANO.map((l) => {
                     const v = l.valor(p);
                     return (
-                      <li key={l.rotulo} className={`flex justify-between gap-3 ${v === "—" ? "text-[#1F2A30]/35" : ""}`}>
+                      <li key={l.rotulo} className={`flex justify-between gap-3 ${v === "—" ? "text-[#1A202C]/35" : ""}`}>
                         <span>{l.rotulo}</span>
-                        <span className="shrink-0 font-medium" style={v === "✓" ? { color: LARANJA } : undefined}>
+                        <span className="shrink-0 font-medium" style={v === "✓" ? { color: NAVY } : undefined}>
                           {v}
                         </span>
                       </li>
@@ -361,31 +363,31 @@ export default function RevendaDeVeiculosPage() {
             );
           })}
         </div>
-        <div className="mt-6 rounded-xl border border-[#1F2A30]/10 bg-white p-5 text-sm">
+        <div className="mt-6 rounded-xl border border-[#1A202C]/10 bg-white p-5 text-sm">
           <p className="font-semibold">Adicional para qualquer plano: Vendedor IA</p>
-          <p className="mt-1 text-[#1F2A30]/75">
+          <p className="mt-1 text-[#1A202C]/75">
             {PACOTES_VENDEDOR_IA.map((x) => `${brl(x.mensalCents)}/mês até ${x.leads.toLocaleString("pt-BR")} leads atendidos`).join(" · ")}
           </p>
         </div>
-        <p className="mt-4 text-sm text-[#1F2A30]/70">
+        <p className="mt-4 text-sm text-[#1A202C]/70">
           Usuários ilimitados em todos os planos. Na revenda, quem atende é a equipe inteira, e cobrar por acesso faria o dono escolher quem pode responder o cliente.
         </p>
       </section>
 
       {/* 8. Perguntas */}
-      <section className="border-t border-[#1F2A30]/10 bg-white">
+      <section className="border-t border-[#1A202C]/10 bg-white">
         <div className="mx-auto max-w-3xl px-4 py-16">
           <h2 className="text-3xl font-bold tracking-tight">Perguntas frequentes</h2>
-          <div className="mt-6 divide-y divide-[#1F2A30]/10">
+          <div className="mt-6 divide-y divide-[#1A202C]/10">
             {PERGUNTAS.map(([p, r]) => (
               <details key={p} className="group py-4">
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 font-medium">
                   {p}
-                  <span aria-hidden className="text-xl leading-none transition group-open:rotate-45" style={{ color: LARANJA }}>
+                  <span aria-hidden className="text-xl leading-none transition group-open:rotate-45" style={{ color: NAVY }}>
                     +
                   </span>
                 </summary>
-                <p className="mt-2 text-sm text-[#1F2A30]/75">{r}</p>
+                <p className="mt-2 text-sm text-[#1A202C]/75">{r}</p>
               </details>
             ))}
           </div>
@@ -393,7 +395,7 @@ export default function RevendaDeVeiculosPage() {
       </section>
 
       {/* 9. Chamada final + contato */}
-      <section id="contato" className="scroll-mt-20 bg-[#1F2A30] text-white">
+      <section id="contato" className="scroll-mt-20 bg-[#03254C] text-white">
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 md:grid-cols-2">
           <div className="flex flex-col gap-4">
             <h2 className="text-3xl font-bold tracking-tight">Comece pelo seu estoque</h2>
@@ -408,16 +410,16 @@ export default function RevendaDeVeiculosPage() {
             )}
           </div>
           {numero && (
-            <div className="rounded-2xl bg-white p-5 text-[#1F2A30]">
+            <div className="rounded-2xl bg-white p-5 text-[#1A202C]">
               <FormularioCadastro numero={numero} ramoInicial="Revenda de veículos" />
             </div>
           )}
         </div>
       </section>
 
-      <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-8 text-xs text-[#1F2A30]/60">
+      <footer className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-3 px-4 py-8 text-xs text-[#1A202C]/60">
         <span>© {new Date().getFullYear()} Dilon Tech</span>
-        <a href="https://dilontech.com.br" className="hover:text-[#1F2A30]">
+        <a href="https://dilontech.com.br" className="hover:text-[#1A202C]">
           dilontech.com.br
         </a>
       </footer>
