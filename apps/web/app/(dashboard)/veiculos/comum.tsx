@@ -169,7 +169,7 @@ export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos
     { id: "vendidos", href: "/veiculos?status=VENDIDO", rotulo: "Vendidos" },
     ...(gerencia
       ? [
-          { id: "importar", href: "/veiculos/importar", rotulo: "Importar planilha" },
+          { id: "importar", href: "/veiculos/importar", rotulo: "Importar" },
           { id: "vitrine", href: "/veiculos/configuracoes", rotulo: "Vitrine" },
           { id: "portais", href: "/veiculos/portais", rotulo: "Portais" },
           ...(temIa ? [{ id: "vendedor-ia", href: "/veiculos/vendedor-ia", rotulo: "Vendedor IA" }] : []),

@@ -3622,6 +3622,12 @@ model Veiculo {
   // foram baixadas para o nosso armazenamento. Esvazia conforme a tela de
   // importação baixa (em lotes, para não estourar o tempo de uma requisição).
   fotosParaImportar   String[] @default([])
+  // Veio do site atual da loja: o id do carro lá ("autocerto:5769805"). Evita
+  // importar duas vezes e serve para redirecionar o endereço antigo no Google.
+  siteOrigemId        String?
+  // Falso quando a quilometragem não veio (o site dizia "N/I"): o carro não
+  // vai à venda até alguém informar, para não aparecer com 0 km.
+  kmInformado         Boolean  @default(true)
   // Só para a equipe: "risco no para-choque", "chave reserva com o dono".
   observacoesInternas String?
 
@@ -3647,6 +3653,7 @@ model Veiculo {
 
   @@index([tenantId, status])
   @@index([tenantId, placa])
+  @@index([tenantId, siteOrigemId])
 }
 
 model CustoVeiculo {

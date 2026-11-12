@@ -90,12 +90,20 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   try {
     const atual = await prisma.veiculo.findFirst({
       where: { id: params.id, tenantId: user.tenantId },
-      select: { id: true, status: true, origem: true, precoCents: true, anoFabricacao: true, anoModelo: true },
+      select: { id: true, status: true, origem: true, precoCents: true, km: true, kmInformado: true, anoFabricacao: true, anoModelo: true },
     });
     if (!atual) throw new ErroDeVeiculo("veículo não encontrado", 404);
     const base = dadosParaBanco({ anoFabricacao: atual.anoFabricacao, anoModelo: atual.anoModelo, ...dados });
     if (status && !podeMudarStatus(atual.status as StatusVeiculo, status, atual.origem as OrigemVeiculo)) {
       throw new ErroDeVeiculo(`não dá para passar de "${ROTULO_STATUS[atual.status as StatusVeiculo]}" para "${ROTULO_STATUS[status]}" por aqui`, 409);
+    }
+    // Carro importado do site chega sem preço e/ou sem quilometragem: não vai à
+    // venda (nem à vitrine e aos portais) até a ficha ter os dois.
+    const precoFinal = dados.precoCents ?? atual.precoCents;
+    const kmInformado = atual.kmInformado || (dados.km !== undefined && (dados.km > 0 || dados.km !== atual.km));
+    if (status === "DISPONIVEL" && atual.status === "PREPARACAO") {
+      const faltas = [precoFinal <= 0 && "o preço", !kmInformado && "a quilometragem"].filter(Boolean);
+      if (faltas.length) throw new ErroDeVeiculo(`informe ${faltas.join(" e ")} antes de colocar o carro à venda`, 409);
     }
     if (atual.origem !== "CONSIGNACAO" && (consignacaoValorCents !== undefined || consignacaoAte !== undefined)) {
       throw new ErroDeVeiculo("este carro não é consignado");
@@ -107,6 +115,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
         where: { id: atual.id },
         data: {
           ...base,
+          ...(!atual.kmInformado && kmInformado ? { kmInformado: true } : {}),
           ...(status ? { status, statusDesde: new Date(), saidaEm: status === "DEVOLVIDO" ? new Date() : null } : {}),
           ...(consignacaoValorCents !== undefined ? { consignacaoValorCents } : {}),
           ...(consignacaoAte !== undefined ? { consignacaoAte: consignacaoAte ? new Date(consignacaoAte) : null } : {}),
