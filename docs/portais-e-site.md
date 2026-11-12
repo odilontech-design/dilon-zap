@@ -45,6 +45,50 @@ Testes:
   virando negociação e JSON-LD foram conferidos contra um Postgres local com o
   servidor rodando.
 
+### Aparência e páginas do site (v1.55.0)
+
+A vitrine deixou de ser só uma lista de carros: ganhou a moldura e as páginas
+de um site de loja, para a revenda poder tirar do ar o site antigo.
+
+**Veículos → Vitrine, o que a loja configura:**
+- **Aparência:** logo, banner da página inicial e cor da loja. O texto sobre a
+  cor é escolhido sozinho (claro ou escuro) para continuar legível.
+- **Horário de funcionamento, Instagram e Facebook:** viram rodapé e dados
+  estruturados do Google (`AutoDealer`, com telefone, horário e redes).
+- **Política de privacidade:** o Zap publica um modelo (LGPD) que cita a loja, o
+  que os formulários coletam e, se a loja ligou pixel ou Analytics, o
+  rastreamento. A loja pode colar o texto do advogado, que substitui o modelo.
+
+**Páginas públicas** (`/loja/<slug>/…`; no domínio próprio, o caminho curto):
+- **Menu da vitrine:** `Veículos` (início), `/venda-seu-carro`, `/financiamento`
+  e `/localizacao`. A `/privacidade` fica no rodapé.
+- **`/venda-seu-carro`:** o visitante descreve o carro dele. Vira negociação
+  "Avaliação: <carro> (site)" no CRM, com a tarefa de chamar no WhatsApp.
+- **`/financiamento`:** escolhe um carro da vitrine (ou nenhum), informa a
+  entrada e o que quiser. Vira negociação "Financiamento: <carro> (site)", com o
+  valor do carro. O botão "Simular financiamento" da página do carro abre essa
+  página com o carro já escolhido. **Não pede CPF nem renda** (a simulação é da equipe).
+- **`/localizacao`:** endereço, horário, WhatsApp e mapa do Google (sem chave de API).
+- **Mesmo comprador, mesmo assunto:** enviar o formulário de novo soma uma
+  tarefa na negociação aberta, em vez de abrir outra.
+- **Proteções dos formulários:** campo isca contra robô e limite de 5 envios por hora
+  por IP e por telefone (os mesmos do "Quero ser chamado").
+
+**Domínio próprio:** o middleware reescreve `/venda-seu-carro`, `/financiamento`,
+`/localizacao` e `/privacidade` para a loja dona do domínio. O sitemap passou a
+listar as páginas. `/painel`, `/login` e o resto continuam voltando para a vitrine.
+
+**Segurança do que a loja digita:** a cor só vale como `#rrggbb`; Instagram e
+Facebook são remontados a partir do usuário (qualquer outra coisa, como
+`javascript:`, é recusada); logo e banner só aceitam PNG, JPG ou WEBP (SVG fica
+de fora, porque pode carregar script) e são servidos por
+`/api/loja/<slug>/marca/<logo|banner>`.
+
+**Testes** (de `apps/web`): `npx tsx lib/vitrine-aparencia.test-manual.ts`
+(cor, redes, mapa, caminhos, política) e `DATABASE_URL=… npx tsx
+lib/lead-site-paginas.test-manual.ts` (formulários → CRM, isolamento entre lojas,
+lista de páginas do middleware igual à do código).
+
 ### Implantação
 
 1. `npm run db:push`: colunas novas em `VeiculosConfig` (`dominio`,

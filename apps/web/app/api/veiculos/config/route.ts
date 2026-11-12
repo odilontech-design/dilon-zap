@@ -6,6 +6,7 @@ import { ehGerencia } from "@/lib/papeis";
 import { logAudit } from "@/lib/audit";
 import { configRevendaSchema } from "@/lib/veiculos-schemas";
 import { baseDaLoja, configDaRevenda, linkDaLoja, normalizarDominio, normalizarWhatsapp } from "@/lib/vitrine";
+import { corValida, linkFacebook, linkInstagram } from "@/lib/vitrine-aparencia";
 import { temCatalogoMeta, type PlanoVeiculos } from "@/lib/veiculos-planos";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { SEM_PERMISSAO } from "@/lib/veiculos-api";
@@ -23,8 +24,12 @@ export async function GET() {
     numeroGeral(user.tenantId),
   ]);
   const base = `${baseDaLoja(null)}/api/loja/${tenant.slug}/feed`;
+  const { logoKey, bannerKey, ...publico } = cfg;
   return NextResponse.json({
-    ...cfg,
+    ...publico,
+    temLogo: !!logoKey,
+    temBanner: !!bannerKey,
+    slug: tenant.slug,
     link: linkDaLoja(tenant.slug, cfg.dominio),
     linkSemDominio: linkDaLoja(tenant.slug),
     hostDoSistema: (() => {
@@ -59,6 +64,9 @@ export async function PUT(req: Request) {
     if (dono) return NextResponse.json({ error: "este domínio já está cadastrado em outra loja" }, { status: 409 });
   }
 
+  if (d.instagram && !linkInstagram(d.instagram)) return NextResponse.json({ error: "Instagram inválido: use @usuario ou o endereço do perfil" }, { status: 400 });
+  if (d.facebook && !linkFacebook(d.facebook)) return NextResponse.json({ error: "Facebook inválido: use o nome da página ou o endereço dela" }, { status: 400 });
+
   const dados = {
     vitrineAtiva: d.vitrineAtiva,
     dominio,
@@ -70,6 +78,12 @@ export async function PUT(req: Request) {
     endereco: d.endereco || null,
     sobre: d.sobre || null,
     mostrarReservados: d.mostrarReservados,
+    corPrimaria: corValida(d.corPrimaria),
+    horario: d.horario || null,
+    // Guarda o que a loja digitou (o link é remontado na vitrine, nunca repassado como veio).
+    instagram: d.instagram || null,
+    facebook: d.facebook || null,
+    politicaPrivacidade: d.politicaPrivacidade || null,
   };
   await prisma.veiculosConfig.upsert({ where: { tenantId: user.tenantId }, create: { tenantId: user.tenantId, ...dados }, update: dados });
   await logAudit({ actor: user, action: "veiculos.config", metadata: { vitrineAtiva: d.vitrineAtiva } });
