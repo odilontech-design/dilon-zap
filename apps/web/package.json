@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@dilon-zap/db": "*",
+    "@dilon-zap/portais": "*",
     "@dilon-zap/push": "*",
     "@dilon-zap/receivables": "*",
     "@dilon-zap/sdr-core": "*",

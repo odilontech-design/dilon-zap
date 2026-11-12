@@ -162,7 +162,7 @@ export function clienteParaRota(c: ClienteEscolhido) {
   return "contactId" in c ? { contactId: c.contactId } : { novoCliente: c.novoCliente };
 }
 
-export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos" | "novo" | "vitrine" | "importar" | "vendedor-ia"; gerencia: boolean }) {
+export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos" | "novo" | "vitrine" | "portais" | "importar" | "vendedor-ia"; gerencia: boolean }) {
   const temIa = useRecurso("VENDEDOR_IA");
   const abas = [
     { id: "estoque", href: "/veiculos", rotulo: "Estoque" },
@@ -171,6 +171,7 @@ export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos
       ? [
           { id: "importar", href: "/veiculos/importar", rotulo: "Importar planilha" },
           { id: "vitrine", href: "/veiculos/configuracoes", rotulo: "Vitrine" },
+          { id: "portais", href: "/veiculos/portais", rotulo: "Portais" },
           ...(temIa ? [{ id: "vendedor-ia", href: "/veiculos/vendedor-ia", rotulo: "Vendedor IA" }] : []),
         ]
       : []),

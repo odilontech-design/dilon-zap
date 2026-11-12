@@ -90,30 +90,81 @@ resto.
 - [ ] Mercado Livre: criar o app em developers.mercadolivre.com.br (nome Dilon
       Zap, URL de retorno `https://zap.dilontech.com.br/api/portais/mercadolivre/retorno`).
 - [ ] OLX: e-mail ao time de integração pedindo `client_id`/`client_secret` do
-      Autoupload, com a mesma URL de retorno (`…/olx/retorno`).
+      Autoupload, com a mesma URL de retorno (`…/olx/retorno`). O conector já
+      está pronto (ver abaixo).
 - [ ] Webmotors: cadastro no portal de desenvolvedores e pedido de acesso ao
       ambiente de teste das APIs de Estoque e Leads.
 - [ ] Liberar `developers.mercadolivre.com.br` e `developers.olx.com.br` na rede
       da sessão de desenvolvimento, para conferir a documentação atual antes de
       codificar os conectores.
 
-### Desenho dos conectores (próxima etapa)
+### Conector da OLX (pronto, v1.51.0)
 
-- **Por empresa:** a conta de cada portal (tokens OAuth guardados
-  criptografados e renovados sozinhos).
-- **Por carro:** em quais portais anunciar. Cada publicação tem situação (na
-  fila, publicado, erro com o motivo do portal, removido), id e link do anúncio
-  no portal.
-- **Sincronização automática** por uma fila no Postgres, num processo próprio,
-  como o do Vendedor IA:
-  - carro novo e disponível: publica;
-  - preço ou fotos mudaram: atualiza;
-  - reservado: pausa;
-  - vendido ou devolvido: remove.
-- **Leads dos portais** (perguntas do ML, chat da OLX, API de Leads da Webmotors)
-  entram no Inbox ou no CRM com o carro vinculado.
-- Cada conector implementa a mesma interface: `publicar`, `atualizar`,
-  `pausar`, `remover` e `buscarLeads`.
+Falta só a credencial da OLX para ligar em produção. Testado ponta a ponta
+contra um servidor falso da OLX: `packages/portais/src/sincronizar.test-manual.ts`.
+
+**Como a loja usa:**
+
+1. **Veículos → Portais → Conectar a OLX.** A loja autoriza a conta
+   profissional dela na OLX e volta para o Zap.
+2. Preenche o **CEP** e o **telefone** dos anúncios. Sem telefone, vale o
+   WhatsApp da vitrine.
+3. Clica em **Anunciar todos os disponíveis**, ou em "Anunciar na OLX" na
+   ficha de cada carro.
+4. O Zap escolhe marca, modelo e versão no catálogo da OLX quando a escolha é
+   clara. Quando não é, a ficha mostra as listas com o mais parecido primeiro.
+
+**O que o worker faz** (`apps/portais-worker`, a cada minuto):
+
+- **Carro disponível e marcado:** publica.
+- **Mudou preço, km, fotos ou descrição:** atualiza. A comparação é pelo hash
+  do anúncio montado, então nada é enviado quando nada mudou.
+- **Reservado, vendido ou devolvido:** tira do ar. Carro que nunca chegou à
+  OLX só sai da fila, sem chamada à API.
+- **Lotes enviados:** confere o resultado. Grava o link do anúncio, ou a
+  recusa da OLX traduzida ("Placa inválida", "Versão do catálogo da OLX
+  inválida: escolha de novo").
+- **Falhas:** a nova tentativa espera 5 min, depois 10, 20… até 6 h. Se a
+  loja corrige a ficha, o envio sai na hora.
+- **Conta sem plano profissional (-6), bloqueada (-2) ou acesso revogado:**
+  a conta fica "precisa de atenção" e o Zap para de insistir até a loja
+  reconectar.
+
+**Segurança:**
+
+- **Token da loja:** guardado no banco em AES-256-GCM, com a chave
+  `PORTAIS_CHAVE`.
+- **Retorno do OAuth:** o `state` é assinado e só vale para a mesma empresa e
+  a mesma pessoa logada, por 15 minutos.
+- **Fotos:** a OLX baixa de `/api/portais/foto/<id>/<assinatura>.jpg`. O link
+  é assinado e só responde enquanto o carro está disponível e anunciado.
+
+**Para ligar em produção:**
+
+- [ ] Pedir à OLX (suporteintegrador@olxbr.com) o `client_id` e o
+      `client_secret` do Autoupload, com a URL de retorno
+      `https://zap.dilontech.com.br/api/portais/olx/retorno`.
+- [ ] No `.env` da VPS, preencher `OLX_CLIENT_ID`, `OLX_CLIENT_SECRET` e
+      `PORTAIS_CHAVE` (`openssl rand -base64 32`). Trocar a chave depois
+      desconecta todas as lojas.
+- [ ] `docker compose -f docker-compose.prod.yml up -d --build web portais-worker`
+      e `npm run db:push` (tabelas `PortalConta` e `PublicacaoPortal`).
+
+**Limites desta versão:**
+
+- **Só carros (categoria 2020).** Moto e caminhão usam outros parâmetros na OLX.
+- **Leads do chat da OLX** ainda não entram no Inbox.
+
+### Mercado Livre e Webmotors (próximos)
+
+- **Mesma estrutura da OLX:** usam as mesmas tabelas (`PortalConta`,
+  `PublicacaoPortal` com o portal no enum) e o mesmo motor de decisão
+  (`packages/portais/src/decisao.ts`). Cada portal precisa só do seu mapa de
+  campos e do seu cliente HTTP.
+- **Mercado Livre:** a documentação bloqueia acesso automatizado (403).
+  Precisa do app criado no portal de desenvolvedores, com alguém logado.
+- **Webmotors:** precisa do cadastro, da homologação, e a loja contrata o
+  "API Site".
 
 Fontes:
 - [Mercado Livre: publicação de automóveis](https://developers.mercadolivre.com.br/pt_br/publicacao-de-automoveis);

@@ -1,0 +1,19 @@
+# Contexto de build é a raiz do monorepo — mesmo motivo do Dockerfile do worker.
+# Processo próprio da sincronização com os portais: não importa o worker do WhatsApp nem abre porta.
+FROM node:20-slim
+WORKDIR /app
+
+# node:20-slim não vem com openssl; sem ele o Prisma não carrega a query engine.
+RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+COPY apps/portais-worker/package.json apps/portais-worker/package.json
+COPY packages/db/package.json packages/db/package.json
+COPY packages/portais/package.json packages/portais/package.json
+RUN npm install
+
+COPY . .
+RUN npm run db:generate
+
+ENV NODE_ENV=production
+CMD ["node", "--import", "tsx", "apps/portais-worker/src/index.ts"]

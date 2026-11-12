@@ -239,6 +239,8 @@ model Tenant {
   vendedorIaConfig      VendedorIaConfig?
   vendedorIaConversas   VendedorIaConversa[]
   vendedorIaUsos        VendedorIaUso[]
+  portaisContas         PortalConta[]
+  publicacoesPortal     PublicacaoPortal[]
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -3633,10 +3635,11 @@ model Veiculo {
   vendaDeOrigemId String?
   vendaDeOrigem   VendaVeiculo? @relation("TrocaDaVenda", fields: [vendaDeOrigemId], references: [id], onDelete: SetNull)
 
-  custos  CustoVeiculo[]
-  fotos   FotoVeiculo[]
-  vendas  VendaVeiculo[]  @relation("VendaDoVeiculo")
-  eventos EventoVeiculo[]
+  custos      CustoVeiculo[]
+  fotos       FotoVeiculo[]
+  publicacoes PublicacaoPortal[]
+  vendas      VendaVeiculo[]     @relation("VendaDoVeiculo")
+  eventos     EventoVeiculo[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3785,6 +3788,10 @@ model VeiculosConfig {
   // Formulário "quero ser chamado" na página do carro (vira negociação no CRM).
   formularioAtivo Boolean @default(true)
 
+  // Dados que os portais exigem em todo anúncio (OLX: CEP e telefone com DDD).
+  cepAnuncios      String?
+  telefoneAnuncios String?
+
   updatedAt DateTime @updatedAt
 }
 
@@ -3875,4 +3882,93 @@ model VendedorIaUso {
 
   @@index([tenantId, createdAt])
   @@index([conversationId])
+}
+
+// ---------------------------------------------------------------------------
+// Anúncios nos portais (OLX, Mercado Livre, Webmotors). Ver docs/portais-e-site.md
+// e packages/portais.
+// ---------------------------------------------------------------------------
+
+enum Portal {
+  OLX
+  MERCADO_LIVRE
+  WEBMOTORS
+}
+
+enum StatusContaPortal {
+  CONECTADA
+  ERRO
+  DESCONECTADA
+}
+
+/// A conta da loja num portal, autorizada por OAuth.
+model PortalConta {
+  id       String @id @default(cuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  portal   Portal
+
+  status             StatusContaPortal @default(CONECTADA)
+  // Tokens criptografados (AES-256-GCM, chave PORTAIS_CHAVE). Nunca em texto puro.
+  accessTokenCripto  String
+  refreshTokenCripto String?
+  expiraEm           DateTime?
+
+  // Para a tela: de quem é a conta no portal.
+  contaNome  String?
+  contaEmail String?
+  erro       String?
+
+  conectadaEm DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, portal])
+}
+
+enum StatusPublicacao {
+  // Na fila para enviar (novo ou com mudança).
+  FILA
+  // Enviado; aguardando o portal processar.
+  ENVIADO
+  PUBLICADO
+  // O portal recusou ou deu erro (motivo em `erro`); volta à fila quando o carro mudar.
+  ERRO
+  // Remoção pedida ao portal (carro vendido, ou a loja desligou o anúncio).
+  REMOVENDO
+  REMOVIDO
+}
+
+/// Um carro num portal: o que a loja quer (anunciar ou não) e como está lá.
+model PublicacaoPortal {
+  id        String  @id @default(cuid())
+  tenantId  String
+  tenant    Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  veiculoId String
+  veiculo   Veiculo @relation(fields: [veiculoId], references: [id], onDelete: Cascade)
+  portal    Portal
+
+  // A loja quer o carro anunciado neste portal.
+  ativo  Boolean          @default(true)
+  status StatusPublicacao @default(FILA)
+
+  // O id que nós mandamos ao portal (o mesmo em toda edição e na remoção).
+  idEnviado          String
+  // O id e o link do anúncio no portal, quando publicado.
+  idExterno          String?
+  url                String?
+  // Marca, modelo e versão no catálogo do portal (ids e nomes), escolhidos
+  // na ficha ou sugeridos pelo nome.
+  catalogo           Json?
+  // Resumo do que foi enviado: mudou, reenvia.
+  hashEnviado        String?
+  // Token do lote de importação (OLX), para consultar o resultado.
+  loteToken          String?
+  erro               String?
+  tentativas         Int       @default(0)
+  proximaTentativaEm DateTime?
+  enviadoEm          DateTime?
+  updatedAt          DateTime  @updatedAt
+
+  @@unique([veiculoId, portal])
+  @@index([tenantId, portal, status])
 }

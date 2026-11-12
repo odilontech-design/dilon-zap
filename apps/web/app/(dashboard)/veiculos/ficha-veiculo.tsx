@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
+import { AnuncioNosPortais } from "./portais-carro";
 import {
   ROTULO_CUSTO,
   ROTULO_ORIGEM,
@@ -225,6 +226,8 @@ export function FichaVeiculo({ id }: { id: string }) {
       {acao === "cancelar" && reserva && <PainelCancelar id={id} reserva={reserva} onPronto={pronto} />}
 
       <Fotos v={v} onMudou={() => mutate()} />
+
+      <AnuncioNosPortais id={id} gerencia={gerencia} />
 
       {v.vendas.filter((x) => x.status !== "CANCELADA").map((venda) => (
         <ResumoVenda key={venda.id} venda={venda} />
