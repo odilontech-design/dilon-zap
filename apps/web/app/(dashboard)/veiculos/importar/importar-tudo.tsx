@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { CompletarComAutoCerto } from "./completar-com-autocerto";
 import { ImportarDoSite } from "./importar-do-site";
 import { ImportarEstoque } from "./importar-estoque";
 import { SecaoFotos, useFotosDaImportacao } from "./fotos-da-importacao";
@@ -16,6 +17,7 @@ export function ImportarTudo() {
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <ImportarDoSite onFotos={baixarFotos} />
+      <CompletarComAutoCerto />
       <div>
         <h2 className="mb-3 text-sm font-semibold text-neutral-500">Ou envie uma planilha</h2>
         <ImportarEstoque onFotos={baixarFotos} />

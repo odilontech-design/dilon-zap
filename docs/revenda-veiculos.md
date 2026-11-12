@@ -213,6 +213,38 @@ redirecionamento. Tamanho da página limitado a 3 MB.
 - `npx tsx lib/importar-site-estoque.test-manual.ts`: motor com um site falso,
   Postgres, reimportação, plano e erros.
 
+## Implementado (v1.56.0): completar o estoque com a planilha do AutoCerto
+
+Veículos → **Importar** → "Completar com a planilha do AutoCerto". Segundo passo da
+migração da Sales: depois de trazer os carros do site (fotos e opcionais), a
+planilha de estoque que o AutoCerto exporta (Estoque e Integrador → Estoque →
+exportar) traz o que o site esconde.
+
+**O que a planilha tem e o site não:** placa (60 de 60 na da Sales), o preço dos
+classificados (o "Preço" do site é 0, daí o "Sob Consulta"), o valor FIPE, a
+data de cadastro e o ano de fabricação (o site mostra só o do modelo).
+
+**O que ela também não tem:** a **quilometragem**. O AutoCerto grava 0 e a loja
+nunca a preencheu lá (na da Sales, 3 de 60 têm). Ela precisa ser informada carro
+por carro; os carros continuam em preparação até lá.
+
+**Como casa:** pela marca, modelo, versão, **ano do modelo** e cor, só quando o
+par é único dos dois lados (na Sales, 60 de 60 casaram 1 a 1). Repetido ou sem par
+fica de fora e aparece na conferência.
+
+**O que preenche:** só campo vazio (preço 0, sem placa, sem FIPE, km não informada).
+Nada que alguém tenha digitado é sobrescrito, então repetir a operação não muda
+nada. Nos carros vindos do site, também acerta o ano de fabricação e a data de
+entrada (que passam a contar os dias reais em estoque). Placa que já está em
+outro carro do estoque não é aplicada.
+
+**Arquivo:** o AutoCerto exporta uma tabela HTML com extensão `.xls`, em Latin-1 e
+sem `<tr>`. O leitor aceita o arquivo como ele vem, inclusive com os acentos lidos
+errado no cabeçalho.
+
+**Teste** (de `apps/web`): `DATABASE_URL=… npx tsx lib/importar-autocerto.test-manual.ts`
+(dados inventados; com `AUTOCERTO_XLS=<arquivo>` confere também a planilha real).
+
 ## Implementado (v1.48.0): planos da revenda
 
 Tabela em `apps/web/lib/veiculos-planos.ts`, com teste. O Super Admin define o
