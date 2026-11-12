@@ -26,7 +26,7 @@ export function ListaDeCarros({ slug, carros }: { slug: string; carros: CarroPub
     );
     if (ordem === "menor") f.sort((a, b) => a.precoCents - b.precoCents);
     if (ordem === "maior") f.sort((a, b) => b.precoCents - a.precoCents);
-    if (ordem === "km") f.sort((a, b) => a.km - b.km);
+    if (ordem === "km") f.sort((a, b) => (a.kmInformado ? a.km : Infinity) - (b.kmInformado ? b.km : Infinity)); // sem km informada vai para o fim
     return f;
   }, [carros, busca, marca, precoMax, ordem]);
 

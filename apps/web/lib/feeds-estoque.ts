@@ -14,7 +14,8 @@ export type CarroDoFeed = {
   versao: string | null;
   anoFabricacao: number;
   anoModelo: number;
-  km: number;
+  /** Nulo quando a loja não informou: o feed deixa em branco em vez de dizer 0 km. */
+  km: number | null;
   cor: string | null;
   combustivel: string | null;
   cambio: string | null;
@@ -80,7 +81,7 @@ export function feedMetaCsv(loja: LojaDoFeed, carros: CarroDoFeed[]): string {
   const linhas = carros.map((c) =>
     [
       c.id, titulo(c), descricao(c), c.url, c.marca, c.modelo, c.anoModelo, c.versao,
-      c.km, "KM", `${reais(c.precoCents)} BRL`, "USED", c.status === "RESERVADO" ? "PENDING" : "AVAILABLE", "OTHER",
+      c.km, c.km == null ? "" : "KM", `${reais(c.precoCents)} BRL`, "USED", c.status === "RESERVADO" ? "PENDING" : "AVAILABLE", "OTHER",
       c.cor, cambioMeta(c.cambio), combustivelMeta(c.combustivel), c.diasEmEstoque, loja.endereco,
       ...Array.from({ length: maxFotos }, (_, i) => c.fotos[i] ?? ""),
     ]

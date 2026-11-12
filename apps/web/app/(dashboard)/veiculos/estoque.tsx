@@ -23,6 +23,7 @@ type Linha = {
   anoFabricacao: number;
   anoModelo: number;
   km: number;
+  kmInformado: boolean;
   cor: string | null;
   cambio: string | null;
   precoCents: number;
@@ -160,7 +161,7 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
                   {v.marca} {v.modelo} {v.versao ?? ""}
                 </span>
                 <span className="text-xs text-neutral-500">
-                  {v.anoFabricacao}/{v.anoModelo} · {v.km.toLocaleString("pt-BR")} km{v.placa ? ` · ${placaParaTela(v.placa)}` : ""}
+                  {v.anoFabricacao}/{v.anoModelo} · {v.kmInformado ? `${v.km.toLocaleString("pt-BR")} km` : "km não informada"}{v.placa ? ` · ${placaParaTela(v.placa)}` : ""}
                   {v.origem !== "COMPRA" ? ` · ${ROTULO_ORIGEM[v.origem]}` : ""}
                 </span>
                 <div className="mt-1 flex items-baseline justify-between gap-2">

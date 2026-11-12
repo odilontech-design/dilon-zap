@@ -65,6 +65,7 @@ type Ficha = Record<string, unknown> & {
   anoModelo: number;
   km: number;
   kmInformado: boolean;
+  exigirKm: boolean;
   siteOrigemId: string | null;
   placa: string | null;
   precoCents: number;
@@ -173,9 +174,9 @@ export function FichaVeiculo({ id }: { id: string }) {
         </div>
       </div>
 
-      {gerencia && v.status === "PREPARACAO" && v.siteOrigemId && (v.precoCents <= 0 || !v.kmInformado) && (
+      {gerencia && v.status === "PREPARACAO" && v.siteOrigemId && (v.precoCents <= 0 || (v.exigirKm && !v.kmInformado)) && (
         <p role="status" className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
-          Carro importado do site antigo: falta informar {[v.precoCents <= 0 && "o preço", !v.kmInformado && "a quilometragem", !v.placa && "a placa"].filter(Boolean).join(", ")} em “Ficha do carro”
+          Carro importado do site antigo: falta informar {[v.precoCents <= 0 && "o preço", v.exigirKm && !v.kmInformado && "a quilometragem", !v.placa && "a placa"].filter(Boolean).join(", ")} em “Ficha do carro”
           (abaixo). Só depois dá para clicar em “Pronto para vender”.
         </p>
       )}

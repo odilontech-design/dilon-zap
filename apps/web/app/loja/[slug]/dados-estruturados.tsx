@@ -18,7 +18,7 @@ export function carroParaJsonLd(c: Omit<CarroPublico, "fotos" | "entradaEm"> & {
     ...(c.versao ? { vehicleConfiguration: c.versao } : {}),
     vehicleModelDate: String(c.anoModelo),
     productionDate: String(c.anoFabricacao),
-    mileageFromOdometer: { "@type": "QuantitativeValue", value: c.km, unitCode: "KMT" },
+    ...(c.kmInformado ? { mileageFromOdometer: { "@type": "QuantitativeValue", value: c.km, unitCode: "KMT" } } : {}),
     itemCondition: "https://schema.org/UsedCondition",
     ...(c.cor ? { color: c.cor } : {}),
     ...(c.combustivel ? { fuelType: c.combustivel } : {}),

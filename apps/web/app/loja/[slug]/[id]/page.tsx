@@ -66,7 +66,7 @@ export default async function CarroPage({
   );
   const ficha: [string, string | number | null][] = [
     ["Ano", `${carro.anoFabricacao}/${carro.anoModelo}`],
-    ["Quilometragem", `${carro.km.toLocaleString("pt-BR")} km`],
+    ["Quilometragem", carro.kmInformado ? `${carro.km.toLocaleString("pt-BR")} km` : null],
     ["Câmbio", carro.cambio],
     ["Combustível", carro.combustivel],
     ["Cor", carro.cor],
