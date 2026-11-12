@@ -3,6 +3,7 @@ import { recursosDoTenant } from "@/lib/plano";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { temCatalogoMeta, type PlanoVeiculos } from "@/lib/veiculos-planos";
+import { COR_PADRAO, corValida, horarioEmLinhas, linkFacebook, linkInstagram } from "@/lib/vitrine-aparencia";
 
 /**
  * Vitrine pública da revenda: /loja/[slug] e /loja/[slug]/[veiculoId].
@@ -136,6 +137,15 @@ export type LojaPublica = {
   sobre: string | null;
   whatsapp: string | null;
   mostrarReservados: boolean;
+  /** Aparência: a cor é sempre válida (#rrggbb); logo e banner são servidos em /api/loja/[slug]/marca/[logo|banner]. */
+  cor: string;
+  temLogo: boolean;
+  temBanner: boolean;
+  horario: string[];
+  instagram: string | null;
+  facebook: string | null;
+  /** Texto próprio da política de privacidade; nulo = o modelo padrão. */
+  politica: string | null;
 };
 
 /** A loja pelo slug, ou null se não existe, não tem o recurso ou não ligou a vitrine. */
@@ -166,7 +176,22 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     sobre: cfg.sobre,
     whatsapp,
     mostrarReservados: cfg.mostrarReservados,
+    cor: corValida(cfg.corPrimaria) ?? COR_PADRAO,
+    temLogo: !!cfg.logoKey,
+    temBanner: !!cfg.bannerKey,
+    horario: horarioEmLinhas(cfg.horario),
+    instagram: linkInstagram(cfg.instagram),
+    facebook: linkFacebook(cfg.facebook),
+    politica: cfg.politicaPrivacidade?.trim() || null,
   };
+}
+
+/** A chave da imagem de marca (logo ou banner) da loja, se a vitrine está no ar e a loja tem a imagem. */
+export async function imagemDaMarca(slug: string, tipo: "logo" | "banner"): Promise<string | null> {
+  const loja = await lojaPublica(slug);
+  if (!loja) return null;
+  const cfg = await prisma.veiculosConfig.findUnique({ where: { tenantId: loja.tenantId }, select: { logoKey: true, bannerKey: true } });
+  return (tipo === "logo" ? cfg?.logoKey : cfg?.bannerKey) ?? null;
 }
 
 function ondePublico(loja: LojaPublica): Prisma.VeiculoWhereInput {

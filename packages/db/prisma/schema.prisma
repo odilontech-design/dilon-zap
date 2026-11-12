@@ -3789,6 +3789,18 @@ model VeiculosConfig {
   // Formulário "quero ser chamado" na página do carro (vira negociação no CRM).
   formularioAtivo Boolean @default(true)
 
+  // Aparência e páginas da vitrine. Logo e banner são chaves no R2 (servidos em
+  // /api/loja/[slug]/marca/[logo|banner]); a cor é #RRGGBB.
+  logoKey             String?
+  bannerKey           String?
+  corPrimaria         String?
+  // "Seg a Sex 8h às 18h" (uma linha por faixa), redes e um texto próprio de
+  // política de privacidade (vazio = o modelo padrão do Zap).
+  horario             String?
+  instagram           String?
+  facebook            String?
+  politicaPrivacidade String?
+
   // Dados que os portais exigem em todo anúncio (OLX: CEP e telefone com DDD).
   cepAnuncios      String?
   telefoneAnuncios String?

@@ -8,6 +8,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * cadastrado, ver /api/loja/dominio/permitido). Nesse domínio:
  *
  *   /             → a vitrine da loja (/loja/[slug])
+ *   /financiamento, /venda-seu-carro, /localizacao, /privacidade → as páginas dela
  *   /sitemap.xml  → o sitemap dela
  *   /robots.txt   → o robots dela
  *   /loja/[slug]/… e /api/loja/[slug]/… seguem normais (fotos, formulário, feeds)
@@ -17,6 +18,9 @@ import { NextResponse, type NextRequest } from "next/server";
  * Quem é dono do domínio vem de /api/loja/dominio, com cache de 1 minuto em
  * memória: a pergunta é ao banco, e uma vitrine recebe muitas visitas.
  */
+
+/** As páginas internas da vitrine (a mesma lista de PAGINAS em lib/vitrine-aparencia.ts; o middleware não importa o módulo, para ficar leve). */
+const PAGINAS_DA_LOJA = new Set(["venda-seu-carro", "financiamento", "localizacao", "privacidade"]);
 
 const cache = new Map<string, { slug: string | null; ate: number }>();
 const TTL_MS = 60_000;
@@ -60,6 +64,9 @@ export async function middleware(req: NextRequest) {
     return NextResponse.rewrite(url);
   };
   if (p === "/") return reescrever(`/loja/${slug}`);
+  // Páginas da loja no domínio próprio: /financiamento, /localizacao… (com ou sem barra no fim).
+  const pagina = p.replace(/\/+$/, "").slice(1);
+  if (PAGINAS_DA_LOJA.has(pagina)) return reescrever(`/loja/${slug}/${pagina}`);
   if (p === "/sitemap.xml") return reescrever(`/api/loja/${slug}/sitemap`);
   if (p === "/robots.txt") return reescrever(`/api/loja/${slug}/robots`);
   if (p === `/loja/${slug}` || p.startsWith(`/loja/${slug}/`) || p.startsWith(`/api/loja/${slug}/`) || p.startsWith("/_next/") || /\.(png|ico|svg|jpg|webmanifest)$/.test(p)) {

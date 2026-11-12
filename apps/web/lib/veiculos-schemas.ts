@@ -159,4 +159,9 @@ export const configRevendaSchema = z.object({
   metaPixelId: z.string().trim().regex(/^\d{5,20}$/, "o ID do pixel tem só números").nullable().optional().or(z.literal("")),
   ga4Id: z.string().trim().toUpperCase().regex(/^G-[A-Z0-9]{4,15}$/, "o ID do Google Analytics começa com G-").nullable().optional().or(z.literal("")),
   formularioAtivo: z.boolean(),
+  corPrimaria: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "a cor precisa ser no formato #1f6f4a").nullable().optional().or(z.literal("")),
+  horario: texto(300),
+  instagram: texto(100),
+  facebook: texto(150),
+  politicaPrivacidade: texto(8000),
 });

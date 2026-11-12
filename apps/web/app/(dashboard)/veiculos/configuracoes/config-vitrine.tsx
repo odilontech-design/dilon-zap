@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { botaoPrimario, botaoSecundario, campo, erroDaResposta, fetcher, rotulo, secao } from "../comum";
+import { ImagemDaMarca } from "./imagem-da-marca";
 
 type Config = {
   vitrineAtiva: boolean;
@@ -15,6 +16,14 @@ type Config = {
   metaPixelId: string | null;
   ga4Id: string | null;
   formularioAtivo: boolean;
+  corPrimaria: string | null;
+  horario: string | null;
+  instagram: string | null;
+  facebook: string | null;
+  politicaPrivacidade: string | null;
+  temLogo: boolean;
+  temBanner: boolean;
+  slug: string;
   linkSemDominio: string;
   hostDoSistema: string | null;
   feeds: { facebook: string | null; xml: string; json: string };
@@ -26,7 +35,8 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true });
+  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true, corPrimaria: "", horario: "", instagram: "", facebook: "", politicaPrivacidade: "" });
+  const [versaoImagens, setVersaoImagens] = useState(0);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
   useEffect(() => {
@@ -42,6 +52,11 @@ export function ConfigVitrine() {
         metaPixelId: data.metaPixelId ?? "",
         ga4Id: data.ga4Id ?? "",
         formularioAtivo: data.formularioAtivo,
+        corPrimaria: data.corPrimaria ?? "",
+        horario: data.horario ?? "",
+        instagram: data.instagram ?? "",
+        facebook: data.facebook ?? "",
+        politicaPrivacidade: data.politicaPrivacidade ?? "",
       });
   }, [data]);
 
@@ -108,6 +123,42 @@ export function ConfigVitrine() {
       </section>
 
       <section className={secao}>
+        <h2 className="text-sm font-semibold">Aparência</h2>
+        <p className="text-xs text-neutral-500">Logo, banner e cor do site da loja. Aparecem na vitrine e nas páginas de Venda seu carro, Financiamento, Localização e Privacidade.</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <ImagemDaMarca tipo="logo" titulo="Logo" dica="PNG, JPG ou WEBP, até 3 MB. Fundo transparente fica melhor." slug={data.slug} tem={data.temLogo} versao={versaoImagens} onMudou={() => { setVersaoImagens((v) => v + 1); mutate(); }} onAviso={setAviso} />
+          <ImagemDaMarca tipo="banner" titulo="Banner da página inicial" dica="PNG, JPG ou WEBP, até 6 MB. Largura de 1600 px ou mais." slug={data.slug} tem={data.temBanner} versao={versaoImagens} onMudou={() => { setVersaoImagens((v) => v + 1); mutate(); }} onAviso={setAviso} />
+        </div>
+        <label className="flex flex-col gap-1" htmlFor="vitrine-cor">
+          <span className={rotulo}>Cor da loja</span>
+          <div className="flex items-center gap-2">
+            <input aria-label="Escolher cor" type="color" value={/^#[0-9a-fA-F]{6}$/.test(f.corPrimaria) ? f.corPrimaria : "#1f6f4a"} onChange={(e) => setF({ ...f, corPrimaria: e.target.value })} className="h-10 w-14 cursor-pointer rounded border border-neutral-300 bg-surface p-1" />
+            <input id="vitrine-cor" value={f.corPrimaria} onChange={(e) => setF({ ...f, corPrimaria: e.target.value })} placeholder="#1f6f4a (vazio = verde padrão)" className={`${campo} max-w-[240px]`} />
+          </div>
+          <span className="text-xs text-neutral-500">Usada no menu, nos botões e na faixa de abertura. O texto sobre a cor muda sozinho (claro ou escuro) para continuar legível.</span>
+        </label>
+      </section>
+
+      <section className={secao}>
+        <h2 className="text-sm font-semibold">Horário e redes sociais</h2>
+        <label className="flex flex-col gap-1" htmlFor="vitrine-horario">
+          <span className={rotulo}>Horário de funcionamento</span>
+          <textarea id="vitrine-horario" rows={3} value={f.horario} onChange={(e) => setF({ ...f, horario: e.target.value })} placeholder={"Segunda a sexta, das 8h às 18h\nSábado, das 8h às 12h"} className={campo} />
+          <span className="text-xs text-neutral-500">Uma faixa por linha.</span>
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1" htmlFor="vitrine-instagram">
+            <span className={rotulo}>Instagram</span>
+            <input id="vitrine-instagram" value={f.instagram} onChange={(e) => setF({ ...f, instagram: e.target.value })} placeholder="@sualoja" className={campo} />
+          </label>
+          <label className="flex flex-col gap-1" htmlFor="vitrine-facebook">
+            <span className={rotulo}>Facebook</span>
+            <input id="vitrine-facebook" value={f.facebook} onChange={(e) => setF({ ...f, facebook: e.target.value })} placeholder="nome da página ou endereço" className={campo} />
+          </label>
+        </div>
+      </section>
+
+      <section className={secao}>
         <h2 className="text-sm font-semibold">Domínio próprio</h2>
         <label className="flex flex-col gap-1">
           <span className={rotulo}>Endereço do site da loja</span>
@@ -160,6 +211,15 @@ export function ConfigVitrine() {
           ))}
           <span className="text-neutral-500">No Gerenciador de Comércio da Meta: Catálogos → Veículos → Fonte de dados → Feed programado, colando o link do CSV.</span>
         </div>
+      </section>
+
+      <section className={secao}>
+        <h2 className="text-sm font-semibold">Política de privacidade</h2>
+        <p className="text-xs text-neutral-500">
+          A vitrine publica uma política de privacidade padrão (LGPD) em <code>/privacidade</code>, que cita a loja, o que os formulários coletam e, se você ligou o pixel ou o Analytics,
+          o rastreamento. É um modelo: se a loja tem um texto do advogado, cole aqui e ele substitui o padrão.
+        </p>
+        <textarea id="vitrine-politica" rows={5} value={f.politicaPrivacidade} onChange={(e) => setF({ ...f, politicaPrivacidade: e.target.value })} placeholder="Vazio = política padrão do Zap" aria-label="Texto próprio da política de privacidade" className={campo} />
       </section>
 
       {aviso && <p className={`rounded-md px-3 py-2 text-sm ${aviso.erro ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-accent"}`}>{aviso.texto}</p>}
