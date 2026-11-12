@@ -9,6 +9,10 @@ import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { wakeOutbox } from "@/lib/worker-client";
 import { encerrarConta, SELECT_PARCELAS, resumoDasParcelas } from "@/lib/otica-financeiro";
 import { linkPublicoDoCarro } from "@/lib/vitrine";
+import { randomUUID } from "node:crypto";
+import { uploadMedia } from "@dilon-zap/storage";
+import { ErroImagem, baixarImagem } from "@/lib/baixar-imagem";
+import type { LinhaImportada } from "@/lib/veiculos-importacao";
 import { telefoneParaWhatsApp } from "@/lib/otica-schemas";
 import {
   ROTULO_CUSTO,
@@ -689,3 +693,144 @@ export async function resumoDaVenda(contaId: string | null) {
 }
 
 export { ErroDeConta };
+
+/* ------------------------------------------------------------- importação */
+
+/**
+ * Grava os carros lidos da planilha (lib/veiculos-importacao). Em dois tempos,
+ * como a importação de armações da ótica: `simular` só conta o que entraria;
+ * sem ele, grava. Placa que já está no pátio fica de fora (não duplica o carro
+ * que alguém já cadastrou à mão).
+ *
+ * O carro entra disponível, como compra. O valor de compra, se veio, vira o
+ * custo "Compra do veículo" SEM conta a pagar: é estoque que a loja já tem e
+ * já pagou; lançar agora criaria dívida que não existe. As fotos ficam em
+ * `fotosParaImportar` e são baixadas depois, em lotes (`baixarFotosPendentes`).
+ */
+export async function importarEstoque(input: {
+  tenantId: string;
+  userId: string;
+  linhas: LinhaImportada[];
+  simular: boolean;
+}): Promise<{ entram: number; jaNoEstoque: { numero: number; motivo: string }[]; fotos: number; criados: number }> {
+  // O que já está no pátio. Com placa, a placa decide; sem placa, marca +
+  // modelo + ano + km (reimportar a mesma planilha não pode duplicar o estoque).
+  const noPatio = await prisma.veiculo.findMany({
+    where: { tenantId: input.tenantId, status: { in: STATUS_NO_PATIO } },
+    select: { placa: true, marca: true, modelo: true, anoModelo: true, km: true },
+  });
+  const chave = (v: { marca: string; modelo: string; anoModelo: number; km: number }) =>
+    `${v.marca.trim().toLowerCase()}|${v.modelo.trim().toLowerCase()}|${v.anoModelo}|${v.km}`;
+  const placas = new Set(noPatio.map((v) => v.placa).filter(Boolean));
+  const semPlaca = new Set(noPatio.map(chave));
+  const jaNoEstoque: { numero: number; motivo: string }[] = [];
+  const novas: LinhaImportada[] = [];
+  for (const l of input.linhas) {
+    if (l.placa && placas.has(l.placa)) jaNoEstoque.push({ numero: l.numero, motivo: `placa ${placaParaTela(l.placa)} já está no estoque` });
+    else if (!l.placa && semPlaca.has(chave(l))) jaNoEstoque.push({ numero: l.numero, motivo: `${l.marca} ${l.modelo} ${l.anoModelo} com ${l.km.toLocaleString("pt-BR")} km já está no estoque` });
+    else novas.push(l);
+  }
+  const fotos = novas.reduce((s, l) => s + l.fotos.length, 0);
+  if (input.simular) return { entram: novas.length, jaNoEstoque, fotos, criados: 0 };
+
+  let criados = 0;
+  // Uma transação por carro: um erro inesperado numa linha não desfaz as outras,
+  // e reimportar a mesma planilha pula o que já entrou (pela placa).
+  for (const l of novas) {
+    await prisma.$transaction(async (tx) => {
+      const v = await tx.veiculo.create({
+        data: {
+          tenantId: input.tenantId,
+          tipo: l.tipo,
+          placa: l.placa,
+          chassi: l.chassi,
+          renavam: l.renavam,
+          marca: l.marca,
+          modelo: l.modelo,
+          versao: l.versao,
+          anoFabricacao: l.anoFabricacao,
+          anoModelo: l.anoModelo,
+          km: l.km,
+          cor: l.cor,
+          combustivel: l.combustivel,
+          cambio: l.cambio,
+          portas: l.portas,
+          opcionais: l.opcionais,
+          precoCents: l.precoCents,
+          fipeCents: l.fipeCents,
+          fipeEm: l.fipeCents ? new Date() : null,
+          descricao: l.descricao,
+          origem: "COMPRA",
+          status: "DISPONIVEL",
+          entradaEm: l.entradaEm ?? new Date(),
+          fotosParaImportar: l.fotos,
+        },
+        select: { id: true },
+      });
+      if (l.custoCents) {
+        await tx.custoVeiculo.create({
+          data: { tenantId: input.tenantId, veiculoId: v.id, tipo: "COMPRA", descricao: "Importado da planilha", valorCents: l.custoCents, data: l.entradaEm ?? new Date(), createdById: input.userId },
+        });
+      }
+      await registrarEvento(tx, v.id, "entrada", `Importado da planilha (linha ${l.numero})${l.fotos.length ? `, ${l.fotos.length} foto(s) a baixar` : ""}`, input.userId);
+    });
+    criados++;
+  }
+  return { entram: novas.length, jaNoEstoque, fotos, criados };
+}
+
+/** Quantas fotos da importação ainda faltam baixar nesta empresa. */
+export async function fotosPendentes(tenantId: string): Promise<number> {
+  const r = await prisma.$queryRaw<{ n: bigint }[]>`
+    SELECT COALESCE(SUM(cardinality("fotosParaImportar")), 0)::bigint AS n FROM "Veiculo" WHERE "tenantId" = ${tenantId}`;
+  return Number(r[0]?.n ?? 0);
+}
+
+/**
+ * Baixa um lote de fotos pendentes da importação para o R2. A tela chama em
+ * sequência até zerar, mostrando o progresso: 70 carros × 10 fotos não cabem
+ * numa requisição só. Foto que falha (endereço fora do ar, não é imagem) sai
+ * da fila e fica anotada no histórico do carro, para não travar as outras.
+ */
+export async function baixarFotosPendentes(
+  tenantId: string,
+  userId: string,
+  limite = 6,
+  deps: { baixar?: typeof baixarImagem; subir?: (key: string, bytes: Buffer, tipo: string) => Promise<void> } = {}
+): Promise<{ baixadas: number; falhas: string[]; restantes: number }> {
+  const baixar = deps.baixar ?? baixarImagem;
+  const subir = deps.subir ?? uploadMedia;
+  const carros = await prisma.veiculo.findMany({
+    where: { tenantId, NOT: { fotosParaImportar: { isEmpty: true } } },
+    orderBy: { createdAt: "asc" },
+    take: limite,
+    select: { id: true, marca: true, modelo: true, fotosParaImportar: true, fotos: { orderBy: { ordem: "desc" }, take: 1, select: { ordem: true } } },
+  });
+
+  let baixadas = 0;
+  const falhas: string[] = [];
+  let feitas = 0;
+  for (const c of carros) {
+    let ordem = (c.fotos[0]?.ordem ?? -1) + 1;
+    const fila = [...c.fotosParaImportar];
+    while (fila.length && feitas < limite) {
+      const url = fila.shift()!;
+      feitas++;
+      try {
+        const img = await baixar(url);
+        const key = `${tenantId}/veiculos/${c.id}/${randomUUID().slice(0, 12)}.${img.extensao}`;
+        await subir(key, img.bytes, img.contentType);
+        await prisma.fotoVeiculo.create({ data: { tenantId, veiculoId: c.id, key, ordem: ordem++ } });
+        baixadas++;
+      } catch (e) {
+        const motivo = e instanceof ErroImagem ? e.message : "erro ao baixar";
+        falhas.push(`${c.marca} ${c.modelo}: ${motivo}`);
+        await registrarEvento(prisma, c.id, "fotos", `Foto da planilha não baixada (${motivo}): ${url.slice(0, 200)}`, userId);
+      }
+      // Grava o que sobrou a cada foto: se a requisição cair no meio, a próxima continua daqui.
+      await prisma.veiculo.update({ where: { id: c.id }, data: { fotosParaImportar: fila } });
+    }
+    if (feitas >= limite) break;
+  }
+  return { baixadas, falhas, restantes: await fotosPendentes(tenantId) };
+}

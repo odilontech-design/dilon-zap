@@ -3607,7 +3607,11 @@ model Veiculo {
   descricao           String?
   // Aparece na vitrine pública da loja quando está disponível (ou reservado).
   // Desligar esconde o carro sem tirá-lo do estoque (carro de repasse, por exemplo).
-  naVitrine           Boolean @default(true)
+  naVitrine           Boolean  @default(true)
+  // Endereços das fotos que vieram na planilha de importação e ainda não
+  // foram baixadas para o nosso armazenamento. Esvazia conforme a tela de
+  // importação baixa (em lotes, para não estourar o tempo de uma requisição).
+  fotosParaImportar   String[] @default([])
   // Só para a equipe: "risco no para-choque", "chave reserva com o dono".
   observacoesInternas String?
 

@@ -128,7 +128,7 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
       {isLoading && <p className="text-sm text-neutral-500">Carregando…</p>}
       {!isLoading && !error && lista.length === 0 && (
         <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500">
-          {buscaAtiva ? "Nenhum veículo encontrado." : vendidos ? "Nenhuma venda ainda." : gerencia ? "Estoque vazio. Clique em Entrada de veículo para cadastrar o primeiro carro." : "Estoque vazio."}
+          {buscaAtiva ? "Nenhum veículo encontrado." : vendidos ? "Nenhuma venda ainda." : gerencia ? "Estoque vazio. Cadastre um carro em Entrada de veículo ou traga o estoque todo em Importar planilha." : "Estoque vazio."}
         </div>
       )}
 

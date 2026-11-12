@@ -5,7 +5,7 @@ vertical do Zap para vender a lojas de seminovos. Segue o mesmo molde da Ótica
 (`docs/otica.md`): recurso sob demanda, que reaproveita contato, Inbox, funil,
 financeiro e caixa que já existem, e acrescenta só o que é do ramo.
 
-> Estado: **fase 1 em andamento** (v1.44.0). O que já existe está na seção
+> Estado: **fase 1 em andamento** (v1.45.0). O que já existe está na seção
 > "Implementado"; o resto do documento continua sendo proposta.
 > Data da pesquisa: 11/11/2026. Os dados de concorrentes são o que os próprios
 > fornecedores divulgam. Não foram testados e os preços podem ter mudado.
@@ -135,6 +135,40 @@ crediário, consignado, cancelamento com e sem devolução e envio pelo WhatsApp
 Implantação: `npm run db:push` (cria `VeiculosConfig` e a coluna
 `Veiculo.naVitrine`) e redeploy do web. O link público usa `NEXTAUTH_URL`
 como endereço do site, então ele precisa ser o domínio de produção.
+
+## Implementado (v1.45.0): importação do estoque por planilha
+
+Veículos → **Importar planilha** (só a gestão). Serve para trazer o estoque
+de uma loja que vem de outro sistema (AutoCerto, planilha) sem cadastrar carro
+por carro.
+
+- **Formato:** CSV, com separador e codificação detectados (inclusive o
+  Latin-1 do Excel antigo). Para Excel, salvar como CSV. Há modelo para baixar.
+- **Colunas:** reconhecidas pelo nome, sem acento nem caixa ("Valor de
+  venda", "Preço", "preco"). Obrigatórias: marca, modelo, ano ("2022/2023" ou
+  ano fab./modelo), km e preço. Opcionais: versão, placa, cor, câmbio,
+  combustível, portas, custo, FIPE, opcionais, descrição, chassi, Renavam,
+  data de entrada, tipo e **fotos** (links). Coluna desconhecida é listada e
+  ignorada.
+- **Dois tempos:** "Conferir" mostra o que entra, as linhas com problema (com
+  o número da linha) e o que já está no estoque; "Importar" grava. Linha ruim
+  não impede as boas.
+- **Sem duplicar:** placa que já está no pátio fica de fora; sem placa, vale
+  marca + modelo + ano + km. Reimportar a mesma planilha não duplica nada.
+- **Como o carro entra:** disponível, como compra. O custo da planilha vira o
+  custo de compra **sem conta a pagar**, porque é estoque já pago.
+- **Fotos:** baixadas depois, em lotes, com barra de progresso. Fechar a
+  página pausa, e dá para continuar depois. Foto que falha vai para o
+  histórico do carro e não trava as outras.
+- **Segurança do download** (`lib/baixar-imagem.ts`): só http(s), nada de rede
+  interna, localhost ou metadados da nuvem. Cada redirecionamento é conferido,
+  só JPG/PNG/WEBP e até 10 MB.
+
+Testes: `npx tsx apps/web/lib/veiculos-importacao.test-manual.ts` (leitura da
+planilha). A gravação, a reimportação, o download e os bloqueios de rede
+interna foram conferidos contra um Postgres local.
+
+Implantação: `npm run db:push` (coluna `Veiculo.fotosParaImportar`) e redeploy.
 
 ### Falta para fechar a fase 1
 - **Contratos** de compra, venda e consignação em PDF, e recibo do sinal.
