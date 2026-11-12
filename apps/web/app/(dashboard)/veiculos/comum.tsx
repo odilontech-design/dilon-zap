@@ -161,11 +161,12 @@ export function clienteParaRota(c: ClienteEscolhido) {
   return "contactId" in c ? { contactId: c.contactId } : { novoCliente: c.novoCliente };
 }
 
-export function AbasVeiculos({ atual }: { atual: "estoque" | "vendidos" | "novo" }) {
+export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos" | "novo" | "vitrine"; gerencia: boolean }) {
   const abas = [
     { id: "estoque", href: "/veiculos", rotulo: "Estoque" },
     { id: "vendidos", href: "/veiculos?status=VENDIDO", rotulo: "Vendidos" },
-  ] as const;
+    ...(gerencia ? [{ id: "vitrine", href: "/veiculos/configuracoes", rotulo: "Vitrine" }] : []),
+  ];
   return (
     <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
       <h1 className="text-lg font-semibold">Veículos</h1>

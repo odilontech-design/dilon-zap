@@ -72,6 +72,7 @@ type Ficha = Record<string, unknown> & {
   consignacaoAte: string | null;
   dias: number;
   diferencaFipe: number | null;
+  linkVitrine: string | null;
   gerencia: boolean;
   fotos: { id: string; ordem: number }[];
   vendas: Venda[];
@@ -140,6 +141,11 @@ export function FichaVeiculo({ id }: { id: string }) {
             <span className={`rounded-full px-2 py-0.5 ${COR_FAIXA[faixa]}`}>
               {v.dias} dia(s) {v.status === "VENDIDO" ? "até vender" : "em estoque"}
             </span>
+            {v.linkVitrine && (
+              <a href={v.linkVitrine} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                ver na vitrine
+              </a>
+            )}
             {v.vendaDeOrigem && (
               <Link href={`/veiculos/${v.vendaDeOrigem.veiculoId}`} className="text-accent hover:underline">
                 entrou como troca

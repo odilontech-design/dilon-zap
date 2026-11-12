@@ -34,6 +34,7 @@ export const dadosVeiculoSchema = z.object({
   precoMinimoCents: centavos.nullable().optional(),
   descricao: texto(4000),
   observacoesInternas: texto(4000),
+  naVitrine: z.boolean().optional(),
 });
 
 /** Pagamento de uma conta a pagar lançada junto (compra do carro, oficina). */
@@ -146,3 +147,12 @@ export const envioSchema = z.union([z.object({ contactId: z.string().min(1) }), 
 );
 
 export type DadosVeiculo = z.infer<typeof dadosVeiculoSchema>;
+
+export const configRevendaSchema = z.object({
+  vitrineAtiva: z.boolean(),
+  whatsapp: texto(20),
+  nomeLoja: texto(120),
+  endereco: texto(200),
+  sobre: texto(2000),
+  mostrarReservados: z.boolean(),
+});

@@ -235,6 +235,7 @@ model Tenant {
   custosVeiculo         CustoVeiculo[]
   fotosVeiculo          FotoVeiculo[]
   vendasVeiculo         VendaVeiculo[]
+  veiculosConfig        VeiculosConfig?
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -3604,6 +3605,9 @@ model Veiculo {
 
   // Texto do anúncio (vitrine, portais, WhatsApp).
   descricao           String?
+  // Aparece na vitrine pública da loja quando está disponível (ou reservado).
+  // Desligar esconde o carro sem tirá-lo do estoque (carro de repasse, por exemplo).
+  naVitrine           Boolean @default(true)
   // Só para a equipe: "risco no para-choque", "chave reserva com o dono".
   observacoesInternas String?
 
@@ -3729,4 +3733,24 @@ model EventoVeiculo {
   createdAt DateTime @default(now())
 
   @@index([veiculoId, createdAt])
+}
+
+// Configuração da revenda por empresa: a vitrine pública (/loja/[slug]).
+model VeiculosConfig {
+  tenantId String @id
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Vitrine desligada = /loja/[slug] responde "não encontrada". Nasce
+  // desligada: publicar o estoque na internet é decisão da loja.
+  vitrineAtiva      Boolean @default(false)
+  // WhatsApp do botão "Tenho interesse" (só dígitos, com DDI). Nulo = o
+  // número geral conectado ao Zap.
+  whatsapp          String?
+  nomeLoja          String?
+  endereco          String?
+  sobre             String?
+  // Mostrar carros reservados na vitrine (com o selo "Reservado").
+  mostrarReservados Boolean @default(true)
+
+  updatedAt DateTime @updatedAt
 }

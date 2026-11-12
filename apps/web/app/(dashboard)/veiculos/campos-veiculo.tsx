@@ -28,6 +28,7 @@ export type FormVeiculo = {
   precoMinimoCents: number | null;
   descricao: string;
   observacoesInternas: string;
+  naVitrine: boolean;
 };
 
 export const FORM_VAZIO: FormVeiculo = {
@@ -53,6 +54,7 @@ export const FORM_VAZIO: FormVeiculo = {
   precoMinimoCents: null,
   descricao: "",
   observacoesInternas: "",
+  naVitrine: true,
 };
 
 /** Do banco para a tela. */
@@ -81,6 +83,7 @@ export function paraForm(v: Record<string, unknown>): FormVeiculo {
     precoMinimoCents: (v.precoMinimoCents as number | null) ?? null,
     descricao: t("descricao"),
     observacoesInternas: t("observacoesInternas"),
+    naVitrine: v.naVitrine !== false,
   };
 }
 
@@ -118,7 +121,7 @@ export function paraRota(f: FormVeiculo, opts: { exigirPreco: boolean; gerencia:
     fipeReferencia: f.fipeReferencia || null,
     precoCents: f.precoCents ?? 0,
     descricao: f.descricao.trim() || null,
-    ...(opts.gerencia ? { precoMinimoCents: f.precoMinimoCents, observacoesInternas: f.observacoesInternas.trim() || null } : {}),
+    ...(opts.gerencia ? { precoMinimoCents: f.precoMinimoCents, observacoesInternas: f.observacoesInternas.trim() || null, naVitrine: f.naVitrine } : {}),
   };
 }
 
@@ -313,6 +316,12 @@ export function CamposVeiculo({
         <label className="flex flex-col gap-1">
           <span className={rotulo}>Observações internas (só a gestão vê)</span>
           <textarea id={`${prefixo}-obs`} rows={2} value={f.observacoesInternas} onChange={(e) => set({ observacoesInternas: e.target.value })} className={campo} />
+        </label>
+      )}
+      {comPreco && gerencia && (
+        <label className="flex items-center gap-2 text-sm">
+          <input id={`${prefixo}-vitrine`} type="checkbox" checked={f.naVitrine} onChange={(e) => set({ naVitrine: e.target.checked })} />
+          Mostrar na vitrine pública (quando disponível)
         </label>
       )}
     </div>

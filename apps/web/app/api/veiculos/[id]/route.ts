@@ -18,6 +18,7 @@ import {
   type StatusVeiculo,
 } from "@/lib/veiculos-regras";
 import { SEM_PERMISSAO, respostaDeErro } from "@/lib/veiculos-api";
+import { linkPublicoDoCarro } from "@/lib/vitrine";
 
 /**
  * A ficha do carro: dados, fotos, custos, venda e histórico. Para quem não é
@@ -62,6 +63,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     gerencia,
     dias: diasEmEstoque(v.entradaEm, v.saidaEm),
     diferencaFipe: diferencaFipe(v.precoCents, v.fipeCents),
+    linkVitrine: await linkPublicoDoCarro(user.tenantId, v),
     vendas: await Promise.all(
       v.vendas.map(async ({ conta, ...venda }) => ({
         ...venda,

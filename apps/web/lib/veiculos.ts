@@ -8,6 +8,7 @@ import { upsertContactByPhone } from "@/lib/contact-server";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { wakeOutbox } from "@/lib/worker-client";
 import { encerrarConta, SELECT_PARCELAS, resumoDasParcelas } from "@/lib/otica-financeiro";
+import { linkPublicoDoCarro } from "@/lib/vitrine";
 import { telefoneParaWhatsApp } from "@/lib/otica-schemas";
 import {
   ROTULO_CUSTO,
@@ -99,6 +100,7 @@ export function dadosParaBanco(d: Partial<DadosVeiculo>): Prisma.VeiculoUnchecke
     out.fipeEm = d.fipeCents ? new Date() : null;
   }
   if (d.precoCents !== undefined) out.precoCents = d.precoCents;
+  if (d.naVitrine !== undefined) out.naVitrine = d.naVitrine;
   if (d.precoMinimoCents !== undefined) out.precoMinimoCents = d.precoMinimoCents ?? null;
   if (d.anoFabricacao !== undefined && d.anoModelo !== undefined && d.anoModelo < d.anoFabricacao) {
     throw new ErroDeVeiculo("o ano do modelo não pode ser anterior ao de fabricação");
@@ -639,7 +641,10 @@ export async function enviarVeiculo(input: {
     });
   }
 
-  const ficha = fichaParaCliente(v);
+  // Com a vitrine ligada, a ficha leva o link do carro: o cliente vê as
+  // fotos todas e repassa para quem vai ajudar a decidir.
+  const link = await linkPublicoDoCarro(input.tenantId, v);
+  const ficha = fichaParaCliente(v) + (link ? `\n\n${link}` : "");
   const fotos = input.fotos > 0 ? v.fotos.slice(0, input.fotos) : [];
   const base = {
     conversationId: conversa.id,

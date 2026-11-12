@@ -5,7 +5,7 @@ vertical do Zap para vender a lojas de seminovos. Segue o mesmo molde da Ótica
 (`docs/otica.md`): recurso sob demanda, que reaproveita contato, Inbox, funil,
 financeiro e caixa que já existem, e acrescenta só o que é do ramo.
 
-> Estado: **fase 1 em andamento** (v1.43.0). O que já existe está na seção
+> Estado: **fase 1 em andamento** (v1.44.0). O que já existe está na seção
 > "Implementado"; o resto do documento continua sendo proposta.
 > Data da pesquisa: 11/11/2026. Os dados de concorrentes são o que os próprios
 > fornecedores divulgam. Não foram testados e os preços podem ter mudado.
@@ -103,10 +103,40 @@ crediário, consignado, cancelamento com e sem devolução e envio pelo WhatsApp
 4. No Super Admin, ficha da empresa → plano → ligar **Revenda de veículos**.
    O recurso é sob demanda, como a Ótica, e liga Contas a receber junto.
 
-### Falta para fechar a fase 1
+## Implementado (v1.44.0): botão no Inbox e vitrine pública
 
-- Botão **"Enviar carro" no Inbox** (a rota já existe).
-- **Vitrine pública** da loja com link de WhatsApp que identifica o carro.
+- **Inbox → "Carro"** (empresas com `VEICULOS`): busca no estoque e manda a
+  ficha com as fotos (0 a 10) na conversa aberta. O modal fica aberto para
+  mandar mais opções. "Ficha no campo" põe o texto no campo de digitação
+  para o vendedor ajustar antes de mandar.
+- **Vitrine pública** em `/loja/[slug]` (o slug da empresa), sem login:
+  - **Listagem:** busca, marca, preço máximo e ordenação.
+  - **Página do carro:** galeria, ficha, opcionais e o botão **"Tenho
+    interesse"**. O botão abre o WhatsApp da loja com o nome do carro e o link
+    dele na mensagem, para o vendedor saber no Inbox de qual carro se trata.
+    No celular, o botão fica fixo no rodapé.
+  - **Prévia do link:** a capa aparece quando o link é compartilhado no
+    WhatsApp ou no Instagram.
+- **Configuração** em Veículos → **Vitrine** (só a gestão):
+  - liga e desliga a vitrine (nasce **desligada**);
+  - define nome, endereço e "sobre" da loja;
+  - define o WhatsApp do botão (vazio = o número conectado);
+  - escolhe se os carros reservados aparecem, com selo.
+
+  Cada carro tem **"Mostrar na vitrine"** na ficha.
+- **Link no envio:** com a vitrine ligada, a ficha enviada pelo WhatsApp (pela
+  ficha do carro ou pelo Inbox) leva o link do carro na vitrine.
+- **Segurança:** a vitrine seleciona só a lista do que pode ser público
+  (`SELECT_PUBLICO` em `lib/vitrine.ts`). Nunca saem custo, piso, placa,
+  chassi, Renavam, observações internas nem dados do consignante. A foto
+  pública (`/api/loja/[slug]/fotos/[id]`) só responde enquanto o carro está
+  na vitrine. Testado: carro escondido e vitrine desligada respondem 404.
+
+Implantação: `npm run db:push` (cria `VeiculosConfig` e a coluna
+`Veiculo.naVitrine`) e redeploy do web. O link público usa `NEXTAUTH_URL`
+como endereço do site, então ele precisa ser o domínio de produção.
+
+### Falta para fechar a fase 1
 - **Contratos** de compra, venda e consignação em PDF, e recibo do sinal.
 - **Alerta de carro parado** por push/aviso à gestão. Hoje ele é só visual.
 - **Vínculo carro ↔ negociação do CRM** (`Negociacao.veiculoId`).
