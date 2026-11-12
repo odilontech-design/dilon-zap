@@ -29,17 +29,18 @@ export async function GET(req: Request) {
   const desde = tipoData === "vencimento" ? parseDia(q.get("desde")) : inicioDoDiaBR(q.get("desde"));
   const ate = tipoData === "vencimento" ? parseDia(q.get("ate")) : fimDoDiaBR(q.get("ate"));
 
+  const filtros = {
+    desde,
+    ate,
+    tipoData,
+    fornecedor: q.get("fornecedor")?.trim() || undefined,
+    forma,
+    categoria: q.get("categoria")?.trim() || undefined,
+  } as const;
   const [linhas, resumo] = await Promise.all([
-    listarParcelasPagar(user.tenantId, {
-      desde,
-      ate,
-      tipoData,
-      fornecedor: q.get("fornecedor")?.trim() || undefined,
-      status: status.length ? status : ["PENDENTE"],
-      forma,
-      categoria: q.get("categoria")?.trim() || undefined,
-    }),
-    resumoAPagar(user.tenantId),
+    listarParcelasPagar(user.tenantId, { ...filtros, status: status.length ? status : ["PENDENTE"] }),
+    // Os cartões seguem os mesmos filtros da lista.
+    resumoAPagar(user.tenantId, filtros),
   ]);
 
   return NextResponse.json({

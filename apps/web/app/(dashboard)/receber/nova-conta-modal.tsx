@@ -27,6 +27,11 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
   const [descricao, setDescricao] = useState("");
   const [categoriaId, setCategoriaId] = useState("");
   const [total, setTotal] = useState("");
+  // Assinatura/mensalidade: quem cobra R$ 297 por mês não deveria ter que
+  // multiplicar pelo número de meses para o sistema dividir de volta. Neste
+  // modo a pessoa informa o valor de CADA parcela e o total é a conta.
+  const [modoValor, setModoValor] = useState<"total" | "parcela">("total");
+  const [valorParcela, setValorParcela] = useState("");
   const [entrada, setEntrada] = useState("");
   const [numParcelas, setNumParcelas] = useState("1");
   const [periodicidade, setPeriodicidade] = useState<Periodicidade>("SEMANAL");
@@ -50,9 +55,15 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
     return () => clearTimeout(t);
   }, [busca, contato]);
 
-  const totalCents = reaisParaCentavos(total);
   const entradaCents = entrada.trim() ? reaisParaCentavos(entrada) : 0;
   const n = Number(numParcelas);
+  const parcelaCents = reaisParaCentavos(valorParcela);
+  const totalCents =
+    modoValor === "total"
+      ? reaisParaCentavos(total)
+      : parcelaCents !== null && parcelaCents > 0 && Number.isInteger(n) && n >= 1 && entradaCents !== null
+        ? parcelaCents * n + entradaCents
+        : null;
   const entradaDividida = entradasDoPlano(partesEntrada, entradaCents ?? 0);
 
   const previa = useMemo(() => {
@@ -80,7 +91,7 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
     setErro(null);
-    if (totalCents === null || totalCents <= 0) return setErro("informe o valor total");
+    if (totalCents === null || totalCents <= 0) return setErro(modoValor === "total" ? "informe o valor total" : "informe o valor de cada parcela e o número de parcelas");
     if (entradaCents === null) return setErro("entrada inválida");
     if (previa.erro) return setErro(previa.erro);
 
@@ -167,11 +178,41 @@ export function NovaContaModal({ onFechar, onCriada }: { onFechar: () => void; o
             <CampoCategoria tipo="RECEITA" value={categoriaId} onChange={setCategoriaId} className={`${campo} mt-1`} />
           </label>
 
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="font-medium text-neutral-700">Informar:</span>
+            {([
+              ["total", "Valor total"],
+              ["parcela", "Valor de cada parcela (mensalidade)"],
+            ] as const).map(([v, rotulo]) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => {
+                  setModoValor(v);
+                  if (v === "parcela") setPeriodicidade("MENSAL");
+                }}
+                className={`rounded-full border px-3 py-1 ${modoValor === v ? "border-accent bg-accent/10 text-accent font-medium" : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"}`}
+              >
+                {rotulo}
+              </button>
+            ))}
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
-            <label className="text-xs font-medium text-neutral-700">
-              Valor total (R$)
-              <input value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" placeholder="0,00" className={`${campo} mt-1`} />
-            </label>
+            {modoValor === "total" ? (
+              <label className="text-xs font-medium text-neutral-700">
+                Valor total (R$)
+                <input value={total} onChange={(e) => setTotal(e.target.value)} inputMode="decimal" placeholder="0,00" className={`${campo} mt-1`} />
+              </label>
+            ) : (
+              <label className="text-xs font-medium text-neutral-700">
+                Valor de cada parcela (R$)
+                <input value={valorParcela} onChange={(e) => setValorParcela(e.target.value)} inputMode="decimal" placeholder="0,00" className={`${campo} mt-1`} />
+                {totalCents !== null && totalCents > 0 && (
+                  <span className="mt-1 block font-normal text-neutral-500">Total: {centsToBRL(totalCents)}</span>
+                )}
+              </label>
+            )}
             <label className="text-xs font-medium text-neutral-700">
               Entrada (R$, opcional)
               <input value={entrada} onChange={(e) => setEntrada(e.target.value)} inputMode="decimal" placeholder="0,00" className={`${campo} mt-1`} />
