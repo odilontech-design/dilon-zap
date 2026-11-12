@@ -22,7 +22,10 @@ import { FAIXAS_ATENDENTES, RAMOS } from "@/lib/qualificacao";
 export function FormularioCadastro({
   numero,
   aoFechar,
+  ramoInicial,
 }: {
+  /** Ramo já escolhido (página de uma vertical, ex.: revenda de veículos). */
+  ramoInicial?: string;
   /** WhatsApp comercial, para o botão depois do envio. */
   numero: string;
   /** Na tela de login o formulário abre recolhido e pode ser fechado; na /cadastro não. */
@@ -32,7 +35,7 @@ export function FormularioCadastro({
   const [empresa, setEmpresa] = useState("");
   const [telefone, setTelefone] = useState("");
   const [email, setEmail] = useState("");
-  const [ramo, setRamo] = useState("");
+  const [ramo, setRamo] = useState(ramoInicial ?? "");
   const [atendentes, setAtendentes] = useState("");
   // Campo-armadilha: fica escondido e nenhum humano preenche. Ver /api/cadastro.
   const [website, setWebsite] = useState("");

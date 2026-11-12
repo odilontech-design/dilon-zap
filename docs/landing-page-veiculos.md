@@ -1,5 +1,12 @@
 # Briefing da landing page: revenda de veículos
 
+> **Já no ar dentro do Zap** (v1.49.0): `apps/web/app/revenda-de-veiculos/page.tsx`,
+> em `zap.dilontech.com.br/revenda-de-veiculos`. Os preços vêm de
+> `lib/veiculos-planos.ts`, e o formulário é o da demonstração gratuita
+> (`/api/cadastro`), com o ramo "Revenda de veículos" já marcado. O pedido
+> cai na fila de aprovação do Super Admin. Este briefing continua valendo se a
+> página for refeita no Lovable em `dilontech.com.br/veiculos`.
+
 Para gerar no **Lovable**. Cole este documento inteiro no prompt.
 
 O produto é um módulo do Dilon Zap (recurso `VEICULOS`, ver
