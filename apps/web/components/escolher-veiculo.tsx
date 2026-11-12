@@ -14,6 +14,7 @@ type Carro = {
   anoFabricacao: number;
   anoModelo: number;
   km: number;
+  kmInformado: boolean;
   precoCents: number;
   status: StatusVeiculo;
   dias: number;
@@ -136,7 +137,7 @@ export function EscolherVeiculo({
                     {c.marca} {c.modelo} {c.versao ?? ""} {c.anoFabricacao}/{c.anoModelo}
                   </p>
                   <p className="text-xs text-neutral-500">
-                    {centsToBRL(c.precoCents)} · {c.km.toLocaleString("pt-BR")} km{c.placa ? ` · ${placaParaTela(c.placa)}` : ""}
+                    {centsToBRL(c.precoCents)} · {c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : "km não informada"}{c.placa ? ` · ${placaParaTela(c.placa)}` : ""}
                   </p>
                   <p className="text-[11px] text-neutral-400">
                     {ROTULO_STATUS[c.status]} · {c.totalFotos} foto(s){parado ? ` · ${c.dias} dias em estoque` : ""}

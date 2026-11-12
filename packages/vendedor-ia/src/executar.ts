@@ -278,14 +278,14 @@ async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise
     take: limite,
     // Só o que pode ir para o cliente: nada de custo, piso, placa ou observação interna.
     select: {
-      id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, km: true,
+      id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, km: true, kmInformado: true,
       precoCents: true, cambio: true, combustivel: true, cor: true, opcionais: true, status: true, _count: { select: { fotos: true } },
     },
   });
   if (!carros.length) return { texto: "Nenhum carro no estoque com esses filtros. Tente uma busca mais ampla ou diga ao cliente que no momento não tem e ofereça avisar quando chegar." };
   const linhas = carros.map(
     (c) =>
-      `- id ${c.id}: ${nomeDoVeiculo(c)}, ${c.km.toLocaleString("pt-BR")} km, ${reais(c.precoCents)}` +
+      `- id ${c.id}: ${nomeDoVeiculo(c)}, ${c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : "km não informada"}, ${reais(c.precoCents)}` +
       `${c.cambio ? `, ${c.cambio}` : ""}${c.combustivel ? `, ${c.combustivel}` : ""}${c.cor ? `, ${c.cor}` : ""}` +
       `${c.opcionais.length ? `; opcionais: ${c.opcionais.slice(0, 8).join(", ")}` : ""}; ${c._count.fotos} foto(s)` +
       `${c.status === "RESERVADO" ? "; RESERVADO para outro cliente" : ""}`

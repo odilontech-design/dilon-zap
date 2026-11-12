@@ -3808,6 +3808,11 @@ model VeiculosConfig {
   facebook            String?
   politicaPrivacidade String?
 
+  // Exige a quilometragem para colocar o carro à venda. Lojas que não costumam
+  // preencher a km (o AutoCerto grava 0) desligam: o carro vai à venda e a km
+  // aparece como "não informada" em vez de "0 km".
+  exigirKm Boolean @default(true)
+
   // Dados que os portais exigem em todo anúncio (OLX: CEP e telefone com DDD).
   cepAnuncios      String?
   telefoneAnuncios String?
