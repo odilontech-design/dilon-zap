@@ -27,7 +27,7 @@ export async function GET(_req: Request, { params }: { params: { slug: string; f
     versao: c.versao,
     anoFabricacao: c.anoFabricacao,
     anoModelo: c.anoModelo,
-    km: c.km,
+    km: c.kmInformado ? c.km : null,
     cor: c.cor,
     combustivel: c.combustivel,
     cambio: c.cambio,

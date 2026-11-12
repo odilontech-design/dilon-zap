@@ -73,6 +73,7 @@ export async function PUT(req: Request) {
     metaPixelId: d.metaPixelId || null,
     ga4Id: d.ga4Id || null,
     formularioAtivo: d.formularioAtivo,
+    exigirKm: d.exigirKm,
     whatsapp,
     nomeLoja: d.nomeLoja || null,
     endereco: d.endereco || null,

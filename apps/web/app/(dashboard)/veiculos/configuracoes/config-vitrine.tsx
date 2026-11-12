@@ -16,6 +16,7 @@ type Config = {
   metaPixelId: string | null;
   ga4Id: string | null;
   formularioAtivo: boolean;
+  exigirKm: boolean;
   corPrimaria: string | null;
   horario: string | null;
   instagram: string | null;
@@ -35,7 +36,7 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true, corPrimaria: "", horario: "", instagram: "", facebook: "", politicaPrivacidade: "" });
+  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true, exigirKm: true, corPrimaria: "", horario: "", instagram: "", facebook: "", politicaPrivacidade: "" });
   const [versaoImagens, setVersaoImagens] = useState(0);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -52,6 +53,7 @@ export function ConfigVitrine() {
         metaPixelId: data.metaPixelId ?? "",
         ga4Id: data.ga4Id ?? "",
         formularioAtivo: data.formularioAtivo,
+        exigirKm: data.exigirKm,
         corPrimaria: data.corPrimaria ?? "",
         horario: data.horario ?? "",
         instagram: data.instagram ?? "",
@@ -211,6 +213,18 @@ export function ConfigVitrine() {
           ))}
           <span className="text-neutral-500">No Gerenciador de Comércio da Meta: Catálogos → Veículos → Fonte de dados → Feed programado, colando o link do CSV.</span>
         </div>
+      </section>
+
+      <section className={secao}>
+        <h2 className="text-sm font-semibold">Quilometragem</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={f.exigirKm} onChange={(e) => setF({ ...f, exigirKm: e.target.checked })} />
+          Exigir a quilometragem para colocar o carro à venda
+        </label>
+        <p className="text-xs text-neutral-500">
+          Desligado, o carro vai à venda sem a km e ela aparece como “não informada” (no site, nos feeds, no WhatsApp e no Vendedor IA), nunca como “0 km”. Alguns portais exigem a km
+          para publicar; nesses, o carro sem km fica de fora do anúncio.
+        </p>
       </section>
 
       <section className={secao}>

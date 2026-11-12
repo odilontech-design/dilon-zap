@@ -58,8 +58,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   const comissao = v.status === "VENDIDO" ? vendaAtiva?.comissaoCents ?? 0 : 0;
 
   const { custos, consignacaoValorCents, precoMinimoCents, observacoesInternas, ...resto } = v;
+  const exigirKm = (await prisma.veiculosConfig.findUnique({ where: { tenantId: user.tenantId }, select: { exigirKm: true } }))?.exigirKm ?? true;
   return NextResponse.json({
     ...resto,
+    exigirKm,
     gerencia,
     dias: diasEmEstoque(v.entradaEm, v.saidaEm),
     diferencaFipe: diferencaFipe(v.precoCents, v.fipeCents),
@@ -102,7 +104,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     const precoFinal = dados.precoCents ?? atual.precoCents;
     const kmInformado = atual.kmInformado || (dados.km !== undefined && (dados.km > 0 || dados.km !== atual.km));
     if (status === "DISPONIVEL" && atual.status === "PREPARACAO") {
-      const faltas = [precoFinal <= 0 && "o preço", !kmInformado && "a quilometragem"].filter(Boolean);
+      const exigirKm = (await prisma.veiculosConfig.findUnique({ where: { tenantId: user.tenantId }, select: { exigirKm: true } }))?.exigirKm ?? true;
+      const faltas = [precoFinal <= 0 && "o preço", exigirKm && !kmInformado && "a quilometragem"].filter(Boolean);
       if (faltas.length) throw new ErroDeVeiculo(`informe ${faltas.join(" e ")} antes de colocar o carro à venda`, 409);
     }
     if (atual.origem !== "CONSIGNACAO" && (consignacaoValorCents !== undefined || consignacaoAte !== undefined)) {

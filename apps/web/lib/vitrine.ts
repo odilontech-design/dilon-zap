@@ -109,6 +109,7 @@ export const SELECT_PUBLICO = {
   anoFabricacao: true,
   anoModelo: true,
   km: true,
+  kmInformado: true,
   cor: true,
   combustivel: true,
   cambio: true,

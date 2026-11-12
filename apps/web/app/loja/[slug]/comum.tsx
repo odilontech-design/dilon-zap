@@ -11,8 +11,8 @@ export function fotoUrl(slug: string, fotoId: string) {
   return `/api/loja/${slug}/fotos/${fotoId}`;
 }
 
-export function resumo(c: Pick<CarroPublico, "km" | "cambio" | "combustivel">) {
-  return [`${c.km.toLocaleString("pt-BR")} km`, c.cambio, c.combustivel].filter(Boolean).join(" · ");
+export function resumo(c: Pick<CarroPublico, "km" | "kmInformado" | "cambio" | "combustivel">) {
+  return [c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel].filter(Boolean).join(" · ");
 }
 
 export function titulo(c: CarroPublico) {

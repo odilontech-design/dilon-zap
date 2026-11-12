@@ -202,6 +202,16 @@ e quilometragem informados (`409` com o motivo). A placa não trava, mas a OLX a
 exige para publicar. A quilometragem fica marcada como "não informada"
 (`kmInformado`) para um carro nunca aparecer com 0 km por engano.
 
+**A quilometragem é opcional, por loja (v1.55.1).** Veículos → Vitrine → "Exigir a
+quilometragem para colocar o carro à venda" (ligado por padrão). Lojas como a
+Sales, que nunca preencheram a km (o AutoCerto grava 0), desligam: o carro vai à
+venda sem ela, e a km aparece como **"não informada"**, nunca como "0 km", em todo
+lugar: vitrine e dados estruturados do Google, feeds (CSV da Meta em branco, XML sem
+a tag, JSON nulo), ficha enviada por WhatsApp, lista do Estoque, seletor do Inbox e
+Vendedor IA (que passa a dizer que vai confirmar a km com a equipe). Um carro zero km
+de verdade (km informada como 0) continua mostrando "0 km". Alguns portais exigem a km
+para publicar; para eles, o carro sem km fica de fora do anúncio.
+
 **Segurança:** o endereço é digitado por quem usa, então a busca recusa
 localhost, rede interna, metadados da nuvem (169.254.x), esquemas que não sejam
 http(s) e endereço com usuário e senha, e confere de novo cada

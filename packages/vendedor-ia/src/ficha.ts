@@ -11,6 +11,8 @@ export type CarroParaFicha = {
   anoFabricacao: number;
   anoModelo: number;
   km: number;
+  /** Falso = a loja não informou a km: a ficha não diz "0 km". */
+  kmInformado?: boolean;
   cor?: string | null;
   combustivel?: string | null;
   cambio?: string | null;
@@ -38,7 +40,7 @@ export function fichaParaCliente(v: CarroParaFicha): string {
   const linhas = [
     `*${nomeDoVeiculo(v)}*`,
     `💰 ${reais(v.precoCents)}`,
-    `📍 ${v.km.toLocaleString("pt-BR")} km`,
+    v.kmInformado === false ? "" : `📍 ${v.km.toLocaleString("pt-BR")} km`,
     [v.cambio, v.combustivel, v.cor].filter(Boolean).join(" · "),
     v.opcionais?.length ? `✅ ${v.opcionais.join(", ")}` : "",
     v.placa ? `Final de placa ${v.placa.slice(-1)}` : "",
