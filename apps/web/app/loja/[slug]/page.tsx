@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { carrosDaVitrine, linkDaLoja, linkWhatsapp, lojaPublica } from "@/lib/vitrine";
-import { IconeWhatsapp } from "./comum";
+import { carrosDaVitrine, linkDaLoja, linkDoCarro, linkWhatsapp, lojaPublica } from "@/lib/vitrine";
+import { BotaoWhatsapp } from "./rastreio";
+import { carroParaJsonLd, JsonLd } from "./dados-estruturados";
 import { ListaDeCarros } from "./lista-de-carros";
 
 /**
@@ -19,7 +20,8 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   return {
     title: `${loja.nome} · Veículos à venda`,
     description: descricao,
-    openGraph: { title: `${loja.nome} · Veículos à venda`, description: descricao, url: linkDaLoja(loja.slug), type: "website" },
+    openGraph: { title: `${loja.nome} · Veículos à venda`, description: descricao, url: linkDaLoja(loja.slug, loja.dominio), type: "website" },
+    alternates: { canonical: linkDaLoja(loja.slug, loja.dominio) },
   };
 }
 
@@ -37,19 +39,27 @@ export default async function LojaPage({ params }: { params: { slug: string } })
             {loja.endereco && <p className="text-sm text-neutral-500">{loja.endereco}</p>}
           </div>
           {loja.whatsapp && (
-            <a
+            <BotaoWhatsapp
               href={linkWhatsapp(loja.whatsapp, `Olá! Vi o estoque no site da ${loja.nome} e quero mais informações.`)}
-              target="_blank"
-              rel="noreferrer"
               className="inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
             >
-              <IconeWhatsapp /> Falar no WhatsApp
-            </a>
+              Falar no WhatsApp
+            </BotaoWhatsapp>
           )}
         </div>
         {loja.sobre && <p className="mx-auto max-w-6xl whitespace-pre-line px-4 pb-5 text-sm text-neutral-600">{loja.sobre}</p>}
       </header>
 
+      <JsonLd
+        dados={{
+          "@context": "https://schema.org",
+          "@type": "AutoDealer",
+          name: loja.nome,
+          url: linkDaLoja(loja.slug, loja.dominio),
+          ...(loja.endereco ? { address: loja.endereco } : {}),
+          makesOffer: carros.slice(0, 50).map((c) => ({ "@type": "Offer", price: (c.precoCents / 100).toFixed(2), priceCurrency: "BRL", itemOffered: carroParaJsonLd(c, linkDoCarro(loja.slug, c.id, loja.dominio), []) })),
+        }}
+      />
       <main className="mx-auto max-w-6xl px-4 py-6">
         <ListaDeCarros slug={loja.slug} carros={carros} />
       </main>

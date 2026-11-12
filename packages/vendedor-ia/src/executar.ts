@@ -41,7 +41,7 @@ async function lojasAtivas() {
   if (!liberadas.length) return [];
   return prisma.vendedorIaConfig.findMany({
     where: { tenantId: { in: liberadas.map((l) => l.tenantId) }, ativo: true, ativadoEm: { not: null } },
-    include: { tenant: { select: { name: true, slug: true, timezone: true, veiculosConfig: { select: { nomeLoja: true, vitrineAtiva: true } } } } },
+    include: { tenant: { select: { name: true, slug: true, timezone: true, veiculosConfig: { select: { nomeLoja: true, vitrineAtiva: true, dominio: true } } } } },
   });
 }
 
@@ -302,7 +302,9 @@ async function enviarCarro(e: Record<string, unknown>, ctx: Contexto): Promise<R
   });
   if (!v) return { texto: "Carro não encontrado ou não está mais à venda. Busque de novo no estoque.", erro: true };
 
-  const site = ctx.deps.urlDoSite?.replace(/\/+$/, "");
+  // Domínio próprio da loja, se tiver; senão o endereço do Zap.
+  const dominio = ctx.loja.tenant.veiculosConfig?.dominio;
+  const site = dominio ? `https://${dominio}` : ctx.deps.urlDoSite?.replace(/\/+$/, "");
   const link = site && ctx.loja.tenant.veiculosConfig?.vitrineAtiva && v.naVitrine ? `${site}/loja/${ctx.loja.tenant.slug}/${v.id}` : null;
   const ficha = fichaParaCliente(v) + (link ? `\n\n${link}` : "");
   const fotos = qtd > 0 ? v.fotos.slice(0, qtd) : [];

@@ -5,7 +5,7 @@ import { exigirRecurso } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { logAudit } from "@/lib/audit";
 import { configRevendaSchema } from "@/lib/veiculos-schemas";
-import { configDaRevenda, linkDaLoja, normalizarWhatsapp } from "@/lib/vitrine";
+import { baseDaLoja, configDaRevenda, linkDaLoja, normalizarDominio, normalizarWhatsapp } from "@/lib/vitrine";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { SEM_PERMISSAO } from "@/lib/veiculos-api";
 
@@ -21,7 +21,22 @@ export async function GET() {
     prisma.tenant.findUniqueOrThrow({ where: { id: user.tenantId }, select: { slug: true, name: true } }),
     numeroGeral(user.tenantId),
   ]);
-  return NextResponse.json({ ...cfg, link: linkDaLoja(tenant.slug), nomeEmpresa: tenant.name, numeroConectado: numero?.phoneNumber ?? null });
+  const base = `${baseDaLoja(null)}/api/loja/${tenant.slug}/feed`;
+  return NextResponse.json({
+    ...cfg,
+    link: linkDaLoja(tenant.slug, cfg.dominio),
+    linkSemDominio: linkDaLoja(tenant.slug),
+    hostDoSistema: (() => {
+      try {
+        return new URL(baseDaLoja(null)).hostname;
+      } catch {
+        return null;
+      }
+    })(),
+    feeds: { facebook: `${base}/facebook.csv`, xml: `${base}/estoque.xml`, json: `${base}/estoque.json` },
+    nomeEmpresa: tenant.name,
+    numeroConectado: numero?.phoneNumber ?? null,
+  });
 }
 
 export async function PUT(req: Request) {
@@ -36,8 +51,19 @@ export async function PUT(req: Request) {
   const whatsapp = normalizarWhatsapp(d.whatsapp);
   if (d.whatsapp && (!whatsapp || whatsapp.length < 12)) return NextResponse.json({ error: "WhatsApp inválido: use DDD + número" }, { status: 400 });
 
+  const dominio = d.dominio ? normalizarDominio(d.dominio) : null;
+  if (d.dominio && !dominio) return NextResponse.json({ error: "domínio inválido: use algo como www.sualoja.com.br" }, { status: 400 });
+  if (dominio) {
+    const dono = await prisma.veiculosConfig.findFirst({ where: { dominio, NOT: { tenantId: user.tenantId } }, select: { tenantId: true } });
+    if (dono) return NextResponse.json({ error: "este domínio já está cadastrado em outra loja" }, { status: 409 });
+  }
+
   const dados = {
     vitrineAtiva: d.vitrineAtiva,
+    dominio,
+    metaPixelId: d.metaPixelId || null,
+    ga4Id: d.ga4Id || null,
+    formularioAtivo: d.formularioAtivo,
     whatsapp,
     nomeLoja: d.nomeLoja || null,
     endereco: d.endereco || null,

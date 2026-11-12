@@ -11,6 +11,13 @@ type Config = {
   endereco: string | null;
   sobre: string | null;
   mostrarReservados: boolean;
+  dominio: string | null;
+  metaPixelId: string | null;
+  ga4Id: string | null;
+  formularioAtivo: boolean;
+  linkSemDominio: string;
+  hostDoSistema: string | null;
+  feeds: { facebook: string; xml: string; json: string };
   link: string;
   nomeEmpresa: string;
   numeroConectado: string | null;
@@ -19,7 +26,7 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true });
+  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true });
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
   useEffect(() => {
@@ -31,6 +38,10 @@ export function ConfigVitrine() {
         endereco: data.endereco ?? "",
         sobre: data.sobre ?? "",
         mostrarReservados: data.mostrarReservados,
+        dominio: data.dominio ?? "",
+        metaPixelId: data.metaPixelId ?? "",
+        ga4Id: data.ga4Id ?? "",
+        formularioAtivo: data.formularioAtivo,
       });
   }, [data]);
 
@@ -94,6 +105,60 @@ export function ConfigVitrine() {
           <input type="checkbox" checked={f.mostrarReservados} onChange={(e) => setF({ ...f, mostrarReservados: e.target.checked })} />
           Mostrar carros reservados (com o selo “Reservado”)
         </label>
+      </section>
+
+      <section className={secao}>
+        <h2 className="text-sm font-semibold">Domínio próprio</h2>
+        <label className="flex flex-col gap-1">
+          <span className={rotulo}>Endereço do site da loja</span>
+          <input id="vitrine-dominio" value={f.dominio} onChange={(e) => setF({ ...f, dominio: e.target.value })} placeholder="www.sualoja.com.br" className={campo} />
+        </label>
+        <p className="text-xs text-neutral-500">
+          No painel onde o domínio foi registrado (Registro.br, GoDaddy, Hostinger…), crie um registro <strong>CNAME</strong> de <code>{f.dominio || "www.sualoja.com.br"}</code> apontando
+          para <code>{data.hostDoSistema ?? "o endereço do Zap"}</code>. Depois que o DNS propagar (de minutos a algumas horas), o site abre com cadeado (HTTPS) automático. Até lá, a
+          vitrine continua em <code>{data.linkSemDominio}</code>.
+        </p>
+        <p className="text-xs text-amber-700">
+          Atenção: apontar o domínio tira do ar o site atual da loja nesse endereço. Faça isso só quando a vitrine estiver pronta para substituí-lo.
+        </p>
+      </section>
+
+      <section className={secao}>
+        <h2 className="text-sm font-semibold">Leads e anúncios</h2>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={f.formularioAtivo} onChange={(e) => setF({ ...f, formularioAtivo: e.target.checked })} />
+          Formulário “Quero ser chamado” na página do carro (vira negociação no CRM, com a tarefa de chamar no WhatsApp)
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-1">
+            <span className={rotulo}>ID do Pixel do Facebook/Instagram</span>
+            <input id="vitrine-pixel" value={f.metaPixelId} onChange={(e) => setF({ ...f, metaPixelId: e.target.value })} placeholder="só números" inputMode="numeric" className={campo} />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className={rotulo}>ID do Google Analytics 4</span>
+            <input id="vitrine-ga4" value={f.ga4Id} onChange={(e) => setF({ ...f, ga4Id: e.target.value })} placeholder="G-XXXXXXXXXX" className={campo} />
+          </label>
+        </div>
+        <p className="text-xs text-neutral-500">Com o pixel, cada clique em “Tenho interesse” conta como contato e cada formulário como lead: dá para anunciar para quem viu um carro e não chamou.</p>
+        <div className="flex flex-col gap-1 text-xs">
+          <span className={rotulo}>Feeds do estoque (atualizados sozinhos, só o que a vitrine mostra)</span>
+          {(
+            [
+              ["Catálogo do Facebook e Instagram (CSV)", data.feeds.facebook],
+              ["XML para integradores e portais", data.feeds.xml],
+              ["JSON", data.feeds.json],
+            ] as const
+          ).map(([nome, url]) => (
+            <div key={url} className="flex flex-wrap items-center gap-2">
+              <span className="text-neutral-600">{nome}:</span>
+              <code className="break-all rounded bg-neutral-100 px-1.5 py-0.5">{url}</code>
+              <button type="button" className="text-accent hover:underline" onClick={() => navigator.clipboard?.writeText(url).then(() => setAviso({ texto: "Link copiado." }))}>
+                copiar
+              </button>
+            </div>
+          ))}
+          <span className="text-neutral-500">No Gerenciador de Comércio da Meta: Catálogos → Veículos → Fonte de dados → Feed programado, colando o link do CSV.</span>
+        </div>
       </section>
 
       {aviso && <p className={`rounded-md px-3 py-2 text-sm ${aviso.erro ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-accent"}`}>{aviso.texto}</p>}

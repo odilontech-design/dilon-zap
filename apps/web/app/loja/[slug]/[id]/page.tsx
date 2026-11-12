@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { baseDoSite, carroDaVitrine, linkDoCarro, linkWhatsapp, lojaPublica, mensagemDeInteresse } from "@/lib/vitrine";
-import { brl, fotoUrl, IconeWhatsapp, resumo, titulo } from "../comum";
+import { baseDaLoja, carroDaVitrine, linkDoCarro, linkWhatsapp, lojaPublica, mensagemDeInteresse } from "@/lib/vitrine";
+import { brl, fotoUrl, resumo, titulo } from "../comum";
+import { BotaoWhatsapp } from "../rastreio";
+import { carroParaJsonLd, JsonLd } from "../dados-estruturados";
+import { FormularioInteresse } from "./formulario-interesse";
 import { Galeria } from "./galeria";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +17,12 @@ export async function generateMetadata({ params }: { params: { slug: string; id:
   const nome = `${titulo(carro)} · ${brl(carro.precoCents)}`;
   const descricao = `${resumo(carro)} · ${loja.nome}`;
   // A capa no cartão do link (WhatsApp, Instagram, Facebook): é o que faz o link ser clicado.
-  const capa = carro.fotos[0] ? `${baseDoSite()}${fotoUrl(loja.slug, carro.fotos[0].id)}` : undefined;
+  const capa = carro.fotos[0] ? `${baseDaLoja(loja.dominio)}${fotoUrl(loja.slug, carro.fotos[0].id)}` : undefined;
   return {
     title: nome,
     description: descricao,
-    openGraph: { title: nome, description: descricao, url: linkDoCarro(loja.slug, carro.id), type: "website", ...(capa ? { images: [capa] } : {}) },
+    openGraph: { title: nome, description: descricao, url: linkDoCarro(loja.slug, carro.id, loja.dominio), type: "website", ...(capa ? { images: [capa] } : {}) },
+    alternates: { canonical: linkDoCarro(loja.slug, carro.id, loja.dominio) },
   };
 }
 
@@ -28,7 +32,9 @@ export default async function CarroPage({ params }: { params: { slug: string; id
   const carro = await carroDaVitrine(loja, params.id);
   if (!carro) notFound();
 
-  const whatsapp = loja.whatsapp ? linkWhatsapp(loja.whatsapp, mensagemDeInteresse(carro, linkDoCarro(loja.slug, carro.id))) : null;
+  const link = linkDoCarro(loja.slug, carro.id, loja.dominio);
+  const whatsapp = loja.whatsapp ? linkWhatsapp(loja.whatsapp, mensagemDeInteresse(carro, link)) : null;
+  const fotosAbsolutas = carro.fotos.map((f) => `${baseDaLoja(loja.dominio)}${fotoUrl(loja.slug, f.id)}`);
   const ficha: [string, string | number | null][] = [
     ["Ano", `${carro.anoFabricacao}/${carro.anoModelo}`],
     ["Quilometragem", `${carro.km.toLocaleString("pt-BR")} km`],
@@ -61,14 +67,13 @@ export default async function CarroPage({ params }: { params: { slug: string; id
             </p>
             <p className="mt-4 text-3xl font-bold">{brl(carro.precoCents)}</p>
             {whatsapp && (
-              <a
+              <BotaoWhatsapp
                 href={whatsapp}
-                target="_blank"
-                rel="noreferrer"
+                valorCents={carro.precoCents}
                 className="mt-4 hidden items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-3 font-medium text-white hover:opacity-90 md:flex"
               >
-                <IconeWhatsapp /> Tenho interesse
-              </a>
+                Tenho interesse
+              </BotaoWhatsapp>
             )}
           </div>
           <div className="rounded-xl border border-neutral-200 bg-surface p-5">
@@ -84,6 +89,7 @@ export default async function CarroPage({ params }: { params: { slug: string; id
                 ))}
             </dl>
           </div>
+          {loja.formularioAtivo && <FormularioInteresse slug={loja.slug} veiculoId={carro.id} valorCents={carro.precoCents} />}
         </aside>
         {(carro.opcionais.length > 0 || carro.descricao) && (
           <section className="flex flex-col gap-4 rounded-xl border border-neutral-200 bg-surface p-5 md:col-span-1">
@@ -103,11 +109,12 @@ export default async function CarroPage({ params }: { params: { slug: string; id
           </section>
         )}
       </main>
+      <JsonLd dados={{ "@context": "https://schema.org", ...carroParaJsonLd(carro, link, fotosAbsolutas, loja.nome) }} />
       {whatsapp && (
         <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-surface p-3 md:hidden">
-          <a href={whatsapp} target="_blank" rel="noreferrer" className="flex items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-3 font-medium text-white">
-            <IconeWhatsapp /> Tenho interesse · {brl(carro.precoCents)}
-          </a>
+          <BotaoWhatsapp href={whatsapp} valorCents={carro.precoCents} className="flex items-center justify-center gap-2 rounded-lg bg-[#25D366] px-4 py-3 font-medium text-white">
+            Tenho interesse · {brl(carro.precoCents)}
+          </BotaoWhatsapp>
         </div>
       )}
     </div>

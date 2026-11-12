@@ -3763,6 +3763,17 @@ model VeiculosConfig {
   // Mostrar carros reservados na vitrine (com o selo "Reservado").
   mostrarReservados Boolean @default(true)
 
+  // Domínio próprio da loja (ex.: "www.salesautomoveis.com.br"), sem
+  // protocolo. Apontado para o Zap, a vitrine abre direto nele, com
+  // certificado emitido pelo Caddy sob demanda (só para domínio cadastrado aqui).
+  dominio         String? @unique
+  // Pixel do Facebook/Instagram e Google Analytics 4 da loja, para medir e
+  // anunciar a partir das visitas à vitrine.
+  metaPixelId     String?
+  ga4Id           String?
+  // Formulário "quero ser chamado" na página do carro (vira negociação no CRM).
+  formularioAtivo Boolean @default(true)
+
   updatedAt DateTime @updatedAt
 }
 

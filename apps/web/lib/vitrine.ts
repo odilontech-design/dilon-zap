@@ -27,12 +27,54 @@ export function baseDoSite(): string {
   return (process.env.NEXTAUTH_URL ?? "").replace(/\/+$/, "");
 }
 
-export function linkDaLoja(slug: string): string {
-  return `${baseDoSite()}/loja/${slug}`;
+/**
+ * Endereço público da loja: o domínio próprio, se ela tem, ou o do Zap. No
+ * domínio próprio a raiz já é a vitrine (o middleware reescreve "/" para
+ * /loja/[slug]); os demais caminhos continuam /loja/[slug]/… nos dois.
+ */
+export function baseDaLoja(dominio: string | null | undefined): string {
+  return dominio ? `https://${dominio}` : baseDoSite();
 }
 
-export function linkDoCarro(slug: string, veiculoId: string): string {
-  return `${baseDoSite()}/loja/${slug}/${veiculoId}`;
+export function linkDaLoja(slug: string, dominio?: string | null): string {
+  return dominio ? `https://${dominio}` : `${baseDoSite()}/loja/${slug}`;
+}
+
+export function linkDoCarro(slug: string, veiculoId: string, dominio?: string | null): string {
+  return `${baseDaLoja(dominio)}/loja/${slug}/${veiculoId}`;
+}
+
+/**
+ * "https://WWW.Sales.com.br/estoque" → "www.sales.com.br". Null se não for um
+ * domínio válido (precisa de ponto, só letras, números e hífen por parte).
+ */
+export function normalizarDominio(texto: string | null | undefined): string | null {
+  const d = (texto ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/^https?:\/\//, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/:\d+$/, "")
+    .replace(/\.$/, "");
+  if (!d || d.length > 253) return null;
+  const partes = d.split(".");
+  if (partes.length < 2) return null;
+  if (!partes.every((p) => /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(p))) return null;
+  if (!/^[a-z]{2,}$/.test(partes[partes.length - 1])) return null;
+  return d;
+}
+
+/** O slug da loja dona do domínio, se a vitrine dela está no ar. É o que o middleware e o Caddy consultam. */
+export async function slugPorDominio(host: string): Promise<string | null> {
+  const dominio = normalizarDominio(host);
+  if (!dominio) return null;
+  const cfg = await prisma.veiculosConfig.findFirst({
+    where: { dominio, vitrineAtiva: true },
+    select: { tenant: { select: { slug: true, id: true } } },
+  });
+  if (!cfg) return null;
+  if (!(await recursosDoTenant(cfg.tenant.id)).has("VEICULOS")) return null;
+  return cfg.tenant.slug;
 }
 
 /** Só dígitos; número brasileiro sem DDI ganha o 55. */
@@ -73,6 +115,7 @@ export const SELECT_PUBLICO = {
   precoCents: true,
   descricao: true,
   status: true,
+  entradaEm: true,
   fotos: { orderBy: { ordem: "asc" }, select: { id: true } },
 } satisfies Prisma.VeiculoSelect;
 
@@ -81,6 +124,10 @@ export type CarroPublico = Prisma.VeiculoGetPayload<{ select: typeof SELECT_PUBL
 export type LojaPublica = {
   tenantId: string;
   slug: string;
+  dominio: string | null;
+  metaPixelId: string | null;
+  ga4Id: string | null;
+  formularioAtivo: boolean;
   nome: string;
   endereco: string | null;
   sobre: string | null;
@@ -106,6 +153,10 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
   return {
     tenantId: tenant.id,
     slug: tenant.slug,
+    dominio: cfg.dominio,
+    metaPixelId: cfg.metaPixelId,
+    ga4Id: cfg.ga4Id,
+    formularioAtivo: cfg.formularioAtivo,
     nome: cfg.nomeLoja?.trim() || tenant.name,
     endereco: cfg.endereco,
     sobre: cfg.sobre,
@@ -147,8 +198,8 @@ export async function fotoDaVitrine(loja: LojaPublica, fotoId: string) {
 /** Link do carro na vitrine para mandar junto da ficha no WhatsApp, quando ele aparece lá. */
 export async function linkPublicoDoCarro(tenantId: string, veiculo: { id: string; naVitrine: boolean; status: string }): Promise<string | null> {
   if (!veiculo.naVitrine || (veiculo.status !== "DISPONIVEL" && veiculo.status !== "RESERVADO")) return null;
-  const t = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { slug: true, veiculosConfig: { select: { vitrineAtiva: true, mostrarReservados: true } } } });
-  if (!t?.veiculosConfig?.vitrineAtiva || !baseDoSite()) return null;
+  const t = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { slug: true, veiculosConfig: { select: { vitrineAtiva: true, mostrarReservados: true, dominio: true } } } });
+  if (!t?.veiculosConfig?.vitrineAtiva || (!baseDoSite() && !t.veiculosConfig.dominio)) return null;
   if (veiculo.status === "RESERVADO" && !t.veiculosConfig.mostrarReservados) return null;
-  return linkDoCarro(t.slug, veiculo.id);
+  return linkDoCarro(t.slug, veiculo.id, t.veiculosConfig.dominio);
 }
