@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
 COPY package.json package-lock.json ./
 COPY apps/vendedor-ia-worker/package.json apps/vendedor-ia-worker/package.json
 COPY packages/db/package.json packages/db/package.json
+COPY packages/sdr-core/package.json packages/sdr-core/package.json
 COPY packages/vendedor-ia/package.json packages/vendedor-ia/package.json
 RUN npm install
 

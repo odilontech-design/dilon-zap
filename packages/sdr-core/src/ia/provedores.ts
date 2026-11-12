@@ -78,6 +78,15 @@ export function provedoresPadrao(fetchFn?: typeof fetch): Provedores {
   };
 }
 
+/**
+ * A chave da Anthropic para quem usa o SDK oficial (o Vendedor IA), que não passa pelo fetch daqui.
+ * Existe para a leitura da chave continuar num lugar só: o worker do Vendedor IA pede por aqui em
+ * vez de ler o ambiente por conta própria.
+ */
+export function chaveAnthropicDoServidor(): string | undefined {
+  return process.env.ANTHROPIC_API_KEY?.trim() || undefined;
+}
+
 /** Tira do texto de erro qualquer valor de chave que tenha escapado. */
 export function semSegredos(texto: string): string {
   let limpo = texto;

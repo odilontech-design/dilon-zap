@@ -28,14 +28,16 @@ const numero = (nome: string, padrao: number) => {
 async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
   const { ciclo } = await import("@dilon-zap/vendedor-ia");
+  const { chaveAnthropicDoServidor } = await import("@dilon-zap/sdr-core");
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  const apiKey = chaveAnthropicDoServidor();
+  if (!apiKey) {
     console.error("[vendedor-ia] ANTHROPIC_API_KEY não configurada: o worker fica parado até configurar.");
   }
   // Timeout curto e poucas tentativas: o cliente está esperando no WhatsApp,
   // e uma resposta que demora minutos já perdeu o sentido.
-  const cliente = new Anthropic({ timeout: 60_000, maxRetries: 2 });
+  const cliente = new Anthropic({ apiKey, timeout: 60_000, maxRetries: 2 });
   const intervaloMs = numero("VENDEDOR_IA_INTERVALO_MS", 3_000);
 
   const acordarFila = async (tenantId: string) => {
@@ -63,7 +65,7 @@ async function main() {
   console.log(`[vendedor-ia] no ar, ciclo a cada ${intervaloMs} ms`);
 
   while (!parando) {
-    if (process.env.ANTHROPIC_API_KEY) {
+    if (apiKey) {
       try {
         const r = await ciclo({ cliente, acordarFila, urlDoSite: process.env.NEXTAUTH_URL ?? null });
         if (r.respondidas || r.erros) console.log(`[vendedor-ia] respondidas ${r.respondidas}, erros ${r.erros}`);
