@@ -47,7 +47,10 @@ export async function PUT(req: Request) {
     const s = await prisma.setor.findFirst({ where: { id: d.setorTransferenciaId, tenantId: user.tenantId }, select: { id: true } });
     if (!s) return NextResponse.json({ error: "setor não encontrado" }, { status: 404 });
   }
-  await configDoVendedorIa(user.tenantId);
+  const atual = await configDoVendedorIa(user.tenantId);
+  if (atual.leadsContratados !== null && d.limiteLeadsMes > atual.leadsContratados) {
+    return NextResponse.json({ error: `o pacote contratado é de até ${atual.leadsContratados} leads por mês: o limite não pode passar disso` }, { status: 400 });
+  }
   await prisma.vendedorIaConfig.update({
     where: { tenantId: user.tenantId },
     data: {

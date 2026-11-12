@@ -17,7 +17,7 @@ type Config = {
   formularioAtivo: boolean;
   linkSemDominio: string;
   hostDoSistema: string | null;
-  feeds: { facebook: string; xml: string; json: string };
+  feeds: { facebook: string | null; xml: string; json: string };
   link: string;
   nomeEmpresa: string;
   numeroConectado: string | null;
@@ -142,12 +142,13 @@ export function ConfigVitrine() {
         <p className="text-xs text-neutral-500">Com o pixel, cada clique em “Tenho interesse” conta como contato e cada formulário como lead: dá para anunciar para quem viu um carro e não chamou.</p>
         <div className="flex flex-col gap-1 text-xs">
           <span className={rotulo}>Feeds do estoque (atualizados sozinhos, só o que a vitrine mostra)</span>
+          {!data.feeds.facebook && <span className="text-amber-700">O catálogo do Facebook e Instagram vem no plano Revenda. Fale com a Dilon Tech para mudar de plano.</span>}
           {(
             [
-              ["Catálogo do Facebook e Instagram (CSV)", data.feeds.facebook],
-              ["XML para integradores e portais", data.feeds.xml],
-              ["JSON", data.feeds.json],
-            ] as const
+              ...(data.feeds.facebook ? [["Catálogo do Facebook e Instagram (CSV)", data.feeds.facebook] as const] : []),
+              ["XML para integradores e portais", data.feeds.xml] as const,
+              ["JSON", data.feeds.json] as const,
+            ]
           ).map(([nome, url]) => (
             <div key={url} className="flex flex-wrap items-center gap-2">
               <span className="text-neutral-600">{nome}:</span>

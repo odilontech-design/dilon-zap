@@ -113,7 +113,9 @@ export async function atenderConversa(conversationId: string, loja: Loja, deps: 
   let limiteAtingido = false;
   if (!estado) {
     const uso = await usoDoMes(loja.tenantId, agora);
-    limiteAtingido = uso.leads >= loja.limiteLeadsMes || (loja.limiteCustoMesCents != null && uso.custoMicrosUsd >= loja.limiteCustoMesCents * 10_000);
+    // O limite da loja nunca passa do contratado.
+    const limiteLeads = loja.leadsContratados === null ? loja.limiteLeadsMes : Math.min(loja.limiteLeadsMes, loja.leadsContratados);
+    limiteAtingido = uso.leads >= limiteLeads || (loja.limiteCustoMesCents != null && uso.custoMicrosUsd >= loja.limiteCustoMesCents * 10_000);
   }
 
   const decisao = decidir(

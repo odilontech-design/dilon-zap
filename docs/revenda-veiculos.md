@@ -170,6 +170,47 @@ interna foram conferidos contra um Postgres local.
 
 Implantação: `npm run db:push` (coluna `Veiculo.fotosParaImportar`) e redeploy.
 
+## Implementado (v1.48.0): planos da revenda
+
+Tabela em `apps/web/lib/veiculos-planos.ts`, com teste. O Super Admin define o
+plano na ficha da empresa, no bloco "Revenda de veículos".
+
+| | Garagem | Revenda | Revenda+ |
+|---|---|---|---|
+| Preço | R$ 197 | R$ 347 | R$ 597 |
+| Carros no estoque (preparação, disponível e reservado) | 30 | 70 | 150 |
+| Catálogo do Facebook e Instagram | não | sim | sim |
+| Mais de um número de WhatsApp | não | não | sim |
+| Usuários | ilimitados | ilimitados | ilimitados |
+
+- **Limite de carros:**
+  - **Entrada:** barra o carro novo quando o estoque está cheio, com a mensagem
+    do plano.
+  - **Importação:** entram as primeiras linhas que cabem, e as outras aparecem
+    como "ficam de fora pelo limite do plano".
+  - **Troca na venda:** nunca é barrada, porque barrar seria barrar a venda.
+    O estoque pode ficar acima do limite até sair um carro.
+- **Avisos:**
+  - O estoque mostra "Plano X: n de N carros", em amarelo a partir de 90% e
+    em vermelho quando está cheio.
+  - Na Vitrine, o link do catálogo do Facebook só aparece a partir do Revenda,
+    e o feed responde 404 no plano Garagem.
+- **Usuários e números:**
+  - **Usuários ilimitados:** com plano da revenda, vale ilimitado, qualquer que
+    seja o plano do Zap por baixo (`vagaDeAtendente`).
+  - **Mais de um número:** o Revenda+ liga sozinho, e uma exceção explícita no
+    Super Admin vence.
+- **Vendedor IA:** o pacote contratado (até 300 por R$ 497, ou até 1.000 por
+  R$ 997) é o teto. A loja pode baixar o próprio limite, nunca passar dele, e
+  definir o pacote ajusta o limite da loja para baixo se estiver acima.
+- **Sem plano** (empresas antigas, contrato sob medida): sem limites, como antes.
+- **Cobrança:** o valor da assinatura continua sendo lançado à mão na
+  cobrança. O painel mostra o total da tabela para conferir.
+
+Implantação: `npm run db:push` (enum `PlanoVeiculos`, `VeiculosConfig.plano`,
+`VendedorIaConfig.leadsContratados`) e redeploy do web e do
+`vendedor-ia-worker`.
+
 ### Falta para fechar a fase 1
 - **Contratos** de compra, venda e consignação em PDF, e recibo do sinal.
 - **Alerta de carro parado** por push/aviso à gestão. Hoje ele é só visual.

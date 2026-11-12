@@ -2,6 +2,7 @@ import { prisma, type Prisma } from "@dilon-zap/db";
 import { recursosDoTenant } from "@/lib/plano";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
+import { temCatalogoMeta, type PlanoVeiculos } from "@/lib/veiculos-planos";
 
 /**
  * Vitrine pública da revenda: /loja/[slug] e /loja/[slug]/[veiculoId].
@@ -128,6 +129,8 @@ export type LojaPublica = {
   metaPixelId: string | null;
   ga4Id: string | null;
   formularioAtivo: boolean;
+  /** O plano libera o catálogo do Facebook e Instagram. */
+  catalogoMeta: boolean;
   nome: string;
   endereco: string | null;
   sobre: string | null;
@@ -157,6 +160,7 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     metaPixelId: cfg.metaPixelId,
     ga4Id: cfg.ga4Id,
     formularioAtivo: cfg.formularioAtivo,
+    catalogoMeta: temCatalogoMeta(cfg.plano as PlanoVeiculos | null),
     nome: cfg.nomeLoja?.trim() || tenant.name,
     endereco: cfg.endereco,
     sobre: cfg.sobre,

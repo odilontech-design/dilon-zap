@@ -6,6 +6,7 @@ import { ehGerencia } from "@/lib/papeis";
 import { logAudit } from "@/lib/audit";
 import { configRevendaSchema } from "@/lib/veiculos-schemas";
 import { baseDaLoja, configDaRevenda, linkDaLoja, normalizarDominio, normalizarWhatsapp } from "@/lib/vitrine";
+import { temCatalogoMeta, type PlanoVeiculos } from "@/lib/veiculos-planos";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { SEM_PERMISSAO } from "@/lib/veiculos-api";
 
@@ -33,7 +34,7 @@ export async function GET() {
         return null;
       }
     })(),
-    feeds: { facebook: `${base}/facebook.csv`, xml: `${base}/estoque.xml`, json: `${base}/estoque.json` },
+    feeds: { facebook: temCatalogoMeta(cfg.plano as PlanoVeiculos | null) ? `${base}/facebook.csv` : null, xml: `${base}/estoque.xml`, json: `${base}/estoque.json` },
     nomeEmpresa: tenant.name,
     numeroConectado: numero?.phoneNumber ?? null,
   });

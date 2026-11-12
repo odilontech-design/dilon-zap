@@ -3746,10 +3746,21 @@ model EventoVeiculo {
   @@index([veiculoId, createdAt])
 }
 
+/// Planos da vertical de revenda (ver apps/web/lib/veiculos-planos.ts).
+enum PlanoVeiculos {
+  GARAGEM
+  REVENDA
+  REVENDA_MAIS
+}
+
 // Configuração da revenda por empresa: a vitrine pública (/loja/[slug]).
 model VeiculosConfig {
   tenantId String @id
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Plano contratado da revenda, definido no Super Admin. Nulo = sem plano
+  // de tabela (contrato sob medida ou teste interno): sem limites.
+  plano PlanoVeiculos?
 
   // Vitrine desligada = /loja/[slug] responde "não encontrada". Nasce
   // desligada: publicar o estoque na internet é decisão da loja.
@@ -3806,6 +3817,9 @@ model VendedorIaConfig {
   // Travas de custo do mês: passou de uma delas, a IA para de assumir
   // conversas novas (as que já está atendendo seguem até passar para alguém).
   limiteLeadsMes      Int  @default(1000)
+  // Teto contratado (Super Admin): 300 ou 1.000 leads/mês. A loja pode
+  // baixar o próprio limite, nunca passar deste. Nulo = sem teto contratado.
+  leadsContratados    Int?
   limiteCustoMesCents Int? // centavos de dólar
 
   // Ligar a IA desliga as automações (saudação, menu, ausência) do número

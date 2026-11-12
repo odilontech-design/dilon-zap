@@ -11,6 +11,7 @@ type Resultado = {
   criados: number;
   fotos: number;
   jaNoEstoque: { numero: number; motivo: string }[];
+  alemDoPlano: { numero: number; motivo: string }[];
   erros: { numero: number; erro: string }[];
   ignoradas: string[];
   previa: { numero: number; nome: string; km: number; placa: string | null; precoCents: number; custoCents: number | null; fotos: number }[];
@@ -149,6 +150,7 @@ export function ImportarEstoque() {
             {r.fotos > 0 && <span className="rounded-full bg-neutral-100 px-3 py-1 text-neutral-600">{r.fotos} foto(s) para baixar</span>}
             {r.jaNoEstoque.length > 0 && <span className="rounded-full bg-neutral-100 px-3 py-1 text-neutral-600">{r.jaNoEstoque.length} já estão no estoque</span>}
             {r.erros.length > 0 && <span className="rounded-full bg-red-500/10 px-3 py-1 text-red-600">{r.erros.length} linha(s) com problema</span>}
+            {r.alemDoPlano.length > 0 && <span className="rounded-full bg-amber-500/10 px-3 py-1 text-amber-700">{r.alemDoPlano.length} ficam de fora pelo limite do plano</span>}
           </div>
           {r.previa.length > 0 && (
             <table className="w-full text-sm">
@@ -180,11 +182,16 @@ export function ImportarEstoque() {
             </table>
           )}
           {r.entram > r.previa.length && <p className="text-xs text-neutral-500">Mostrando os primeiros {r.previa.length} de {r.entram}.</p>}
-          {(r.erros.length > 0 || r.jaNoEstoque.length > 0) && (
+          {(r.erros.length > 0 || r.jaNoEstoque.length > 0 || r.alemDoPlano.length > 0) && (
             <ul className="max-h-48 overflow-auto rounded-md bg-neutral-50 p-3 text-xs">
               {r.erros.map((e) => (
                 <li key={`e${e.numero}`} className="text-red-600">
                   Linha {e.numero}: {e.erro}
+                </li>
+              ))}
+              {r.alemDoPlano.map((e) => (
+                <li key={`p${e.numero}`} className="text-amber-700">
+                  Linha {e.numero}: {e.motivo}
                 </li>
               ))}
               {r.jaNoEstoque.map((e) => (

@@ -15,6 +15,7 @@ type Dados = {
     setorTransferenciaId: string | null;
     limiteLeadsMes: number;
     limiteCustoMesCents: number | null;
+    leadsContratados: number | null;
   };
   setores: { id: string; nome: string }[];
   estimativas: { id: string; nome: string; aproximado: boolean; usdPorLead: number }[];
@@ -185,7 +186,7 @@ export function ConfigVendedorIa() {
           </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="flex flex-col gap-1">
-              <span className={rotulo}>Limite de leads novos por mês</span>
+              <span className={rotulo}>Limite de leads novos por mês{data.config.leadsContratados !== null ? ` (contratado: até ${data.config.leadsContratados})` : ""}</span>
               <input id="ia-limite-leads" inputMode="numeric" value={f.limiteLeadsMes} onChange={(e) => setF({ ...f, limiteLeadsMes: Number(e.target.value.replace(/\D/g, "")) || 1 })} className={campo} />
             </label>
             <label className="flex flex-col gap-1">

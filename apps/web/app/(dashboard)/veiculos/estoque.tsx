@@ -58,7 +58,7 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
   const params = new URLSearchParams();
   if (vendidos) params.set("status", "VENDIDO");
   if (buscaAtiva) params.set("q", buscaAtiva);
-  const { data, error, isLoading } = useSWR<{ gerencia: boolean; veiculos: Linha[] }>(`/api/veiculos?${params}`, fetcher, { refreshInterval: 60_000 });
+  const { data, error, isLoading } = useSWR<{ gerencia: boolean; plano: { nome: string; limite: number; noPatio: number } | null; veiculos: Linha[] }>(`/api/veiculos?${params}`, fetcher, { refreshInterval: 60_000 });
 
   const todos = data?.veiculos ?? [];
   const lista = useMemo(() => (filtro === "todos" || vendidos ? todos : todos.filter((v) => v.status === filtro)), [todos, filtro, vendidos]);
@@ -116,6 +116,11 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
             {parados.length} parado(s) há 60+ dias
           </span>
           {gerencia && <span className="rounded-full bg-neutral-100 px-3 py-1 text-neutral-600">Capital em estoque: {brl(capital)}</span>}
+          {data?.plano && (
+            <span className={`rounded-full px-3 py-1 ${data.plano.noPatio >= data.plano.limite ? "bg-red-500/10 text-red-600" : data.plano.noPatio >= data.plano.limite * 0.9 ? "bg-amber-500/10 text-amber-700" : "bg-neutral-100 text-neutral-600"}`}>
+              Plano {data.plano.nome}: {data.plano.noPatio} de {data.plano.limite} carros
+            </span>
+          )}
         </div>
       )}
       {vendidos && gerencia && todos.length > 0 && (

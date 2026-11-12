@@ -15,6 +15,8 @@ export async function GET(_req: Request, { params }: { params: { slug: string; f
   const loja = await lojaPublica(params.slug);
   if (!loja) return NextResponse.json({ error: "não encontrada" }, { status: 404 });
   if (!["facebook.csv", "estoque.xml", "estoque.json"].includes(params.formato)) return NextResponse.json({ error: "formato desconhecido" }, { status: 404 });
+  // O catálogo da Meta é do plano Revenda para cima.
+  if (params.formato === "facebook.csv" && !loja.catalogoMeta) return NextResponse.json({ error: "catálogo não incluído no plano da loja" }, { status: 404 });
 
   const base = baseDaLoja(loja.dominio);
   const agora = new Date();

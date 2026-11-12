@@ -8,6 +8,8 @@ import { entradaVeiculoSchema } from "@/lib/veiculos-schemas";
 import { registrarEntrada, resolverCliente } from "@/lib/veiculos";
 import { STATUS_NO_PATIO, custoTotal, diasEmEstoque, margem, normalizarPlaca, type StatusVeiculo } from "@/lib/veiculos-regras";
 import { SEM_PERMISSAO, respostaDeErro } from "@/lib/veiculos-api";
+import { patioDoPlano } from "@/lib/veiculos";
+import { PLANOS_VEICULOS } from "@/lib/veiculos-planos";
 
 /**
  * O estoque. Sem filtro, traz o que está no pátio (preparação, disponível,
@@ -71,8 +73,10 @@ export async function GET(req: Request) {
   });
 
   const agora = new Date();
+  const patio = await patioDoPlano(prisma, user.tenantId);
   return NextResponse.json({
     gerencia,
+    plano: patio.plano ? { nome: PLANOS_VEICULOS[patio.plano].nome, limite: PLANOS_VEICULOS[patio.plano].carrosNoPatio, noPatio: patio.noPatio } : null,
     veiculos: veiculos.map(({ custos, fotos, _count, consignacaoValorCents, vendas, ...v }) => {
       const custo = custoTotal(custos.map((c) => c.valorCents), consignacaoValorCents);
       const venda = vendas[0] ?? null;

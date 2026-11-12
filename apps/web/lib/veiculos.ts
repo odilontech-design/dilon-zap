@@ -13,6 +13,7 @@ import { randomUUID } from "node:crypto";
 import { uploadMedia } from "@dilon-zap/storage";
 import { ErroImagem, baixarImagem } from "@/lib/baixar-imagem";
 import type { LinhaImportada } from "@/lib/veiculos-importacao";
+import { mensagemPatioCheio, vagasNoPatio, type PlanoVeiculos } from "@/lib/veiculos-planos";
 import { telefoneParaWhatsApp } from "@/lib/otica-schemas";
 import {
   ROTULO_CUSTO,
@@ -110,6 +111,20 @@ export function dadosParaBanco(d: Partial<DadosVeiculo>): Prisma.VeiculoUnchecke
     throw new ErroDeVeiculo("o ano do modelo não pode ser anterior ao de fabricação");
   }
   return out;
+}
+
+/**
+ * O pátio pelo plano: quantos carros há e quantos ainda cabem (null = sem
+ * limite). Conta o que está no pátio (preparação, disponível, reservado):
+ * vendido e devolvido não ocupam vaga.
+ */
+export async function patioDoPlano(db: Db, tenantId: string): Promise<{ plano: PlanoVeiculos | null; noPatio: number; vagas: number | null }> {
+  const [cfg, noPatio] = await Promise.all([
+    db.veiculosConfig.findUnique({ where: { tenantId }, select: { plano: true } }),
+    db.veiculo.count({ where: { tenantId, status: { in: STATUS_NO_PATIO } } }),
+  ]);
+  const plano = (cfg?.plano ?? null) as PlanoVeiculos | null;
+  return { plano, noPatio, vagas: vagasNoPatio(plano, noPatio) };
 }
 
 /** Duas fichas do mesmo carro no pátio ao mesmo tempo é erro de digitação (ou o carro entrou duas vezes). */
@@ -215,6 +230,8 @@ export async function registrarEntrada(input: {
   await prepararFinanceiro(input.tenantId);
 
   return prisma.$transaction(async (tx) => {
+    const patio = await patioDoPlano(tx, input.tenantId);
+    if (patio.vagas === 0) throw new ErroDeVeiculo(mensagemPatioCheio(patio.plano!, patio.noPatio), 402);
     await conferirPlacaNoPatio(tx, input.tenantId, base.placa as string | null | undefined);
     const status = d.disponivel ? "DISPONIVEL" : "PREPARACAO";
     const v = await tx.veiculo.create({
@@ -565,7 +582,9 @@ export async function vender(input: {
       await tx.vendaVeiculo.update({ where: { id: venda.id }, data: { repasseContaPagarId: conta.id } });
     }
 
-    // ---- a troca entra no estoque, com o valor dela como custo (pago com abatimento, sem conta a pagar)
+    // ---- a troca entra no estoque, com o valor dela como custo (pago com abatimento, sem conta a pagar).
+    // Não passa pelo limite de carros do plano: barrar a troca seria barrar a
+    // venda. O pátio fica acima do limite até sair um carro.
     let trocaId: string | null = null;
     if (d.troca && trocaDados) {
       await conferirPlacaNoPatio(tx, input.tenantId, trocaDados.placa as string | null | undefined);
@@ -712,7 +731,7 @@ export async function importarEstoque(input: {
   userId: string;
   linhas: LinhaImportada[];
   simular: boolean;
-}): Promise<{ entram: number; jaNoEstoque: { numero: number; motivo: string }[]; fotos: number; criados: number }> {
+}): Promise<{ entram: number; jaNoEstoque: { numero: number; motivo: string }[]; alemDoPlano: { numero: number; motivo: string }[]; fotos: number; criados: number }> {
   // O que já está no pátio. Com placa, a placa decide; sem placa, marca +
   // modelo + ano + km (reimportar a mesma planilha não pode duplicar o estoque).
   const noPatio = await prisma.veiculo.findMany({
@@ -730,8 +749,14 @@ export async function importarEstoque(input: {
     else if (!l.placa && semPlaca.has(chave(l))) jaNoEstoque.push({ numero: l.numero, motivo: `${l.marca} ${l.modelo} ${l.anoModelo} com ${l.km.toLocaleString("pt-BR")} km já está no estoque` });
     else novas.push(l);
   }
+  // O que não cabe no plano fica de fora (as primeiras linhas da planilha entram).
+  const patio = await patioDoPlano(prisma, input.tenantId);
+  const alemDoPlano: { numero: number; motivo: string }[] = [];
+  if (patio.vagas !== null && novas.length > patio.vagas) {
+    for (const l of novas.splice(patio.vagas)) alemDoPlano.push({ numero: l.numero, motivo: `passa do limite do plano (${patio.noPatio + patio.vagas} carros no estoque)` });
+  }
   const fotos = novas.reduce((s, l) => s + l.fotos.length, 0);
-  if (input.simular) return { entram: novas.length, jaNoEstoque, fotos, criados: 0 };
+  if (input.simular) return { entram: novas.length, jaNoEstoque, alemDoPlano, fotos, criados: 0 };
 
   let criados = 0;
   // Uma transação por carro: um erro inesperado numa linha não desfaz as outras,
@@ -776,7 +801,7 @@ export async function importarEstoque(input: {
     });
     criados++;
   }
-  return { entram: novas.length, jaNoEstoque, fotos, criados };
+  return { entram: novas.length, jaNoEstoque, alemDoPlano, fotos, criados };
 }
 
 /** Quantas fotos da importação ainda faltam baixar nesta empresa. */

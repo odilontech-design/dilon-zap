@@ -138,7 +138,8 @@ Três colunas, com a do meio destacada como "mais escolhido".
 | Site da loja no seu domínio | ✓ | ✓ | ✓ |
 | Catálogo para Facebook e Instagram | | ✓ | ✓ |
 | Importação de planilha com fotos | ✓ | ✓ | ✓ |
-| Relatórios e CRM de vendas | | ✓ | ✓ |
+| CRM de vendas com funil e tarefas | ✓ | ✓ | ✓ |
+| Mais de um número de WhatsApp | | | ✓ |
 
 **Adicional para qualquer plano: Vendedor IA**, R$ 497/mês até 300 leads
 atendidos no mês, ou R$ 997/mês até 1.000.
@@ -147,8 +148,10 @@ atendidos no mês, ou R$ 997/mês até 1.000.
 quem atende é a equipe inteira, e cobrar por acesso faria o dono escolher quem
 pode responder o cliente.
 
-> **Os valores precisam de confirmação antes de publicar.** São os sugeridos em
-> `docs/revenda-veiculos.md`, seção 9. Se mudarem lá, mudam aqui.
+> **A tabela é a que o sistema aplica** (`apps/web/lib/veiculos-planos.ts`):
+> limite de carros, catálogo do Facebook a partir do Revenda, mais de um número
+> no Revenda+ e usuários ilimitados. Mudou o preço ou o limite aqui, muda lá
+> também, e vice-versa.
 
 ### 8. Perguntas frequentes
 
