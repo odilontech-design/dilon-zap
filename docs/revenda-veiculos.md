@@ -170,6 +170,49 @@ interna foram conferidos contra um Postgres local.
 
 Implantação: `npm run db:push` (coluna `Veiculo.fotosParaImportar`) e redeploy.
 
+## Implementado (v1.54.0): importação do estoque a partir do site atual
+
+Veículos → **Importar** → "Trazer o estoque do site atual". A loja digita o
+endereço do site que usa hoje; o Zap lê os carros e cria as fichas. Primeiro o
+caso real: a Sales Automóveis (site no AutoCerto, 60 carros).
+
+**Como funciona:**
+- **Layout lido:** o do AutoCerto, que muitas revendas usam: uma lista com todos
+  os carros e uma página por carro (`/Veiculo/<nome>/<id>/detalhes`). Outros
+  sites: a tela diz que não reconhece e manda usar a planilha.
+- **O que vem:** marca, modelo, versão, ano, cor, câmbio, combustível, opcionais
+  e todas as fotos (a primeira é a capa). "IPVA pago", "chave reserva" e afins
+  são situação do carro, não opcional, e ficam de fora.
+- **Duas etapas:** "Conferir" mostra o que entra, sem gravar; "Importar" cria as
+  fichas e abre a página de cada carro (5 por vez). Na Sales, 60 carros e 1.142
+  fotos entraram em cerca de 40 segundos. As fotos entram na mesma fila de
+  download da planilha, com barra de progresso.
+- **Reimportar não duplica:** o id do carro no site (`siteOrigemId`) fica
+  guardado, também para carro vendido aqui e ainda no site antigo. Esse id
+  servirá para redirecionar os endereços antigos no Google.
+- **Limite do plano:** o que passa das vagas do pátio fica de fora, como na planilha.
+- **Página de um carro que não abriu:** o carro entra só com a capa, com aviso,
+  e uma nova importação completa os que faltam.
+
+**O que o site não publica, e a trava que isso exige.** No site da Sales, 59 dos
+60 carros estão como "Sob Consulta", 56 têm "N/I" na quilometragem e nenhum tem
+placa. Por isso os carros entram **em preparação**, fora da vitrine e dos
+portais. A ficha avisa o que falta, e "Pronto para vender" só libera com preço
+e quilometragem informados (`409` com o motivo). A placa não trava, mas a OLX a
+exige para publicar. A quilometragem fica marcada como "não informada"
+(`kmInformado`) para um carro nunca aparecer com 0 km por engano.
+
+**Segurança:** o endereço é digitado por quem usa, então a busca recusa
+localhost, rede interna, metadados da nuvem (169.254.x), esquemas que não sejam
+http(s) e endereço com usuário e senha, e confere de novo cada
+redirecionamento. Tamanho da página limitado a 3 MB.
+
+**Testes** (de `apps/web`, com `DATABASE_URL` de um Postgres local):
+- `npx tsx lib/importar-site.test-manual.ts`: leitor, com trechos reais do site
+  da Sales em `test-fixtures/` e, se existir, a página inteira.
+- `npx tsx lib/importar-site-estoque.test-manual.ts`: motor com um site falso,
+  Postgres, reimportação, plano e erros.
+
 ## Implementado (v1.48.0): planos da revenda
 
 Tabela em `apps/web/lib/veiculos-planos.ts`, com teste. O Super Admin define o
