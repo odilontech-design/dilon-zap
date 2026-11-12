@@ -87,7 +87,7 @@ Loja:     Tem sim! Quer vir ver amanhã de manhã?
 - Todo mundo atende no número da loja, e o histórico fica com a loja.
 - Se ninguém respondeu, o sistema avisa o vendedor e o dono.
 
-### 4. Recursos: grade de 8 cards
+### 4. Recursos: grade de 9 cards (3 × 3)
 
 Cada card: ícone, título curto, uma frase.
 
@@ -99,6 +99,7 @@ Cada card: ícone, título curto, uma frase.
 6. **O site da sua revenda.** O estoque no seu domínio, aparecendo no Google com preço e foto, e o botão "Tenho interesse" abrindo o WhatsApp com o carro na mensagem.
 7. **Anúncio no Facebook e Instagram.** O estoque vira catálogo de anúncios, sempre atualizado: vendeu, sai do anúncio.
 8. **Traga seu estoque de onde estiver.** Importação da planilha com fotos, sem cadastrar carro por carro.
+9. **Vendedor IA.** Responde o primeiro contato a qualquer hora com o estoque real, manda a ficha e as fotos e passa para o vendedor quando o cliente quer negociar, financiar, dar carro na troca ou visitar a loja.
 
 ### 5. Como funciona: 4 passos numerados, com captura de tela em cada
 
@@ -107,17 +108,20 @@ Cada card: ícone, título curto, uma frase.
 3. **Coloque o site no ar.** Aponte o domínio da loja e ligue a vitrine. O cadeado de segurança é automático.
 4. **Venda e receba.** Reserva, venda, troca e financiamento caem no financeiro sem redigitar.
 
-### 6. Em breve (seção curta, fundo claro, selo "em breve" em cada item)
+### 6. Vendedor IA (seção de destaque, fundo escuro)
 
-**Título:** O que vem a seguir
+**Título:** Lead respondido às 23h de domingo
 
-- **Anúncio nos portais:** Mercado Livre, OLX e Webmotors publicados direto do estoque, com o lead caindo no WhatsApp da loja.
-- **Vendedor IA:** responde o primeiro contato a qualquer hora com o estoque real e passa para o vendedor quando o cliente quer negociar.
-- **Nota fiscal e RENAVE:** por parceiros homologados, dentro do mesmo sistema.
+**Texto:** O Vendedor IA atende o WhatsApp da loja quando a equipe não está:
+consulta o estoque de verdade, manda o carro certo e faz as perguntas que o
+vendedor faria (entrada, troca, dia da visita). Quando o cliente quer negociar,
+ele passa a conversa para um vendedor com um resumo pronto. Assim que alguém da
+equipe responde, ele sai da conversa.
 
-> **Marcar "em breve" é obrigatório.** Nenhum desses três está em uso por
-> cliente hoje. Anunciá-los como prontos gera cancelamento na primeira semana.
-> Quando cada um entrar em uso, ele sai desta seção e vira card na seção 4.
+**Três pontos curtos:**
+- Só fala de carros que estão no estoque: não inventa preço nem condição.
+- Não dá desconto nem promete nada: negociação é com o vendedor.
+- O painel mostra cada conversa atendida, o que foi passado ao vendedor e o custo do mês.
 
 ### 7. Planos
 
@@ -135,8 +139,9 @@ Três colunas, com a do meio destacada como "mais escolhido".
 | Catálogo para Facebook e Instagram | | ✓ | ✓ |
 | Importação de planilha com fotos | ✓ | ✓ | ✓ |
 | Relatórios e CRM de vendas | | ✓ | ✓ |
-| Mais de uma loja / CNPJ | | | em breve |
-| Anúncio nos portais | | em breve | em breve |
+
+**Adicional para qualquer plano: Vendedor IA**, R$ 497/mês até 300 leads
+atendidos no mês, ou R$ 997/mês até 1.000.
 
 **Frase abaixo da tabela:** Usuários ilimitados em todos os planos. Na revenda,
 quem atende é a equipe inteira, e cobrar por acesso faria o dono escolher quem
@@ -152,7 +157,8 @@ pode responder o cliente.
 - **Funciona com o WhatsApp que a loja já usa?** Funciona. Você conecta o número da loja pelo QR Code, como no WhatsApp Web, e a equipe atende por ele no computador ou no celular.
 - **O vendedor vê quanto o carro custou?** Não. Custo, margem e o menor preço aceito só aparecem para quem é da gestão.
 - **O site substitui o que eu tenho hoje?** Pode substituir. Ele fica no seu domínio e você decide quando apontar. Até lá, roda num endereço provisório para você testar.
-- **E o RENAVE e a nota fiscal?** Hoje continuam onde estão (despachante, contador ou o sistema atual). A integração com parceiros homologados está em andamento.
+- **E o RENAVE, a nota fiscal e os portais?** Continuam com quem faz hoje (despachante, contador, o integrador de anúncios atual). O estoque, o WhatsApp, a venda, o financeiro, o site e o catálogo do Facebook e Instagram ficam no sistema.
+- **O Vendedor IA pode falar besteira para o cliente?** Ele só fala de carros que estão no estoque, não negocia preço e passa para o vendedor tudo o que for negociação, financiamento ou troca. Você vê cada conversa no painel e desliga quando quiser.
 
 ### 9. Chamada final
 
@@ -171,6 +177,9 @@ tempo de resposta e margem por carro.
 - Responsiva, com atenção real ao celular: o dono da revenda abre o link no pátio.
 - Botões e formulário de contato (nome, loja, cidade, WhatsApp, quantos carros
   em estoque) → mesmo destino usado na página do Zap.
+- **Não citar** Mercado Livre, OLX, Webmotors, nota fiscal nem RENAVE como
+  recursos: ainda não estão no sistema. Entram na página quando o conector
+  estiver em uso.
 - **Não há cadastro sozinho:** o módulo é liberado pela Dilon Tech, por isso o
   botão é "Falar com a Dilon Tech", e não "Testar grátis".
 - Título da aba: "Revenda de veículos — Dilon Tech". Descrição: "Estoque com
@@ -197,3 +206,4 @@ carros (sem foto, o estoque e a vitrine parecem vazios):
 | 5 · passo 2 | Inbox com a janela "Enviar carro" aberta | Inbox → Carro |
 | 5 · passo 3 | Configuração da vitrine com o domínio | Veículos → Vitrine |
 | 5 · passo 4 | Seção da venda com as parcelas (pagas e em aberto) | Veículos → carro vendido |
+| 6 | Painel do Vendedor IA com conversas atendidas e resumos | Veículos → Vendedor IA |
