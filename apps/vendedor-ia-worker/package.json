@@ -10,6 +10,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
     "@dilon-zap/db": "*",
+    "@dilon-zap/sdr-core": "*",
     "@dilon-zap/vendedor-ia": "*",
     "dotenv": "^16.4.5"
   },
