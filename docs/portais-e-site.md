@@ -310,7 +310,7 @@ Refeita a navegação pública inteira, pensando em quem chega pelo celular vind
 
 **Fotos sem cortes (v1.65.0).** A capa da Sales é uma arte quadrada com o carro, o ano, a versão e o telefone escritos na imagem; cortar para 4:3 cortava esse texto. `components/foto-sem-cortes.tsx` mostra a foto **inteira** (`object-contain`) sobre uma cópia dela desfocada (sem faixas brancas), na vitrine (cartões quadrados, galeria e miniaturas) e no painel (estoque e ficha). Para outras lojas, foto comum em qualquer proporção também fica inteira.
 
-## Webmotors pelo Cockpit: credencial de integrador, adoção e troca de sistema (v1.66.0)
+## Webmotors pelo Cockpit: credencial de integrador, adoção e troca de sistema (v1.69.0)
 
 **Como a loja liga o Zap à Webmotors.** No Cockpit da loja: Integrações > **Estoque terceiro** > "+ Adicionar credencial" (tela "integrador"): escolher o integrador, informar um e-mail e criar uma senha. Esse e-mail e essa senha, mais o **CNPJ da loja**, são exatamente o que o Zap pede em Veículos > Portais > Webmotors (o `autenticar(cnpj, email, senha)` do serviço). A AutoCerto já aparece nessa lista com a credencial dela. Pendente: confirmar se "Dilon Tech" aparece na lista de integradores do Cockpit (senão, é preciso o cadastro como integrador no Portal do Desenvolvedor da Webmotors).
 
