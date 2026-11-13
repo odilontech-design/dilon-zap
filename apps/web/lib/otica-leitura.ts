@@ -297,7 +297,8 @@ type Opcoes = { chave?: string; modelo?: string; fetchFn?: typeof fetch; signal?
 
 /** Manda a foto à IA e devolve o JSON que ela escreveu (ainda cru: passe por normalizarLeitura). */
 export async function lerFotoDaOS(foto: { base64: string; mime: string }, opcoes: Opcoes = {}): Promise<unknown> {
-  const chave = (opcoes.chave ?? process.env.GEMINI_API_KEY ?? "").trim();
+  // A chave vem de quem chama (a rota pede ao sdr-core): as chaves dos provedores só são lidas lá.
+  const chave = (opcoes.chave ?? "").trim();
   if (!chave) throw new ErroDeLeitura("A leitura por foto ainda não está ligada neste servidor (falta a chave GEMINI_API_KEY).", 503);
   const modelo = opcoes.modelo ?? (process.env.OTICA_LEITURA_MODELO?.trim() || MODELO_PADRAO);
   const fetchFn = opcoes.fetchFn ?? fetch;

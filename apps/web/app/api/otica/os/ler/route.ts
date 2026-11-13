@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@dilon-zap/db";
+import { chaveGeminiDoServidor } from "@dilon-zap/sdr-core";
 import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { ErroDeLeitura, LIMITE_FOTO_BYTES, TIPOS_DE_FOTO, acharPorNome, lerFotoDaOS, normalizarLeitura } from "@/lib/otica-leitura";
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
 
   let bruto: unknown;
   try {
-    bruto = await lerFotoDaOS({ base64: Buffer.from(await foto.arrayBuffer()).toString("base64"), mime: foto.type }, { signal: AbortSignal.timeout(45_000) });
+    bruto = await lerFotoDaOS({ base64: Buffer.from(await foto.arrayBuffer()).toString("base64"), mime: foto.type }, { signal: AbortSignal.timeout(45_000), chave: chaveGeminiDoServidor() });
   } catch (e) {
     if (e instanceof ErroDeLeitura) return NextResponse.json({ error: e.message }, { status: e.status });
     if (e instanceof Error && e.name === "TimeoutError") return NextResponse.json({ error: "A leitura demorou demais. Tente de novo." }, { status: 504 });

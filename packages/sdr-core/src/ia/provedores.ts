@@ -87,6 +87,14 @@ export function chaveAnthropicDoServidor(): string | undefined {
   return process.env.ANTHROPIC_API_KEY?.trim() || undefined;
 }
 
+/**
+ * A chave do Gemini para quem fala com ele por fora do SDR (a leitura da foto da OS da Ótica). Existe pelo
+ * mesmo motivo da anterior: a leitura da chave fica num lugar só, e o chamador a pede por aqui.
+ */
+export function chaveGeminiDoServidor(): string | undefined {
+  return process.env.GEMINI_API_KEY?.trim() || undefined;
+}
+
 /** Tira do texto de erro qualquer valor de chave que tenha escapado. */
 export function semSegredos(texto: string): string {
   let limpo = texto;
