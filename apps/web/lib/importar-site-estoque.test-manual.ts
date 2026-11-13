@@ -69,7 +69,7 @@ async function main() {
 
   // Plano com limite de 1 vaga no pátio.
   await prisma.veiculo.deleteMany({ where: { tenantId: t.id } });
-  await prisma.veiculosConfig.create({ data: { tenantId: t.id, plano: "GARAGEM" } });
+  await prisma.veiculosConfig.upsert({ where: { tenantId: t.id }, create: { tenantId: t.id, plano: "GARAGEM" }, update: { plano: "GARAGEM" } });
   await prisma.veiculo.createMany({
     data: Array.from({ length: 29 }, (_, i) => ({ tenantId: t.id, marca: "X", modelo: `M${i}`, anoFabricacao: 2020, anoModelo: 2020, km: 1, precoCents: 100, status: "DISPONIVEL" as const, origem: "COMPRA" as const })),
   });

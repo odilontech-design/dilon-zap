@@ -3617,17 +3617,23 @@ model Veiculo {
   descricao           String?
   // Aparece na vitrine pública da loja quando está disponível (ou reservado).
   // Desligar esconde o carro sem tirá-lo do estoque (carro de repasse, por exemplo).
-  naVitrine           Boolean  @default(true)
+  naVitrine           Boolean   @default(true)
   // Endereços das fotos que vieram na planilha de importação e ainda não
   // foram baixadas para o nosso armazenamento. Esvazia conforme a tela de
   // importação baixa (em lotes, para não estourar o tempo de uma requisição).
-  fotosParaImportar   String[] @default([])
+  fotosParaImportar   String[]  @default([])
   // Veio do site atual da loja: o id do carro lá ("autocerto:5769805"). Evita
   // importar duas vezes e serve para redirecionar o endereço antigo no Google.
   siteOrigemId        String?
   // Falso quando a quilometragem não veio (o site dizia "N/I"): o carro não
   // vai à venda até alguém informar, para não aparecer com 0 km.
-  kmInformado         Boolean  @default(true)
+  kmInformado         Boolean   @default(true)
+  // O carro deixou de aparecer no site de origem (provavelmente vendido lá): foi
+  // escondido da vitrine e espera a gestão confirmar (vender ou reativar).
+  sumiuDoSiteEm       DateTime?
+  // Falso: a gestão disse que este carro continua à venda mesmo fora do site antigo;
+  // o espelho para de compará-lo (o id do site fica, para não importar de novo).
+  seguirSite          Boolean   @default(true)
   // Só para a equipe: "risco no para-choque", "chave reserva com o dono".
   observacoesInternas String?
 
@@ -3807,6 +3813,13 @@ model VeiculosConfig {
   instagram           String?
   facebook            String?
   politicaPrivacidade String?
+
+  // Espelho do site atual da loja (AutoCerto etc.): o endereço de onde o estoque
+  // foi importado e o resultado da última sincronização. Enquanto o site antigo
+  // for o cadastro principal, o Zap o acompanha para não mostrar carro vendido.
+  siteOrigemUrl  String?
+  siteSincEm     DateTime?
+  siteSincResumo String?
 
   // Exige a quilometragem para colocar o carro à venda. Lojas que não costumam
   // preencher a km (o AutoCerto grava 0) desligam: o carro vai à venda e a km

@@ -24,6 +24,7 @@ type Linha = {
   anoModelo: number;
   km: number;
   kmInformado: boolean;
+  sumiuDoSiteEm: string | null;
   cor: string | null;
   cambio: string | null;
   precoCents: number;
@@ -152,6 +153,7 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
                   <div className="flex h-full items-center justify-center text-xs text-neutral-400">sem foto</div>
                 )}
                 <span className="absolute left-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-[11px] text-white">{ROTULO_STATUS[v.status]}</span>
+                {v.sumiuDoSiteEm && <span className="absolute bottom-2 left-2 rounded-full bg-amber-500 px-2 py-0.5 text-[11px] font-medium text-white">saiu do site antigo</span>}
                 {v.status !== "VENDIDO" && (
                   <span className={`absolute right-2 top-2 rounded-full px-2 py-0.5 text-[11px] font-medium ${COR_FAIXA[faixa]}`}>{v.dias} dia(s)</span>
                 )}
