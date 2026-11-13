@@ -1,13 +1,9 @@
-import { baseDaLoja, carrosDaVitrine, linkDaLoja, linkDoCarro, lojaPublica } from "@/lib/vitrine";
-import { PAGINAS, caminhoDaLoja } from "@/lib/vitrine-aparencia";
+import { carrosDaVitrine, lojaPublica } from "@/lib/vitrine";
+import { sitemapDaLoja } from "@/lib/vitrine-seo";
 
-/** Sitemap da vitrine (no domínio próprio, servido em /sitemap.xml pelo middleware). */
+/** Sitemap da vitrine, com datas e fotos (no domínio próprio, servido em /sitemap.xml pelo middleware). */
 export async function GET(_req: Request, { params }: { params: { slug: string } }) {
   const loja = await lojaPublica(params.slug);
   if (!loja) return new Response("não encontrada", { status: 404 });
-  const carros = await carrosDaVitrine(loja);
-  const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;");
-  const urls = [linkDaLoja(loja.slug, loja.dominio), ...PAGINAS.map((p) => `${baseDaLoja(loja.dominio)}${caminhoDaLoja(loja.slug, loja.dominio, p)}`), ...carros.map((c) => linkDoCarro(loja.slug, c.id, loja.dominio))];
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.map((u) => `  <url><loc>${esc(u)}</loc></url>`).join("\n")}\n</urlset>\n`;
-  return new Response(xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=600" } });
+  return new Response(sitemapDaLoja(loja, await carrosDaVitrine(loja)), { headers: { "Content-Type": "application/xml; charset=utf-8", "Cache-Control": "public, max-age=600" } });
 }

@@ -119,6 +119,7 @@ export const SELECT_PUBLICO = {
   descricao: true,
   status: true,
   entradaEm: true,
+  updatedAt: true,
   fotos: { orderBy: { ordem: "asc" }, select: { id: true } },
 } satisfies Prisma.VeiculoSelect;
 

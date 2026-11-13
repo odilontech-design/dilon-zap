@@ -11,8 +11,10 @@ const TRANSMISSAO = (c: string | null) => (!c ? undefined : /manual/i.test(c) ? 
 export function carroParaJsonLd(c: Omit<CarroPublico, "fotos" | "entradaEm"> & { fotos?: unknown }, url: string, fotos: string[], loja?: string) {
   return {
     "@type": "Car",
+    "@id": `${url}#carro`,
     name: nomeDoVeiculo(c),
     url,
+    sku: c.id,
     brand: { "@type": "Brand", name: c.marca },
     model: c.modelo,
     ...(c.versao ? { vehicleConfiguration: c.versao } : {}),
@@ -30,6 +32,7 @@ export function carroParaJsonLd(c: Omit<CarroPublico, "fotos" | "entradaEm"> & {
       "@type": "Offer",
       price: (c.precoCents / 100).toFixed(2),
       priceCurrency: "BRL",
+      priceValidUntil: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
       availability: c.status === "RESERVADO" ? "https://schema.org/LimitedAvailability" : "https://schema.org/InStock",
       url,
       ...(loja ? { seller: { "@type": "AutoDealer", name: loja } } : {}),
