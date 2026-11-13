@@ -48,6 +48,8 @@ export function PlanoPanel({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  // Confirmação de que gravou: sem ela o botão não dava sinal nenhum e o superadmin ficava sem saber se tinha dado certo.
+  const [salvoEm, setSalvoEm] = useState<Date | null>(null);
 
   // O que valeria com a configuração que está na tela, antes de salvar.
   const efetivos = recursosEfetivos(
@@ -67,21 +69,36 @@ export function PlanoPanel({
     setSalvando(true);
     setErro(null);
     setAviso(null);
-    const res = await fetch(`/api/admin/tenants/${tenantId}/plano`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        plano,
-        plataformaCompleta: completa,
-        excecoes: RECURSOS_GERENCIAVEIS.map((r) => ({ recurso: r, ativo: ex[r] })),
-      }),
-    });
-    setSalvando(false);
-    const b = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setErro(typeof b.error === "string" ? b.error : "não deu pra salvar");
+    setSalvoEm(null);
+    let res: Response;
+    try {
+      res = await fetch(`/api/admin/tenants/${tenantId}/plano`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plano,
+          plataformaCompleta: completa,
+          excecoes: RECURSOS_GERENCIAVEIS.map((r) => ({ recurso: r, ativo: ex[r] })),
+        }),
+      });
+    } catch {
+      // Rede fora: antes o botão ficava em "Salvando..." para sempre, sem mensagem.
+      setSalvando(false);
+      setErro("Sem conexão com o servidor. Nada foi salvo; tente de novo.");
       return;
     }
+    setSalvando(false);
+    const tipo = res.headers.get("content-type") ?? "";
+    if (!tipo.includes("application/json")) {
+      setErro("Sua sessão expirou. Entre de novo; nada foi salvo.");
+      return;
+    }
+    const b = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setErro(typeof b.error === "string" ? b.error : "Não deu pra salvar. Nada foi alterado.");
+      return;
+    }
+    setSalvoEm(new Date());
     // Consequência que acontece no servidor e a pessoa precisa saber: o
     // menu de triagem que estava rodando pros clientes da empresa parou.
     if (b.uraDesligada) {
@@ -167,6 +184,11 @@ export function PlanoPanel({
 
         {erro && <p className="mb-3 text-xs text-red-400">{erro}</p>}
         {aviso && <p className="mb-3 rounded-md border border-amber-900 bg-amber-950/40 px-3 py-2 text-xs text-amber-200">{aviso}</p>}
+        {salvoEm && (
+          <p role="status" className="mb-3 rounded-md border border-emerald-900 bg-emerald-950/40 px-3 py-2 text-xs text-emerald-300">
+            ✓ Plano e recursos salvos às {salvoEm.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}.
+          </p>
+        )}
 
         <button
           onClick={salvar}
