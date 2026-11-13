@@ -92,8 +92,11 @@ export function ArmacoesPanel() {
   );
 }
 
+const emReais = (c: number | null) => (c ? (c / 100).toFixed(2).replace(".", ",") : "");
+
 function Linha({ a, aoMudar }: { a: Armacao; aoMudar: () => void }) {
   const [erro, setErro] = useState<string | null>(null);
+  const [editando, setEditando] = useState(false);
   const detalhe = [a.marca, a.cor, a.material, a.medidas].filter(Boolean).join(" · ");
 
   async function patch(corpo: object) {
@@ -102,6 +105,8 @@ function Linha({ a, aoMudar }: { a: Armacao; aoMudar: () => void }) {
     if (!r.ok) return setErro(await erroDaResposta(r));
     aoMudar();
   }
+
+  if (editando) return <EditarLinha a={a} aoSalvar={() => { setEditando(false); aoMudar(); }} aoCancelar={() => setEditando(false)} />;
 
   const situacao = !a.ativo ? ["Desativada", "text-neutral-400"] : a.quantidade > 0 ? ["À venda", "text-accent"] : ["Vendida", "text-neutral-500"];
   return (
@@ -125,8 +130,75 @@ function Linha({ a, aoMudar }: { a: Armacao; aoMudar: () => void }) {
         />
       </td>
       <td className={`px-3 py-2 text-xs font-medium ${situacao[1]}`}>{situacao[0]}</td>
-      <td className="px-3 py-2 text-right">
+      <td className="px-3 py-2 text-right whitespace-nowrap">
+        <button onClick={() => setEditando(true)} className="mr-3 text-xs text-neutral-500 hover:text-accent">Editar</button>
         <button onClick={() => patch({ ativo: !a.ativo })} className="text-xs text-neutral-500 hover:text-accent">{a.ativo ? "Desativar" : "Reativar"}</button>
+      </td>
+    </tr>
+  );
+}
+
+/** Edição de uma armação na própria linha: etiqueta, modelo, detalhes e valores. A quantidade continua na coluna Qtd. */
+function EditarLinha({ a, aoSalvar, aoCancelar }: { a: Armacao; aoSalvar: () => void; aoCancelar: () => void }) {
+  const [f, setF] = useState({
+    codigo: a.codigo,
+    descricao: a.descricao,
+    marca: a.marca ?? "",
+    cor: a.cor ?? "",
+    material: a.material ?? "",
+    medidas: a.medidas ?? "",
+    custo: emReais(a.custoCents),
+    preco: emReais(a.precoCents),
+  });
+  const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const mudar = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
+
+  async function salvar(e: React.FormEvent) {
+    e.preventDefault();
+    setErro(null);
+    const custo = f.custo.trim() ? reaisParaCentavos(f.custo) : null;
+    const preco = f.preco.trim() ? reaisParaCentavos(f.preco) : null;
+    if (custo === undefined || preco === undefined || (f.custo.trim() && custo === null) || (f.preco.trim() && preco === null)) return setErro("Confira o custo e o preço.");
+    if (!f.codigo.trim() || !f.descricao.trim()) return setErro("O código e o modelo são obrigatórios.");
+    setSalvando(true);
+    const r = await fetch(`/api/otica/armacoes/${a.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        codigo: f.codigo.trim(),
+        descricao: f.descricao.trim(),
+        marca: f.marca.trim() || null,
+        cor: f.cor.trim() || null,
+        material: f.material.trim() || null,
+        medidas: f.medidas.trim() || null,
+        custoCents: custo,
+        precoCents: preco,
+      }),
+    });
+    setSalvando(false);
+    if (!r.ok) return setErro(await erroDaResposta(r));
+    aoSalvar();
+  }
+
+  return (
+    <tr className="border-t border-neutral-100 bg-accent/5">
+      <td colSpan={6} className="px-3 py-3">
+        <form onSubmit={salvar} className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <label className={rotulo}>Código<input id={`ed-codigo-${a.id}`} value={f.codigo} onChange={mudar("codigo")} className={`${campo} mt-1`} required /></label>
+          <label className={`${rotulo} col-span-2`}>Modelo<input id={`ed-desc-${a.id}`} value={f.descricao} onChange={mudar("descricao")} className={`${campo} mt-1`} required /></label>
+          <label className={rotulo}>Marca<input id={`ed-marca-${a.id}`} value={f.marca} onChange={mudar("marca")} className={`${campo} mt-1`} /></label>
+          <label className={rotulo}>Cor<input id={`ed-cor-${a.id}`} value={f.cor} onChange={mudar("cor")} className={`${campo} mt-1`} /></label>
+          <label className={rotulo}>Material<input id={`ed-material-${a.id}`} value={f.material} onChange={mudar("material")} className={`${campo} mt-1`} /></label>
+          <label className={rotulo}>Medidas<input id={`ed-medidas-${a.id}`} value={f.medidas} onChange={mudar("medidas")} placeholder="52□19-145" className={`${campo} mt-1`} /></label>
+          <label className={rotulo}>Custo (R$)<input id={`ed-custo-${a.id}`} value={f.custo} onChange={mudar("custo")} inputMode="decimal" className={`${campo} mt-1`} /></label>
+          <label className={rotulo}>Preço (R$)<input id={`ed-preco-${a.id}`} value={f.preco} onChange={mudar("preco")} inputMode="decimal" className={`${campo} mt-1`} /></label>
+          <div className="col-span-2 flex items-end gap-2 md:col-span-3">
+            <button disabled={salvando} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">{salvando ? "Salvando…" : "Salvar"}</button>
+            <button type="button" onClick={aoCancelar} className="rounded-md border border-neutral-300 px-4 py-2 text-sm">Cancelar</button>
+            {erro && <span role="alert" className="text-xs text-red-600">{erro}</span>}
+          </div>
+        </form>
       </td>
     </tr>
   );

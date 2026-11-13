@@ -299,7 +299,11 @@ type Opcoes = { chave?: string; modelo?: string; fetchFn?: typeof fetch; signal?
 export async function lerFotoDaOS(foto: { base64: string; mime: string }, opcoes: Opcoes = {}): Promise<unknown> {
   // A chave vem de quem chama (a rota pede ao sdr-core): as chaves dos provedores só são lidas lá.
   const chave = (opcoes.chave ?? "").trim();
-  if (!chave) throw new ErroDeLeitura("A leitura por foto ainda não está ligada neste servidor (falta a chave GEMINI_API_KEY).", 503);
+  // A mensagem vai para a atendente: o que ela pode fazer agora e quem resolve. A causa técnica fica no log.
+  if (!chave) {
+    console.error("[otica] leitura por foto desligada: falta GEMINI_API_KEY no servidor");
+    throw new ErroDeLeitura("A leitura por foto ainda não foi ligada nesta conta. Preencha a OS à mão por enquanto e avise a Dilon Tech para ligar.", 503);
+  }
   const modelo = opcoes.modelo ?? (process.env.OTICA_LEITURA_MODELO?.trim() || MODELO_PADRAO);
   const fetchFn = opcoes.fetchFn ?? fetch;
 

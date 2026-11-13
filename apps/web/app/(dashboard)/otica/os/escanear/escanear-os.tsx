@@ -106,8 +106,9 @@ export function EscanearOS() {
         <input id="escanear-camera" ref={camera} type="file" accept="image/*" capture="environment" className="sr-only" onChange={(e) => { escolher(e.target.files?.[0]); e.target.value = ""; }} />
         <input id="escanear-galeria" ref={galeria} type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(e) => { escolher(e.target.files?.[0]); e.target.value = ""; }} />
         <ul className="list-disc pl-5 text-xs text-neutral-600 space-y-0.5">
-          <li>Deixe a folha inteira na foto, reta, sobre uma mesa.</li>
+          <li>Deixe a folha inteira na foto, reta, sobre uma mesa, enchendo a tela. Chegue perto: letra pequena não é lida.</li>
           <li>Boa luz, sem sombra da mão nem reflexo. Uma OS por foto.</li>
+          <li>Se a foto ficar escura, torta ou com a folha pequena, tire de novo antes de ler.</li>
         </ul>
       </div>
 

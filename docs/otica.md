@@ -94,7 +94,8 @@ etiqueta** — então o cadastro é por **código da etiqueta**, a quantidade qu
   mostra quantas são novas, quantas já existem e as linhas com problema (com o
   número da linha); linha ruim não impede as boas. Código que já existe é mantido,
   nunca sobrescrito — reimportar a mesma planilha não duplica estoque.
-- **Cadastro e contagem:** cadastrar uma a uma, editar a quantidade na própria linha
+- **Cadastro e contagem:** cadastrar uma a uma, **Editar** na própria linha (código, modelo,
+  marca, cor, material, medidas, custo e preço; v1.68.1), editar a quantidade na coluna Qtd
   (vira um movimento de ajuste) e desativar.
 - **Na OS**, a armação é escolhida pela etiqueta ou modelo (só aparecem as que ainda
   estão à venda) e o texto impresso já sai preenchido. Ao abrir a OS a peça **sai do
