@@ -107,6 +107,9 @@ export function anuncioXml(a: AnuncioWM): string {
   );
 }
 
+/** Um anúncio que já existe na Webmotors. */
+export type AnuncioExistente = { codigo: string; placa: string; modalidade: string; km: number; preco: number };
+
 export type ItemCatalogo = { codigo: string; nome: string };
 export type Modalidade = { codigo: string; descricao: string; tipo: string; total: number; usados: number };
 
@@ -191,6 +194,28 @@ export class SessaoWebmotors {
       total: Number(m.QuantidadeAnunciosTotal ?? 0),
       usados: Number(m.QuantidadeAnuncios ?? 0),
     }));
+  }
+
+  /**
+   * Os anúncios que a loja já tem na Webmotors (publicados por ela mesma, pelo Cockpit ou por
+   * outro sistema, como a AutoCerto). Serve para o Zap ADOTAR o anúncio existente (casando pela
+   * placa) em vez de criar um segundo. Pagina até o total informado.
+   */
+  async estoqueAtual(): Promise<AnuncioExistente[]> {
+    const tamanho = 100;
+    const todos: AnuncioExistente[] = [];
+    for (let pagina = 1; pagina <= 100; pagina++) {
+      const r = await this.estoque("ObterEstoqueAtualPaginado", campos([["pPagina", pagina], ["pTamanho", tamanho]]));
+      const itens = comoLista(r?.Anuncios, "Anuncio") as any[];
+      for (const a of itens) {
+        const codigo = texto(a?.CodigoAnuncio);
+        if (!codigo || codigo === "0") continue;
+        todos.push({ codigo, placa: texto(a?.Placa).toUpperCase().replace(/[^A-Z0-9]/g, ""), modalidade: texto(a?.CodigoModalidade), km: Number(a?.Km ?? 0), preco: Number(a?.PrecoVenda ?? 0) });
+      }
+      const total = Number(r?.TotalAnuncios ?? 0);
+      if (!itens.length || todos.length >= total) break;
+    }
+    return todos;
   }
 
   /** Inclui o carro e devolve o código do anúncio na Webmotors. */

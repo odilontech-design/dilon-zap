@@ -3,7 +3,7 @@ import { decidir, deveEstarNoAr, hashDoAnuncio, proximaTentativa } from "./decis
 import { decifrar } from "./seguranca";
 import { linkDaFotoParaPortal, type OpcoesCiclo, type ResumoCiclo } from "./sincronizar";
 import { catalogoCompleto, novosCatalogos, resolverCatalogo } from "./webmotors/catalogo";
-import { ErroSoap, ErroWebmotors, SessaoWebmotors, type CredenciaisWebmotors } from "./webmotors/cliente";
+import { ErroSoap, ErroWebmotors, SessaoWebmotors, type AnuncioExistente, type CredenciaisWebmotors } from "./webmotors/cliente";
 import { montarAnuncioWebmotors, type CatalogoWebmotors } from "./webmotors/mapa";
 
 /**
@@ -54,6 +54,14 @@ async function sincronizarLoja(tenantId: string, contaId: string, planoPadrao: s
   });
   const cache = novosCatalogos();
   let feitas = 0;
+  // Os anúncios que já existem na Webmotors (da AutoCerto, do Cockpit...), buscados só se algum carro novo vai ser incluído.
+  let existentes: Map<string, AnuncioExistente> | null = null;
+  const existentePorPlaca = async (placa: string | null): Promise<AnuncioExistente | null> => {
+    const chave = (placa ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    if (chave.length < 7) return null;
+    if (!existentes) existentes = new Map((await sessao.estoqueAtual()).filter((a) => a.placa).map((a) => [a.placa, a]));
+    return existentes.get(chave) ?? null;
+  };
 
   for (const p of pubs) {
     if (feitas >= MAX_POR_RODADA) break;
@@ -91,10 +99,21 @@ async function sincronizarLoja(tenantId: string, contaId: string, planoPadrao: s
       } else if (acao === "enviar" && mapa.ok) {
         feitas++;
         let codigo = p.idExterno;
+        let planoEnviado = plano;
         if (!codigo) {
-          codigo = await sessao.incluirCarro({ ...mapa.anuncio, CodigoAnuncio: 0 });
-          // Grava o código na hora: se as fotos falharem, o próximo ciclo altera em vez de incluir de novo.
-          await prisma.publicacaoPortal.update({ where: { id: p.id }, data: { idExterno: codigo } });
+          // Antes de criar, vê se a Webmotors já tem este carro (mesma placa): adota o anúncio, sem duplicar.
+          const ja = await existentePorPlaca(v.placa);
+          if (ja) {
+            codigo = ja.codigo;
+            // O anúncio adotado mantém o plano em que já está; trocar de plano é decisão da loja.
+            planoEnviado = ja.modalidade || plano;
+            await prisma.publicacaoPortal.update({ where: { id: p.id }, data: { idExterno: codigo } });
+            await sessao.alterarCarro({ ...mapa.anuncio, CodigoAnuncio: Number(codigo), ...(ja.modalidade ? { CodigoModalidade: Number(ja.modalidade) } : {}) });
+          } else {
+            codigo = await sessao.incluirCarro({ ...mapa.anuncio, CodigoAnuncio: 0 });
+            // Grava o código na hora: se as fotos falharem, o próximo ciclo altera em vez de incluir de novo.
+            await prisma.publicacaoPortal.update({ where: { id: p.id }, data: { idExterno: codigo } });
+          }
         } else {
           await sessao.alterarCarro({ ...mapa.anuncio, CodigoAnuncio: Number(codigo) });
           const enviada = (catalogo as Guardado).modalidadeEnviada;
@@ -112,7 +131,7 @@ async function sincronizarLoja(tenantId: string, contaId: string, planoPadrao: s
             tentativas: 0,
             proximaTentativaEm: null,
             enviadoEm: agora,
-            catalogo: { ...catalogo, modalidadeEnviada: plano } as object,
+            catalogo: { ...catalogo, modalidadeEnviada: planoEnviado } as object,
           },
         });
         r.enviados++;

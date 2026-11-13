@@ -11,6 +11,7 @@ type Painel = {
   semKm: number;
   problemas: { id: string; veiculoId: string; status: string; erro: string | null; veiculo: { marca: string; modelo: string; versao: string | null; anoModelo: number; placa: string | null } }[];
 };
+type Conferencia = { naWebmotors: number; noZap: number; casam: number; soNoZap: { id: string; nome: string; placa: string | null }[]; soNaWebmotors: { codigo: string; placa: string | null }[] };
 type Modalidade = { codigo: string; descricao: string; total: number; usados: number };
 
 const ROTULOS: [string, string][] = [["PUBLICADO", "No ar"], ["FILA", "Na fila"], ["ERRO", "Com problema"]];
@@ -23,6 +24,7 @@ export function PainelWebmotors() {
   const [form, setForm] = useState({ cnpj: "", email: "", senha: "" });
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  const [conf, setConf] = useState<Conferencia | null>(null);
   if (!data) return null;
 
   async function chamar(url: string, metodo: string, corpo?: object) {
@@ -92,8 +94,17 @@ export function PainelWebmotors() {
           {data.semKm > 0 && <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700">{data.semKm} carro(s) sem quilometragem informada: a Webmotors exige a km e o Zap não publica sem ela.</p>}
           <div className="flex flex-wrap gap-2">
             <button className={botaoPrimario} disabled={ocupado || !data.conta?.planoPadrao} onClick={() => chamar("/api/portais/webmotors/anunciar", "POST", { todos: true })}>Anunciar todos os disponíveis</button>
+            <button className={botaoSecundario} disabled={ocupado} onClick={async () => setConf(await chamar("/api/portais/webmotors/conferir", "GET"))}>Conferir com a Webmotors</button>
             <button className={botaoSecundario} disabled={ocupado} onClick={() => chamar("/api/portais/webmotors/desconectar", "POST")}>Desconectar</button>
           </div>
+          {conf && (
+            <div className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-700" data-testid="conferencia-webmotors">
+              <p className="font-medium">Só leitura: nada foi publicado nem alterado.</p>
+              <p>A Webmotors tem {conf.naWebmotors} anúncio(s); o Zap tem {conf.noZap} carro(s) à venda. {conf.casam} casam pela placa: o Zap adota esses anúncios em vez de criar outros.</p>
+              {conf.soNoZap.length > 0 && <p className="mt-1">Só no Zap ({conf.soNoZap.length}): {conf.soNoZap.slice(0, 8).map((c) => `${c.nome}${c.placa ? ` (${c.placa})` : ""}`).join(", ")}{conf.soNoZap.length > 8 ? "…" : ""}</p>}
+              {conf.soNaWebmotors.length > 0 && <p className="mt-1">Só na Webmotors ({conf.soNaWebmotors.length}): {conf.soNaWebmotors.slice(0, 8).map((a) => a.placa ?? a.codigo).join(", ")}{conf.soNaWebmotors.length > 8 ? "…" : ""}</p>}
+            </div>
+          )}
           {data.problemas.length > 0 && (
             <ul className="flex flex-col gap-1 text-xs text-red-600">
               {data.problemas.map((p) => (
