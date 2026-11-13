@@ -85,3 +85,28 @@ export async function painelWebmotors(tenantId: string) {
   ]);
   return { configurada: integracaoWebmotorsConfigurada(), conta, contagem: Object.fromEntries(porStatus.map((s) => [s.status, s._count])) as Record<string, number>, problemas, semKm };
 }
+
+const placaLimpa = (p: string | null | undefined) => (p ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+/**
+ * Confere (só leitura, nada é publicado nem alterado) o que a loja já tem na Webmotors contra o
+ * estoque do Zap, casando pela placa: quantos anúncios o Zap adotaria, quais carros do Zap não
+ * estão lá e quais anúncios da Webmotors não existem no Zap. É o ensaio da troca de sistema.
+ */
+export async function conferirWebmotors(tenantId: string) {
+  const segredo = segredoDosPortais();
+  const conta = await prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId, portal: "WEBMOTORS" } } });
+  if (!segredo || !conta || conta.status === "DESCONECTADA" || !conta.accessTokenCripto) return null;
+  const existentes = await new SessaoWebmotors(credenciaisDaConta(conta.accessTokenCripto, chaveDoAmbiente(segredo))).estoqueAtual();
+  const carros = await prisma.veiculo.findMany({ where: { tenantId, status: { in: ["DISPONIVEL", "RESERVADO"] } }, select: { id: true, marca: true, modelo: true, anoModelo: true, placa: true } });
+  const naWm = new Map(existentes.map((a) => [a.placa, a]));
+  const noZap = new Set(carros.map((c) => placaLimpa(c.placa)).filter(Boolean));
+  const casam = carros.filter((c) => naWm.has(placaLimpa(c.placa)));
+  return {
+    naWebmotors: existentes.length,
+    noZap: carros.length,
+    casam: casam.length,
+    soNoZap: carros.filter((c) => !naWm.has(placaLimpa(c.placa))).slice(0, 100).map((c) => ({ id: c.id, nome: `${c.marca} ${c.modelo} ${c.anoModelo}`, placa: c.placa })),
+    soNaWebmotors: existentes.filter((a) => !noZap.has(a.placa)).slice(0, 100).map((a) => ({ codigo: a.codigo, placa: a.placa || null })),
+  };
+}

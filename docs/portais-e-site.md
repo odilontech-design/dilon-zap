@@ -309,3 +309,20 @@ Refeita a navegação pública inteira, pensando em quem chega pelo celular vind
 - **Cores**: cabeçalho, abertura e rodapé usam um tom quase preto da cor da loja; a cor principal vai nos botões de chamada e a **segunda cor** nos destaques (título, filete, selos). Sem segunda cor, o destaque é um tom claro da principal. Para a Sales: principal `#B01218`, segunda `#FFC800`.
 
 **Fotos sem cortes (v1.65.0).** A capa da Sales é uma arte quadrada com o carro, o ano, a versão e o telefone escritos na imagem; cortar para 4:3 cortava esse texto. `components/foto-sem-cortes.tsx` mostra a foto **inteira** (`object-contain`) sobre uma cópia dela desfocada (sem faixas brancas), na vitrine (cartões quadrados, galeria e miniaturas) e no painel (estoque e ficha). Para outras lojas, foto comum em qualquer proporção também fica inteira.
+
+## Webmotors pelo Cockpit: credencial de integrador, adoção e troca de sistema (v1.69.0)
+
+**Como a loja liga o Zap à Webmotors.** No Cockpit da loja: Integrações > **Estoque terceiro** > "+ Adicionar credencial" (tela "integrador"): escolher o integrador, informar um e-mail e criar uma senha. Esse e-mail e essa senha, mais o **CNPJ da loja**, são exatamente o que o Zap pede em Veículos > Portais > Webmotors (o `autenticar(cnpj, email, senha)` do serviço). A AutoCerto já aparece nessa lista com a credencial dela. Pendente: confirmar se "Dilon Tech" aparece na lista de integradores do Cockpit (senão, é preciso o cadastro como integrador no Portal do Desenvolvedor da Webmotors).
+
+**Conferido contra o WSDL real** (`wsEstoqueRevendedorWebMotors.asmx?WSDL`, 29 operações): nomes e parâmetros de todas as operações que o conector usa, e a ordem dos campos de `Anuncio`, batem com o contrato.
+
+**Adoção de anúncio existente.** Antes de criar um anúncio, o ciclo lista o que a loja já tem (`ObterEstoqueAtualPaginado`) e casa **pela placa**: se o carro já está lá (publicado pela AutoCerto, pelo Cockpit...), o Zap guarda o código existente, atualiza os dados e as fotos e **mantém o plano em que o anúncio já estava**, em vez de criar um segundo anúncio.
+
+**Conferir com a Webmotors** (botão no painel, só leitura): mostra quantos anúncios a loja tem lá, quantos casam com o estoque do Zap pela placa (seriam adotados), quais carros só existem no Zap e quais anúncios só existem na Webmotors. É o ensaio da troca.
+
+**Roteiro da troca de sistema (AutoCerto → Zap)**
+1. Conectar a Webmotors no Zap com a credencial nova e rodar **Conferir** (nada é publicado).
+2. Resolver as diferenças (carros sem placa, sem km, sem fotos).
+3. Em horário calmo: "Anunciar todos" no Zap (adota os anúncios existentes e passa a ser a fonte das fotos e dos preços).
+4. No mesmo dia, **remover a credencial da AutoCerto** no Cockpit (Estoque terceiro), para os dois sistemas não disputarem o anúncio.
+5. Repetir com MobiAuto e Na Pista quando os conectores existirem. Enquanto isso, a AutoCerto continua publicando nesses dois: só desligue a AutoCerto quando os três estiverem cobertos.

@@ -51,6 +51,12 @@ const servidor = http.createServer((req, res) => {
       case "ObterCambio": return responder(env(op, NS, lista("TipoCambioWM", [[t("CodigoCambio", "1"), t("Descricao", "Manual"), t("CodigoRetorno", 500)], [t("CodigoCambio", "2"), t("Descricao", "Automático"), t("CodigoRetorno", 500)]])));
       case "ObterCombustivel": return responder(env(op, NS, lista("CombustivelWM", [[t("CodigoCombustivel", "3"), t("Descricao", "Flex"), t("CodigoRetorno", 500)]])));
       case "ObterOpcionais": return responder(env(op, NS, lista("OpcionalWM", [[t("CodigoOpcional", 50), t("Descricao", "Ar condicionado"), t("CodigoRetorno", 500)]])));
+      case "ObterEstoqueAtualPaginado": {
+        const pagina = Number(tag(corpo, "pPagina"));
+        const todos = [...anuncios.entries()];
+        const itens = pagina === 1 ? todos : [];
+        return responder(env(op, NS, t("Pagina", pagina) + t("AnunciosPorPagina", 100) + t("TotalAnuncios", todos.length) + `<Anuncios>${itens.map(([c, a]) => `<Anuncio>${t("CodigoAnuncio", c)}${t("CodigoModalidade", a.modalidade)}${t("Km", a.km)}${t("Placa", a.placa)}${t("PrecoVenda", a.preco)}${t("CodigoRetorno", 500)}</Anuncio>`).join("")}</Anuncios>`));
+      }
       case "IncluirCarro": {
         if (recusarCodigo && Number(tag(corpo, "CodigoModelo")) === recusarCodigo) return responder(env(op, NS, t("CodigoRetorno", 400)));
         for (const campo of ["CodigoModalidade", "CodigoMarca", "Km", "PrecoVenda", "NrPortas", "CodigoCor"]) if (!tag(corpo, campo)) return responder(env(op, NS, t("CodigoRetorno", 400)));
@@ -88,9 +94,11 @@ async function main() {
   const cred = JSON.stringify({ cnpj: "20.458.995/0001-46", email: "integracao@loja.com", senha: "segredo" });
   const conta = await prisma.portalConta.create({ data: { tenantId: t0.id, portal: "WEBMOTORS", status: "CONECTADA", accessTokenCripto: cifrar(cred, chave), planoPadrao: "189" } });
 
+  let seqPlaca = 0;
   const novo = async (marca: string, modelo: string, extra: object = {}, comFoto = true) => {
+    const placaPadrao = seqPlaca++ === 0 ? "RMO1H85" : `RMO2H${String(seqPlaca).padStart(2, "0")}`; // placa é única de verdade: a mesma placa seria adotada como o mesmo carro
     const v = await prisma.veiculo.create({
-      data: { tenantId: t0.id, marca, modelo, versao: "1.0 FIREFLY FLEX DRIVE MANUAL 4P", anoFabricacao: 2021, anoModelo: 2021, km: 31000, kmInformado: true, cor: "Branco", combustivel: "Flex", cambio: "Manual", precoCents: 5_599_999, status: "DISPONIVEL", origem: "COMPRA", placa: "RMO1H85", ...extra },
+      data: { tenantId: t0.id, marca, modelo, versao: "1.0 FIREFLY FLEX DRIVE MANUAL 4P", anoFabricacao: 2021, anoModelo: 2021, km: 31000, kmInformado: true, cor: "Branco", combustivel: "Flex", cambio: "Manual", precoCents: 5_599_999, status: "DISPONIVEL", origem: "COMPRA", placa: placaPadrao, ...extra },
     });
     const fts = comFoto ? [await prisma.fotoVeiculo.create({ data: { tenantId: t0.id, veiculoId: v.id, key: `k/${v.id}-1.jpg`, ordem: 0 } }), await prisma.fotoVeiculo.create({ data: { tenantId: t0.id, veiculoId: v.id, key: `k/${v.id}-2.jpg`, ordem: 1 } })] : [];
     await prisma.publicacaoPortal.create({ data: { tenantId: t0.id, veiculoId: v.id, portal: "WEBMOTORS", idEnviado: v.id.slice(-12) } });
@@ -165,6 +173,18 @@ async function main() {
   fora = false;
   const cc = await prisma.portalConta.findUniqueOrThrow({ where: { id: conta.id } });
   checa("fora do ar: o carro segue publicado e a conta avisa", [(await estado(d.v)).status, cc.status, cc.erro], ["PUBLICADO", "CONECTADA", "a Webmotors não respondeu"]);
+
+  // 9b) Adoção: o carro já está na Webmotors (publicado por outro sistema, como a AutoCerto): o Zap adota, não duplica.
+  anuncios.set(7001, { modalidade: "55", preco: "30000.00", km: "90000", placa: "AAA1B23" });
+  fotos.set(7001, [{ codigo: 900, url: "https://autocerto.exemplo/f1.jpg" }]);
+  const incluidosAntes = n("IncluirCarro");
+  const adot = await novo("Fiat", "Argo", { placa: "AAA-1B23", km: 45000, precoCents: 4_599_900 });
+  await cicloWebmotors(op);
+  const pAdot = await estado(adot.v);
+  checa("carro que já estava na Webmotors: adotado pelo código existente, sem criar outro", [pAdot.status, pAdot.idExterno, n("IncluirCarro") - incluidosAntes], ["PUBLICADO", "7001", 0]);
+  checa("o anúncio adotado foi atualizado com os dados do Zap e manteve o plano em que estava", [anuncios.get(7001)?.preco, anuncios.get(7001)?.km, anuncios.get(7001)?.modalidade], ["45999.00", "45000", "55"]);
+  checa("as fotos do anúncio adotado passam a ser as do Zap", fotos.get(7001)?.map((f) => f.url), adot.fts.map((f) => `https://zap.exemplo.com.br/api/portais/foto/${f.id}/${assinarFoto(f.id, segredo)}.jpg`));
+  checa("o plano adotado fica registrado (e a rodada seguinte não troca de plano)", [((pAdot.catalogo as { modalidadeEnviada?: string }).modalidadeEnviada), (await cicloWebmotors(op), n("TrocarModalidadeCarro"))], ["55", 1]);
 
   // 10) Credencial recusada: a conta pede reconexão.
   loginOk = false;
