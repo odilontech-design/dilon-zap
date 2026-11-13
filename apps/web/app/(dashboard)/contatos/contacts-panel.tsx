@@ -25,7 +25,15 @@ type Contact = ContactRef & {
   hasWhatsapp: boolean | null;
   // Quanto deve em parcelas em aberto (null = nada).
   pendencia: PendenciaResumo | null;
+  // Pedidos fechados e quando foi o último; e a última mensagem da conversa mais recente.
+  compras?: number;
+  ultimaCompraEm?: string | null;
+  ultimaMensagemEm?: string | null;
 };
+
+type ResultadoLote = { excluidos: number; ignorados: { id: string; nome: string | null; motivo: string }[] };
+
+const DIA_MS = 24 * 60 * 60 * 1000;
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -41,6 +49,13 @@ export function ContactsPanel() {
   // Pagamento: todos | quem tem parcela em aberto | quem tem parcela vencida.
   const [pagamentoFiltro, setPagamentoFiltro] = useState<"" | "pendente" | "atraso">("");
   const [dupeOnly, setDupeOnly] = useState(false);
+  // Limpeza da base: quem nunca comprou / quem não conversa há tempo, e seleção para excluir em lote.
+  const [compraFiltro, setCompraFiltro] = useState<"" | "nunca" | "comprou">("");
+  const [paradoFiltro, setParadoFiltro] = useState<"" | "30" | "90" | "180" | "nunca">("");
+  const [selecionando, setSelecionando] = useState(false);
+  const [marcados, setMarcados] = useState<Set<string>>(new Set());
+  const [excluindoLote, setExcluindoLote] = useState(false);
+  const [resultadoLote, setResultadoLote] = useState<ResultadoLote | null>(null);
   const [editing, setEditing] = useState<Contact | "new" | null>(null);
   // "Editar" abre a ficha completa (cadastro, etapas, pedidos), a mesma do
   // Inbox — o formulário curto ficou só para "Novo contato".
@@ -93,6 +108,16 @@ export function ContactsPanel() {
       if (stageFilter && c.stageId !== stageFilter) return false;
       if (pagamentoFiltro === "pendente" && !c.pendencia) return false;
       if (pagamentoFiltro === "atraso" && !(c.pendencia && c.pendencia.vencidas > 0)) return false;
+      if (compraFiltro === "nunca" && (c.compras ?? 0) > 0) return false;
+      if (compraFiltro === "comprou" && !(c.compras && c.compras > 0)) return false;
+      if (paradoFiltro) {
+        const ultima = c.ultimaMensagemEm ? new Date(c.ultimaMensagemEm).getTime() : null;
+        if (paradoFiltro === "nunca") {
+          if (ultima !== null) return false;
+        } else if (ultima !== null && Date.now() - ultima < Number(paradoFiltro) * DIA_MS) {
+          return false;
+        }
+      }
       if (!term) return true;
       const digitos = term.replace(/\D/g, "");
       const doc = (c.documento ?? "").toLowerCase();
@@ -104,7 +129,61 @@ export function ContactsPanel() {
         (digitos.length >= 3 && doc.replace(/\D/g, "").includes(digitos))
       );
     });
-  }, [contacts, search, stageFilter, pagamentoFiltro, dupeOnly, duplicateReasons]);
+  }, [contacts, search, stageFilter, pagamentoFiltro, compraFiltro, paradoFiltro, dupeOnly, duplicateReasons]);
+
+  const idsFiltrados = filtered?.map((c) => c.id) ?? [];
+  const todosMarcados = idsFiltrados.length > 0 && idsFiltrados.every((id) => marcados.has(id));
+
+  function alternar(id: string) {
+    setMarcados((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
+
+  function marcarTodosFiltrados() {
+    setMarcados(todosMarcados ? new Set() : new Set(idsFiltrados));
+  }
+
+  function sairDaSelecao() {
+    setSelecionando(false);
+    setMarcados(new Set());
+  }
+
+  async function excluirMarcados() {
+    const ids = [...marcados];
+    if (ids.length === 0) return;
+    const aviso =
+      `Excluir ${ids.length} contato(s)? Isso apaga as conversas e mensagens deles e não dá para desfazer.\n\n` +
+      "Quem tem pedido, conta a receber, negociação ou conversa aberta NÃO será excluído.";
+    if (!confirm(aviso)) return;
+    setExcluindoLote(true);
+    setResultadoLote(null);
+    // A rota aceita até 500 por vez; seleções maiores vão em várias chamadas.
+    const total: ResultadoLote = { excluidos: 0, ignorados: [] };
+    let falhou: string | null = null;
+    for (let i = 0; i < ids.length; i += 500) {
+      const res = await fetch("/api/contacts/lote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "excluir", ids: ids.slice(i, i + 500) }),
+      }).catch(() => null);
+      const corpo = res ? await res.json().catch(() => ({})) : {};
+      if (!res || !res.ok) {
+        falhou = typeof corpo.error === "string" ? corpo.error : "não deu pra excluir agora";
+        break;
+      }
+      total.excluidos += corpo.excluidos ?? 0;
+      total.ignorados.push(...(corpo.ignorados ?? []));
+    }
+    setExcluindoLote(false);
+    setResultadoLote(total);
+    if (falhou) setImportSummary(`${falhou}. ${total.excluidos} contato(s) já tinham sido excluídos antes do erro.`);
+    setMarcados(new Set());
+    mutate();
+  }
 
   async function handleStartConversation(contact: Contact) {
     const res = await fetch(`/api/contacts/${contact.id}/start-conversation`, { method: "POST" });
@@ -202,6 +281,13 @@ export function ContactsPanel() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => (selecionando ? sairDaSelecao() : setSelecionando(true))}
+            className={`text-xs rounded-md border px-3 py-1.5 ${selecionando ? "border-accent text-accent bg-accent/5" : "border-neutral-300 hover:bg-neutral-50"}`}
+            title="Marcar vários contatos para excluir de uma vez"
+          >
+            {selecionando ? "Cancelar seleção" : "Selecionar"}
+          </button>
+          <button
             onClick={handleExport}
             className="text-xs rounded-md border border-neutral-300 px-3 py-1.5 hover:bg-neutral-50"
           >
@@ -279,6 +365,28 @@ export function ContactsPanel() {
           <option value="pendente">Com pagamento pendente</option>
           <option value="atraso">Com pagamento em atraso</option>
         </select>
+        <select
+          value={compraFiltro}
+          onChange={(e) => setCompraFiltro(e.target.value as typeof compraFiltro)}
+          className="text-sm rounded-md border border-neutral-300 px-2 py-2"
+          title="Pedidos fechados"
+        >
+          <option value="">Compras: todos</option>
+          <option value="nunca">Nunca comprou</option>
+          <option value="comprou">Já comprou</option>
+        </select>
+        <select
+          value={paradoFiltro}
+          onChange={(e) => setParadoFiltro(e.target.value as typeof paradoFiltro)}
+          className="text-sm rounded-md border border-neutral-300 px-2 py-2"
+          title="Quanto tempo faz que a última mensagem foi trocada"
+        >
+          <option value="">Última conversa: qualquer</option>
+          <option value="30">Há mais de 30 dias</option>
+          <option value="90">Há mais de 90 dias</option>
+          <option value="180">Há mais de 180 dias</option>
+          <option value="nunca">Nunca conversou</option>
+        </select>
         {duplicateReasons.size > 0 && (
           <label className="flex items-center gap-1.5 text-xs text-amber-700">
             <input type="checkbox" checked={dupeOnly} onChange={(e) => setDupeOnly(e.target.checked)} />
@@ -287,14 +395,66 @@ export function ContactsPanel() {
         )}
       </div>
 
+      {selecionando && (
+        <div className="mb-3 flex items-center justify-between gap-3 flex-wrap rounded-md border border-accent/30 bg-accent/5 px-3 py-2 text-sm">
+          <span>
+            <strong>{marcados.size}</strong> marcado(s) de {idsFiltrados.length} na lista
+            {idsFiltrados.length > 0 && (
+              <button type="button" onClick={marcarTodosFiltrados} className="ml-3 text-xs text-accent hover:underline">
+                {todosMarcados ? "Desmarcar todos" : `Marcar os ${idsFiltrados.length} da lista`}
+              </button>
+            )}
+          </span>
+          <button
+            type="button"
+            onClick={excluirMarcados}
+            disabled={marcados.size === 0 || excluindoLote}
+            className="rounded-md bg-red-600 px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-40"
+          >
+            {excluindoLote ? "Excluindo..." : `Excluir ${marcados.size} contato(s)`}
+          </button>
+        </div>
+      )}
+
+      {resultadoLote && (
+        <div role="status" className="mb-3 rounded-md border border-neutral-200 bg-surface px-3 py-2 text-xs">
+          <div className="flex items-center justify-between">
+            <p>
+              <strong>{resultadoLote.excluidos}</strong> contato(s) excluído(s)
+              {resultadoLote.ignorados.length > 0 && <>, <strong>{resultadoLote.ignorados.length}</strong> mantido(s):</>}
+            </p>
+            <button onClick={() => setResultadoLote(null)} className="hover:opacity-70" aria-label="Fechar">
+              ×
+            </button>
+          </div>
+          {resultadoLote.ignorados.length > 0 && (
+            <ul className="mt-1 max-h-32 overflow-y-auto text-neutral-600">
+              {resultadoLote.ignorados.slice(0, 50).map((i) => (
+                <li key={i.id}>
+                  {i.nome ?? "Sem nome"} — {i.motivo}
+                </li>
+              ))}
+              {resultadoLote.ignorados.length > 50 && <li>… e mais {resultadoLote.ignorados.length - 50}</li>}
+            </ul>
+          )}
+        </div>
+      )}
+
       <div className="rounded-lg border border-neutral-200 bg-surface overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-xs text-neutral-500">
             <tr>
+              {selecionando && (
+                <th className="px-3 py-2 w-8">
+                  <input type="checkbox" checked={todosMarcados} onChange={marcarTodosFiltrados} aria-label="Marcar todos da lista" />
+                </th>
+              )}
               <th className="text-left px-4 py-2 font-medium">Contato</th>
               <th className="text-left px-4 py-2 font-medium">Número</th>
               <th className="text-left px-4 py-2 font-medium">Etapa</th>
               <th className="text-left px-4 py-2 font-medium">Tags</th>
+              <th className="text-left px-4 py-2 font-medium">Compras</th>
+              <th className="text-left px-4 py-2 font-medium">Última conversa</th>
               <th className="text-left px-4 py-2 font-medium">Criado em</th>
               <th className="text-left px-4 py-2 font-medium">Ações</th>
             </tr>
@@ -302,13 +462,18 @@ export function ContactsPanel() {
           <tbody>
             {filtered?.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-neutral-400">
+                <td colSpan={9} className="px-4 py-8 text-center text-neutral-400">
                   Nenhum contato encontrado.
                 </td>
               </tr>
             )}
             {filtered?.map((c) => (
-              <tr key={c.id} className="border-t border-neutral-100">
+              <tr key={c.id} className={`border-t border-neutral-100 ${marcados.has(c.id) ? "bg-accent/5" : ""}`}>
+                {selecionando && (
+                  <td className="px-3 py-2.5">
+                    <input type="checkbox" checked={marcados.has(c.id)} onChange={() => alternar(c.id)} aria-label={`Marcar ${contactLabel(c)}`} />
+                  </td>
+                )}
                 <td className="px-4 py-2.5">
                   <div className="flex items-center gap-2.5">
                     <Avatar contact={c} size={28} />
@@ -369,6 +534,12 @@ export function ContactsPanel() {
                       );
                     })}
                   </div>
+                </td>
+                <td className="px-4 py-2.5 text-neutral-600 whitespace-nowrap">
+                  {c.compras ? `${c.compras}${c.ultimaCompraEm ? ` · ${formatDate(c.ultimaCompraEm)}` : ""}` : <span className="text-neutral-400">nunca</span>}
+                </td>
+                <td className="px-4 py-2.5 text-neutral-500 whitespace-nowrap">
+                  {c.ultimaMensagemEm ? formatDate(c.ultimaMensagemEm) : <span className="text-neutral-400">—</span>}
                 </td>
                 <td className="px-4 py-2.5 text-neutral-500">{formatDate(c.createdAt)}</td>
                 <td className="px-4 py-2.5">
