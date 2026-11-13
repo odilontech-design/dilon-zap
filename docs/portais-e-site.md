@@ -256,3 +256,15 @@ Conector construído sobre o contrato público (SOAP/XML) e testado com um servi
 - **Envio**: o `portais-worker` roda `cicloWebmotors` depois da OLX, em tentativa separada. Mesmas decisões (`decisao.ts`): disponível publica, mudou preço/ficha/fotos atualiza, vendido/reservado exclui. Catálogo (marca/modelo/versão/cor/câmbio/combustível/opcionais) resolvido pelo nome; o que não bater vira pendência legível.
 - **Env**: `WEBMOTORS_URL_BASE` (padrão produção `https://integracao.webmotors.com.br`; homologação `https://hportal.webmotors.com.br/IntegracaoRevendedor`).
 - **Falta**: credenciais de homologação, API de leads (separada do manual), limites de fotos/observação, confirmar se a km vazia é aceita.
+
+## Central de leads por e-mail (v1.59.0)
+
+Na Pista, MobiAuto e Webmotors avisam os contatos de compradores **por e-mail**. A central lê esses e-mails e faz o mesmo que já fazíamos com a OLX: contato + negociação (origem = o portal, carro e valor no título) + tarefa de chamar.
+
+- **Entrada**: Veículos > Portais > Central de leads gera um endereço por loja (`/api/leads/email/<token>`). Aceita e-mail bruto (`message/rfc822`/texto) ou JSON (`raw`, ou `from`/`subject`/`text`/`html`). Falta ligar um provedor de e-mail recebido (Cloudflare Email Routing, Mailgun, Postmark...) que chame esse endereço, e a loja encaminhar os e-mails dos portais para ele.
+- **Leitor** (`packages/portais/src/lead-email.ts`): tolerante (rótulos "Nome:", tabela em HTML, encaminhado pelo Gmail). Reconhece o portal por remetente/assunto/corpo. **Ainda não foi ajustado a e-mails reais**: tudo que não entender (portal desconhecido, sem telefone nem e-mail) fica guardado em `EmailDeLead` com o motivo, aparece no painel e serve para afinar o leitor por portal.
+- **Carro**: pela placa; senão por modelo + ano quando só um carro do estoque bate.
+- **Distribuição**: opcional (`VeiculosConfig.distribuirLeads`); o lead novo vai para o vendedor ativo (papel AGENT) com menos negociações abertas.
+- **Relógio**: cada lead mostra "aguardando há X" até alguém marcar como respondido (`LeadPortal.respondidoEm`).
+- **Segurança**: sem login, a defesa é o token da URL (trocá-lo invalida o encaminhamento). Mesmo e-mail (Message-ID) não duplica; falha ao registrar devolve 5xx para o provedor tentar de novo.
+- **Falta**: provedor de e-mail recebido; exemplos reais de e-mail de cada portal; leads da MobiAuto via webhook `lead-callback` e da Webmotors via API de leads (quando houver acesso).

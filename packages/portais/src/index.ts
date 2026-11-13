@@ -12,3 +12,4 @@ export * from "./webmotors/cliente";
 export * from "./webmotors/mapa";
 export * from "./webmotors/catalogo";
 export { cicloWebmotors, credenciaisDaConta } from "./sincronizar-webmotors";
+export { lerEmail, entenderEmail, extrairCampos, detectarPortal, type LeadDeEmail, type PortalDeLead, type EmailLido } from "./lead-email";

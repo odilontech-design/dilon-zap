@@ -242,6 +242,7 @@ model Tenant {
   portaisContas         PortalConta[]
   publicacoesPortal     PublicacaoPortal[]
   leadsPortal           LeadPortal[]
+  emailsDeLead          EmailDeLead[]
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -3773,7 +3774,12 @@ enum PlanoVeiculos {
 // Configuração da revenda por empresa: a vitrine pública (/loja/[slug]).
 model VeiculosConfig {
   tenantId String @id
-  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // Central de leads: o token do endereço que recebe os e-mails dos portais
+  // (a loja encaminha para ele) e se os leads novos são repartidos entre os vendedores.
+  leadEmailToken  String? @unique
+  distribuirLeads Boolean @default(false)
+  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Plano contratado da revenda, definido no Super Admin. Nulo = sem plano
   // de tabela (contrato sob medida ou teste interno): sem limites.
@@ -3931,6 +3937,8 @@ enum Portal {
   OLX
   MERCADO_LIVRE
   WEBMOTORS
+  MOBIAUTO
+  NAPISTA
 }
 
 enum StatusContaPortal {
@@ -4047,9 +4055,33 @@ model LeadPortal {
   veiculoId    String?
   negociacaoId String?
   // Sem telefone não há como chamar no WhatsApp: fica aqui para a equipe ver.
-  semTelefone  Boolean  @default(false)
-  recebidoEm   DateTime @default(now())
+  semTelefone  Boolean   @default(false)
+  recebidoEm   DateTime  @default(now())
+  // Quando a equipe respondeu pela primeira vez (relógio do tempo de resposta).
+  respondidoEm DateTime?
 
   @@unique([tenantId, portal, chave])
+  @@index([tenantId, recebidoEm])
+}
+
+/// Cada e-mail de lead que chegou pelo endereço da loja (guarda também os que
+/// não entendemos, para a equipe ver e para ajustarmos o leitor do portal).
+model EmailDeLead {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messageId  String
+  de         String
+  assunto    String
+  portal     Portal?
+  // PROCESSADO | DUPLICADO | NAO_ENTENDIDO | ERRO (falhou ao registrar; o provedor tenta de novo)
+  situacao   String
+  motivo     String?
+  leadId     String?
+  // O texto do e-mail (limitado), para conferir e para ensinar o leitor.
+  texto      String
+  recebidoEm DateTime @default(now())
+
+  @@unique([tenantId, messageId])
   @@index([tenantId, recebidoEm])
 }
