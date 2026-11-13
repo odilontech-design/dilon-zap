@@ -15,3 +15,7 @@ export { cicloWebmotors, credenciaisDaConta } from "./sincronizar-webmotors";
 export { lerEmail, entenderEmail, extrairCampos, detectarPortal, type LeadDeEmail, type PortalDeLead, type EmailLido } from "./lead-email";
 export * from "./instagram/cliente";
 export * from "./instagram/webhook";
+export * from "./mobiauto/cliente";
+export * from "./mobiauto/mapa";
+export * from "./mobiauto/catalogo";
+export { cicloMobiauto, contaMobiautoGuardada, guardarContaMobiauto, type ContaMobiauto } from "./sincronizar-mobiauto";
