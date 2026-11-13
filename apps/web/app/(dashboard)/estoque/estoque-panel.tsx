@@ -72,7 +72,12 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
   const [produto, setProduto] = useState("");
   const [tipo, setTipo] = useState<"" | Tipo>("");
   const [busca, setBusca] = useState("");
-  const [situacao, setSituacao] = useState<"todos" | "com_saldo" | "zerados" | "negativos" | "movimentados">("todos");
+  const [situacao, setSituacao] = useState<"todos" | "com_saldo" | "zerados" | "negativos" | "movimentados" | "ativos" | "desativados">("todos");
+  // Seleção para ações em lote (desativar, reativar, mudar categoria)
+  const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
+  const [loteOcupado, setLoteOcupado] = useState(false);
+  const [loteErro, setLoteErro] = useState<string | null>(null);
+  const [novaCategoria, setNovaCategoria] = useState<string | null>(null);
   const [importando, setImportando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
 
@@ -98,6 +103,8 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
     if (situacao === "zerados") return l.saldoFinal === 0;
     if (situacao === "negativos") return l.saldoFinal < 0;
     if (situacao === "movimentados") return l.compras || l.producao || l.devolucoes || l.ajustes || l.vendas;
+    if (situacao === "ativos") return l.ativo;
+    if (situacao === "desativados") return !l.ativo;
     return true;
   });
   const linhasMovs = (movs.data?.linhas ?? []).filter((l) => casa([l.produto, l.codigo, l.motivo]));
@@ -116,6 +123,56 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
     }),
     { entradas: 0, saidas: 0, unidades: 0, valor: 0, valorCusto: 0, cmv: 0, vendasSemCusto: 0, semCusto: 0, negativos: 0 }
   );
+
+  // Só conta como selecionado o que está visível: mudar o filtro não deixa
+  // ação "escondida" pegando produto que a pessoa não está vendo.
+  const idsVisiveis = linhasResumo.map((l) => l.productId);
+  const selVisiveis = idsVisiveis.filter((id) => selecionados.has(id));
+  const todosMarcados = idsVisiveis.length > 0 && selVisiveis.length === idsVisiveis.length;
+  const categoriasExistentes = [...new Set((resumo.data?.linhas ?? []).map((l) => l.categoria).filter((c): c is string => !!c))].sort((a, b) =>
+    a.localeCompare(b, "pt-BR")
+  );
+
+  function alternar(id: string) {
+    setSelecionados((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+
+  async function aplicarLote(corpo: { acao: "desativar" | "reativar" } | { acao: "categoria"; categoria: string }) {
+    if (selVisiveis.length === 0) return;
+    if (
+      corpo.acao === "desativar" &&
+      !confirm(`Desativar ${selVisiveis.length} produto(s)? Eles saem dos seletores de pedido, mas o histórico fica guardado e dá para reativar depois.`)
+    )
+      return;
+    setLoteOcupado(true);
+    setLoteErro(null);
+    try {
+      const res = await fetch("/api/products/lote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...corpo, ids: selVisiveis }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setLoteErro(typeof d.error === "string" ? d.error : "Não foi possível aplicar.");
+        return;
+      }
+      const feito = corpo.acao === "desativar" ? "desativado(s)" : corpo.acao === "reativar" ? "reativado(s)" : "com a categoria atualizada";
+      setAviso(`${d.atualizados} produto(s) ${feito}.`);
+      setSelecionados(new Set());
+      setNovaCategoria(null);
+      await resumo.mutate();
+    } catch {
+      setLoteErro("Não foi possível aplicar. Verifique a conexão.");
+    } finally {
+      setLoteOcupado(false);
+    }
+  }
 
   const carregando = visao === "resumo" ? resumo.isLoading : movs.isLoading;
   const erro = visao === "resumo" ? resumo.error : movs.error;
@@ -209,6 +266,8 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
               <option value="zerados">Zerados</option>
               <option value="negativos">Saldo negativo</option>
               <option value="movimentados">Movimentados no período</option>
+              <option value="ativos">Só ativos</option>
+              <option value="desativados">Desativados</option>
             </select>
           </label>
         )}
@@ -256,10 +315,80 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
               nota={totais.vendasSemCusto ? `${totais.vendasSemCusto} un. vendidas sem custo ficaram fora` : "custo das vendas, menos devoluções"}
             />
           </div>
+          {selVisiveis.length > 0 && (
+            <div className="so-tela sticky top-0 z-10 mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent/5 px-3 py-2 text-sm">
+              <span className="font-medium">{selVisiveis.length} selecionado(s)</span>
+              <button
+                disabled={loteOcupado}
+                onClick={() => aplicarLote({ acao: "desativar" })}
+                className="rounded-md border border-neutral-200 bg-surface px-3 py-1 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Desativar
+              </button>
+              <button
+                disabled={loteOcupado}
+                onClick={() => aplicarLote({ acao: "reativar" })}
+                className="rounded-md border border-neutral-200 bg-surface px-3 py-1 hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Reativar
+              </button>
+              {novaCategoria === null ? (
+                <button
+                  disabled={loteOcupado}
+                  onClick={() => setNovaCategoria("")}
+                  className="rounded-md border border-neutral-200 bg-surface px-3 py-1 hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  Mudar categoria
+                </button>
+              ) : (
+                <span className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    list="categorias-estoque"
+                    value={novaCategoria}
+                    maxLength={40}
+                    onChange={(e) => setNovaCategoria(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") aplicarLote({ acao: "categoria", categoria: novaCategoria.trim() });
+                    }}
+                    placeholder="Categoria (vazio tira)"
+                    className={`${campo} w-48`}
+                  />
+                  <datalist id="categorias-estoque">
+                    {categoriasExistentes.map((c) => (
+                      <option key={c} value={c} />
+                    ))}
+                  </datalist>
+                  <button
+                    disabled={loteOcupado}
+                    onClick={() => aplicarLote({ acao: "categoria", categoria: novaCategoria.trim() })}
+                    className="rounded-md bg-accent px-3 py-1 font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  >
+                    Aplicar
+                  </button>
+                  <button onClick={() => setNovaCategoria(null)} className="px-2 py-1 text-neutral-500 hover:text-neutral-800">
+                    Cancelar
+                  </button>
+                </span>
+              )}
+              <button onClick={() => setSelecionados(new Set())} className="ml-auto px-2 py-1 text-neutral-500 hover:text-neutral-800">
+                Limpar seleção
+              </button>
+              {loteErro && <span className="w-full text-red-600">{loteErro}</span>}
+            </div>
+          )}
           <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-surface">
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs text-neutral-500">
                 <tr>
+                  <th className="so-tela w-8 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      aria-label="Selecionar todos os produtos da lista"
+                      checked={todosMarcados}
+                      onChange={() => setSelecionados(todosMarcados ? new Set() : new Set(idsVisiveis))}
+                    />
+                  </th>
                   <th className={th}>Código</th>
                   <th className={th}>Produto</th>
                   <th className={`${th} text-right`}>Saldo inicial</th>
@@ -279,7 +408,15 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
               </thead>
               <tbody className="tabular-nums">
                 {linhasResumo.map((l) => (
-                  <tr key={l.productId} className="border-t border-neutral-100">
+                  <tr key={l.productId} className={`border-t border-neutral-100 ${selecionados.has(l.productId) ? "bg-accent/5" : ""}`}>
+                    <td className="so-tela px-3 py-2">
+                      <input
+                        type="checkbox"
+                        aria-label={`Selecionar ${l.produto}`}
+                        checked={selecionados.has(l.productId)}
+                        onChange={() => alternar(l.productId)}
+                      />
+                    </td>
                     <td className="px-3 py-2 text-neutral-500">{l.codigo ?? "—"}</td>
                     <td className="px-3 py-2">
                       {l.produto}
@@ -306,7 +443,7 @@ export function EstoquePanel({ empresa }: { empresa: string }) {
                 ))}
                 {linhasResumo.length === 0 && (
                   <tr>
-                    <td colSpan={15} className="px-3 py-8 text-center text-neutral-400">Nenhum produto com esse filtro.</td>
+                    <td colSpan={16} className="px-3 py-8 text-center text-neutral-400">Nenhum produto com esse filtro.</td>
                   </tr>
                 )}
               </tbody>
