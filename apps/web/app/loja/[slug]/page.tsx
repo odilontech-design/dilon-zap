@@ -4,6 +4,8 @@ import { baseDaLoja, carrosDaVitrine, linkDaLoja, linkDoCarro, lojaPublica } fro
 import { CascaDaLoja } from "./casca";
 import { carroParaJsonLd, JsonLd } from "./dados-estruturados";
 import { ListaDeCarros } from "./lista-de-carros";
+import Link from "next/link";
+import { cidadeDaLoja, gruposDoEstoque } from "@/lib/vitrine-seo";
 
 /**
  * Vitrine pública da revenda. Sem login: é a página que a loja põe na bio do
@@ -50,6 +52,24 @@ export default async function LojaPage({ params }: { params: { slug: string } })
       />
       <main className="mx-auto max-w-6xl px-4 py-6">
         <ListaDeCarros slug={loja.slug} carros={carros} />
+        {gruposDoEstoque(carros).length > 0 && (
+          <nav aria-label="Procurar por marca e modelo" className="mt-10 border-t border-neutral-200 pt-6">
+            <h2 className="text-sm font-semibold">Carros usados{cidadeDaLoja(loja.endereco) ? ` em ${cidadeDaLoja(loja.endereco)}` : ""} por marca e modelo</h2>
+            <ul className="mt-3 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-3">
+              {gruposDoEstoque(carros).map((g) => (
+                <li key={g.marcaSlug} className="text-sm">
+                  <Link href={`/loja/${loja.slug}/marca/${g.marcaSlug}`} className="font-medium hover:underline">{g.marca} ({g.n})</Link>
+                  <span className="text-neutral-500">
+                    {" "}
+                    {g.modelos.slice(0, 6).map((m, i) => (
+                      <span key={m.modeloSlug}>{i > 0 ? " · " : ""}<Link href={`/loja/${loja.slug}/marca/${g.marcaSlug}/${m.modeloSlug}`} className="hover:underline">{m.modelo}</Link></span>
+                    ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        )}
       </main>
     </CascaDaLoja>
   );

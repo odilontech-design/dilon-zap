@@ -276,4 +276,13 @@ Na Pista, MobiAuto e Webmotors avisam os contatos de compradores **por e-mail**.
 - **robots.txt** (`lib/vitrine-seo.ts`): convida os rastreadores de IA (GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot, Claude-SearchBot, Google-Extended, Applebot-Extended, Bingbot) e **libera as fotos** (`/api/loja/*/fotos/`), que antes ficavam bloqueadas por `Disallow: /api/` e fora do Google Imagens.
 - **sitemap.xml** com `lastmod` e fotos de cada carro.
 - **llms.txt** (`/llms.txt` no domínio próprio; `/api/loja/<slug>/llms` no do Zap): contato, páginas e todo o estoque em texto com preço e link.
-- **Falta**: páginas por marca/modelo/cidade; redesenho visual; enviar o sitemap ao Google Search Console e conferir a indexação (feito pela loja/Dilon Tech após o domínio no ar).
+- **Falta**: redesenho visual; enviar o sitemap ao Google Search Console e conferir a indexação (feito pela loja/Dilon Tech após o domínio no ar).
+
+## Páginas por marca e modelo (v1.61.0)
+
+`/loja/<slug>/marca/<marca>` e `/loja/<slug>/marca/<marca>/<modelo>` (ex.: "Honda Civic usado em Duque de Caxias | Sales Automóveis"). Só existem para o que há **em estoque agora** (marca ou modelo sem carro responde 404, para não publicar página vazia).
+
+- Título, descrição, abertura e `H1` com a **cidade** tirada do fim do endereço da loja ("... - Duque de Caxias - RJ"); se não der para ter certeza, sai sem cidade (cadastre o endereço no formato "Rua, nº - Bairro, Cidade - UF").
+- `ItemList` e `BreadcrumbList` em JSON-LD, canônico e Open Graph próprios.
+- Entram no sitemap e no llms.txt ("Por marca"), e a vitrine ganha um bloco de links "Carros usados em <cidade> por marca e modelo" (ligação interna que o Google e as IAs seguem).
+- Código em `lib/vitrine-seo.ts` (puro, testado) e `app/loja/[slug]/marca/`.
