@@ -3,8 +3,11 @@ import { notFound } from "next/navigation";
 import { baseDaLoja, carrosDaVitrine, linkDaLoja, linkDoCarro, lojaPublica } from "@/lib/vitrine";
 import { CascaDaLoja } from "./casca";
 import { carroParaJsonLd, JsonLd } from "./dados-estruturados";
-import { ListaDeCarros } from "./lista-de-carros";
+import { Suspense } from "react";
 import Link from "next/link";
+import { Hero } from "./hero";
+import { FaixaDeMarcas } from "./marcas";
+import { ListaDeCarros } from "./lista-de-carros";
 import { cidadeDaLoja, gruposDoEstoque } from "@/lib/vitrine-seo";
 
 /**
@@ -35,7 +38,7 @@ export default async function LojaPage({ params }: { params: { slug: string } })
 
   const urlDaLoja = linkDaLoja(loja.slug, loja.dominio);
   return (
-    <CascaDaLoja loja={loja} aba="vitrine" hero>
+    <CascaDaLoja loja={loja} aba="vitrine">
       <JsonLd
         dados={{
           "@context": "https://schema.org",
@@ -50,8 +53,12 @@ export default async function LojaPage({ params }: { params: { slug: string } })
           makesOffer: carros.slice(0, 50).map((c) => ({ "@type": "Offer", price: (c.precoCents / 100).toFixed(2), priceCurrency: "BRL", itemOffered: carroParaJsonLd(c, linkDoCarro(loja.slug, c.id, loja.dominio), []) })),
         }}
       />
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <ListaDeCarros slug={loja.slug} carros={carros} />
+      <Hero loja={loja} menorPreco={carros.length ? Math.min(...carros.map((c) => c.precoCents)) : 0} cambios={[...new Set(carros.map((c) => c.cambio).filter(Boolean) as string[])].sort()} total={carros.length} />
+      <FaixaDeMarcas slug={loja.slug} grupos={gruposDoEstoque(carros)} />
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <Suspense>
+          <ListaDeCarros slug={loja.slug} carros={carros} whatsapp={loja.whatsapp} baseUrl={`${baseDaLoja(loja.dominio)}/loja/${loja.slug}`} />
+        </Suspense>
         {gruposDoEstoque(carros).length > 0 && (
           <nav aria-label="Procurar por marca e modelo" className="mt-10 border-t border-neutral-200 pt-6">
             <h2 className="text-sm font-semibold">Carros usados{cidadeDaLoja(loja.endereco) ? ` em ${cidadeDaLoja(loja.endereco)}` : ""} por marca e modelo</h2>

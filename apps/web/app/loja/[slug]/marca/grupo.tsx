@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { carrosDaVitrine, linkDaLoja, linkDoCarro, lojaPublica } from "@/lib/vitrine";
+import { baseDaLoja, carrosDaVitrine, linkDaLoja, linkDoCarro, lojaPublica } from "@/lib/vitrine";
 import { caminhoDaLoja } from "@/lib/vitrine-aparencia";
 import { carrosDoGrupo, gruposDoEstoque, linkDaMarca, linkDoModelo, listaJsonLd, textosDoGrupo } from "@/lib/vitrine-seo";
 import { CabecalhoDaPagina, CascaDaLoja } from "../casca";
 import { JsonLd } from "../dados-estruturados";
+import { Suspense } from "react";
+import { FaixaDeMarcas } from "../marcas";
 import { ListaDeCarros } from "../lista-de-carros";
 
 /** Dados da página de marca ou modelo: só existe se há carro desse grupo em estoque (senão, 404). */
@@ -18,7 +20,7 @@ async function carregar(slug: string, marcaSlug: string, modeloSlug?: string) {
   const grupo = gruposDoEstoque(todos).find((g) => g.marcaSlug === marcaSlug)!;
   const modelo = modeloSlug ? grupo.modelos.find((m) => m.modeloSlug === modeloSlug) ?? null : null;
   const nome = modelo ? `${grupo.marca} ${modelo.modelo}` : grupo.marca;
-  return { loja, carros, grupo, modelo, nome, textos: textosDoGrupo(loja, nome, carros) };
+  return { loja, carros, grupo, modelo, nome, grupos: gruposDoEstoque(todos), textos: textosDoGrupo(loja, nome, carros) };
 }
 
 export async function metadataDoGrupo(slug: string, marcaSlug: string, modeloSlug?: string): Promise<Metadata> {
@@ -37,7 +39,7 @@ export async function metadataDoGrupo(slug: string, marcaSlug: string, modeloSlu
 export async function PaginaDoGrupo({ slug, marcaSlug, modeloSlug }: { slug: string; marcaSlug: string; modeloSlug?: string }) {
   const d = await carregar(slug, marcaSlug, modeloSlug);
   if (!d) notFound();
-  const { loja, carros, grupo, nome, textos } = d;
+  const { loja, carros, grupo, grupos, nome, textos } = d;
   const urlAtual = modeloSlug ? linkDoModelo(loja, marcaSlug, modeloSlug) : linkDaMarca(loja, marcaSlug);
   const trilha = [
     { name: loja.nome, item: linkDaLoja(loja.slug, loja.dominio) },
@@ -64,8 +66,11 @@ export async function PaginaDoGrupo({ slug, marcaSlug, modeloSlug }: { slug: str
           ))}
         </nav>
       )}
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        <ListaDeCarros slug={loja.slug} carros={carros} />
+      <FaixaDeMarcas slug={loja.slug} grupos={grupos} />
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        <Suspense>
+          <ListaDeCarros slug={loja.slug} carros={carros} whatsapp={loja.whatsapp} baseUrl={`${baseDaLoja(loja.dominio)}/loja/${loja.slug}`} titulo={`${nome} à venda`} />
+        </Suspense>
       </main>
     </CascaDaLoja>
   );

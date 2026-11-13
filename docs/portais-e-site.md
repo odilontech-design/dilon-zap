@@ -294,3 +294,16 @@ Na Pista, MobiAuto e Webmotors avisam os contatos de compradores **por e-mail**.
 - **Lista**: barra de busca em cartão, atalhos das marcas com mais carros, cartões maiores com zoom na foto, selo "Novidade" (7 dias) e "Reservado", contagem de fotos, chips de ano/km/câmbio/combustível e preço em destaque. Responsivo (filtros em 2 colunas no celular).
 
 **Marca de duas cores (v1.62.0).** Além da cor da loja, `VeiculosConfig.corSecundaria` (Configurações > Aparência > "Segunda cor"): a primeira vira os tons escuros do cabeçalho, da abertura e do rodapé (a cor misturada com preto, calculada em `escurecer`), e a segunda os destaques (botão "Ver estoque", menu ativo, selos, filete). Sem segunda cor, os destaques usam a primeira. Para a Sales: cor da loja `#B01218` e segunda cor `#FFC800`.
+
+## Revisão de UX da vitrine pública (v1.65.0)
+
+Refeita a navegação pública inteira, pensando em quem chega pelo celular vindo do Google ou do Instagram:
+
+- **Correção**: a foto grande da página do carro esticava a página (imagem fora da moldura). Agora toda foto fica dentro da moldura (posição absoluta) e a galeria aceita deslizar o dedo. Os cartões também deixaram de mostrar a foto "encolhida" com faixas brancas.
+- **Faixa de contato** no topo (WhatsApp, cidade, horário), **cabeçalho** com menu (no celular, o menu abre numa lista) e botão do WhatsApp; **botão flutuante do WhatsApp** em todas as páginas (na página do carro, no celular, some: a barra fixa "Tenho interesse" já faz o papel).
+- **Abertura**: título com a cidade, **busca rápida** (marca ou modelo, valor máximo, câmbio) que leva à lista já filtrada (`?q=…&max=…&cambio=…#estoque`) e três atalhos (estoque, financiamento, avaliação do carro).
+- **Faixa "Procure por marca"** com o símbolo das montadoras (SVG embutido, `lib/marcas-logos.ts`, gerado do pacote simple-icons, CC0; marcas sem símbolo mostram as iniciais) e link para a página de SEO da marca.
+- **Lista**: busca, marca, preço e ordenação à vista; modelo, ano, câmbio e combustível em "Mais filtros"; "Limpar filtros"; estado vazio com saída. O selo "Novidade" só aparece quando é raro (até 30% do estoque).
+- **Cartão do carro**: cartão todo clicável, chips (ano, km, câmbio, combustível), preço em destaque e botão de WhatsApp que já fala do carro.
+- **Página do carro**: trilha (Estoque › Marca › Modelo), card de preço fixo ao rolar com "Tenho interesse", "Simular financiamento" e "Ver endereço e agendar visita", compartilhar, descrição, opcionais, ficha técnica e **"Você também pode gostar"** (mesmo modelo, marca ou preço próximo).
+- **Cores**: cabeçalho, abertura e rodapé usam um tom quase preto da cor da loja; a cor principal vai nos botões de chamada e a **segunda cor** nos destaques (título, filete, selos). Sem segunda cor, o destaque é um tom claro da principal. Para a Sales: principal `#B01218`, segunda `#FFC800`.
