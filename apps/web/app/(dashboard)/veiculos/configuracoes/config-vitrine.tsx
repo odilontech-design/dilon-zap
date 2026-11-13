@@ -17,6 +17,7 @@ type Config = {
   ga4Id: string | null;
   formularioAtivo: boolean;
   exigirKm: boolean;
+  cabecalhoClaro: boolean;
   corPrimaria: string | null;
   horario: string | null;
   instagram: string | null;
@@ -36,7 +37,7 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true, exigirKm: true, corPrimaria: "", horario: "", instagram: "", facebook: "", politicaPrivacidade: "" });
+  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, corPrimaria: "", horario: "", instagram: "", facebook: "", politicaPrivacidade: "" });
   const [versaoImagens, setVersaoImagens] = useState(0);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -54,6 +55,7 @@ export function ConfigVitrine() {
         ga4Id: data.ga4Id ?? "",
         formularioAtivo: data.formularioAtivo,
         exigirKm: data.exigirKm,
+        cabecalhoClaro: data.cabecalhoClaro ?? false,
         corPrimaria: data.corPrimaria ?? "",
         horario: data.horario ?? "",
         instagram: data.instagram ?? "",
@@ -138,6 +140,10 @@ export function ConfigVitrine() {
             <input id="vitrine-cor" value={f.corPrimaria} onChange={(e) => setF({ ...f, corPrimaria: e.target.value })} placeholder="#1f6f4a (vazio = verde padrão)" className={`${campo} max-w-[240px]`} />
           </div>
           <span className="text-xs text-neutral-500">Usada no menu, nos botões e na faixa de abertura. O texto sobre a cor muda sozinho (claro ou escuro) para continuar legível.</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input type="checkbox" checked={f.cabecalhoClaro} onChange={(e) => setF({ ...f, cabecalhoClaro: e.target.checked })} />
+          Cabeçalho e rodapé claros (desmarcado = escuro, que valoriza logos claras ou prateadas)
         </label>
       </section>
 

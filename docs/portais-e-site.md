@@ -286,3 +286,9 @@ Na Pista, MobiAuto e Webmotors avisam os contatos de compradores **por e-mail**.
 - `ItemList` e `BreadcrumbList` em JSON-LD, canônico e Open Graph próprios.
 - Entram no sitemap e no llms.txt ("Por marca"), e a vitrine ganha um bloco de links "Carros usados em <cidade> por marca e modelo" (ligação interna que o Google e as IAs seguem).
 - Código em `lib/vitrine-seo.ts` (puro, testado) e `app/loja/[slug]/marca/`.
+
+## Visual da vitrine (v1.62.0)
+
+- **Cabeçalho e rodapé escuros** por padrão (valorizam logos prateadas/claras, como a da Sales), com filete na cor da loja; opção "Cabeçalho e rodapé claros" em Veículos > Configurações > Aparência (`VeiculosConfig.cabecalhoClaro`, só adição).
+- **Abertura (hero)** com fundo escuro (ou o banner da loja), chamada com a cidade, `H1` com o nome da loja e dois botões: Ver estoque e Simular financiamento.
+- **Lista**: barra de busca em cartão, atalhos das marcas com mais carros, cartões maiores com zoom na foto, selo "Novidade" (7 dias) e "Reservado", contagem de fotos, chips de ano/km/câmbio/combustível e preço em destaque. Responsivo (filtros em 2 colunas no celular).
