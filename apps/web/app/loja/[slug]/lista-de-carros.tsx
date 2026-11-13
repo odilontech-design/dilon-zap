@@ -68,7 +68,7 @@ export function ListaDeCarros({ slug, carros }: { slug: string; carros: CarroPub
                 onClick={() => setMarca(marca === m ? "" : m)}
                 aria-pressed={marca === m}
                 className={`rounded-full border px-3 py-1 text-xs font-medium transition ${marca === m ? "border-transparent" : "border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}
-                style={marca === m ? { background: "var(--loja)", color: "var(--loja-texto)" } : undefined}
+                style={marca === m ? { background: "var(--loja2)", color: "var(--loja2-texto)" } : undefined}
               >
                 {m} · {qtd}
               </button>
@@ -93,7 +93,7 @@ export function ListaDeCarros({ slug, carros }: { slug: string; carros: CarroPub
               <div className="absolute left-3 top-3 flex gap-2">
                 {c.status === "RESERVADO" && <span className="rounded-full bg-amber-500 px-2.5 py-0.5 text-xs font-medium text-white shadow">Reservado</span>}
                 {c.status !== "RESERVADO" && novidade(c) && (
-                  <span className="rounded-full px-2.5 py-0.5 text-xs font-medium shadow" style={{ background: "var(--loja)", color: "var(--loja-texto)" }}>
+                  <span className="rounded-full px-2.5 py-0.5 text-xs font-medium shadow" style={{ background: "var(--loja2)", color: "var(--loja2-texto)" }}>
                     Novidade
                   </span>
                 )}

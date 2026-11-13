@@ -81,6 +81,7 @@ export async function PUT(req: Request) {
     mostrarReservados: d.mostrarReservados,
     corPrimaria: corValida(d.corPrimaria),
     ...(d.cabecalhoClaro !== undefined ? { cabecalhoClaro: d.cabecalhoClaro } : {}),
+    ...(d.corSecundaria !== undefined ? { corSecundaria: corValida(d.corSecundaria) } : {}),
     horario: d.horario || null,
     // Guarda o que a loja digitou (o link é remontado na vitrine, nunca repassado como veio).
     instagram: d.instagram || null,

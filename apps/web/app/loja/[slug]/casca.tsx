@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { linkWhatsapp, type LojaPublica } from "@/lib/vitrine";
-import { caminhoDaLoja, corDoTexto, type PaginaDaLoja } from "@/lib/vitrine-aparencia";
+import { caminhoDaLoja, corDoTexto, escurecer, type PaginaDaLoja } from "@/lib/vitrine-aparencia";
 import { cidadeDaLoja } from "@/lib/vitrine-seo";
 import { BotaoWhatsapp } from "./rastreio";
 
@@ -20,7 +20,15 @@ const MENU: { aba: Aba; rotulo: string; pagina?: PaginaDaLoja }[] = [
 ];
 
 export function estiloDaLoja(loja: LojaPublica): React.CSSProperties {
-  return { "--loja": loja.cor, "--loja-texto": corDoTexto(loja.cor) } as React.CSSProperties;
+  return {
+    "--loja": loja.cor,
+    "--loja-texto": corDoTexto(loja.cor),
+    // Segunda cor (destaques) e os tons escuros da primeira, para o cabeçalho, a abertura e o rodapé.
+    "--loja2": loja.corSecundaria,
+    "--loja2-texto": corDoTexto(loja.corSecundaria),
+    "--loja-escuro": escurecer(loja.cor, 0.62),
+    "--loja-mais-escuro": escurecer(loja.cor, 0.28),
+  } as React.CSSProperties;
 }
 
 export function CascaDaLoja({ loja, aba, hero = false, children }: { loja: LojaPublica; aba: Aba; hero?: boolean; children: React.ReactNode }) {
@@ -32,8 +40,8 @@ export function CascaDaLoja({ loja, aba, hero = false, children }: { loja: LojaP
   const sub = escuro ? "text-neutral-400" : "text-neutral-600";
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-neutral-900" style={estiloDaLoja(loja)}>
-      <header className={`sticky top-0 z-20 backdrop-blur ${escuro ? "bg-neutral-950/95 text-white" : "border-b border-neutral-200 bg-surface/95"}`}>
-        <div className="h-0.5 w-full" style={{ background: "var(--loja)" }} />
+      <header className={`sticky top-0 z-20 backdrop-blur ${escuro ? "text-white" : "border-b border-neutral-200 bg-surface/95"}`} style={escuro ? { background: "linear-gradient(180deg, var(--loja-escuro), var(--loja-mais-escuro))" } : undefined}>
+        <div className="h-0.5 w-full" style={{ background: "var(--loja2)" }} />
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3">
           <Link href={caminho()} className="flex min-w-0 items-center gap-3">
             {loja.temLogo ? (
@@ -61,7 +69,7 @@ export function CascaDaLoja({ loja, aba, hero = false, children }: { loja: LojaP
               href={caminho(m.pagina)}
               aria-current={aba === m.aba ? "page" : undefined}
               className={`whitespace-nowrap rounded-full px-3.5 py-1.5 transition ${aba === m.aba ? "font-medium" : escuro ? "text-neutral-300 hover:bg-white/10 hover:text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
-              style={aba === m.aba ? { background: "var(--loja)", color: "var(--loja-texto)" } : undefined}
+              style={aba === m.aba ? { background: "var(--loja2)", color: "var(--loja2-texto)" } : undefined}
             >
               {m.rotulo}
             </Link>
@@ -70,19 +78,19 @@ export function CascaDaLoja({ loja, aba, hero = false, children }: { loja: LojaP
       </header>
 
       {hero && (
-        <div className="relative isolate overflow-hidden bg-neutral-950 text-white">
+        <div className="relative isolate overflow-hidden text-white" style={{ background: "var(--loja-mais-escuro)" }}>
           {loja.temBanner ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img src={marca("banner")} alt="" className="absolute inset-0 -z-10 h-full w-full object-cover opacity-60" />
           ) : (
             <>
-              <div className="absolute inset-0 -z-10 bg-gradient-to-br from-neutral-950 via-neutral-900 to-neutral-800" />
-              <div className="absolute -right-24 -top-24 -z-10 h-80 w-80 rounded-full opacity-30 blur-3xl" style={{ background: "var(--loja)" }} />
+              <div className="absolute inset-0 -z-10" style={{ background: "linear-gradient(135deg, var(--loja-mais-escuro) 0%, var(--loja-escuro) 100%)" }} />
+              <div className="absolute -right-24 -top-24 -z-10 h-80 w-80 rounded-full opacity-30 blur-3xl" style={{ background: "var(--loja2)" }} />
             </>
           )}
           <div className="absolute inset-0 -z-10 bg-gradient-to-t from-black/70 via-black/20 to-transparent" />
           <div className="mx-auto flex max-w-6xl flex-col gap-4 px-4 py-12 md:py-20">
-            <p className="text-xs font-medium uppercase tracking-[0.2em]" style={{ color: "var(--loja)" }}>
+            <p className="text-xs font-medium uppercase tracking-[0.2em]" style={{ color: "var(--loja2)" }}>
               Seminovos e usados{cidade ? ` · ${cidade}` : ""}
             </p>
             <h1 className="max-w-3xl text-3xl font-semibold leading-tight tracking-tight md:text-5xl">{loja.nome}</h1>
@@ -92,7 +100,7 @@ export function CascaDaLoja({ loja, aba, hero = false, children }: { loja: LojaP
               loja.endereco && <p className="text-sm text-neutral-300">{loja.endereco}</p>
             )}
             <div className="mt-2 flex flex-wrap gap-3">
-              <a href="#estoque" className="rounded-full px-6 py-3 text-sm font-semibold shadow-lg transition hover:opacity-90" style={{ background: "var(--loja)", color: "var(--loja-texto)" }}>
+              <a href="#estoque" className="rounded-full px-6 py-3 text-sm font-semibold shadow-lg transition hover:opacity-90" style={{ background: "var(--loja2)", color: "var(--loja2-texto)" }}>
                 Ver estoque
               </a>
               <Link href={financiar} className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/10">
@@ -105,8 +113,8 @@ export function CascaDaLoja({ loja, aba, hero = false, children }: { loja: LojaP
 
       <div className="flex-1">{children}</div>
 
-      <footer className={`mt-12 ${escuro ? "bg-neutral-950 text-neutral-200" : "border-t border-neutral-200 bg-surface"}`}>
-        <div className="h-0.5 w-full" style={{ background: "var(--loja)" }} />
+      <footer className={`mt-12 ${escuro ? "text-neutral-200" : "border-t border-neutral-200 bg-surface"}`} style={escuro ? { background: "var(--loja-mais-escuro)" } : undefined}>
+        <div className="h-0.5 w-full" style={{ background: "var(--loja2)" }} />
         <div className="mx-auto grid max-w-6xl gap-6 px-4 py-8 text-sm sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <p className="font-semibold">{loja.nome}</p>

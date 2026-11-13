@@ -161,6 +161,7 @@ export const configRevendaSchema = z.object({
   formularioAtivo: z.boolean(),
   exigirKm: z.boolean(),
   cabecalhoClaro: z.boolean().optional(),
+  corSecundaria: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "a cor precisa ser no formato #ffc800").nullable().optional().or(z.literal("")),
   corPrimaria: z.string().trim().regex(/^#[0-9a-fA-F]{6}$/, "a cor precisa ser no formato #1f6f4a").nullable().optional().or(z.literal("")),
   horario: texto(300),
   instagram: texto(100),
