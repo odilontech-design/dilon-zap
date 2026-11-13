@@ -12,7 +12,7 @@ import {
   type OrigemVeiculo,
   type StatusVeiculo,
 } from "@/lib/veiculos-regras";
-import { COR_FAIXA, botaoPrimario, brl, campo, fetcher } from "./comum";
+import { COR_FAIXA, botaoPrimario, botaoSecundario, brl, campo, erroDaResposta, fetcher } from "./comum";
 
 type Linha = {
   id: string;
@@ -60,7 +60,9 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
   const params = new URLSearchParams();
   if (vendidos) params.set("status", "VENDIDO");
   if (buscaAtiva) params.set("q", buscaAtiva);
-  const { data, error, isLoading } = useSWR<{ gerencia: boolean; plano: { nome: string; limite: number; noPatio: number } | null; veiculos: Linha[] }>(`/api/veiculos?${params}`, fetcher, { refreshInterval: 60_000 });
+  const [lote, setLote] = useState<{ texto: string; erro?: boolean; ignorados?: { id: string; nome: string; motivo: string }[] } | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+  const { data, error, isLoading, mutate } = useSWR<{ gerencia: boolean; plano: { nome: string; limite: number; noPatio: number } | null; veiculos: Linha[] }>(`/api/veiculos?${params}`, fetcher, { refreshInterval: 60_000 });
 
   const todos = data?.veiculos ?? [];
   const lista = useMemo(() => (filtro === "todos" || vendidos ? todos : todos.filter((v) => v.status === filtro)), [todos, filtro, vendidos]);
@@ -70,6 +72,22 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
   const parados = noPatio.filter((v) => v.dias >= 60);
   const capital = noPatio.reduce((s, v) => s + (v.origem === "CONSIGNACAO" ? 0 : v.custoCents ?? 0), 0);
   const margemTotal = todos.reduce((s, v) => s + (v.margem?.valorCents ?? 0), 0);
+
+  const emPreparacao = noPatio.filter((v) => v.status === "PREPARACAO");
+  async function colocarTodosAVenda() {
+    if (!confirm(`Colocar à venda os ${emPreparacao.length} carros em preparação? Os que estiverem sem preço ou sem quilometragem (quando exigida) continuam em preparação.`)) return;
+    setOcupado(true);
+    setLote(null);
+    try {
+      const r = await fetch("/api/veiculos/colocar-a-venda", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ todos: true }) });
+      if (!r.ok) return setLote({ texto: await erroDaResposta(r), erro: true });
+      const j = (await r.json()) as { colocados: number; ignorados: { id: string; nome: string; motivo: string }[] };
+      setLote({ texto: `${j.colocados} carro(s) colocado(s) à venda.${j.ignorados.length ? ` ${j.ignorados.length} ficaram em preparação:` : ""}`, ignorados: j.ignorados });
+      mutate();
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-4">
@@ -122,6 +140,27 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
             <span className={`rounded-full px-3 py-1 ${data.plano.noPatio >= data.plano.limite ? "bg-red-500/10 text-red-600" : data.plano.noPatio >= data.plano.limite * 0.9 ? "bg-amber-500/10 text-amber-700" : "bg-neutral-100 text-neutral-600"}`}>
               Plano {data.plano.nome}: {data.plano.noPatio} de {data.plano.limite} carros
             </span>
+          )}
+        </div>
+      )}
+      {!vendidos && gerencia && emPreparacao.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3">
+          <button className={botaoSecundario} disabled={ocupado} onClick={colocarTodosAVenda} data-testid="colocar-todos-a-venda">
+            Colocar à venda todos os {emPreparacao.length} em preparação
+          </button>
+        </div>
+      )}
+      {lote && (
+        <div className={`rounded-md px-3 py-2 text-sm ${lote.erro ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-accent"}`} role="status">
+          <p>{lote.texto}</p>
+          {lote.ignorados && lote.ignorados.length > 0 && (
+            <ul className="mt-1 max-h-40 list-disc overflow-auto pl-5 text-xs">
+              {lote.ignorados.slice(0, 50).map((i) => (
+                <li key={i.id}>
+                  <Link href={`/veiculos/${i.id}`} className="underline">{i.nome}</Link>: {i.motivo}
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       )}
