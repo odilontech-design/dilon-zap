@@ -39,12 +39,21 @@ export async function desconectarWebmotors(tenantId: string) {
   await prisma.portalConta.updateMany({ where: { tenantId, portal: "WEBMOTORS" }, data: { status: "DESCONECTADA", accessTokenCripto: "", erro: null } });
 }
 
-/** Os planos de anúncio da loja, consultados ao vivo (a Webmotors é quem sabe quantos cabem). */
+/**
+ * Os planos de anúncio da loja, consultados ao vivo (a Webmotors é quem sabe quantos cabem). Se a
+ * Webmotors não listar planos para esta credencial, usa os planos em que os anúncios que a loja
+ * já tem estão (o mais usado primeiro): assim dá para escolher o mesmo plano que a loja usa hoje.
+ */
 export async function modalidadesWebmotors(tenantId: string): Promise<Modalidade[] | null> {
   const segredo = segredoDosPortais();
   const conta = await prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId, portal: "WEBMOTORS" } } });
   if (!segredo || !conta || conta.status === "DESCONECTADA" || !conta.accessTokenCripto) return null;
-  return new SessaoWebmotors(credenciaisDaConta(conta.accessTokenCripto, chaveDoAmbiente(segredo))).modalidades();
+  const sessao = new SessaoWebmotors(credenciaisDaConta(conta.accessTokenCripto, chaveDoAmbiente(segredo)));
+  const listados = await sessao.modalidades();
+  if (listados.length) return listados;
+  const porPlano = new Map<string, number>();
+  for (const a of await sessao.estoqueAtual()) if (a.modalidade) porPlano.set(a.modalidade, (porPlano.get(a.modalidade) ?? 0) + 1);
+  return [...porPlano.entries()].sort((a, b) => b[1] - a[1]).map(([codigo, usados]) => ({ codigo, descricao: `Plano ${codigo} (em uso por ${usados} anúncio${usados === 1 ? "" : "s"} da loja)`, tipo: "", total: 0, usados }));
 }
 
 export async function definirPlanoPadrao(tenantId: string, codigo: string | null) {

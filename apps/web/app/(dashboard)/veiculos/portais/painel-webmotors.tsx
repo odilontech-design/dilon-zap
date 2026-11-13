@@ -82,7 +82,7 @@ export function PainelWebmotors() {
             <select id="wm-plano" className={campo} value={data.conta?.planoPadrao ?? ""} disabled={ocupado || !planos.data} onChange={(e) => chamar("/api/portais/webmotors/plano", "PUT", { codigo: e.target.value || null })}>
               <option value="">{planos.error ? "Erro ao consultar a Webmotors" : planos.data ? "Escolha…" : "Carregando…"}</option>
               {planos.data?.modalidades.map((m) => (
-                <option key={m.codigo} value={m.codigo}>{m.descricao} ({m.usados}/{m.total} em uso)</option>
+                <option key={m.codigo} value={m.codigo}>{m.total > 0 ? `${m.descricao} (${m.usados}/${m.total} em uso)` : m.descricao}</option>
               ))}
             </select>
           </label>
