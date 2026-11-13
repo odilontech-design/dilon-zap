@@ -65,6 +65,7 @@ type Ficha = Record<string, unknown> & {
   anoModelo: number;
   km: number;
   kmInformado: boolean;
+  sumiuDoSiteEm: string | null;
   exigirKm: boolean;
   siteOrigemId: string | null;
   placa: string | null;
@@ -173,6 +174,26 @@ export function FichaVeiculo({ id }: { id: string }) {
           )}
         </div>
       </div>
+
+      {gerencia && v.sumiuDoSiteEm && (
+        <div role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
+          <span>
+            Este carro saiu do site antigo em {dataBR(v.sumiuDoSiteEm)} e foi escondido da vitrine. Se foi vendido, registre a venda aqui na ficha. Se continua à venda, reative.
+          </span>
+          <button
+            type="button"
+            className={botaoSecundario}
+            onClick={async () => {
+              const r = await fetch(`/api/veiculos/${id}/saiu-do-site`, { method: "POST" });
+              if (!r.ok) return setAviso({ texto: await erroDaResposta(r), erro: true });
+              setAviso({ texto: "Carro reativado: voltou para a vitrine." });
+              mutate();
+            }}
+          >
+            Continua à venda: reativar
+          </button>
+        </div>
+      )}
 
       {gerencia && v.status === "PREPARACAO" && v.siteOrigemId && (v.precoCents <= 0 || (v.exigirKm && !v.kmInformado)) && (
         <p role="status" className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-700">

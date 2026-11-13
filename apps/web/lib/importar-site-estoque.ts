@@ -55,31 +55,37 @@ async function emParalelo<T, R>(itens: T[], limite: number, fn: (x: T) => Promis
 
 const nomeDoCard = (c: CardDoSite) => `${c.marca} ${c.modelo}${c.versao ? ` ${c.versao}` : ""}`;
 
-async function lerEstoqueDoSite(endereco: string, buscar: Buscador): Promise<{ cards: CardDoSite[]; base: URL }> {
+export async function lerEstoqueDoSite(endereco: string, buscar: Buscador): Promise<{ cards: CardDoSite[]; base: URL }> {
   const url = enderecoDoSite(endereco);
   if (!url) throw new ErroImportacaoSite("endereço do site inválido: use algo como www.sualoja.com.br");
   // O que a pessoa digitou primeiro; se não for a lista, a página de veículos do AutoCerto.
   const tentativas = [...new Set([url.toString(), new URL("/Veiculos", url).toString()])];
   let ultimoErro = "";
+  let abriuSemCarros = false;
   for (const t of tentativas) {
     try {
       const { html, urlFinal } = await buscar(t);
       const { cards } = lerListaDoSite(html, urlFinal);
       if (cards.length) return { cards: cards.slice(0, MAX_CARROS), base: new URL(urlFinal) };
       ultimoErro = "não achei carros nessa página";
+      abriuSemCarros = true;
     } catch (e) {
       ultimoErro = e instanceof ErroPagina ? e.message : "falha ao ler o site";
     }
   }
-  throw new ErroImportacaoSite(
-    `${ultimoErro}. Por enquanto a importação lê sites feitos no AutoCerto; para outros sites, use a planilha.`,
-    422,
-  );
+  // O aviso de "só AutoCerto" só faz sentido quando o site abriu e não tinha carros; se ele não respondeu, o problema é outro.
+  throw new ErroImportacaoSite(abriuSemCarros ? `${ultimoErro}. Por enquanto a importação lê sites feitos no AutoCerto; para outros sites, use a planilha.` : ultimoErro, 422);
+}
+
+/** Guarda de onde veio o estoque, para o espelho do site poder voltar lá depois. */
+async function guardarSiteDeOrigem(tenantId: string, base: URL) {
+  await prisma.veiculosConfig.upsert({ where: { tenantId }, create: { tenantId, siteOrigemUrl: base.origin }, update: { siteOrigemUrl: base.origin } });
 }
 
 export async function importarDoSite(input: {
   tenantId: string;
-  userId: string;
+  /** Nulo quando quem importa é o agendamento (o histórico do carro fica sem autor). */
+  userId: string | null;
   endereco: string;
   simular: boolean;
   buscar?: Buscador;
@@ -120,7 +126,11 @@ export async function importarDoSite(input: {
       kmInformado: c.kmInformado,
     })),
   };
-  if (input.simular || !novos.length) return resumo;
+  if (input.simular || !novos.length) {
+    if (!input.simular) await guardarSiteDeOrigem(input.tenantId, base);
+    return resumo;
+  }
+  await guardarSiteDeOrigem(input.tenantId, base);
 
   // Páginas dos carros: 5 por vez, com tolerância (uma que não abre não derruba as outras).
   const detalhes = await emParalelo(novos, 5, async (c) => {

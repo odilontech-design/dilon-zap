@@ -56,6 +56,7 @@ export async function GET(req: Request) {
       anoModelo: true,
       km: true,
       kmInformado: true,
+      sumiuDoSiteEm: true,
       cor: true,
       cambio: true,
       combustivel: true,

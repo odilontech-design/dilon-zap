@@ -255,6 +255,50 @@ errado no cabeçalho.
 **Teste** (de `apps/web`): `DATABASE_URL=… npx tsx lib/importar-autocerto.test-manual.ts`
 (dados inventados; com `AUTOCERTO_XLS=<arquivo>` confere também a planilha real).
 
+## Implementado (v1.57.0): espelho do site atual
+
+Enquanto o AutoCerto (ou outro site antigo) for o cadastro principal do estoque, e
+é ele que publica nos portais, o Zap o **acompanha**, para a vitrine nova não
+mostrar carro que já foi vendido lá. O Zap guarda de onde importou
+(`VeiculosConfig.siteOrigemUrl`) e relê o site de hora em hora.
+
+- **Carro novo no site:** entra no Zap em preparação, com fotos e opcionais (o mesmo
+  caminho da importação). O preço e a placa dele vêm da planilha do AutoCerto,
+  que a gestão envia em "Completar com a planilha do AutoCerto".
+- **Carro que saiu do site:** é **escondido da vitrine do Zap na hora** e marcado
+  (`sumiuDoSiteEm`): aparece como "saiu do site antigo" no Estoque, na ficha e na
+  lista do cartão "Acompanhando o site atual". **Nunca é vendido nem apagado sozinho**:
+  uma venda tem comprador, valor e dinheiro. A gestão decide: registra a venda pela
+  ficha, ou clica em "Continua à venda: reativar" (volta à vitrine e o carro deixa de
+  ser comparado com o site, `seguirSite=false`; o id do site fica, para o importador
+  não duplicá-lo se ele reaparecer).
+- **Carro que voltou ao site:** volta para a vitrine sozinho.
+- **Não mexe em:** carro vendido no Zap e carro cadastrado à mão (sem id de site).
+- **Trava de segurança:** site fora do ar, em manutenção ou com o layout mudado pode
+  parecer vazio. Site que não responde ou sem carros dá **erro**, nunca "tudo vendido".
+  E se **mais de 30% dos carros rastreados (e pelo menos 5)** sumirem de uma vez,
+  nada é escondido e o resumo avisa "ATENÇÃO: confira se o site mudou".
+- **Falha visível:** o agendamento que não consegue ler o site grava "Falhou em
+  <data>: <motivo>" no cartão, em vez de a gestão achar que está tudo em dia.
+
+**Agendamento (VPS):** `POST /api/cron/sincronizar-sites` com `Authorization: Bearer
+$CRON_SECRET`, como o `erp-sync`:
+
+```text
+0 * * * * curl -fsS -X POST -H "Authorization: Bearer $CRON_SECRET" https://SEU-ZAP/api/cron/sincronizar-sites
+```
+
+Uma loja com problema não atrapalha as outras. "Sincronizar agora" faz o mesmo pela tela
+(Veículos → Importar → "Acompanhando o site atual").
+
+**Limite:** o preço dos carros novos não está no site. Até a loja enviar a planilha, eles
+ficam em preparação. A saída definitiva é o Zap virar o cadastro principal e publicar
+nos portais (os conectores ainda não existem; ver `docs/portais-e-site.md`).
+
+**Teste** (de `apps/web`): `DATABASE_URL=… npx tsx lib/espelho-do-site.test-manual.ts`
+(21 verificações com um site falso: saiu, voltou, reativado sem duplicar, novo, vendido e
+manual intocados, site fora do ar e vazio, trava de 8 de 10 sumirem).
+
 ## Implementado (v1.48.0): planos da revenda
 
 Tabela em `apps/web/lib/veiculos-planos.ts`, com teste. O Super Admin define o
