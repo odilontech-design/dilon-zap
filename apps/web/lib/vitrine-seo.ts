@@ -58,6 +58,10 @@ export function sitemapDaLoja(loja: LojaPublica, carros: (CarroPublico & { updat
   const linhas = [
     item(linkDaLoja(loja.slug, loja.dominio), "<changefreq>daily</changefreq><priority>1.0</priority>"),
     ...enderecoDasPaginas(loja).map((p) => item(p.url, "<changefreq>monthly</changefreq><priority>0.5</priority>")),
+    ...gruposDoEstoque(carros).flatMap((g) => [
+      item(linkDaMarca(loja, g.marcaSlug), "<changefreq>daily</changefreq><priority>0.7</priority>"),
+      ...g.modelos.map((m) => item(linkDoModelo(loja, g.marcaSlug, m.modeloSlug), "<changefreq>daily</changefreq><priority>0.7</priority>")),
+    ]),
     ...carros.map((c) => {
       const fotos = c.fotos.slice(0, 20).map((f) => `<image:image><image:loc>${esc(`${base}/api/loja/${loja.slug}/fotos/${f.id}`)}</image:loc><image:title>${esc(nomeDoVeiculo(c))}</image:title></image:image>`).join("");
       const mod = c.updatedAt ? `<lastmod>${c.updatedAt.toISOString()}</lastmod>` : "";
@@ -84,6 +88,8 @@ export function llmsTxtDaLoja(loja: LojaPublica, carros: CarroPublico[]): string
   ].filter(Boolean) as string[];
   linhas.push("## Contato", ...dados, "");
   linhas.push("## Páginas", ...enderecoDasPaginas(loja).filter((p) => p.nome !== "Política de privacidade").map((p) => `- [${p.nome}](${p.url})`), "");
+  const grupos = gruposDoEstoque(carros);
+  if (grupos.length) linhas.push("## Por marca", ...grupos.map((g) => `- [${g.marca} (${g.n})](${linkDaMarca(loja, g.marcaSlug)})`), "");
   linhas.push(`## Estoque (${carros.length} veículos)`);
   for (const c of carros.slice(0, 300)) {
     const detalhe = [brl(c.precoCents), c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel, c.cor, c.status === "RESERVADO" ? "reservado" : null].filter(Boolean).join(", ");
@@ -101,5 +107,77 @@ export function breadcrumbJsonLd(loja: LojaPublica, c: CarroPublico, urlDoCarro:
       { "@type": "ListItem", position: 1, name: loja.nome, item: linkDaLoja(loja.slug, loja.dominio) },
       { "@type": "ListItem", position: 2, name: nomeDoVeiculo(c), item: urlDoCarro },
     ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Páginas por marca e por modelo ("Honda Civic usado em Duque de Caxias"):
+// é onde a busca local acontece. Só existem para o que há em estoque agora,
+// para não publicar página vazia.
+// ---------------------------------------------------------------------------
+
+/** "Citroën C3" → "citroen-c3": sem acento, minúsculo, hifens. */
+export function slugDe(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+/** A cidade, tirada do fim do endereço ("Rua A, 10 - Centro, Duque de Caxias - RJ" → "Duque de Caxias"). Nulo se não der para ter certeza. */
+export function cidadeDaLoja(endereco: string | null | undefined): string | null {
+  if (!endereco) return null;
+  const m = endereco.trim().match(/([A-Za-zÀ-ú' ]{3,40}?)\s*[-–/,]\s*([A-Z]{2})\s*\.?$/);
+  if (!m) return null;
+  const cidade = m[1].trim().split(/\s*[,-]\s*/).pop()?.trim() ?? "";
+  return cidade.length >= 3 && !/\d/.test(cidade) ? cidade : null;
+}
+
+export type GrupoDeCarros = { marca: string; marcaSlug: string; modelos: { modelo: string; modeloSlug: string; n: number }[]; n: number };
+
+/** Marcas e modelos do estoque, com a contagem, na ordem de quem tem mais carros. */
+export function gruposDoEstoque(carros: Pick<CarroPublico, "marca" | "modelo">[]): GrupoDeCarros[] {
+  const marcas = new Map<string, GrupoDeCarros>();
+  for (const c of carros) {
+    const ms = slugDe(c.marca);
+    const mo = slugDe(c.modelo);
+    if (!ms || !mo) continue;
+    const g = marcas.get(ms) ?? { marca: c.marca, marcaSlug: ms, modelos: [], n: 0 };
+    g.n++;
+    const m = g.modelos.find((x) => x.modeloSlug === mo);
+    if (m) m.n++;
+    else g.modelos.push({ modelo: c.modelo, modeloSlug: mo, n: 1 });
+    marcas.set(ms, g);
+  }
+  return [...marcas.values()].map((g) => ({ ...g, modelos: g.modelos.sort((a, b) => b.n - a.n || a.modelo.localeCompare(b.modelo, "pt-BR")) })).sort((a, b) => b.n - a.n || a.marca.localeCompare(b.marca, "pt-BR"));
+}
+
+export const linkDaMarca = (loja: Pick<LojaPublica, "slug" | "dominio">, marcaSlug: string) => `${baseDaLoja(loja.dominio)}/loja/${loja.slug}/marca/${marcaSlug}`;
+export const linkDoModelo = (loja: Pick<LojaPublica, "slug" | "dominio">, marcaSlug: string, modeloSlug: string) => `${linkDaMarca(loja, marcaSlug)}/${modeloSlug}`;
+
+export function carrosDoGrupo<T extends Pick<CarroPublico, "marca" | "modelo">>(carros: T[], marcaSlug: string, modeloSlug?: string): T[] {
+  return carros.filter((c) => slugDe(c.marca) === marcaSlug && (!modeloSlug || slugDe(c.modelo) === modeloSlug));
+}
+
+/** Título/descrição/abertura da página de uma marca ou modelo. */
+export function textosDoGrupo(loja: Pick<LojaPublica, "nome" | "endereco">, nome: string, carros: CarroPublico[]) {
+  const cidade = cidadeDaLoja(loja.endereco);
+  const menor = Math.min(...carros.map((c) => c.precoCents));
+  const anos = carros.map((c) => c.anoModelo);
+  const faixaAnos = Math.min(...anos) === Math.max(...anos) ? `${anos[0]}` : `${Math.min(...anos)} a ${Math.max(...anos)}`;
+  const qtd = carros.length === 1 ? "1 unidade" : `${carros.length} unidades`;
+  return {
+    titulo: `${nome} usado${cidade ? ` em ${cidade}` : ""} | ${loja.nome}`.slice(0, 110),
+    h1: `${nome} usado${cidade ? ` em ${cidade}` : ""}`,
+    descricao: `${nome} usado${cidade ? ` em ${cidade}` : ""}: ${qtd} na ${loja.nome}, anos ${faixaAnos}, a partir de ${brl(menor)}. Veja fotos, ficha completa e simule o financiamento.`.slice(0, 200),
+    abertura: `${qtd} de ${nome} à venda${cidade ? ` em ${cidade}` : ""}, a partir de ${brl(menor)}. Todos com fotos e ficha completa; fale com a ${loja.nome} pelo WhatsApp ou simule o financiamento.`,
+  };
+}
+
+/** Lista de carros da página (ItemList): ajuda o Google e as IAs a entender o que a página reúne. */
+export function listaJsonLd(nome: string, carros: CarroPublico[], urlDe: (c: CarroPublico) => string) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: nome,
+    numberOfItems: carros.length,
+    itemListElement: carros.slice(0, 50).map((c, i) => ({ "@type": "ListItem", position: i + 1, url: urlDe(c), name: nomeDoVeiculo(c) })),
   };
 }
