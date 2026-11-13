@@ -3,7 +3,7 @@ import { recursosDoTenant } from "@/lib/plano";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { temCatalogoMeta, type PlanoVeiculos } from "@/lib/veiculos-planos";
-import { COR_PADRAO, corValida, horarioEmLinhas, linkFacebook, linkInstagram } from "@/lib/vitrine-aparencia";
+import { COR_PADRAO, clarear, corValida, horarioEmLinhas, linkFacebook, linkInstagram } from "@/lib/vitrine-aparencia";
 
 /**
  * Vitrine pública da revenda: /loja/[slug] e /loja/[slug]/[veiculoId].
@@ -187,7 +187,7 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     temBanner: !!cfg.bannerKey,
     horario: horarioEmLinhas(cfg.horario),
     cabecalhoClaro: cfg.cabecalhoClaro,
-    corSecundaria: corValida(cfg.corSecundaria) ?? corValida(cfg.corPrimaria) ?? COR_PADRAO,
+    corSecundaria: corValida(cfg.corSecundaria) ?? clarear(corValida(cfg.corPrimaria) ?? COR_PADRAO, 0.62),
     instagram: linkInstagram(cfg.instagram),
     facebook: linkFacebook(cfg.facebook),
     politica: cfg.politicaPrivacidade?.trim() || null,

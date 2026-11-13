@@ -12,6 +12,7 @@ import {
   type OrigemVeiculo,
   type StatusVeiculo,
 } from "@/lib/veiculos-regras";
+import { FotoSemCortes } from "@/components/foto-sem-cortes";
 import { COR_FAIXA, botaoPrimario, botaoSecundario, brl, campo, erroDaResposta, fetcher } from "./comum";
 
 type Linha = {
@@ -184,10 +185,9 @@ export function Estoque({ vendidos }: { vendidos: boolean }) {
           const fipe = diferencaFipe(v.precoCents, v.fipeCents);
           return (
             <Link key={v.id} href={`/veiculos/${v.id}`} className="group flex flex-col overflow-hidden rounded-lg border border-neutral-200 bg-surface hover:border-accent">
-              <div className="relative aspect-[4/3] bg-neutral-100">
+              <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100">
                 {v.capaId ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={`/api/veiculos/fotos/${v.capaId}`} alt="" loading="lazy" className="h-full w-full object-cover" />
+                  <FotoSemCortes src={`/api/veiculos/fotos/${v.capaId}`} alt="" />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-neutral-400">sem foto</div>
                 )}

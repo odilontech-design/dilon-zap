@@ -24,6 +24,11 @@ export function titulo(c: CarroPublico) {
   return nomeDoVeiculo(c);
 }
 
+/** Link do WhatsApp para o navegador (a versão do servidor está em lib/vitrine e puxa o banco). */
+export function whatsappLink(numero: string, texto: string): string {
+  return `https://wa.me/${numero}?text=${encodeURIComponent(texto)}`;
+}
+
 /** Ícone do WhatsApp, inline (página pública sem dependência externa). */
 export function IconeWhatsapp({ className = "h-5 w-5" }: { className?: string }) {
   return (

@@ -30,6 +30,15 @@ export function escurecer(hex: string, fator: number): string {
   return `#${canal(0)}${canal(1)}${canal(2)}`;
 }
 
+/** Clareia #rrggbb misturando com branco: fator 0.6 = 60% de branco (um rosa-claro a partir do vermelho). */
+export function clarear(hex: string, fator: number): string {
+  const canal = (i: number) => {
+    const c = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16);
+    return Math.round(c + (255 - c) * fator).toString(16).padStart(2, "0");
+  };
+  return `#${canal(0)}${canal(1)}${canal(2)}`;
+}
+
 /** Texto branco ou escuro, o que contrastar melhor sobre a cor da loja. */
 export function corDoTexto(fundo: string): "#ffffff" | "#111827" {
   const L = luminancia(fundo);
