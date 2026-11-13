@@ -7,7 +7,7 @@ import { configDaOtica, consultorValido, dadosDoCliente, previsaoDaTela, reserva
 import { criarContaDaOS, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
 import { ErroDeConta } from "@/lib/contas-receber";
 import { baixarParaOS } from "@/lib/otica-estoque";
-import { validadeDaReceita } from "@/lib/otica-regras";
+import { numeroOS, validadeDaReceita } from "@/lib/otica-regras";
 import { criarOSSchema, paraData, telefoneParaWhatsApp } from "@/lib/otica-schemas";
 
 /**
@@ -74,6 +74,13 @@ export async function GET(req: Request) {
   );
 }
 
+/** O número do papel já existe no sistema: a OS não é criada. */
+class NumeroEmUso extends Error {
+  constructor(public numero: number) {
+    super("número em uso");
+  }
+}
+
 export async function POST(req: Request) {
   const user = await requireUser();
   const bloqueio = await exigirRecurso(user, "OTICA");
@@ -82,6 +89,8 @@ export async function POST(req: Request) {
   const parsed = criarOSSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
+  // OS antiga do talão de papel, só para o histórico: não mexe em Caixa, estoque nem WhatsApp.
+  const historica = d.historica === true;
 
   // Cliente: o escolhido na busca ou um novo pelo telefone. O novo é criado
   // fora da transação porque resolver o número no WhatsApp é uma chamada ao
@@ -139,11 +148,27 @@ export async function POST(req: Request) {
       receitaId = receita.id;
     }
 
-    const numero = await reservarNumeroOS(tx, user.tenantId);
+    // O número vem do papel quando a OS foi escaneada; senão, é o próximo da numeração.
+    let numero: number;
+    if (d.numero !== undefined) {
+      numero = d.numero;
+      const ja = await tx.ordemServico.findUnique({ where: { tenantId_numero: { tenantId: user.tenantId, numero } }, select: { id: true } });
+      if (ja) throw new NumeroEmUso(numero);
+      // A numeração automática nunca pode alcançar um número já usado no papel.
+      await tx.oticaConfig.updateMany({ where: { tenantId: user.tenantId, proximoNumeroOS: { lte: numero } }, data: { proximoNumeroOS: numero + 1 } });
+    } else {
+      numero = await reservarNumeroOS(tx, user.tenantId);
+    }
+    // OS antiga: criada no dia do talão e já entregue, longe da coluna "Entregue" do quadro.
+    const dia = d.dataVenda ? new Date(`${d.dataVenda}T12:00:00Z`) : null;
+    const passado = (x: Date | null | undefined) => (x && x.getTime() <= Date.now() ? x : null);
+    const entregue = historica ? (passado(previsao) ?? passado(dia) ?? new Date(Date.now() - 40 * 24 * 60 * 60 * 1000)) : null;
     const criada = await tx.ordemServico.create({
       data: {
         tenantId: user.tenantId,
         numero,
+        historica,
+        ...(historica ? { etapa: "ENTREGUE" as const, entregueEm: entregue, etapaDesde: entregue!, ...(dia ? { createdAt: dia } : {}) } : {}),
         contactId: contactId!,
         receitaId,
         laboratorioId: d.laboratorioId || null,
@@ -156,7 +181,7 @@ export async function POST(req: Request) {
         tratamentos: d.tratamentos ?? [],
         tratamentoCor: d.tratamentoCor || null,
         armacao: d.armacao || null,
-        armacaoEstoqueId: d.armacaoEstoqueId || null,
+        armacaoEstoqueId: historica ? null : d.armacaoEstoqueId || null,
         materialArmacao: d.materialArmacao || null,
         servicos: d.servicos ?? [],
         medidas: d.medidas ?? undefined,
@@ -167,7 +192,13 @@ export async function POST(req: Request) {
       },
       select: { id: true, numero: true },
     });
-    await tx.eventoOS.create({ data: { ordemId: criada.id, para: "ABERTA", porId: user.id } });
+    await tx.eventoOS.create({
+      data: historica
+        ? { ordemId: criada.id, para: "ENTREGUE", porId: user.id, aviso: "registro histórico do talão de papel: cliente não avisado" }
+        : { ordemId: criada.id, para: "ABERTA", porId: user.id },
+    });
+    // OS histórica é só o registro: nada de estoque nem de dinheiro.
+    if (historica) return criada;
 
     // A armação escolhida do estoque é vendida: sai da lista de disponíveis.
     // Falha (peça já vendida) derruba a OS inteira, e o número reservado volta.
@@ -193,6 +224,7 @@ export async function POST(req: Request) {
   });
   } catch (e) {
     if (e instanceof ErroDeConta) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof NumeroEmUso) return NextResponse.json({ error: `Já existe a OS ${numeroOS(e.numero)} no sistema. Confira o número no papel.` }, { status: 409 });
     throw e;
   }
 

@@ -63,7 +63,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   const ordem = await prisma.ordemServico.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
-    select: { id: true, numero: true, contactId: true, receitaId: true, valorCents: true, contaId: true, previsaoEntrega: true, etapa: true, armacaoEstoqueId: true },
+    select: { id: true, numero: true, contactId: true, receitaId: true, valorCents: true, contaId: true, previsaoEntrega: true, etapa: true, armacaoEstoqueId: true, historica: true },
   });
   if (!ordem) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
   if (ordem.etapa === "CANCELADA") return NextResponse.json({ error: "OS cancelada não pode ser editada" }, { status: 409 });
@@ -134,7 +134,8 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   });
 
   // Armação do estoque trocada: a antiga volta, a nova sai — na mesma transação.
-  if (d.armacaoEstoqueId !== undefined && (d.armacaoEstoqueId || null) !== ordem.armacaoEstoqueId) {
+  // OS histórica não mexe em estoque: o texto da armação é só o que estava no papel.
+  if (!ordem.historica && d.armacaoEstoqueId !== undefined && (d.armacaoEstoqueId || null) !== ordem.armacaoEstoqueId) {
     try {
       await prisma.$transaction(async (tx) => {
         if (ordem.armacaoEstoqueId) {
@@ -153,7 +154,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   // Dinheiro: o valor da venda mora na conta a receber. Mudar o valor é
   // corrigir a parcela em aberto; OS que ainda não tinha valor ganha a conta agora.
-  if (d.valorCents !== undefined && d.valorCents !== ordem.valorCents) {
+  // OS histórica não tem conta: o valor e o sinal são só o registro do papel.
+  if (ordem.historica && d.valorCents !== undefined) {
+    await prisma.ordemServico.update({ where: { id: ordem.id }, data: { valorCents: d.valorCents, sinalCents: Math.min(d.sinalCents ?? 0, d.valorCents) } });
+  } else if (d.valorCents !== undefined && d.valorCents !== ordem.valorCents) {
     try {
       if (ordem.contaId) {
         await corrigirValor({ tenantId: user.tenantId, ordemId: ordem.id, valorCents: d.valorCents });
