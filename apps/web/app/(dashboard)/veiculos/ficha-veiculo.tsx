@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
+import { FotoSemCortes } from "@/components/foto-sem-cortes";
 import { AnuncioNosPortais } from "./portais-carro";
 import {
   ROTULO_CUSTO,
@@ -347,9 +348,8 @@ function Fotos({ v, onMudou }: { v: Ficha; onMudou: () => void }) {
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-6">
           {v.fotos.map((f, i) => (
             <div key={f.id} className="group relative aspect-[4/3] overflow-hidden rounded-md bg-neutral-100">
-              <button type="button" onClick={() => setAberta(f.id)} className="h-full w-full">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`/api/veiculos/fotos/${f.id}`} alt={`Foto ${i + 1}`} loading="lazy" className="h-full w-full object-cover" />
+              <button type="button" onClick={() => setAberta(f.id)} className="absolute inset-0 h-full w-full">
+                <FotoSemCortes src={`/api/veiculos/fotos/${f.id}`} alt={`Foto ${i + 1}`} />
               </button>
               {i === 0 && <span className="absolute left-1 top-1 rounded bg-black/60 px-1.5 text-[10px] text-white">capa</span>}
               {v.gerencia && (

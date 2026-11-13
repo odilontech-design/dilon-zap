@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { CarroPublico } from "@/lib/vitrine";
+import { FotoSemCortes } from "@/components/foto-sem-cortes";
 import { brl, fotoSrcSet, fotoUrl, IconeWhatsapp, whatsappLink } from "./comum";
 import { registrarContato } from "./rastreio";
 
@@ -17,17 +18,15 @@ export function CartaoDeCarro({ slug, c, whatsapp, baseUrl, novidade = false }: 
   const chips = [`${c.anoFabricacao}/${c.anoModelo}`, c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel].filter(Boolean) as string[];
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-surface shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-xl">
-      <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100">
+      <div className="relative aspect-square overflow-hidden bg-neutral-100">
         {c.fotos[0] ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <FotoSemCortes
             src={fotoUrl(slug, c.fotos[0].id, 800)}
+            fundo={fotoUrl(slug, c.fotos[0].id, 240)}
             srcSet={fotoSrcSet(slug, c.fotos[0].id, [480, 800, 1200])}
             sizes="(min-width:1024px) 360px, (min-width:640px) 50vw, 100vw"
             alt={`${nome} ${c.anoModelo}`}
-            loading="lazy"
-            decoding="async"
-            className="absolute inset-0 h-full w-full object-cover text-transparent transition duration-500 group-hover:scale-105"
+            className="transition duration-500 group-hover:scale-[1.03]"
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-neutral-400">Fotos em breve</div>

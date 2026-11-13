@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { FotoSemCortes } from "@/components/foto-sem-cortes";
 import { fotoSrcSet, fotoUrl } from "../comum";
 
 /**
@@ -27,15 +28,14 @@ export function Galeria({ slug, fotos, alt }: { slug: string; fotos: string[]; a
           if (Math.abs(dx) > 40) ir(dx < 0 ? 1 : -1);
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
+        <FotoSemCortes
           src={fotoUrl(slug, fotos[i], 1200)}
+          fundo={fotoUrl(slug, fotos[i], 240)}
           srcSet={fotoSrcSet(slug, fotos[i], [800, 1200])}
           sizes="(min-width:1024px) 700px, 100vw"
-          fetchPriority={i === 0 ? "high" : undefined}
-          decoding="async"
+          prioridade={i === 0}
+          loading="eager"
           alt={`${alt} · foto ${i + 1} de ${fotos.length}`}
-          className="absolute inset-0 h-full w-full object-cover text-transparent"
         />
         {fotos.length > 1 && (
           <>
@@ -55,8 +55,7 @@ export function Galeria({ slug, fotos, alt }: { slug: string; fotos: string[]; a
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
           {fotos.map((f, j) => (
             <button key={f} onClick={() => setI(j)} aria-label={`Ver foto ${j + 1}`} aria-current={j === i} className={`relative aspect-[4/3] w-20 shrink-0 overflow-hidden rounded-lg border-2 transition md:w-24 ${j === i ? "border-[var(--loja)]" : "border-transparent opacity-70 hover:opacity-100"}`}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={fotoUrl(slug, f, 240)} alt="" loading="lazy" decoding="async" className="absolute inset-0 h-full w-full object-cover text-transparent" />
+              <FotoSemCortes src={fotoUrl(slug, f, 240)} alt="" />
             </button>
           ))}
         </div>
