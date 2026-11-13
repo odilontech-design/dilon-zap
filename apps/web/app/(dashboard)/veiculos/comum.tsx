@@ -162,11 +162,12 @@ export function clienteParaRota(c: ClienteEscolhido) {
   return "contactId" in c ? { contactId: c.contactId } : { novoCliente: c.novoCliente };
 }
 
-export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos" | "novo" | "vitrine" | "portais" | "importar" | "completar" | "vendedor-ia"; gerencia: boolean }) {
+export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos" | "novo" | "vitrine" | "portais" | "importar" | "completar" | "instagram" | "vendedor-ia"; gerencia: boolean }) {
   const temIa = useRecurso("VENDEDOR_IA");
   const abas = [
     { id: "estoque", href: "/veiculos", rotulo: "Estoque" },
     { id: "vendidos", href: "/veiculos?status=VENDIDO", rotulo: "Vendidos" },
+    { id: "instagram", href: "/veiculos/instagram", rotulo: "Instagram" },
     ...(gerencia
       ? [
           { id: "importar", href: "/veiculos/importar", rotulo: "Importar" },

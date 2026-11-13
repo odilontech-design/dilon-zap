@@ -15,7 +15,7 @@ import { nomeDoVeiculo } from "@/lib/veiculos-regras";
  * A mesma entrega duas vezes não duplica: a chave do lead é única por loja.
  */
 
-export const NOME_DO_PORTAL: Record<Portal, string> = { OLX: "OLX", WEBMOTORS: "Webmotors", MOBIAUTO: "MobiAuto", NAPISTA: "Na Pista", MERCADO_LIVRE: "Mercado Livre" };
+export const NOME_DO_PORTAL: Record<Portal, string> = { OLX: "OLX", WEBMOTORS: "Webmotors", MOBIAUTO: "MobiAuto", NAPISTA: "Na Pista", INSTAGRAM: "Instagram", MERCADO_LIVRE: "Mercado Livre" };
 
 type CarroDoLead = { id: string; marca: string; modelo: string; versao: string | null; anoFabricacao: number; anoModelo: number; precoCents: number };
 
