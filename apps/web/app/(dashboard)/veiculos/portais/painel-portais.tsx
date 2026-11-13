@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { CentralDeLeads } from "./central-leads";
+import { PainelMobiauto } from "./painel-mobiauto";
 import { PainelWebmotors } from "./painel-webmotors";
 import { botaoPrimario, botaoSecundario, campo, erroDaResposta, fetcher, rotulo, secao } from "../comum";
 
@@ -278,10 +279,12 @@ export function PainelPortais() {
 
       <PainelWebmotors />
 
+      <PainelMobiauto />
+
       <section className={secao}>
         <h2 className="text-sm font-semibold">Outros portais</h2>
         <p className="text-sm text-neutral-600">
-          Mercado Livre usa a mesma fila de anúncios e entra em seguida. Enquanto isso, o feed do estoque (em Vitrine) já serve para
+          Mercado Livre e Na Pista usam a mesma fila de anúncios e entram em seguida. Enquanto isso, o feed do estoque (em Vitrine) já serve para
           portais que leem XML.
         </p>
       </section>
