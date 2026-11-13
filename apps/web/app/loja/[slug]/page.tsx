@@ -18,9 +18,10 @@ export async function generateMetadata({ params }: { params: { slug: string } })
   if (!loja) return { title: "Loja não encontrada" };
   const descricao = loja.sobre?.slice(0, 160) || `Veículos à venda na ${loja.nome}.`;
   return {
-    title: `${loja.nome} · Veículos à venda`,
+    title: { absolute: `${loja.nome} · Carros seminovos e usados à venda` },
     description: descricao,
-    openGraph: { title: `${loja.nome} · Veículos à venda`, description: descricao, url: linkDaLoja(loja.slug, loja.dominio), type: "website" },
+    robots: { index: true, follow: true, "max-image-preview": "large" },
+    openGraph: { siteName: loja.nome, locale: "pt_BR", title: `${loja.nome} · Veículos à venda`, description: descricao, url: linkDaLoja(loja.slug, loja.dominio), type: "website" },
     alternates: { canonical: linkDaLoja(loja.slug, loja.dominio) },
   };
 }

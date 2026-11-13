@@ -14,6 +14,7 @@ import { BotaoWhatsapp } from "../rastreio";
 import { carroParaJsonLd, JsonLd } from "../dados-estruturados";
 import { CascaDaLoja } from "../casca";
 import { caminhoDaLoja } from "@/lib/vitrine-aparencia";
+import { breadcrumbJsonLd, descricaoDoCarro, tituloDoCarro } from "@/lib/vitrine-seo";
 import { FormularioInteresse } from "./formulario-interesse";
 import { Galeria } from "./galeria";
 
@@ -27,16 +28,20 @@ export async function generateMetadata({
   const loja = await lojaPublica(params.slug);
   const carro = loja ? await carroDaVitrine(loja, params.id) : null;
   if (!loja || !carro) return { title: "Veículo não encontrado" };
-  const nome = `${titulo(carro)} · ${brl(carro.precoCents)}`;
-  const descricao = `${resumo(carro)} · ${loja.nome}`;
+  const nome = tituloDoCarro(carro, loja);
+  const descricao = descricaoDoCarro(carro, loja);
   // A capa no cartão do link (WhatsApp, Instagram, Facebook): é o que faz o link ser clicado.
   const capa = carro.fotos[0]
     ? `${baseDaLoja(loja.dominio)}${fotoUrl(loja.slug, carro.fotos[0].id)}`
     : undefined;
   return {
-    title: nome,
+    title: { absolute: nome },
     description: descricao,
+    robots: { index: true, follow: true, "max-image-preview": "large" },
+    twitter: { card: "summary_large_image", title: nome, description: descricao, ...(capa ? { images: [capa] } : {}) },
     openGraph: {
+      siteName: loja.nome,
+      locale: "pt_BR",
       title: nome,
       description: descricao,
       url: linkDoCarro(loja.slug, carro.id, loja.dominio),
@@ -176,6 +181,7 @@ export default async function CarroPage({
             ...carroParaJsonLd(carro, link, fotosAbsolutas, loja.nome),
           }}
         />
+        <JsonLd dados={breadcrumbJsonLd(loja, carro, link)} />
         {whatsapp && (
           <div className="fixed inset-x-0 bottom-0 border-t border-neutral-200 bg-surface p-3 md:hidden">
             <BotaoWhatsapp

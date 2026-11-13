@@ -69,6 +69,7 @@ export async function middleware(req: NextRequest) {
   if (PAGINAS_DA_LOJA.has(pagina)) return reescrever(`/loja/${slug}/${pagina}`);
   if (p === "/sitemap.xml") return reescrever(`/api/loja/${slug}/sitemap`);
   if (p === "/robots.txt") return reescrever(`/api/loja/${slug}/robots`);
+  if (p === "/llms.txt") return reescrever(`/api/loja/${slug}/llms`);
   if (p === `/loja/${slug}` || p.startsWith(`/loja/${slug}/`) || p.startsWith(`/api/loja/${slug}/`) || p.startsWith("/_next/") || /\.(png|ico|svg|jpg|webmanifest)$/.test(p)) {
     return NextResponse.next();
   }

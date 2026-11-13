@@ -268,3 +268,12 @@ Na Pista, MobiAuto e Webmotors avisam os contatos de compradores **por e-mail**.
 - **Relógio**: cada lead mostra "aguardando há X" até alguém marcar como respondido (`LeadPortal.respondidoEm`).
 - **Segurança**: sem login, a defesa é o token da URL (trocá-lo invalida o encaminhamento). Mesmo e-mail (Message-ID) não duplica; falha ao registrar devolve 5xx para o provedor tentar de novo.
 - **Falta**: provedor de e-mail recebido; exemplos reais de e-mail de cada portal; leads da MobiAuto via webhook `lead-callback` e da Webmotors via API de leads (quando houver acesso).
+
+## SEO e busca por IA da vitrine (v1.60.0)
+
+- **Títulos e descrições** por carro: "Honda Civic EXL 2017/2018 por R$ 90.000 | Loja" e descrição com ano, km (só se informada), câmbio, combustível, cor; `robots` com `max-image-preview: large`, Twitter card, `siteName`/`locale`.
+- **Dados estruturados**: `Car` com `@id`, `sku`, `priceValidUntil`; `BreadcrumbList` na página do carro; `AutoDealer` na vitrine (já existia).
+- **robots.txt** (`lib/vitrine-seo.ts`): convida os rastreadores de IA (GPTBot, OAI-SearchBot, ChatGPT-User, PerplexityBot, ClaudeBot, Claude-SearchBot, Google-Extended, Applebot-Extended, Bingbot) e **libera as fotos** (`/api/loja/*/fotos/`), que antes ficavam bloqueadas por `Disallow: /api/` e fora do Google Imagens.
+- **sitemap.xml** com `lastmod` e fotos de cada carro.
+- **llms.txt** (`/llms.txt` no domínio próprio; `/api/loja/<slug>/llms` no do Zap): contato, páginas e todo o estoque em texto com preço e link.
+- **Falta**: páginas por marca/modelo/cidade; redesenho visual; enviar o sitemap ao Google Search Console e conferir a indexação (feito pela loja/Dilon Tech após o domínio no ar).
