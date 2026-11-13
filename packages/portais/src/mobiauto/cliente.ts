@@ -149,6 +149,18 @@ export class SessaoMobiauto {
     return ((await this.req<any[]>("GET", this.d("/locality"))) ?? []).map((l) => Number(l.id)).filter(Number.isFinite);
   }
 
+  /** O que a MobiAuto sabe de um carro pela placa (marca, modelo, versão, ano, combustível, chassi, código FIPE). */
+  async veiculoPorPlaca(placa: string): Promise<{ marca: string; modelo: string; versao: string; anoModelo: number | null; combustivel: string; chassi: string; fipe: string } | null> {
+    try {
+      const r = await this.req<any>("GET", `/api/vehicle/v1.0/plate/${encodeURIComponent(placa)}`);
+      if (!r || (!r.make && !r.model)) return null;
+      return { marca: texto(r.make), modelo: texto(r.model), versao: texto(r.trim), anoModelo: r.modelYear ? Number(r.modelYear) : null, combustivel: texto(r.fuel), chassi: texto(r.chassi), fipe: texto(r.fipeId) };
+    } catch (e) {
+      if (e instanceof ErroMobiauto && e.http === 404) return null;
+      throw e;
+    }
+  }
+
   // ---- estoque ----
   /** Todos os deals da loja (paginado), para adotar o que já existe pela placa. */
   async estoque(): Promise<DealExistente[]> {

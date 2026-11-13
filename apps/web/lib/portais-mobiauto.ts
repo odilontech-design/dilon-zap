@@ -145,3 +145,20 @@ export async function painelMobiauto(tenantId: string) {
   ]);
   return { configurada: integracaoMobiautoConfigurada(), conta, contagem: Object.fromEntries(porStatus.map((s) => [s.status, s._count])) as Record<string, number>, problemas, semKm };
 }
+
+/** Dados do carro pela placa na MobiAuto; `undefined` se a loja não tem a conta conectada (não é um provedor disponível). */
+export async function consultarPlacaMobiauto(tenantId: string, placa: string): Promise<import("@/lib/placa").DadosDaPlaca | null | undefined> {
+  const s = await sessaoDaLoja(tenantId);
+  if (!s) return undefined;
+  const v = await s.sessao.veiculoPorPlaca(placa);
+  if (!v) return null;
+  return {
+    marca: v.marca || undefined,
+    modelo: v.modelo || undefined,
+    versao: v.versao || undefined,
+    anoModelo: v.anoModelo ?? undefined,
+    combustivel: v.combustivel || undefined,
+    chassi: v.chassi || undefined,
+    codigoFipe: v.fipe || undefined,
+  };
+}
