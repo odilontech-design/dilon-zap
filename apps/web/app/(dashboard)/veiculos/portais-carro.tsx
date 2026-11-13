@@ -17,6 +17,8 @@ type Dados = {
   } | null;
   contaWebmotors: "CONECTADA" | "ERRO" | "DESCONECTADA" | null;
   webmotors: Anuncio | null;
+  contaMobiauto: "CONECTADA" | "ERRO" | "DESCONECTADA" | null;
+  mobiauto: Anuncio | null;
 };
 
 type Anuncio = { ativo: boolean; status: string; rotulo: string; url: string | null; erro: string | null };
@@ -41,8 +43,9 @@ export function AnuncioNosPortais({ id, gerencia }: { id: string; gerencia: bool
   const conectada = data.contaOlx === "CONECTADA";
   const pub = data.olx;
   const wmConectada = data.contaWebmotors === "CONECTADA";
+  const mbConectada = data.contaMobiauto === "CONECTADA";
   // Sem conta e sem histórico: a seção só aparece para a gestão, com o caminho para conectar.
-  if (!conectada && !pub && !wmConectada && !data.webmotors && !gerencia) return null;
+  if (!conectada && !pub && !wmConectada && !data.webmotors && !mbConectada && !data.mobiauto && !gerencia) return null;
 
   async function salvar(corpo: object) {
     setAviso(null);
@@ -93,6 +96,7 @@ export function AnuncioNosPortais({ id, gerencia }: { id: string; gerencia: bool
         </div>
       )}
       <LinhaWebmotors dados={data.webmotors} conectada={wmConectada} gerencia={gerencia} onLigar={(ativo) => salvar({ portal: "WEBMOTORS", ativo })} />
+      <LinhaWebmotors nome="MobiAuto" dados={data.mobiauto} conectada={mbConectada} gerencia={gerencia} onLigar={(ativo) => salvar({ portal: "MOBIAUTO", ativo })} />
       {escolhendo && <EscolherCatalogo veiculoId={id} onEscolheu={(catalogo) => salvar({ ativo: true, catalogo })} />}
       {aviso && <p className={`text-sm ${aviso.erro ? "text-red-600" : "text-accent"}`}>{aviso.texto}</p>}
       <p className="text-xs text-neutral-500">
@@ -103,12 +107,12 @@ export function AnuncioNosPortais({ id, gerencia }: { id: string; gerencia: bool
 }
 
 /** O anúncio na Webmotors: liga e desliga; o modelo é achado sozinho pelo nome (o que faltar aparece no aviso). Sem km informada, não publica. */
-function LinhaWebmotors({ dados, conectada, gerencia, onLigar }: { dados: Anuncio | null; conectada: boolean; gerencia: boolean; onLigar: (ativo: boolean) => void }) {
+function LinhaWebmotors({ nome = "Webmotors", dados, conectada, gerencia, onLigar }: { nome?: string; dados: Anuncio | null; conectada: boolean; gerencia: boolean; onLigar: (ativo: boolean) => void }) {
   if (!conectada && !dados) return null;
   return (
-    <div className="flex flex-col gap-2" data-testid="linha-webmotors">
+    <div className="flex flex-col gap-2" data-testid={`linha-${nome.toLowerCase()}`}>
       <div className="flex flex-wrap items-center gap-2 text-sm">
-        <span className="font-medium">Webmotors</span>
+        <span className="font-medium">{nome}</span>
         {dados ? (
           <span className={`rounded-full px-2 py-0.5 text-xs ${dados.ativo ? COR[dados.status] ?? "" : "bg-neutral-100 text-neutral-500"}`}>{dados.rotulo}</span>
         ) : (
@@ -125,11 +129,11 @@ function LinhaWebmotors({ dados, conectada, gerencia, onLigar }: { dados: Anunci
         <div>
           {!dados?.ativo ? (
             <button className={botaoPrimario} onClick={() => onLigar(true)}>
-              Anunciar na Webmotors
+              Anunciar na {nome}
             </button>
           ) : (
             <button className={botaoSecundario} onClick={() => onLigar(false)}>
-              Tirar da Webmotors
+              Tirar da {nome}
             </button>
           )}
         </div>

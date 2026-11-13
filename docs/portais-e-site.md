@@ -326,3 +326,14 @@ Refeita a navegação pública inteira, pensando em quem chega pelo celular vind
 3. Em horário calmo: "Anunciar todos" no Zap (adota os anúncios existentes e passa a ser a fonte das fotos e dos preços).
 4. No mesmo dia, **remover a credencial da AutoCerto** no Cockpit (Estoque terceiro), para os dois sistemas não disputarem o anúncio.
 5. Repetir com MobiAuto e Na Pista quando os conectores existirem. Enquanto isso, a AutoCerto continua publicando nesses dois: só desligue a AutoCerto quando os três estiverem cobertos.
+
+## MobiAuto (v1.70.0)
+
+Conector construído sobre o **Swagger público** (`open-api.mobiauto.com.br/v2/api-docs?group=open-api-1.0`, 84 caminhos) e testado com uma MobiAuto falsa + Postgres. **Ainda não rodou contra a MobiAuto de verdade**: falta o app OAuth (client id/secret) que a MobiAuto libera para a Dilon Tech.
+
+- **Acesso**: OAuth2 por código de autorização (Keycloak, `auth.mobiauto.com.br`). A loja entra com o usuário do Mobigestor e autoriza o Zap (a senha não passa pelo Zap); guardamos a loja (`dealerId`) e os tokens cifrados (`PORTAIS_CHAVE`) e renovamos o token sozinhos. Variáveis: `MOBIAUTO_CLIENT_ID`, `MOBIAUTO_CLIENT_SECRET`; URL de retorno a cadastrar na MobiAuto: `<NEXTAUTH_URL>/api/portais/mobiauto/retorno`. (Opcionais para teste: `MOBIAUTO_API_URL`, `MOBIAUTO_AUTH_URL`.) A loja Sales é o dealer **26274**.
+- **Painel** (Veículos > Portais > MobiAuto): conectar, escolher a loja (se o usuário gerencia várias) e o plano, "Anunciar todos", "Conferir com a MobiAuto" (só leitura, casa pela placa) e a linha por carro na ficha.
+- **Envio** (worker dos portais, `cicloMobiauto`, depois da OLX e da Webmotors, em tentativa separada): cria ou atualiza o *deal*, troca as fotos por endereço, publica no plano (`PUT …/publish?planId=`). **Adota** o deal que já existe pela placa (sem duplicar e sem republicar o que já está publicado). Reservado: despublica e mantém o deal; vendido/devolvido: despublica e apaga o deal. **Sem km informada não publica.**
+- **Catálogo** por nome (marca → modelo → versão/*trim* filtrada pelo ano, cor, câmbio, combustível, opcionais), com pendências legíveis, como nas outras integrações.
+- **Falta / a confirmar com a MobiAuto**: o fluxo de autorização liberado para a Dilon Tech (código de autorização ou outro), campos obrigatórios do deal em produção, e os **leads** (webhook `lead-callback`: o formato do corpo não está no Swagger; usar `test-callback` quando houver acesso).
+- **Troca de sistema** (Sales): além da AutoCerto, desativar a integração **WebMotors** e a **Meu Carro Novo** no Mobigestor (aba Integrações > Estoque), que também empurram estoque.
