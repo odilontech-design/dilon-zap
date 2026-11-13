@@ -7,8 +7,13 @@ export function brl(cents: number) {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
 }
 
-export function fotoUrl(slug: string, fotoId: string) {
-  return `/api/loja/${slug}/fotos/${fotoId}`;
+export function fotoUrl(slug: string, fotoId: string, largura?: 240 | 480 | 800 | 1200) {
+  return `/api/loja/${slug}/fotos/${fotoId}${largura ? `?w=${largura}` : ""}`;
+}
+
+/** srcset das versões leves: o navegador escolhe a que cabe na tela. */
+export function fotoSrcSet(slug: string, fotoId: string, larguras: (240 | 480 | 800 | 1200)[]) {
+  return larguras.map((l) => `${fotoUrl(slug, fotoId, l)} ${l}w`).join(", ");
 }
 
 export function resumo(c: Pick<CarroPublico, "km" | "kmInformado" | "cambio" | "combustivel">) {
