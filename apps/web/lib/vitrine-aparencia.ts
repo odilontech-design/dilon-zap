@@ -24,6 +24,12 @@ function luminancia(hex: string): number {
   return 0.2126 * canal(0) + 0.7152 * canal(1) + 0.0722 * canal(2);
 }
 
+/** Escurece #rrggbb misturando com preto: fator 0.55 = 55% da cor original (um vinho a partir do vermelho, um verde-mata a partir do verde). */
+export function escurecer(hex: string, fator: number): string {
+  const canal = (i: number) => Math.round(parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) * fator).toString(16).padStart(2, "0");
+  return `#${canal(0)}${canal(1)}${canal(2)}`;
+}
+
 /** Texto branco ou escuro, o que contrastar melhor sobre a cor da loja. */
 export function corDoTexto(fundo: string): "#ffffff" | "#111827" {
   const L = luminancia(fundo);

@@ -3779,6 +3779,11 @@ model VeiculosConfig {
   // (a loja encaminha para ele) e se os leads novos são repartidos entre os vendedores.
   leadEmailToken  String? @unique
   distribuirLeads Boolean @default(false)
+
+  // Vitrine: cabeçalho e rodapé claros (o padrão é escuro, que valoriza logos prateadas/claras).
+  cabecalhoClaro Boolean @default(false)
+  // Segunda cor da marca (destaques: botões de chamada, selos, menu ativo). Nulo = usa só a cor da loja.
+  corSecundaria String?
   tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Plano contratado da revenda, definido no Super Admin. Nulo = sem plano

@@ -144,6 +144,10 @@ export type LojaPublica = {
   temLogo: boolean;
   temBanner: boolean;
   horario: string[];
+  /** Cabeçalho e rodapé claros (o padrão é escuro). */
+  cabecalhoClaro: boolean;
+  /** Segunda cor da marca; sem ela, os destaques usam a cor da loja. */
+  corSecundaria: string;
   instagram: string | null;
   facebook: string | null;
   /** Texto próprio da política de privacidade; nulo = o modelo padrão. */
@@ -182,6 +186,8 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     temLogo: !!cfg.logoKey,
     temBanner: !!cfg.bannerKey,
     horario: horarioEmLinhas(cfg.horario),
+    cabecalhoClaro: cfg.cabecalhoClaro,
+    corSecundaria: corValida(cfg.corSecundaria) ?? corValida(cfg.corPrimaria) ?? COR_PADRAO,
     instagram: linkInstagram(cfg.instagram),
     facebook: linkFacebook(cfg.facebook),
     politica: cfg.politicaPrivacidade?.trim() || null,

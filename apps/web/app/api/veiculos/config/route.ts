@@ -80,6 +80,8 @@ export async function PUT(req: Request) {
     sobre: d.sobre || null,
     mostrarReservados: d.mostrarReservados,
     corPrimaria: corValida(d.corPrimaria),
+    ...(d.cabecalhoClaro !== undefined ? { cabecalhoClaro: d.cabecalhoClaro } : {}),
+    ...(d.corSecundaria !== undefined ? { corSecundaria: corValida(d.corSecundaria) } : {}),
     horario: d.horario || null,
     // Guarda o que a loja digitou (o link é remontado na vitrine, nunca repassado como veio).
     instagram: d.instagram || null,
