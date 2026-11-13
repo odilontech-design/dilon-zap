@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { fotoUrl } from "../comum";
+import { fotoSrcSet, fotoUrl } from "../comum";
 
 /** Foto grande com as miniaturas embaixo. Setas do teclado e toque nas laterais trocam a foto. */
 export function Galeria({ slug, fotos, alt }: { slug: string; fotos: string[]; alt: string }) {
@@ -14,7 +14,7 @@ export function Galeria({ slug, fotos, alt }: { slug: string; fotos: string[]; a
     <div className="flex flex-col gap-2" onKeyDown={(e) => (e.key === "ArrowRight" ? ir(1) : e.key === "ArrowLeft" ? ir(-1) : null)} tabIndex={0}>
       <div className="relative aspect-[4/3] overflow-hidden rounded-xl bg-neutral-100">
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={fotoUrl(slug, fotos[i])} alt={`${alt} · foto ${i + 1} de ${fotos.length}`} className="h-full w-full object-cover text-transparent" />
+        <img src={fotoUrl(slug, fotos[i], 1200)} srcSet={fotoSrcSet(slug, fotos[i], [800, 1200])} sizes="(min-width:768px) 60vw, 100vw" width={1200} height={900} fetchPriority={i === 0 ? "high" : undefined} decoding="async" alt={`${alt} · foto ${i + 1} de ${fotos.length}`} className="h-full w-full object-cover text-transparent" />
         {fotos.length > 1 && (
           <>
             <button aria-label="Foto anterior" onClick={() => ir(-1)} className="absolute inset-y-0 left-0 w-1/4 text-3xl text-white/0 hover:text-white/90">
@@ -34,7 +34,7 @@ export function Galeria({ slug, fotos, alt }: { slug: string; fotos: string[]; a
           {fotos.map((f, j) => (
             <button key={f} onClick={() => setI(j)} className={`aspect-[4/3] w-20 shrink-0 overflow-hidden rounded-md border-2 ${j === i ? "border-accent" : "border-transparent"}`}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={fotoUrl(slug, f)} alt="" loading="lazy" className="h-full w-full object-cover text-transparent" />
+              <img src={fotoUrl(slug, f, 240)} width={160} height={120} alt="" loading="lazy" decoding="async" className="h-full w-full object-cover text-transparent" />
             </button>
           ))}
         </div>

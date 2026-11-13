@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { CarroPublico } from "@/lib/vitrine";
-import { brl, fotoUrl } from "./comum";
+import { brl, fotoSrcSet, fotoUrl } from "./comum";
 
 type Ordem = "recentes" | "menor" | "maior" | "km";
 
@@ -86,7 +86,7 @@ export function ListaDeCarros({ slug, carros }: { slug: string; carros: CarroPub
             <div className="relative aspect-[4/3] overflow-hidden bg-neutral-100">
               {c.fotos[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={fotoUrl(slug, c.fotos[0].id)} alt={`${c.marca} ${c.modelo} ${c.versao ?? ""} ${c.anoModelo}`.replace(/\s+/g, " ").trim()} loading="lazy" className="h-full w-full object-cover text-transparent transition duration-500 group-hover:scale-105" />
+                <img src={fotoUrl(slug, c.fotos[0].id, 800)} srcSet={fotoSrcSet(slug, c.fotos[0].id, [480, 800, 1200])} sizes="(min-width:1024px) 360px, (min-width:640px) 50vw, 100vw" width={800} height={600} decoding="async" alt={`${c.marca} ${c.modelo} ${c.versao ?? ""} ${c.anoModelo}`.replace(/\s+/g, " ").trim()} loading="lazy" className="h-full w-full object-cover text-transparent transition duration-500 group-hover:scale-105" />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-neutral-400">Fotos em breve</div>
               )}

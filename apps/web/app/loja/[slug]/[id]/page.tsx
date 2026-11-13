@@ -32,7 +32,7 @@ export async function generateMetadata({
   const descricao = descricaoDoCarro(carro, loja);
   // A capa no cartão do link (WhatsApp, Instagram, Facebook): é o que faz o link ser clicado.
   const capa = carro.fotos[0]
-    ? `${baseDaLoja(loja.dominio)}${fotoUrl(loja.slug, carro.fotos[0].id)}`
+    ? `${baseDaLoja(loja.dominio)}${fotoUrl(loja.slug, carro.fotos[0].id, 1200)}`
     : undefined;
   return {
     title: { absolute: nome },
