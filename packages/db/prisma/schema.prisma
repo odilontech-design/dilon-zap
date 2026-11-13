@@ -3425,6 +3425,12 @@ model OrdemServico {
   canceladaEm        DateTime?
   motivoCancelamento String?
 
+  // OS antiga do talão de papel, digitada depois só para guardar o histórico:
+  // não mexe em Caixa, estoque nem WhatsApp. Ver docs/otica.md (escanear OS).
+  historica Boolean @default(false)
+  // A foto do talão (R2), quando a OS foi escaneada.
+  fotoKey   String?
+
   createdAt DateTime   @default(now())
   updatedAt DateTime   @updatedAt
   eventos   EventoOS[]

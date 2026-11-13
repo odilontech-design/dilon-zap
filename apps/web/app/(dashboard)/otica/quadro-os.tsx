@@ -107,6 +107,9 @@ export function QuadroOS() {
           />
           <button className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:border-accent">Buscar</button>
         </form>
+        <Link href="/otica/os/escanear" className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:border-accent">
+          Escanear OS do papel
+        </Link>
         <Link href="/otica/os/nova" className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
           Nova OS
         </Link>

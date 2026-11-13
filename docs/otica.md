@@ -119,11 +119,73 @@ CREATE INDEX / CREATE UNIQUE INDEX (tabelas novas) e OrdemServico_armacaoEstoque
 ALTER TABLE ... ADD CONSTRAINT (chaves estrangeiras das tabelas novas e de OrdemServico_armacaoEstoqueId_fkey)
 ```
 
+## Escanear OS do papel (v1.68.0)
+
+Botão **Escanear OS do papel** no quadro (`/otica/os/escanear`). Serve para passar
+para o sistema as OS do talão: as antigas, para guardar o histórico, e as novas
+enquanto a loja ainda preenche à mão.
+
+1. Escolher o tipo: **OS em andamento** (comporta-se como OS nova) ou **OS antiga**
+   (só registro).
+2. **Tirar foto** (câmera do celular) ou escolher da galeria. A foto é reduzida no
+   aparelho antes de subir.
+3. **Ler a OS**: a IA lê os campos escritos (cliente, receita, lentes, armação,
+   medidas, laboratório, previsão, valor e sinal) e a tela abre o formulário
+   da OS já preenchido, com o resumo do que não ficou claro.
+4. A atendente **confere contra o papel** e salva. A leitura é só sugestão:
+   grau fora do passo de 0,25, data impossível ou valor ilegível voltam como campo
+   vazio com aviso, nunca como valor chutado.
+5. Ao salvar, a **foto do talão fica guardada na OS** (R2). Na tela da OS há
+   "Ver foto do talão" e "Trocar a foto".
+
+**Número da OS.** Vem do papel (campo "Número da OS no papel", editável) e não
+depende do contador. Se o número já existe, a OS não é criada ("Já existe a OS
+0498"). Ao salvar com número do papel, a numeração automática nunca fica abaixo
+dele.
+
+**OS antiga (histórica).** Guarda a OS, a receita e a foto, sem Caixa, sem estoque
+e sem WhatsApp: nenhuma conta a receber, nenhuma baixa de armação, nenhum aviso. Nasce
+como Entregue, longe da coluna Entregue do quadro, não muda de etapa e o valor e o
+sinal ficam só como registro. A tela da OS mostra "Registro histórico do talão de
+papel".
+
+**OS em andamento escaneada** segue todas as regras da OS nova: conta a receber, sinal
+no Caixa (com a forma de pagamento), baixa da armação do estoque e avisos ao cliente.
+
+**Configuração do servidor.** A leitura usa a API do Gemini, que tem camada gratuita.
+- `GEMINI_API_KEY` no `.env` da VPS (o container `web` lê o `.env`). Gere a chave em
+  aistudio.google.com. Sem a chave, a tela avisa que a leitura não está ligada e a OS
+  segue sendo preenchida à mão.
+- `OTICA_LEITURA_MODELO` (opcional): o modelo. Padrão `gemini-2.5-flash`. Se o Google
+  aposentar o modelo, troque aqui sem nova versão.
+- Limites da camada gratuita: poucas dezenas de pedidos por minuto e um teto diário. A
+  rota espera 2,5 s entre uma foto e outra por empresa.
+- **Privacidade (LGPD).** A foto da OS, com nome, CPF e receita do cliente, vai para a
+  API do Google só na hora da leitura. Na camada gratuita o Google pode usar esse conteúdo
+  para melhorar os produtos dele. Se a ótica não aceitar isso, use a camada paga (que não
+  usa os dados) ou preencha à mão.
+- O armazenamento de arquivos (R2) tem de estar configurado, como na foto do produto.
+
+**Banco:** duas colunas novas em `OrdemServico`, ambas aditivas (`historica Boolean
+DEFAULT false NOT NULL` e `fotoKey TEXT`). O ensaio somente leitura do `db push` deve
+mostrar só isto:
+
+```sql
+ALTER TABLE "OrdemServico" ADD COLUMN "fotoKey" TEXT,
+ADD COLUMN "historica" BOOLEAN NOT NULL DEFAULT false;
+```
+
+**Limpar OS de teste.** `docs/otica-limpar-os-de-teste.sql` remove as OS de teste e a
+venda delas (conta, parcelas, pagamentos, movimentos de estoque) para a numeração voltar
+ao número do talão. Roda com ROLLBACK por padrão.
+
+Teste das regras de leitura: `npx tsx apps/web/lib/otica-leitura.test-manual.ts`.
+
 ## Ainda não faz (próximas fases)
 
 - A OS não cria negociação no CRM nem Pedido (a OS já faz o papel de pedido).
 - Lembrete de retirada, ajuste em 30 dias, pesquisa de satisfação e receita
   vencendo.
-- Agenda de exames, importação das planilhas e emissão de nota fiscal.
+- Agenda de exames e emissão de nota fiscal.
 
 Teste das regras: `npx tsx apps/web/lib/otica-regras.test-manual.ts`.

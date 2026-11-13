@@ -28,7 +28,7 @@ export { configIaSchema, CONFIG_PADRAO } from "./ia/config";
 export type { ConfigIa } from "./ia/config";
 export { executarTarefaIa, extrairJson } from "./ia/executar";
 export type { PedidoDeTarefaIa, ResultadoDeTarefaIa, MotivoDaRecusa } from "./ia/executar";
-export { provedorAnthropic, provedorGemini, provedoresPadrao, chaveAnthropicDoServidor } from "./ia/provedores";
+export { provedorAnthropic, provedorGemini, provedoresPadrao, chaveAnthropicDoServidor, chaveGeminiDoServidor } from "./ia/provedores";
 export type { Provedor, Provedores } from "./ia/provedores";
 
 export { acompanhamentoSchema, empresaEditavelSchema, novaAbordagemSchema, edicaoDeAbordagemSchema, contatoSchema, resultadoSchema, modeloNeutro, NOME_DO_PRODUTO, TAREFA_DE_ABORDAGEM, ETAPAS, ETAPAS_DE_RESULTADO } from "./comercial";
