@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
+import { CentralDeLeads } from "./central-leads";
 import { PainelWebmotors } from "./painel-webmotors";
 import { botaoPrimario, botaoSecundario, campo, erroDaResposta, fetcher, rotulo, secao } from "../comum";
 
@@ -272,6 +273,8 @@ export function PainelPortais() {
           </ul>
         </section>
       )}
+
+      <CentralDeLeads />
 
       <PainelWebmotors />
 
