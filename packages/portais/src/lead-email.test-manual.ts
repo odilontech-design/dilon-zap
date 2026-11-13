@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { entenderEmail, lerEmail } from "./lead-email";
 
 let n = 0;
-const ok = (nome: string) => console.log(`ok    ${nome}`) || n++;
+const ok = (nome: string) => { console.log(`ok    ${nome}`); n++; };
 
 const email = (de: string, assunto: string, corpo: string, extra = "", html = false) =>
   [`From: ${de}`, "To: leads@loja.com", `Subject: ${assunto}`, `Message-ID: <${Math.random().toString(36).slice(2)}@x>`, "Date: Mon, 03 Nov 2026 10:00:00 -0300", "MIME-Version: 1.0", `Content-Type: text/${html ? "html" : "plain"}; charset=utf-8`, extra, "", corpo].join("\r\n");

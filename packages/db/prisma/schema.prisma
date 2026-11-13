@@ -243,6 +243,7 @@ model Tenant {
   publicacoesPortal     PublicacaoPortal[]
   leadsPortal           LeadPortal[]
   emailsDeLead          EmailDeLead[]
+  instagramConta        InstagramConta?
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -3783,8 +3784,8 @@ model VeiculosConfig {
   // Vitrine: cabeçalho e rodapé claros (o padrão é escuro, que valoriza logos prateadas/claras).
   cabecalhoClaro Boolean @default(false)
   // Segunda cor da marca (destaques: botões de chamada, selos, menu ativo). Nulo = usa só a cor da loja.
-  corSecundaria String?
-  tenant          Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  corSecundaria  String?
+  tenant         Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Plano contratado da revenda, definido no Super Admin. Nulo = sem plano
   // de tabela (contrato sob medida ou teste interno): sem limites.
@@ -3944,6 +3945,7 @@ enum Portal {
   WEBMOTORS
   MOBIAUTO
   NAPISTA
+  INSTAGRAM
 }
 
 enum StatusContaPortal {
@@ -4089,4 +4091,79 @@ model EmailDeLead {
 
   @@unique([tenantId, messageId])
   @@index([tenantId, recebidoEm])
+}
+
+// ---------------------------------------------------------------------------
+// Caixa de entrada do Instagram da revenda (módulo próprio, sem relação com o
+// Inbox do WhatsApp): mensagens diretas da conta profissional da loja.
+// ---------------------------------------------------------------------------
+
+model InstagramConta {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  // O id da conta profissional no Instagram (chega no webhook como entry.id).
+  igUserId          String            @unique
+  username          String
+  nome              String?
+  // Token de longa duração (60 dias), cifrado (AES-256-GCM, chave PORTAIS_CHAVE).
+  accessTokenCripto String
+  expiraEm          DateTime?
+  status            StatusContaPortal @default(CONECTADA)
+  erro              String?
+  // Quando a Meta confirmou a assinatura dos webhooks de mensagem.
+  webhookEm         DateTime?
+  conectadaEm       DateTime          @default(now())
+
+  conversas InstagramConversa[]
+}
+
+model InstagramConversa {
+  id       String         @id @default(cuid())
+  tenantId String
+  contaId  String
+  conta    InstagramConta @relation(fields: [contaId], references: [id], onDelete: Cascade)
+
+  // Quem conversa com a loja (IGSID, único por conta).
+  igsid    String
+  nome     String?
+  username String?
+
+  ultimaMensagemEm DateTime
+  ultimoTexto      String
+  // A última mensagem DO CLIENTE: a Meta só deixa responder até 24 h depois dela.
+  ultimaEntradaEm  DateTime?
+  naoLidas         Int       @default(0)
+  // Quando a loja respondeu depois da última mensagem do cliente (relógio do tempo de resposta).
+  respondidaEm     DateTime?
+
+  // Preenchidos quando o cliente passa o WhatsApp (ou a equipe informa): vira negociação no CRM.
+  telefone     String?
+  negociacaoId String?
+
+  createdAt DateTime            @default(now())
+  mensagens InstagramMensagem[]
+
+  @@unique([contaId, igsid])
+  @@index([tenantId, ultimaMensagemEm])
+}
+
+model InstagramMensagem {
+  id         String            @id @default(cuid())
+  tenantId   String
+  conversaId String
+  conversa   InstagramConversa @relation(fields: [conversaId], references: [id], onDelete: Cascade)
+
+  // O id da mensagem no Instagram: a mesma mensagem entregue duas vezes não duplica.
+  mid          String
+  // ENTRADA (cliente) ou SAIDA (loja, pelo Zap ou pelo app do Instagram).
+  direcao      String
+  texto        String
+  anexos       Json?
+  enviadaEm    DateTime
+  enviadaPorId String?
+
+  @@unique([tenantId, mid])
+  @@index([conversaId, enviadaEm])
 }
