@@ -4396,4 +4396,11 @@ model SdrVendedorConversa {
 
   @@index([tenantId, status])
   @@index([tenantId, iniciadaEm])
+/// Cache da consulta de placa (só as características do veículo, nunca dados do dono): cada
+/// consulta a um provedor pago custa, então a mesma placa não é consultada de novo por 90 dias.
+model ConsultaPlaca {
+  placa        String   @id
+  origem       String
+  dados        Json
+  consultadaEm DateTime @default(now())
 }

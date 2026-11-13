@@ -742,3 +742,12 @@ Revenda pode subir para R$ 397.
 
 - **Veículos > Completar** (gestão): tabela só com os carros sem quilometragem informada (ou sem preço). A equipe digita a km (Tab para o próximo) e usa **Salvar** ou **Salvar e colocar à venda** (os que estão em preparação e ficaram com preço e km passam a disponível; em loja que não exige km, basta o preço). Km 0 conta como informada. Vai para o histórico do carro. Código: `lib/veiculos-completar.ts`, rota `POST /api/veiculos/completar`.
 - **Fotos leves na vitrine**: `/api/loja/<slug>/fotos/<id>?w=240|480|800|1200` devolve WebP redimensionado (respeita a orientação do celular, não amplia, cache em memória de 150 MB e `Cache-Control` de 1 dia). Sem `w`, continua redirecionando para a original (portais, feeds e sitemap). Lista, galeria e capa do compartilhamento usam as versões leves com `srcset`. Se o redimensionamento falhar, cai para a original. Dependência nova: `sharp` (apps/web).
+
+## Busca pela placa (v1.71.0)
+
+Na entrada e na ficha do veículo, ao lado da placa, o botão **"Buscar pela placa"** (gestão) preenche marca, modelo, versão, anos, cor, combustível, câmbio, portas, chassi, renavam e código FIPE; km, preço e opcionais ficam como estão, e a tela pede para conferir a versão. Só características do carro: **nenhum dado do proprietário** é pedido nem guardado.
+
+- **Provedores** (`apps/web/lib/placa.ts`), na ordem: (1) um provedor HTTP configurado por variável: `PLACA_API_URL` com `{placa}` no lugar da placa (o token pode ir na própria URL) e, se precisar, `PLACA_API_HEADERS` (JSON de cabeçalhos). A resposta é lida de forma tolerante (campos em português ou inglês, em qualquer nível; "CHEVROLET/PRISMA" vira marca e modelo; "Gasolina/Álcool" vira Flex). (2) A **MobiAuto**, se a loja tem a conta conectada (`GET /api/vehicle/v1.0/plate/{placa}`: marca, modelo, versão, ano, combustível, chassi, FIPE).
+- **Cache** de 90 dias por placa (`ConsultaPlaca`, só as características): a mesma placa não é cobrada duas vezes.
+- Sem nenhum provedor, o botão avisa "A busca pela placa ainda não está liberada nesta conta".
+- **Pendente**: contratar um provedor de dados de veículo por placa (cobrança por consulta) e configurar `PLACA_API_URL`; o leitor tolerante deve aceitar a maioria, mas convém conferir com a resposta real do provedor escolhido (testado só com respostas simuladas).

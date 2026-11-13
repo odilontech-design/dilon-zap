@@ -211,6 +211,36 @@ export function CamposVeiculo({
   prefixo?: string;
 }) {
   const [fipeAberta, setFipeAberta] = useState(false);
+  const [placaBusca, setPlacaBusca] = useState<{ texto: string; erro?: boolean } | null>(null);
+  const [buscandoPlaca, setBuscandoPlaca] = useState(false);
+  /** Preenche a ficha com o que o provedor sabe da placa (só o que ele trouxe; km, preço e opcionais ficam como estão). */
+  async function buscarPelaPlaca() {
+    setPlacaBusca(null);
+    setBuscandoPlaca(true);
+    try {
+      const r = await fetch(`/api/veiculos/placa?placa=${encodeURIComponent(f.placa)}`);
+      const j = await r.json().catch(() => null);
+      if (!r.ok) return setPlacaBusca({ texto: j?.error ?? "Não foi possível consultar a placa.", erro: true });
+      const d = j.dados as { marca?: string; modelo?: string; versao?: string; anoFabricacao?: number; anoModelo?: number; cor?: string; combustivel?: string; cambio?: string; portas?: number; chassi?: string; renavam?: string; codigoFipe?: string };
+      set({
+        ...(d.marca ? { marca: d.marca } : {}),
+        ...(d.modelo ? { modelo: d.modelo } : {}),
+        ...(d.versao ? { versao: d.versao } : {}),
+        ...(d.anoFabricacao ? { anoFabricacao: String(d.anoFabricacao) } : {}),
+        ...(d.anoModelo ? { anoModelo: String(d.anoModelo), ...(!d.anoFabricacao && !f.anoFabricacao ? { anoFabricacao: String(d.anoModelo) } : {}) } : {}),
+        ...(d.cor ? { cor: d.cor } : {}),
+        ...(d.combustivel ? { combustivel: d.combustivel } : {}),
+        ...(d.cambio ? { cambio: d.cambio } : {}),
+        ...(d.portas ? { portas: String(d.portas) } : {}),
+        ...(d.chassi ? { chassi: d.chassi } : {}),
+        ...(d.renavam ? { renavam: d.renavam } : {}),
+        ...(d.codigoFipe ? { codigoFipe: d.codigoFipe } : {}),
+      });
+      setPlacaBusca({ texto: "Dados da placa preenchidos. Confira a versão e preencha o que faltar (km, cor, câmbio…)." });
+    } finally {
+      setBuscandoPlaca(false);
+    }
+  }
   const texto = (k: keyof FormVeiculo, r: string, extra?: { placeholder?: string; inputMode?: "numeric" | "text" }) => (
     <label className="flex flex-col gap-1">
       <span className={rotulo}>{r}</span>
@@ -265,7 +295,20 @@ export function CamposVeiculo({
         {texto("anoFabricacao", "Ano fabricação", { inputMode: "numeric" })}
         {texto("anoModelo", "Ano modelo", { inputMode: "numeric" })}
         {texto("km", "Quilometragem", { inputMode: "numeric" })}
-        {texto("placa", "Placa", { placeholder: "ABC1D23" })}
+        <div className="flex flex-col gap-1 sm:col-span-3">
+          <label className="flex flex-col gap-1">
+            <span className={rotulo}>Placa</span>
+            <div className="flex gap-2">
+              <input id={`${prefixo}-placa`} value={f.placa} onChange={(e) => set({ placa: e.target.value.toUpperCase() })} placeholder="ABC1D23" className={`${campo} max-w-[200px]`} />
+              {gerencia && (
+                <button type="button" onClick={buscarPelaPlaca} disabled={buscandoPlaca || f.placa.replace(/[^A-Za-z0-9]/g, "").length < 7} className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:border-accent disabled:opacity-50">
+                  {buscandoPlaca ? "Buscando…" : "Buscar pela placa"}
+                </button>
+              )}
+            </div>
+          </label>
+          {placaBusca && <p className={`text-xs ${placaBusca.erro ? "text-amber-700" : "text-emerald-700"}`} role="status">{placaBusca.texto}</p>}
+        </div>
         {texto("cor", "Cor")}
         <label className="flex flex-col gap-1">
           <span className={rotulo}>Câmbio</span>
