@@ -7,3 +7,8 @@ export * from "./olx/mensagens";
 export * from "./olx/lead";
 export * from "./olx/catalogo";
 export { cicloPortais, linkDaFotoParaPortal, telefoneValido, type OpcoesCiclo, type ResumoCiclo } from "./sincronizar";
+export * from "./webmotors/soap";
+export * from "./webmotors/cliente";
+export * from "./webmotors/mapa";
+export * from "./webmotors/catalogo";
+export { cicloWebmotors, credenciaisDaConta } from "./sincronizar-webmotors";

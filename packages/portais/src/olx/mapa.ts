@@ -22,6 +22,8 @@ export type CarroParaPortal = {
   anoFabricacao: number;
   anoModelo: number;
   km: number;
+  /** Falso = a loja não informou a km. Os portais exigem a km: o carro não vai como "0 km". */
+  kmInformado?: boolean;
   cor: string | null;
   combustivel: string | null;
   cambio: string | null;
@@ -169,6 +171,7 @@ export function montarAnuncioOlx(c: CarroParaPortal, catalogo: CatalogoOlx | nul
   if (!catalogo?.marca || !catalogo.modelo || !catalogo.versao) faltando.push("Escolher marca, modelo e versão no catálogo da OLX");
   const fotos = [...new Set(c.fotos)].slice(0, MAX_FOTOS_OLX);
   if (!fotos.length) faltando.push("Pelo menos uma foto");
+  if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (a OLX exige a km)");
   const preco = Math.round(c.precoCents / 100);
   if (preco <= 0) faltando.push("Preço de anúncio");
   const cep = soDigitos(loja.cep);

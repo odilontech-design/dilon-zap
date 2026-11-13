@@ -3952,6 +3952,9 @@ model PortalConta {
   refreshTokenCripto String?
   expiraEm           DateTime?
 
+  // Webmotors: a modalidade (plano do anúncio) usada nos carros que não escolheram outra.
+  planoPadrao String?
+
   // Para a tela: de quem é a conta no portal.
   contaNome  String?
   contaEmail String?
@@ -4007,6 +4010,9 @@ model PublicacaoPortal {
   catalogo           Json?
   // Resumo do que foi enviado: mudou, reenvia.
   hashEnviado        String?
+  // Webmotors: a modalidade (plano) deste carro e o resumo das fotos já enviadas.
+  plano              String?
+  hashFotos          String?
   // Token do lote de importação (OLX), para consultar o resultado.
   loteToken          String?
   erro               String?

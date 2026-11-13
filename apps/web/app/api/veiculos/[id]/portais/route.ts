@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { anunciarNaOlx, desligarDaOlx, STATUS_ROTULO } from "@/lib/portais";
+import { anunciarNaWebmotors, desligarDaWebmotors } from "@/lib/portais-webmotors";
 
 /** Como está o anúncio deste carro na OLX (qualquer pessoa da equipe vê). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -14,20 +15,28 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (bloqueio) return bloqueio;
   const v = await prisma.veiculo.findFirst({ where: { id: params.id, tenantId: user.tenantId }, select: { id: true } });
   if (!v) return NextResponse.json({ error: "veículo não encontrado" }, { status: 404 });
-  const [pub, conta] = await Promise.all([
+  const [pub, conta, pubWm, contaWm] = await Promise.all([
     prisma.publicacaoPortal.findUnique({
       where: { veiculoId_portal: { veiculoId: v.id, portal: "OLX" } },
       select: { ativo: true, status: true, url: true, erro: true, catalogo: true, enviadoEm: true, updatedAt: true },
     }),
     prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId: user.tenantId, portal: "OLX" } }, select: { status: true } }),
+    prisma.publicacaoPortal.findUnique({
+      where: { veiculoId_portal: { veiculoId: v.id, portal: "WEBMOTORS" } },
+      select: { ativo: true, status: true, url: true, erro: true, enviadoEm: true, updatedAt: true },
+    }),
+    prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId: user.tenantId, portal: "WEBMOTORS" } }, select: { status: true } }),
   ]);
   return NextResponse.json({
     contaOlx: conta?.status ?? null,
     olx: pub ? { ...pub, rotulo: pub.ativo ? STATUS_ROTULO[pub.status] : "Não anunciar" } : null,
+    contaWebmotors: contaWm?.status ?? null,
+    webmotors: pubWm ? { ...pubWm, rotulo: pubWm.ativo ? STATUS_ROTULO[pubWm.status].replace("a OLX", "a Webmotors") : "Não anunciar" } : null,
   });
 }
 
 const corpo = z.object({
+  portal: z.enum(["OLX", "WEBMOTORS"]).default("OLX"),
   ativo: z.boolean(),
   catalogo: z.object({ marca: z.string().regex(/^\d+$/), modelo: z.string().regex(/^\d+$/), versao: z.string().regex(/^\d+$/) }).nullable().optional(),
 });
@@ -43,6 +52,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const v = await prisma.veiculo.findFirst({ where: { id: params.id, tenantId: user.tenantId }, select: { id: true } });
   if (!v) return NextResponse.json({ error: "veículo não encontrado" }, { status: 404 });
 
+  if (parsed.data.portal === "WEBMOTORS") {
+    if (parsed.data.ativo) await anunciarNaWebmotors(user.tenantId, [v.id]);
+    else await desligarDaWebmotors(user.tenantId, v.id);
+    return NextResponse.json({ ok: true });
+  }
   if (!parsed.data.ativo) {
     await desligarDaOlx(user.tenantId, v.id);
     return NextResponse.json({ ok: true });

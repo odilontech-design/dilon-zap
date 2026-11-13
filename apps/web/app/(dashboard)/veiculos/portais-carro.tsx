@@ -15,7 +15,11 @@ type Dados = {
     erro: string | null;
     catalogo: { marca: string; modelo: string; versao: string } | null;
   } | null;
+  contaWebmotors: "CONECTADA" | "ERRO" | "DESCONECTADA" | null;
+  webmotors: Anuncio | null;
 };
+
+type Anuncio = { ativo: boolean; status: string; rotulo: string; url: string | null; erro: string | null };
 
 type Opcao = { id: string; nome: string; nota: number };
 
@@ -36,8 +40,9 @@ export function AnuncioNosPortais({ id, gerencia }: { id: string; gerencia: bool
   if (!data) return null;
   const conectada = data.contaOlx === "CONECTADA";
   const pub = data.olx;
+  const wmConectada = data.contaWebmotors === "CONECTADA";
   // Sem conta e sem histórico: a seção só aparece para a gestão, com o caminho para conectar.
-  if (!conectada && !pub && !gerencia) return null;
+  if (!conectada && !pub && !wmConectada && !data.webmotors && !gerencia) return null;
 
   async function salvar(corpo: object) {
     setAviso(null);
@@ -87,12 +92,49 @@ export function AnuncioNosPortais({ id, gerencia }: { id: string; gerencia: bool
           </button>
         </div>
       )}
+      <LinhaWebmotors dados={data.webmotors} conectada={wmConectada} gerencia={gerencia} onLigar={(ativo) => salvar({ portal: "WEBMOTORS", ativo })} />
       {escolhendo && <EscolherCatalogo veiculoId={id} onEscolheu={(catalogo) => salvar({ ativo: true, catalogo })} />}
       {aviso && <p className={`text-sm ${aviso.erro ? "text-red-600" : "text-accent"}`}>{aviso.texto}</p>}
       <p className="text-xs text-neutral-500">
         Disponível e anunciado: vai para a OLX sozinho. Mudou preço, km ou fotos: atualiza. Vendeu ou reservou: sai do ar.
       </p>
     </section>
+  );
+}
+
+/** O anúncio na Webmotors: liga e desliga; o modelo é achado sozinho pelo nome (o que faltar aparece no aviso). Sem km informada, não publica. */
+function LinhaWebmotors({ dados, conectada, gerencia, onLigar }: { dados: Anuncio | null; conectada: boolean; gerencia: boolean; onLigar: (ativo: boolean) => void }) {
+  if (!conectada && !dados) return null;
+  return (
+    <div className="flex flex-col gap-2" data-testid="linha-webmotors">
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <span className="font-medium">Webmotors</span>
+        {dados ? (
+          <span className={`rounded-full px-2 py-0.5 text-xs ${dados.ativo ? COR[dados.status] ?? "" : "bg-neutral-100 text-neutral-500"}`}>{dados.rotulo}</span>
+        ) : (
+          <span className="text-xs text-neutral-500">não anunciado</span>
+        )}
+        {dados?.url && dados.status === "PUBLICADO" && (
+          <a href={dados.url} target="_blank" rel="noreferrer" className="text-xs text-accent hover:underline">
+            ver anúncio
+          </a>
+        )}
+      </div>
+      {dados?.ativo && dados.erro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-600">{dados.erro}</p>}
+      {gerencia && conectada && (
+        <div>
+          {!dados?.ativo ? (
+            <button className={botaoPrimario} onClick={() => onLigar(true)}>
+              Anunciar na Webmotors
+            </button>
+          ) : (
+            <button className={botaoSecundario} onClick={() => onLigar(false)}>
+              Tirar da Webmotors
+            </button>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 

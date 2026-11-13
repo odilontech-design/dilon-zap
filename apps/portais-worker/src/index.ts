@@ -28,7 +28,7 @@ const numero = (nome: string, padrao: number) => {
 
 async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-  const { cicloPortais, chaveDoAmbiente } = await import("@dilon-zap/portais");
+  const { cicloPortais, cicloWebmotors, chaveDoAmbiente } = await import("@dilon-zap/portais");
   const intervaloMs = numero("PORTAIS_INTERVALO_MS", 60_000);
 
   let parando = false;
@@ -52,7 +52,15 @@ async function main() {
       avisou = true;
     } else {
       try {
-        const r = await cicloPortais({ chave: chaveDoAmbiente(segredo), segredoFotos: segredo, urlBase });
+        const opcoes = { chave: chaveDoAmbiente(segredo), segredoFotos: segredo, urlBase };
+        const r = await cicloPortais(opcoes);
+        // Webmotors em tentativa própria: se ela cair, a OLX já foi sincronizada (e vice-versa).
+        try {
+          const w = await cicloWebmotors(opcoes);
+          if (w.enviados || w.removidos || w.erros) console.log(`[portais] webmotors: lojas ${w.lojas}, enviados ${w.enviados}, removidos ${w.removidos}, erros ${w.erros}`);
+        } catch (e) {
+          console.error("[portais] ciclo da Webmotors falhou:", e instanceof Error ? e.message : e);
+        }
         if (r.enviados || r.removidos || r.conferidos || r.erros) {
           console.log(`[portais] lojas ${r.lojas}, enviados ${r.enviados}, removidos ${r.removidos}, conferidos ${r.conferidos}, erros ${r.erros}`);
         }

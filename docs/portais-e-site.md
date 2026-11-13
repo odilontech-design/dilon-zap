@@ -246,3 +246,13 @@ Fontes:
 - [Webmotors: portal de APIs](https://portal-webmotors.sensedia.com/api-portal/api-browser);
 - [Mobiauto: integração via API (manual de terceiro)](https://ajuda.revendamais.com.br/hc/rmais-ajuda/articles/1755098051-integrador-_-adicionar-mobiauto-para-integracao-de-estoque);
 - [Meta: campos opcionais do catálogo automotivo](https://www.facebook.com/business/help/1132483410249195).
+
+## Webmotors (v1.58.0)
+
+Conector construído sobre o contrato público (SOAP/XML) e testado com um servidor falso; **ainda não homologado**: falta o acesso de desenvolvedor da Webmotors.
+
+- **Conta**: CNPJ + e-mail + senha do sistema de revendedores, guardados cifrados (`PORTAIS_CHAVE`) em `PortalConta`. Painel em Veículos > Portais. O plano dos anúncios (modalidade: Nitro, Acelerador…) vem da Webmotors ao vivo; fica em `PortalConta.planoPadrao`.
+- **Regra da gestão**: carro **sem quilometragem informada não é publicado** (nem na Webmotors nem na OLX). O motivo aparece em "Falta para anunciar".
+- **Envio**: o `portais-worker` roda `cicloWebmotors` depois da OLX, em tentativa separada. Mesmas decisões (`decisao.ts`): disponível publica, mudou preço/ficha/fotos atualiza, vendido/reservado exclui. Catálogo (marca/modelo/versão/cor/câmbio/combustível/opcionais) resolvido pelo nome; o que não bater vira pendência legível.
+- **Env**: `WEBMOTORS_URL_BASE` (padrão produção `https://integracao.webmotors.com.br`; homologação `https://hportal.webmotors.com.br/IntegracaoRevendedor`).
+- **Falta**: credenciais de homologação, API de leads (separada do manual), limites de fotos/observação, confirmar se a km vazia é aceita.
