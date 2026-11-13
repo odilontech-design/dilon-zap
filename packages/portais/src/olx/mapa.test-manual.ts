@@ -50,6 +50,10 @@ checa("lista tudo que falta", falta.ok ? [] : falta.faltando.length, 6);
 const moto = montarAnuncioOlx({ ...carro, tipo: "MOTO" }, cat, loja);
 checa("moto ainda não", moto.ok, false);
 
+const semKm = montarAnuncioOlx({ ...carro, km: 0, kmInformado: false }, cat, loja);
+checa("sem km informada: não publica na OLX", semKm.ok ? [] : semKm.faltando, ["Informar a quilometragem do carro (a OLX exige a km)"]);
+checa("zero km informado de verdade: publica", montarAnuncioOlx({ ...carro, km: 0, kmInformado: true }, cat, loja).ok, true);
+
 const antigo = montarAnuncioOlx({ ...carro, anoModelo: 1977 }, cat, loja);
 checa("ano antigo em faixa", antigo.ok && antigo.anuncio.params.regdate, "1975");
 const muitasFotos = montarAnuncioOlx({ ...carro, fotos: Array.from({ length: 30 }, (_, i) => `https://f/${i}.jpg`) }, cat, loja);
