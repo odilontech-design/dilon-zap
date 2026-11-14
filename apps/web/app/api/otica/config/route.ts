@@ -4,7 +4,7 @@ import { requireUser } from "@/lib/session";
 import { exigirRecurso } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { configDaOtica } from "@/lib/otica";
-import { AVISOS_PADRAO, ETAPAS_COM_AVISO, avisoDaEtapa } from "@/lib/otica-regras";
+import { AVISOS_PADRAO, ETAPAS_COM_AVISO, avisoDaEtapa, numeroOS } from "@/lib/otica-regras";
 import { configSchema } from "@/lib/otica-schemas";
 
 /** Configuração da ótica com os avisos já resolvidos (o da loja ou o de fábrica). */
@@ -39,7 +39,22 @@ export async function PATCH(req: Request) {
     const maior = await prisma.ordemServico.aggregate({ where: { tenantId: user.tenantId }, _max: { numero: true } });
     const minimo = (maior._max.numero ?? 0) + 1;
     if (d.proximoNumeroOS < minimo) {
-      return NextResponse.json({ error: `o próximo número precisa ser ${minimo} ou maior (já existe a OS ${minimo - 1})` }, { status: 400 });
+      // Diz QUAL é a OS que segura o número: a cancelada some do quadro mas continua ocupando o número, e a
+      // mensagem antiga ("já existe a OS 502") parecia erro para quem não via nenhuma OS na tela (Visuallis, 13/11).
+      const seguradora = await prisma.ordemServico.findFirst({
+        where: { tenantId: user.tenantId, numero: minimo - 1 },
+        select: { etapa: true, historica: true, createdAt: true, contact: { select: { name: true } } },
+      });
+      const quem = [
+        seguradora?.etapa === "CANCELADA" ? "cancelada" : seguradora?.historica ? "OS antiga do papel" : null,
+        seguradora?.contact?.name ? `de ${seguradora.contact.name}` : null,
+        seguradora ? `criada em ${seguradora.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : null,
+      ].filter(Boolean).join(", ");
+      const dica = seguradora?.etapa === "CANCELADA" ? " Uma OS cancelada continua ocupando o número dela." : "";
+      return NextResponse.json(
+        { error: `o próximo número precisa ser ${numeroOS(minimo)} ou maior: já existe a OS ${numeroOS(minimo - 1)}${quem ? ` (${quem})` : ""}.${dica}` },
+        { status: 400 }
+      );
     }
   }
 
