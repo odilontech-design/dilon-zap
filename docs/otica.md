@@ -132,7 +132,8 @@ enquanto a loja ainda preenche à mão.
 3. **Ler a OS**: a IA lê os campos escritos (cliente, receita, lentes, armação,
    medidas, laboratório, previsão, valor e sinal) e a tela abre o formulário
    da OS já preenchido, com o resumo do que não ficou claro.
-4. A atendente **confere contra o papel** e salva. A leitura é só sugestão:
+4. A atendente **confere contra o papel** e salva. O aviso de "campos duvidosos" lista só o que a leitura
+   viu mas não teve certeza (com o nome do campo); o que estava em branco no papel não vira aviso. A leitura é só sugestão:
    grau fora do passo de 0,25, data impossível ou valor ilegível voltam como campo
    vazio com aviso, nunca como valor chutado.
 5. Ao salvar, a **foto do talão fica guardada na OS** (R2). Na tela da OS há

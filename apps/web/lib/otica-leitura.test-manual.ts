@@ -36,7 +36,7 @@ await ok("lê número, datas e dinheiro no formato do formulário", () => {
   assert.equal(l.previsaoDia, "2026-11-18");
   assert.equal(l.previsaoHora, "16:00");
   assert.deepEqual(avisos, []);
-  assert.deepEqual(duvidas, ["cliente.rg"]);
+  assert.deepEqual(duvidas, [], "RG em branco no papel não vira aviso");
 });
 
 await ok("graus e medidas viram o texto do formulário", () => {
@@ -58,6 +58,13 @@ await ok("opções conhecidas casam sem diferenciar maiúscula; o resto vai para
   assert.deepEqual(l.tratamentos, ["Antirreflexo"]);
   assert.deepEqual(l.servicos, ["Montagem"]);
   assert.match(l.observacoes, /Tratamento no talão: UV Premium/);
+});
+
+await ok("dúvidas viram nomes legíveis e só entram campos que foram lidos", () => {
+  const x = structuredClone(bruto) as any;
+  x.duvidas = ["cliente.rg", "cliente.cpf", "sinal", "formaDoSinal", "portadorAutorizado", "receita.longe.od.esf", "campoInventado"];
+  const { duvidas } = normalizarLeitura(x);
+  assert.deepEqual(duvidas, ["CPF", "Sinal", "Forma do sinal", "Receita longe od esf", "campoInventado"]);
 });
 
 await ok("grau fora do passo de 0,25 vira vazio com aviso, e não um valor chutado", () => {

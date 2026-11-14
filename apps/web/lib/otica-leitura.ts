@@ -227,7 +227,6 @@ export function normalizarLeitura(bruto: unknown): ResultadoDaLeitura {
   if (txt(j.previsaoData, 20) && !previsaoDia) avisos.push(`Previsão: não consegui ler a data "${txt(j.previsaoData, 20)}"`);
 
   const observacoes = [txt(j.observacoes, 1500), ...extras].filter(Boolean).join("\n");
-  const duvidas = lista(j.duvidas);
 
   const leitura: LeituraOS = {
     numero,
@@ -281,7 +280,61 @@ export function normalizarLeitura(bruto: unknown): ResultadoDaLeitura {
     observacoes,
     portadorAutorizado: txt(j.portadorAutorizado, 120),
   };
-  return { leitura, avisos, duvidas };
+  return { leitura, avisos, duvidas: duvidasUteis(lista(j.duvidas), leitura) };
+}
+
+// O que a IA chama de "duvidoso" vira o nome que a atendente vê, e só entra o que ela de fato leu:
+// campo em branco no papel não precisa de aviso, a tela já mostra o campo vazio.
+const CAMPO_DUVIDOSO: Record<string, [string, (l: LeituraOS) => string]> = {
+  numeroos: ["Número da OS", (l) => (l.numero ? String(l.numero) : "")],
+  dataVenda: ["Dia da venda", (l) => l.dataVenda],
+  nome: ["Nome do cliente", (l) => l.cliente.nome],
+  telefone: ["Telefone", (l) => l.cliente.telefone],
+  cpf: ["CPF", (l) => l.cliente.documento],
+  rg: ["RG", (l) => l.cliente.rgIe],
+  nascimento: ["Nascimento", (l) => l.cliente.nascimento],
+  email: ["E-mail", (l) => l.cliente.email],
+  cep: ["CEP", (l) => l.cliente.cep],
+  endereco: ["Endereço", (l) => l.cliente.logradouro],
+  numero: ["Número do endereço", (l) => l.cliente.numeroEndereco],
+  bairro: ["Bairro", (l) => l.cliente.bairro],
+  cidade: ["Cidade", (l) => l.cliente.cidade],
+  medico: ["Médico", (l) => l.receita.medico],
+  crm: ["CRM", (l) => l.receita.crm],
+  dataconsulta: ["Data da consulta", (l) => l.receita.dataConsulta],
+  lentes: ["Lentes", (l) => l.lentes],
+  materiallente: ["Material da lente", (l) => l.materialLente],
+  indicelente: ["Índice da lente", (l) => l.indiceLente],
+  armacao: ["Armação", (l) => l.armacao],
+  materialarmacao: ["Material da armação", (l) => l.materialArmacao],
+  laboratorio: ["Laboratório", (l) => l.laboratorioNome],
+  pedidolaboratorio: ["Pedido no laboratório", (l) => l.pedidoLaboratorio],
+  previsaodata: ["Previsão de entrega", (l) => l.previsaoDia],
+  previsaohora: ["Hora da previsão", (l) => l.previsaoHora],
+  consultor: ["Consultor", (l) => l.consultorNome],
+  valortotal: ["Valor", (l) => l.valor],
+  sinal: ["Sinal", (l) => l.sinal],
+  formadosinal: ["Forma do sinal", (l) => l.meioDoSinal],
+  portadorautorizado: ["Autorizado a retirar", (l) => l.portadorAutorizado],
+  observacoes: ["Observações", (l) => l.observacoes],
+};
+
+export function duvidasUteis(brutas: string[], l: LeituraOS): string[] {
+  const saida: string[] = [];
+  for (const d of brutas) {
+    const ultimo = d.split(".").pop() ?? d;
+    if (d.toLowerCase().startsWith("receita.") && /^(esf|cil|eixo|dnp|alt)$/i.test(ultimo)) {
+      saida.push(`Receita ${d.split(".").slice(1).join(" ")}`);
+      continue;
+    }
+    const conhecido = CAMPO_DUVIDOSO[ultimo.toLowerCase()] ?? CAMPO_DUVIDOSO[ultimo.replace(/[^a-z]/gi, "").toLowerCase()];
+    if (!conhecido) {
+      saida.push(d);
+      continue;
+    }
+    if (conhecido[1](l).trim()) saida.push(conhecido[0]);
+  }
+  return [...new Set(saida)];
 }
 
 export class ErroDeLeitura extends Error {

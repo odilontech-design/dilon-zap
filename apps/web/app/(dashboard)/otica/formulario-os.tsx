@@ -130,7 +130,9 @@ function lerGrade(g: Grade): { graus: Graus; erros: string[] } {
   return { graus, erros };
 }
 
-const campo = "w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40";
+// min-w-0 e max-w-full: no celular (Safari do iPhone) o campo de data tem largura própria e, sem isso, estoura a coluna e empurra a tela para os lados.
+const campo = "w-full min-w-0 max-w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40";
+const campoData = "appearance-none [&::-webkit-date-and-time-value]:text-left [&::-webkit-date-and-time-value]:min-h-[1.25rem]";
 const rotulo = "text-xs font-medium text-neutral-700";
 
 /** O que a tela de escanear entrega ao formulário: a leitura da foto, o que já existe e a própria foto. */
@@ -544,7 +546,7 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
       {escaneada && <PainelDaLeitura e={escaneada} numero={numeroPapel} mudarNumero={setNumeroPapel} dia={dataVenda} mudarDia={setDataVenda} />}
 
       <form onSubmit={salvar} className="flex flex-col gap-4">
-        <fieldset disabled={cancelada} className="flex flex-col gap-4 disabled:opacity-70">
+        <fieldset disabled={cancelada} className="flex min-w-0 flex-col gap-4 disabled:opacity-70">
           <Secao titulo="Cliente">
             {contato ? (
               <div className="flex items-center justify-between rounded-md border border-neutral-300 px-3 py-2 text-sm">
@@ -762,9 +764,9 @@ function Secao({ titulo, children }: { titulo: string; children: React.ReactNode
 
 function Campo(p: { rotulo: string; id: string; valor: string; mudar: (v: string) => void; tipo?: string; className?: string; dica?: string; modo?: "decimal" | "text" }) {
   return (
-    <label className={`${rotulo} ${p.className ?? ""}`}>
+    <label className={`${rotulo} min-w-0 ${p.className ?? ""}`}>
       {p.rotulo}
-      <input id={p.id} type={p.tipo ?? "text"} value={p.valor} onChange={(e) => p.mudar(e.target.value)} inputMode={p.modo} placeholder={p.dica} className={`${campo} mt-1`} />
+      <input id={p.id} type={p.tipo ?? "text"} value={p.valor} onChange={(e) => p.mudar(e.target.value)} inputMode={p.modo} placeholder={p.dica} className={`${campo} mt-1 ${p.tipo === "date" || p.tipo === "time" ? campoData : ""}`} />
     </label>
   );
 }
