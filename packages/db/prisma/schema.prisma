@@ -244,6 +244,7 @@ model Tenant {
   leadsPortal           LeadPortal[]
   emailsDeLead          EmailDeLead[]
   instagramConta        InstagramConta?
+  painelEcommerce       PainelEcommerceConfig?
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -1756,6 +1757,9 @@ enum Recurso {
   // agenda e passa para um vendedor. Sob demanda (tem custo de API por
   // conversa). Roda em processo próprio (apps/vendedor-ia-worker).
   VENDEDOR_IA
+  // Painel do e-commerce da empresa dentro do Zap (aba "Site"): os números vêm do site dela, por chave.
+  // Sob demanda: só liga para quem tem loja própria (Believe, 13/11).
+  PAINEL_ECOMMERCE
 }
 
 // Plano de cada cliente — preço negociado individualmente (não tem
@@ -4172,4 +4176,18 @@ model InstagramMensagem {
 
   @@unique([tenantId, mid])
   @@index([conversaId, enviadaEm])
+}
+
+/// De onde o painel "Site" lê os números do e-commerce da empresa. A chave fica cifrada (AES-256-GCM, a mesma
+/// PORTAIS_CHAVE dos portais) e nunca volta para o navegador: quem chama o site é o servidor do Zap.
+model PainelEcommerceConfig {
+  tenantId     String   @id
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Endereço do site, só https (ex.: https://believecosmeticos.com). O caminho do painel é fixo (contrato v1).
+  url          String
+  chaveCripto  String
+  /// Resultado do último "Testar conexão" salvo.
+  testadoEm    DateTime?
+  testeOk      Boolean?
+  atualizadoEm DateTime @updatedAt
 }

@@ -45,6 +45,7 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         "test/juncao-contatos-e-salvar.test.ts",
         "test/setor-unico.test.ts",
         "test/contatos-lote.test.ts",
+        "test/painel-ecommerce.test.ts",
         "test/resumo-financeiro-filtros.test.ts",
         "test/pedidos-vendedor.test.ts",
         "test/fila-diaria.test.ts",
