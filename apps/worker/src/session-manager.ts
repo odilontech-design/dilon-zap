@@ -28,7 +28,7 @@ import { lerNotaDeVoz } from "./ogg-audio";
 import { abrirEdicaoSecreta, textoDoContato } from "./contato-e-edicao";
 import { dentroDoHorario, noIntervaloDeAlmoco, type DiaDeAtendimento } from "./business-hours";
 import { criarBaileysLogger } from "./baileys-logger";
-import { decidirAutoResposta, avaliarAutomacao, equipeFalou, numeroTemRobo, type OpcaoUra } from "./auto-reply-decisao";
+import { decidirAutoResposta, avaliarAutomacao, equipeFalou, equipeIniciou, numeroTemRobo, type OpcaoUra } from "./auto-reply-decisao";
 import {
   ehGrupo,
   nomeDoAutor,
@@ -1262,19 +1262,24 @@ async function recordMessage(params: {
   // PESSOA do robô: a auto-resposta também grava OUTBOUND, mas sem usuário —
   // sem esse filtro o próprio menu da URA contaria como "a equipe falou" e o
   // robô se calaria sozinho pra sempre depois do primeiro menu.
-  const ultimaAntes = conversaAntes
-    ? await prisma.message.findFirst({
+  // As últimas mensagens (e não só a última): para saber se a equipe PUXOU a conversa ou apenas
+  // respondeu ao cliente (ver equipeIniciou).
+  const recentesAntes = conversaAntes
+    ? await prisma.message.findMany({
         where: { conversationId: conversaAntes.id },
         orderBy: { createdAt: "desc" },
-        select: { direction: true, senderUserId: true, deCelular: true },
+        take: 60,
+        select: { direction: true, senderUserId: true, deCelular: true, createdAt: true },
       })
-    : null;
+    : [];
+  const ultimaAntes = recentesAntes[0] ?? null;
 
   const estadoAntesDaMensagem = conversaAntes
     ? {
         status: conversaAntes.status,
         lastMessageAt: conversaAntes.lastMessageAt,
         equipeFalouPorUltimo: equipeFalou(ultimaAntes),
+        equipeIniciou: equipeIniciou(recentesAntes),
       }
     : null;
 
