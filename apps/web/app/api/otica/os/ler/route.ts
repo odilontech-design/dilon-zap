@@ -53,7 +53,7 @@ export async function POST(req: Request) {
   ]);
   const lab = leitura.laboratorioNome ? acharPorNome(laboratorios, leitura.laboratorioNome) : null;
   const consultor = leitura.consultorNome ? acharPorNome(equipe.map((u) => ({ id: u.id, nome: u.name })), leitura.consultorNome) : null;
-  if (leitura.laboratorioNome && !lab) avisos.push(`Laboratório "${leitura.laboratorioNome}" não está cadastrado: escolha na lista ou cadastre em Laboratórios e avisos.`);
+  if (leitura.laboratorioNome && !lab) avisos.push(`Laboratório "${leitura.laboratorioNome}" não está cadastrado: escolha na lista ou cadastre em "Laboratório e entrega", mais abaixo (a gestão cadastra).`);
 
   const digitos = telefoneParaWhatsApp(leitura.cliente.telefone);
   const cpf = leitura.cliente.documento.replace(/\D/g, "");

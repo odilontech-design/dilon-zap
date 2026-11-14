@@ -27,6 +27,7 @@ import {
 import { diaParaISO, erroDaResposta, fetcher, isoParaDia } from "./formatos";
 import type { LeituraOS } from "@/lib/otica-leitura";
 import { FormularioArmacao, type ArmacaoDados } from "./formulario-armacao";
+import { FormularioLaboratorio, type LaboratorioNovo } from "./formulario-laboratorio";
 
 // Opções do talão da Visuallis. Texto livre por baixo: aparecendo outro
 // material, a atendente escreve em "Lentes" sem esperar uma versão nova.
@@ -150,7 +151,7 @@ export type Escaneada = {
 export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escaneada }) {
   const router = useRouter();
   const editando = !!id;
-  const { data: opcoes } = useSWR<Opcoes>("/api/otica/opcoes", fetcher);
+  const { data: opcoes, mutate: recarregarOpcoes } = useSWR<Opcoes>("/api/otica/opcoes", fetcher);
   const { data: os, mutate } = useSWR<OSCompleta>(id ? `/api/otica/os/${id}` : null, fetcher);
 
   // Cliente
@@ -193,6 +194,8 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
   const [buscaArm, setBuscaArm] = useState("");
   // Cadastrar ou editar a armação sem sair da OS.
   const [armForm, setArmForm] = useState<null | { editar?: string; codigo?: string }>(null);
+  // Cadastrar o laboratório sem sair da OS (o nome lido da foto do talão vira o ponto de partida).
+  const [labForm, setLabForm] = useState<null | { nome?: string }>(null);
   const [corAntes, setCorAntes] = useState<string | null>(null);
   const [medidasAntes, setMedidasAntes] = useState<string | null>(null);
   const [achadasArm, setAchadasArm] = useState<(ArmacaoEscolhida & { cor: string | null; medidas: string | null; quantidade: number })[]>([]);
@@ -425,6 +428,17 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
       const p = previsaoPeloPrazo(new Date(), lab.prazoDias);
       return { ...x, laboratorioId: labId, previsaoDia: diaHoraNoFuso(p, opcoes!.timezone).dia };
     });
+  }
+
+  // Laboratório recém-cadastrado: entra na lista, fica escolhido e, sem previsão ainda, sugere pelo prazo dele.
+  async function laboratorioSalvo(lab: LaboratorioNovo) {
+    await recarregarOpcoes();
+    setF((x) => ({
+      ...x,
+      laboratorioId: lab.id,
+      previsaoDia: x.previsaoDia || (lab.prazoDias && opcoes ? diaHoraNoFuso(previsaoPeloPrazo(new Date(), lab.prazoDias), opcoes.timezone).dia : ""),
+    }));
+    setLabForm(null);
   }
 
   const lida = useMemo(() => lerGrade(grade), [grade]);
@@ -713,6 +727,18 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
                     <option key={l.id} value={l.id}>{l.nome}{l.prazoDias ? ` (${l.prazoDias} dias)` : ""}</option>
                   ))}
                 </select>
+                {opcoes?.gestao ? (
+                  <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button type="button" onClick={() => setLabForm({})} className="text-xs font-normal text-accent hover:underline">+ Cadastrar laboratório</button>
+                    {escaneada?.leitura.laboratorioNome && !f.laboratorioId && (
+                      <button type="button" onClick={() => setLabForm({ nome: escaneada.leitura.laboratorioNome })} className="text-xs font-normal text-accent hover:underline">
+                        Cadastrar "{escaneada.leitura.laboratorioNome}" (lido do papel)
+                      </button>
+                    )}
+                  </span>
+                ) : (
+                  <span className="mt-1 block text-[11px] font-normal text-neutral-500">Laboratório novo? Peça à gestão para cadastrar.</span>
+                )}
               </label>
               <Campo rotulo="Nº do pedido no laboratório" id="os-pedido" valor={f.pedidoLaboratorio} mudar={(v) => setF({ ...f, pedidoLaboratorio: v })} className="col-span-2" />
               <Campo rotulo="Previsão de entrega" id="os-prev-dia" tipo="date" valor={f.previsaoDia} mudar={(v) => setF({ ...f, previsaoDia: v })} />
@@ -726,8 +752,9 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
               </label>
             </div>
             {opcoes && opcoes.laboratorios.length === 0 && (
-              <p className="text-xs text-neutral-500">Nenhum laboratório cadastrado. A gestão cadastra em Ótica → Laboratórios e avisos.</p>
+              <p className="text-xs text-neutral-500">Nenhum laboratório cadastrado. {opcoes.gestao ? "Use \"+ Cadastrar laboratório\" acima." : "A gestão cadastra em Ótica → Laboratórios e avisos."}</p>
             )}
+            {labForm && <FormularioLaboratorio nomeInicial={labForm.nome} onSalvo={laboratorioSalvo} onFechar={() => setLabForm(null)} />}
           </Secao>
 
           <Secao titulo="Valores">
