@@ -25,6 +25,7 @@ type Dados = {
   sobre: string;
   instagram: string;
   facebook: string;
+  siteAtual: string;
   banners: Banner[];
   carros: Carro[];
 };
@@ -69,6 +70,7 @@ export function MeuSite() {
         ))}
       </nav>
       {aba === "inicio" && <Inicio d={data} ir={ir} />}
+      {aba === "inicio" && <TrazerDoSite d={data} recarregar={mutate} />}
       {aba === "banners" && <Banners d={data} recarregar={mutate} />}
       {aba === "destaques" && <Destaques d={data} recarregar={mutate} />}
       {aba === "paginas" && <Paginas d={data} recarregar={mutate} />}
@@ -150,6 +152,50 @@ function Inicio({ d, ir }: { d: Dados; ir: (a: Aba) => void }) {
         )}
       </section>
     </div>
+  );
+}
+
+type Trazido = {
+  banners: { achados: number; trazidos: number; jaTinha: number; falhas: string[] };
+  ofertas: { achadas: number; noZap: number; aplicadas: boolean; motivo?: string };
+  quemSomos: { achado: boolean; aplicado: boolean; motivo?: string };
+};
+
+/** Copia do site que a loja já tem (AutoCerto) os banners, as últimas ofertas e o Quem somos. */
+function TrazerDoSite({ d, recarregar }: { d: Dados; recarregar: () => void }) {
+  const [endereco, setEndereco] = useState(d.siteAtual);
+  const [substituir, setSubstituir] = useState(false);
+  const [rodando, setRodando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const [r, setR] = useState<Trazido | null>(null);
+  const trazer = async () => {
+    setRodando(true);
+    setErro(null);
+    setR(null);
+    const resp = await fetch("/api/veiculos/site/trazer", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ endereco: endereco || null, substituir }) });
+    setRodando(false);
+    if (!resp.ok) return setErro(await erroDaResposta(resp));
+    setR(await resp.json());
+    recarregar();
+  };
+  return (
+    <section className={secao} data-testid="site-trazer">
+      <h3 className="text-sm font-semibold">Trazer do site atual</h3>
+      <p className="text-xs text-neutral-500">Copia do site que a loja já tem os banners do topo, os carros de “Últimas ofertas” e o texto do “Quem somos”. Nada é apagado: banner já trazido não vem de novo, e destaques e Quem somos só são preenchidos se estiverem vazios. Para as ofertas aparecerem, importe antes o estoque do site (Veículos → Importar).</p>
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="flex min-w-[260px] flex-1 flex-col gap-1"><span className={rotulo}>Endereço do site atual</span><input className={campo} value={endereco} onChange={(e) => setEndereco(e.target.value)} placeholder="www.sualoja.com.br" /></label>
+        <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={substituir} onChange={(e) => setSubstituir(e.target.checked)} /> Substituir destaques e Quem somos</label>
+        <button type="button" className={botaoPrimario} disabled={rodando || !endereco.trim()} onClick={trazer}>{rodando ? "Trazendo…" : "Trazer do site atual"}</button>
+      </div>
+      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {r && (
+        <ul className="flex flex-col gap-1 text-sm">
+          <li>Banners: {r.banners.achados === 0 ? "nenhum encontrado no site." : `${r.banners.trazidos} trazido(s)${r.banners.jaTinha ? `, ${r.banners.jaTinha} já estavam aqui` : ""} de ${r.banners.achados}.`}{r.banners.falhas.length > 0 && <span className="text-red-600"> Não vieram: {r.banners.falhas.join("; ")}.</span>}</li>
+          <li>Últimas ofertas: {r.ofertas.achadas === 0 ? "nenhuma encontrada no site." : r.ofertas.aplicadas ? `${r.ofertas.noZap} de ${r.ofertas.achadas} carro(s) postos em destaque.` : `${r.ofertas.achadas} encontrada(s), ${r.ofertas.noZap} no Zap — ${r.ofertas.motivo}.`}</li>
+          <li>Quem somos: {r.quemSomos.aplicado ? "texto trazido (confira na aba Páginas)." : r.quemSomos.motivo ? `${r.quemSomos.motivo}.` : "não encontrado no site."}</li>
+        </ul>
+      )}
+    </section>
   );
 }
 

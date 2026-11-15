@@ -360,3 +360,13 @@ A aba **Veículos > Meu site** (antes "Vitrine") reúne o que a loja controla no
 - **Páginas**: redes sociais e **Quem somos** (título e texto), com página própria `/quem-somos` no menu, no sitemap e no llms.txt.
 - **Aparência, dados e domínio**: a tela que já existia (logo, cores, dados da loja, WhatsApp, domínio, pixel e Analytics).
 - Schema (só adições): `BannerVitrine`; em `VeiculosConfig`: `destaques`, `ofertaVeiculoId`, `quemSomosTitulo`, `quemSomosTexto`.
+
+## Trazer do site atual (v1.76.0)
+
+Em **Meu site > Início**, o quadro **Trazer do site atual** copia do site que a loja já tem (o do AutoCerto) o que a home e a página da empresa mostram, para o site novo nascer igual ao antigo:
+
+- **Banners do topo**: as imagens de fundo dos blocos `.banner`, na ordem, baixadas com as mesmas proteções do download de fotos (só endereço público, só JPG/PNG/WEBP) e guardadas como banners com título `Do site atual: <arquivo>`. É por esse título que um banner não é trazido duas vezes.
+- **Últimas ofertas**: os carros do bloco "Últimas ofertas" viram os destaques, casados pelo id do carro no site antigo (`Veiculo.siteOrigemId = autocerto:<id>`). Só entram os carros já importados e à venda, por isso é preciso importar o estoque antes (Veículos > Importar).
+- **Quem somos**: o título (a frase em destaque) e os parágrafos do corpo da página da empresa, nunca o resumo cortado do rodapé.
+
+Nada é apagado. Destaques e Quem somos só são preenchidos se estiverem vazios, a não ser que a pessoa marque **Substituir**. O endereço digitado **não** é guardado em `siteOrigemUrl`, porque esse campo liga o espelho do estoque. Rota: `POST /api/veiculos/site/trazer` (`{ endereco?, substituir? }`), registrada na auditoria como `site.trazer`. Teste: `apps/web/lib/trazer-do-site.test-manual.ts` (aceita, opcionalmente, as páginas salvas de um site real para mostrar o que sairia delas).

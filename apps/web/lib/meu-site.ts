@@ -26,6 +26,7 @@ const ROTULO_ACAO: Record<string, string> = {
   "site.banner.excluir": "Banner removido",
   "site.destaques": "Destaques e oferta",
   "site.paginas": "Páginas do site",
+  "site.trazer": "Trazido do site atual",
 };
 
 /** Link de banner: uma página do próprio site ("/...") ou um endereço https. Outra coisa vira nulo. */
@@ -87,7 +88,7 @@ export async function painelDoSite(tenantId: string) {
 /** Os dados das abas Banners, Destaques e Páginas, e os carros à venda para escolher. */
 export async function dadosDoSite(tenantId: string) {
   const [cfg, banners, carros] = await Promise.all([
-    prisma.veiculosConfig.findUnique({ where: { tenantId }, select: { destaques: true, ofertaVeiculoId: true, quemSomosTitulo: true, quemSomosTexto: true, instagram: true, facebook: true, sobre: true } }),
+    prisma.veiculosConfig.findUnique({ where: { tenantId }, select: { destaques: true, ofertaVeiculoId: true, quemSomosTitulo: true, quemSomosTexto: true, instagram: true, facebook: true, sobre: true, siteOrigemUrl: true } }),
     prisma.bannerVitrine.findMany({ where: { tenantId }, orderBy: [{ ordem: "asc" }, { createdAt: "asc" }], select: { id: true, titulo: true, link: true, ativo: true, chaveCelular: true } }),
     prisma.veiculo.findMany({
       where: { tenantId, naVitrine: true, status: "DISPONIVEL" },
@@ -103,6 +104,7 @@ export async function dadosDoSite(tenantId: string) {
     sobre: cfg?.sobre ?? "",
     instagram: cfg?.instagram ?? "",
     facebook: cfg?.facebook ?? "",
+    siteAtual: cfg?.siteOrigemUrl ?? "",
     banners: banners.map((b) => ({ id: b.id, titulo: b.titulo, link: b.link, ativo: b.ativo, temCelular: !!b.chaveCelular })),
     carros: carros.map((c) => ({ id: c.id, nome: nomeDoVeiculo(c), precoCents: c.precoCents, capaId: c.fotos[0]?.id ?? null })),
   };
