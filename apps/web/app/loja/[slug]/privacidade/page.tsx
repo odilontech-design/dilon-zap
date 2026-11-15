@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function PrivacidadePage({ params }: { params: { slug: string } }) {
   const loja = await lojaPublica(params.slug);
   if (!loja) notFound();
-  const secoes = loja.politica ? null : politicaPadrao({ nome: loja.nome, endereco: loja.endereco, whatsapp: loja.whatsapp, usaPixel: !!loja.metaPixelId, usaAnalytics: !!loja.ga4Id });
+  const secoes = loja.politica ? null : politicaPadrao({ nome: loja.nome, endereco: loja.endereco, whatsapp: loja.whatsapp, usaPixel: !!loja.metaPixelId, usaAnalytics: !!(loja.ga4Id || loja.googleAdsId || loja.gtmId) });
   return (
     <CascaDaLoja loja={loja} aba="privacidade">
       <CabecalhoDaPagina titulo="Política de privacidade" />

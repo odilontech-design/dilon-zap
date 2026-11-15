@@ -370,3 +370,15 @@ Em **Meu site > Início**, o quadro **Trazer do site atual** copia do site que a
 - **Quem somos**: o título (a frase em destaque) e os parágrafos do corpo da página da empresa, nunca o resumo cortado do rodapé.
 
 Nada é apagado. Destaques e Quem somos só são preenchidos se estiverem vazios, a não ser que a pessoa marque **Substituir**. O endereço digitado **não** é guardado em `siteOrigemUrl`, porque esse campo liga o espelho do estoque. Rota: `POST /api/veiculos/site/trazer` (`{ endereco?, substituir? }`), registrada na auditoria como `site.trazer`. Teste: `apps/web/lib/trazer-do-site.test-manual.ts` (aceita, opcionalmente, as páginas salvas de um site real para mostrar o que sairia delas).
+
+## Meu site: Dados da loja, WhatsApp e Avançado (v1.77.0)
+
+Três abas novas em **Meu site**, no jeito do AutoCerto:
+
+- **Dados da loja**: CEP (preenche rua, bairro, cidade e estado pelo ViaCEP, direto do navegador), endereço e número, bairro, cidade, estado, até 3 telefones (WhatsApp, celular ou fixo), o mapa (liga/desliga e um ponto exato, colando o link do Google Maps ou as coordenadas) e o horário por faixa (segunda a sexta, sábado e domingo; em branco aparece "Fechado"). Ao salvar, o Zap monta os campos antigos `endereco` e `horario` (que o site, o SEO e os feeds já leem) e, como no AutoCerto, leva o CEP e o 1º telefone para os anúncios dos portais (`cepAnuncios`/`telefoneAnuncios`).
+- **WhatsApp**: o número do botão e a mensagem que já vem escrita, com prévia. Vale para o botão flutuante, o rodapé e a Localização. Nos anúncios dos carros, a mensagem continua levando o carro e o link.
+- **Avançado**: em vez de colar scripts, só os IDs: Pixel da Meta, Google Analytics 4, Google Ads (`AW-…`) e Google Tag Manager (`GTM-…`), conferidos pelo formato porque vão para dentro de um script. O **GTM só carrega no domínio próprio da loja**: é código livre, e o endereço do Zap (`/loja/<slug>`) é o mesmo do painel onde a equipe fica logada. O DNS do domínio não é gerido pelo Zap (ver abaixo).
+
+Endereço, horário, WhatsApp, Pixel e GA4 saíram da tela "Aparência e domínio" (o `PUT /api/veiculos/config` só mexe neles se receber o campo). Rota nova: `GET/PUT /api/veiculos/site/loja` (`secao`: `dados` | `whatsapp` | `avancado`), na auditoria como `site.dados`, `site.whatsapp`, `site.avancado`. Teste: `apps/web/lib/dados-da-loja.test-manual.ts`.
+
+**Na troca do domínio (AutoCerto → Zap):** no AutoCerto, o DNS do domínio fica com eles (aba Avançado > Entradas de DNS). Antes de mudar o domínio de lugar, copie todas as entradas de e-mail (MX, TXT/SPF e o `autodiscover`) para o novo DNS; só a entrada do site (`www`) passa a apontar para o Zap. Sem isso, o e-mail da loja para de funcionar.

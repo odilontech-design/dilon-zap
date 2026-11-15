@@ -3886,6 +3886,28 @@ model VeiculosConfig {
   cepAnuncios      String?
   telefoneAnuncios String?
 
+  // Meu site > Dados da loja: endereço em partes (o campo "endereco" acima é montado a partir
+  // delas), até 3 telefones [{ tipo: "WHATSAPP"|"CELULAR"|"FIXO", numero: "5521..." }], o ponto
+  // do mapa e o horário por faixa (o "horario" acima é montado a partir delas).
+  cep            String?
+  logradouro     String?
+  bairro         String?
+  cidade         String?
+  uf             String?
+  telefones      Json?
+  mapaAtivo      Boolean @default(true)
+  mapaLat        Float?
+  mapaLng        Float?
+  horarioSemana  String?
+  horarioSabado  String?
+  horarioDomingo String?
+  // Meu site > WhatsApp: a mensagem que já vem escrita quando o cliente toca no botão.
+  whatsappMensagem String?
+  // Meu site > Avançado: Google Ads (AW-…) e Google Tag Manager (GTM-…). O GTM só carrega no
+  // domínio próprio da loja, nunca no endereço do Zap (é código livre da loja).
+  googleAdsId String?
+  gtmId       String?
+
   updatedAt DateTime @updatedAt
 }
 
