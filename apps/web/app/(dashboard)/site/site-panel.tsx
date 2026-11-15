@@ -127,6 +127,7 @@ function Painel({ d, buscadoEm, origem }: { d: PainelV1; buscadoEm: number; orig
   const c = d.carrinhoAbandonado;
   const desc = v.descontos;
   const totalDescontos = desc.comboCents + desc.cupomCents + desc.indicacaoCents + desc.cashbackCents;
+  const [verWpp, setVerWpp] = useState<null | "todos" | "falhas">(null);
 
   return (
     <div className="space-y-6">
@@ -218,9 +219,10 @@ function Painel({ d, buscadoEm, origem }: { d: PainelV1; buscadoEm: number; orig
       <Grupo titulo="Avisos às clientes">
         <Cartao rotulo="E-mails enviados" valor={inteiro(d.avisos.email.enviados)} dica={`${inteiro(d.avisos.email.pulados)} pulado(s)`} />
         <Cartao rotulo="E-mails com falha" valor={inteiro(d.avisos.email.falhas)} alerta={d.avisos.email.falhas > 0} />
-        <Cartao rotulo="WhatsApps enviados" valor={inteiro(d.avisos.whatsapp.enviados)} dica={`${inteiro(d.avisos.whatsapp.pulados)} pulado(s)`} />
-        <Cartao rotulo="WhatsApps com falha" valor={inteiro(d.avisos.whatsapp.falhas)} alerta={d.avisos.whatsapp.falhas > 0} />
+        <Cartao rotulo="WhatsApps enviados" valor={inteiro(d.avisos.whatsapp.enviados)} dica={`${inteiro(d.avisos.whatsapp.pulados)} pulado(s) · clique para ver`} onClick={() => setVerWpp(verWpp === "todos" ? null : "todos")} ativo={verWpp === "todos"} />
+        <Cartao rotulo="WhatsApps com falha" valor={inteiro(d.avisos.whatsapp.falhas)} alerta={d.avisos.whatsapp.falhas > 0} dica="clique para ver" onClick={() => setVerWpp(verWpp === "falhas" ? null : "falhas")} ativo={verWpp === "falhas"} />
       </Grupo>
+      {verWpp && <DetalheWhatsapps de={d.periodo.de} ate={d.periodo.ate} soFalhas={verWpp === "falhas"} />}
     </div>
   );
 }
@@ -236,9 +238,15 @@ function Grupo({ titulo, nota, children }: { titulo: string; nota?: string; chil
   );
 }
 
-function Cartao({ rotulo, valor, dica, destaque, alerta }: { rotulo: string; valor: string; dica?: string; destaque?: boolean; alerta?: boolean }) {
+function Cartao({ rotulo, valor, dica, destaque, alerta, onClick, ativo }: { rotulo: string; valor: string; dica?: string; destaque?: boolean; alerta?: boolean; onClick?: () => void; ativo?: boolean }) {
   return (
-    <div title={dica} className={`rounded-lg border px-3 py-3 ${alerta ? "border-red-300 bg-red-50" : destaque ? "border-accent/40 bg-accent/5" : "border-neutral-200 bg-surface"}`}>
+    <div
+      title={dica}
+      onClick={onClick}
+      onKeyDown={onClick ? (e) => (e.key === "Enter" || e.key === " ") && onClick() : undefined}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      className={`rounded-lg border px-3 py-3 ${onClick ? "cursor-pointer hover:bg-neutral-50 " : ""}${ativo ? "ring-2 ring-accent " : ""}${alerta ? "border-red-300 bg-red-50" : destaque ? "border-accent/40 bg-accent/5" : "border-neutral-200 bg-surface"}`}>
       <p className="text-[11px] text-neutral-500">{rotulo}</p>
       <p className={`mt-0.5 text-lg font-semibold tabular-nums ${alerta ? "text-red-800" : ""}`}>{valor}</p>
       {dica && <p className="mt-0.5 text-[10px] leading-tight text-neutral-400">{dica}</p>}
@@ -308,5 +316,68 @@ function GraficoDiario({ serie }: { serie: PainelV1["serieDiaria"] }) {
         <text x={W - margem.dir} y={margem.topo + 4} fontSize="10" textAnchor="end" className="fill-neutral-500">{`máx. ${brl(max)}`}</text>
       </svg>
     </div>
+  );
+}
+
+type Whatsapp = { id: string; quando: number; status: string; erro: string | null; tipo: string; pedido: string | null; contato: string; telefone: string; texto: string; conversationId: string };
+const ROTULO_ENVIO: Record<string, string> = { PENDING: "Na fila", SENT: "Enviada", DELIVERED: "Entregue", READ: "Lida", FAILED: "Falhou" };
+const quandoBR = (ms: number) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+
+/** Os WhatsApps que o site mandou, lidos do Inbox: quando, para quem, o quê, e se chegou. */
+function DetalheWhatsapps({ de, ate, soFalhas }: { de: string; ate: string; soFalhas: boolean }) {
+  const [aberta, setAberta] = useState<string | null>(null);
+  const { data, error, isLoading } = useSWR<{ mensagens: Whatsapp[] }>(
+    `/api/painel-ecommerce/whatsapps?de=${de}&ate=${ate}${soFalhas ? "&falhas=1" : ""}`,
+    async (u: string) => {
+      const r = await fetch(u);
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j) throw new Error(typeof j?.error === "string" ? j.error : "Não deu para carregar as mensagens.");
+      return j;
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+  const lista = data?.mensagens ?? [];
+  return (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold">{soFalhas ? "WhatsApps do site que falharam" : "WhatsApps enviados pelo site"}</h2>
+      {isLoading && <p className="text-sm text-neutral-500">Carregando…</p>}
+      {error && <p role="alert" className="text-sm text-red-700">{(error as Error).message}</p>}
+      {data && lista.length === 0 && <p className="rounded-lg border border-neutral-200 bg-surface px-4 py-5 text-center text-sm text-neutral-400">Nenhuma mensagem no período.</p>}
+      {lista.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-surface">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-xs text-neutral-500">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium">Quando</th>
+                <th className="px-3 py-2 text-left font-medium">Para</th>
+                <th className="px-3 py-2 text-left font-medium">Mensagem</th>
+                <th className="px-3 py-2 text-left font-medium">Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map((m) => (
+                <tr key={m.id} className="border-t border-neutral-100 align-top">
+                  <td className="whitespace-nowrap px-3 py-2 tabular-nums">{quandoBR(m.quando)}</td>
+                  <td className="px-3 py-2">
+                    <a href={`/inbox?open=${m.conversationId}`} className="font-medium hover:underline">{m.contato}</a>
+                    <p className="text-[11px] text-neutral-500">{m.telefone}</p>
+                  </td>
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{m.tipo}{m.pedido ? ` · pedido #${m.pedido}` : ""}</p>
+                    <button onClick={() => setAberta(aberta === m.id ? null : m.id)} className="text-[11px] text-accent hover:underline">{aberta === m.id ? "ocultar texto" : "ver texto"}</button>
+                    {aberta === m.id && <p className="mt-1 max-w-xl whitespace-pre-wrap rounded-md bg-neutral-50 p-2 text-xs">{m.texto}</p>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={m.status === "FAILED" ? "text-red-700" : ""}>{ROTULO_ENVIO[m.status] ?? m.status}</span>
+                    {m.erro && <p className="max-w-[16rem] text-[11px] text-red-700">{m.erro}</p>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="mt-1.5 text-[11px] text-neutral-500">Lido do Inbox: só o que o site mandou pela integração, até 300 mensagens, as mais recentes primeiro.</p>
+    </section>
   );
 }
