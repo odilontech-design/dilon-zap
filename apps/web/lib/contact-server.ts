@@ -1,6 +1,14 @@
 import { prisma } from "@dilon-zap/db";
 import { resolveWhatsAppJid } from "./worker-client";
 
+/** O contato escondido atrás de um @lid cujo telefone real (phoneNumber) é um destes. O mais antigo, se houver mais de um. */
+export async function acharContatoPorLid(tenantId: string, telefones: string[]) {
+  return prisma.contact.findFirst({
+    where: { tenantId, waJid: { endsWith: "@lid" }, phoneNumber: { in: [...new Set(telefones)] } },
+    orderBy: { createdAt: "asc" },
+  });
+}
+
 /**
  * Cria (ou acha) um contato a partir de um telefone, usando o worker pra
  * resolver o JID canônico (pode ser @s.whatsapp.net ou @lid, dependendo da
@@ -27,6 +35,11 @@ export async function upsertContactByPhone(tenantId: string, phoneDigits: string
       });
     }
   }
+
+  // Contato que o WhatsApp esconde atrás de um @lid: o waJid não é o telefone, mas o telefone real fica em
+  // phoneNumber. Sem esta busca, quem já conversa com a empresa ganhava um segundo contato (e uma segunda
+  // conversa) toda vez que um sistema de fora mandava mensagem pelo número (Believe, 14/11/2026).
+  if (!contact) contact = await acharContatoPorLid(tenantId, [phoneDigits, resolvedJid?.split("@")[0] ?? phoneDigits]);
 
   // nameManual nos dois casos: os dois chamadores dessa função são o cadastro
   // manual de contato e a importação de planilha — nome digitado por gente,
