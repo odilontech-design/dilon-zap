@@ -47,6 +47,7 @@ function rodarTestes(pacote: Ambiente): Promise<number> {
         "test/contatos-lote.test.ts",
         "test/painel-ecommerce.test.ts",
         "test/contato-lid-e-whatsapps-do-site.test.ts",
+        "test/estoque-do-site.test.ts",
         "test/resumo-financeiro-filtros.test.ts",
         "test/pedidos-vendedor.test.ts",
         "test/fila-diaria.test.ts",

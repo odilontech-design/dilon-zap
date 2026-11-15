@@ -245,6 +245,7 @@ model Tenant {
   emailsDeLead          EmailDeLead[]
   instagramConta        InstagramConta?
   painelEcommerce       PainelEcommerceConfig?
+  baixasDoSite          BaixaDoSite[]
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -1159,6 +1160,10 @@ model Product {
   // o cache descola do histórico e o número deixa de valer.
   stockQty Int @default(0)
 
+  // Código deste produto na loja online da empresa (na Believe, o slug do produto no site). É o vínculo que faz
+  // uma venda do site baixar o estoque aqui (POST /api/integracao/estoque). Nulo = produto que não vende no site.
+  codigoSite String?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1168,6 +1173,7 @@ model Product {
 
   @@unique([tenantId, name])
   @@unique([tenantId, sku])
+  @@unique([tenantId, codigoSite])
   @@index([tenantId, isActive])
 }
 
@@ -1416,6 +1422,27 @@ model StockMovement {
 
   @@index([tenantId, productId, createdAt])
   @@index([productId, createdAt])
+}
+
+// Uma venda (ou o estorno dela) que a loja online mandou para baixar o estoque (lib/estoque-do-site.ts). A chave
+// única é o que impede a mesma venda de baixar duas vezes quando o site repete o envio. `itens` guarda cada linha
+// como chegou e o produto em que foi baixada; linha sem produto vinculado fica pendente e é baixada quando a
+// gestão vincula o código ao produto.
+model BaixaDoSite {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  referencia String
+  // VENDA | ESTORNO
+  tipo       String
+  pedido     String?
+  /// [{ codigo, nome, quantidade, productId | null, aplicadoEm | null }]
+  itens      Json
+  pendentes  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@unique([tenantId, referencia, tipo])
+  @@index([tenantId, pendentes])
 }
 
 enum ScheduledMessageStatus {
