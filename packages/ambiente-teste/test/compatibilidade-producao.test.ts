@@ -42,6 +42,8 @@ const schemaAlvo = (() => {
   fs.writeFileSync(arquivo, execFileSync("git", ["show", `${COMMIT_DO_SDR}:packages/db/prisma/schema.prisma`], { cwd: raiz, maxBuffer: 16 * 1024 * 1024 }));
   return arquivo;
 })();
+/** O schema de hoje: o ponto de partida do código novo no ensaio. */
+const schemaAtual = path.join(raiz, "packages", "db", "prisma", "schema.prisma");
 const cliPrisma = createRequire(import.meta.url).resolve("prisma/build/index.js");
 const senha = decodeURIComponent(new URL(process.env.DATABASE_URL!).password);
 
@@ -381,6 +383,10 @@ const fase = process.argv[2];
     });
 
     test("o código novo faz o fluxo inteiro com a empresa fictícia e com uma de controle e leva as duas ao CRM, uma negociação e um contato para cada", async () => {
+      // O código de hoje lê colunas que vieram depois do commit do SDR (ex.: SdrEmpresa.instagram). Leva o banco do
+      // ensaio ao schema atual pelo SQL do diff (como na produção, sem --accept-data-loss) antes de rodar o fluxo.
+      const ddlAtual = await prismaCliComAmbiente(["migrate", "diff", "--from-url", urlEnsaio, "--to-schema-datamodel", schemaAtual, "--script"]);
+      assert.equal((await sql(BANCO_ENSAIO, ddlAtual)).erro, null);
       const antes = await totais();
       const { stdout } = await executar(process.execPath, ["--import", "tsx", path.join(aqui, "ensaio-pos-push.ts")], {
         cwd: path.resolve(aqui, ".."),
@@ -476,14 +482,14 @@ const fase = process.argv[2];
          INSERT INTO "SdrInteracao" (id, "tenantId", "empresaId", tipo) VALUES ('ens-in', '${tidEnsaio}', 'ens-emp', 'NOTA');`
       );
       assert.equal(semeadas.erro, null);
-      const esquemaAntes = await diff(urlEnsaio, ["--to-schema-datamodel", schemaAlvo]);
+      const esquemaAntes = await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]);
       const r = await lerComCliente("sdr-antigo", { URL_ANTES: urlEnsaio, TID: tidEnsaio, EMP: "ens-emp" });
       assert.equal(r.erro, undefined, r.erro);
       assert.equal(r.depois, r.antes); // criou uma e apagou outra
       const sobra = await consultar(BANCO_ENSAIO, `SELECT (SELECT count(*)::int FROM "SdrAcompanhamento" WHERE id = 'ens-ac') + (SELECT count(*)::int FROM "SdrAbordagem" WHERE id = 'ens-ab') + (SELECT count(*)::int FROM "SdrInteracao" WHERE id = 'ens-in') AS n`);
       assert.equal(sobra[0].n, 0); // a cascata do banco cuidou das tabelas que o código antigo nem conhece
       assert.match(esquemaAntes, /No difference detected/);
-      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAlvo]), /No difference detected/);
+      assert.match(await diff(urlEnsaio, ["--to-schema-datamodel", schemaAtual]), /No difference detected/);
       assert.deepEqual((await lerComCliente("ler", { URL_ANTES: urlEnsaio })).recursos, antesDoPush.recursos);
     });
   });

@@ -15,6 +15,7 @@ export type EmpresaConhecida = {
   telefone: string | null;
   email: string | null;
   site: string | null;
+  instagram: string | null;
   dominio: string | null;
   emailDominio: string | null;
   uf: string | null;
@@ -82,7 +83,7 @@ export class IndiceDeEmpresas {
 }
 
 /** Campos que a mesclagem pode preencher. */
-const CAMPOS_MESCLAVEIS = ["cnpj", "razaoSocial", "nomeFantasia", "telefone", "email", "site", "uf", "cidade", "segmento", "porte", "cnae"] as const;
+const CAMPOS_MESCLAVEIS = ["cnpj", "razaoSocial", "nomeFantasia", "telefone", "email", "site", "instagram", "uf", "cidade", "segmento", "porte", "cnae"] as const;
 type CampoMesclavel = (typeof CAMPOS_MESCLAVEIS)[number];
 
 export type Mudanca = { campo: string; de: null; para: string };

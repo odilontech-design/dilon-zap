@@ -67,6 +67,7 @@ export type DadosDaEmpresa = {
   email: string | null;
   telefone: string | null;
   site: string | null;
+  instagram?: string | null;
   cidade: string | null;
   uf: string | null;
   segmento: string | null;
@@ -438,7 +439,12 @@ function CartaoDeAbordagem({ ab, empresa, a, bloqueado, situacaoEmail, atualizar
                 Enviar por e-mail
               </button>
             )}
-            {!bloqueado && (ab.canal === "WHATSAPP" || ab.canal === "MENSAGEM") && telefoneDestino && (
+            {ab.canal === "MENSAGEM" && empresa.instagram && (
+              <a href={empresa.instagram} target="_blank" rel="noopener noreferrer" className={botaoSecundario}>
+                Abrir o Instagram ({empresa.instagram.replace("https://instagram.com/", "@")})
+              </a>
+            )}
+            {!bloqueado && ab.canal === "WHATSAPP" && telefoneDestino && (
               <button id={`ab-whatsapp-${ab.id}`} onClick={abrirWhatsapp} className={botaoPrimario}>
                 Abrir conversa no WhatsApp
               </button>
@@ -452,7 +458,9 @@ function CartaoDeAbordagem({ ab, empresa, a, bloqueado, situacaoEmail, atualizar
           <p className="text-[11px] text-neutral-500">
             {ab.canal === "EMAIL" && situacaoEmail?.configurado
               ? "“Enviar por e-mail” manda agora, pela sua caixa, depois de você confirmar. Se preferir mandar você mesmo, use “Abrir no meu e-mail” e depois registre o contato."
-              : ab.canal === "WHATSAPP" || ab.canal === "MENSAGEM"
+              : ab.canal === "MENSAGEM"
+                ? "Copie o texto, envie pelo direct do Instagram (ou LinkedIn) e depois registre aqui. O Dilon Zap não acessa essas redes."
+                : ab.canal === "WHATSAPP"
                 ? "O WhatsApp abre a conversa com a mensagem pronta e só envia quando você clicar em Enviar no Inbox. É uma conversa por clique, com limite por dia."
                 : "O Dilon Zap não envia esta mensagem. Você envia pelo seu canal e depois registra aqui."}
           </p>
@@ -616,6 +624,7 @@ function EditarEmpresa({ empresa, atualizar, setAviso, falhou }: { empresa: Dado
     nomeFantasia: empresa.nomeFantasia ?? "",
     razaoSocial: empresa.razaoSocial ?? "",
     site: empresa.site ?? "",
+    instagram: empresa.instagram ?? "",
     email: empresa.email ?? "",
     telefone: empresa.telefone ? formatarTelefone(empresa.telefone) : "",
     cidade: empresa.cidade ?? "",
@@ -641,6 +650,7 @@ function EditarEmpresa({ empresa, atualizar, setAviso, falhou }: { empresa: Dado
             ["nomeFantasia", "Nome fantasia"],
             ["razaoSocial", "Razão social"],
             ["site", "Site"],
+            ["instagram", "Instagram (@perfil ou link)"],
             ["email", "E-mail da empresa"],
             ["telefone", "Telefone da empresa"],
             ["cidade", "Cidade"],

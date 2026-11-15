@@ -49,4 +49,8 @@ export async function lerJson(req: Request, limiteBytes = 8 * 1024 * 1024): Prom
 
 export const recusa = (a: Extract<AcessoSdr, { ok: false }>) => NextResponse.json({ error: a.erro }, { status: a.status });
 
-export const dadosInvalidos = () => NextResponse.json({ error: "confira os dados informados" }, { status: 400 });
+/** Com o erro do zod, devolve a primeira mensagem escrita para a pessoa (as que não são o padrão em inglês). */
+export const dadosInvalidos = (erro?: { issues: { message: string; path: (string | number)[] }[] }) => {
+  const propria = erro?.issues.find((i) => /[ãçéíóúâêô]|variável|link|precisa/i.test(i.message));
+  return NextResponse.json({ error: propria ? propria.message : "confira os dados informados" }, { status: 400 });
+};

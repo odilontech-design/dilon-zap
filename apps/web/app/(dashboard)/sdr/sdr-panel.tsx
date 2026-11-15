@@ -5,6 +5,7 @@ import useSWR from "swr";
 import { PORTES, ROTULO_PORTE, ROTULO_STATUS_CAMPANHA, STATUS_CAMPANHA, UFS } from "@/lib/sdr/esquemas";
 import { chamar, fetcher } from "../receber/formatos";
 import { BloqueiosPanel } from "./bloqueios-panel";
+import { FormCampanha, type CampanhaCompleta } from "./campanha-form";
 import { EmpresasPanel, type FiltroInicial } from "./empresas-panel";
 import { FilaPanel } from "./fila-panel";
 import { HojePanel } from "./hoje-panel";
@@ -27,7 +28,7 @@ type Perfil = {
   _count?: { campanhas: number };
 };
 type Status = (typeof STATUS_CAMPANHA)[number];
-type Campanha = { id: string; nome: string; descricao: string | null; status: Status; icp: { id: string; nome: string } };
+type Campanha = CampanhaCompleta;
 
 const campo = "w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm";
 const rotulo = "block text-xs font-medium text-neutral-700 mb-1";
@@ -203,6 +204,11 @@ function Campanhas({
                   <td className="px-4 py-2.5">
                     <p className="font-medium">{c.nome}</p>
                     {c.descricao && <p className="text-xs text-neutral-500">{c.descricao}</p>}
+                    <p className="text-[11px] text-neutral-500">
+                      Meta de {c.metaDiaria ?? 25} empresas/dia ·{" "}
+                      {[c.modeloLigacao, c.modeloEmail, c.modeloDirect, c.modeloWhatsapp].filter((m) => m?.trim()).length} de 4 modelos ·{" "}
+                      {Array.isArray(c.objecoes) ? c.objecoes.length : 0} objeções
+                    </p>
                   </td>
                   <td className="px-4 py-2.5 text-neutral-600">{c.icp.nome}</td>
                   <td className="px-4 py-2.5">
@@ -265,63 +271,6 @@ function Rodape({ salvando, onFechar }: { salvando: boolean; onFechar: () => voi
         Salvar
       </button>
     </div>
-  );
-}
-
-function FormCampanha({ campanha, perfis, onFechar, onSalvo }: { campanha: Campanha | null; perfis: Perfil[]; onFechar: () => void; onSalvo: () => void }) {
-  const [nome, setNome] = useState(campanha?.nome ?? "");
-  const [descricao, setDescricao] = useState(campanha?.descricao ?? "");
-  const [icpId, setIcpId] = useState(campanha?.icp.id ?? perfis[0]?.id ?? "");
-  const [status, setStatus] = useState<Status>(campanha?.status ?? "RASCUNHO");
-  const [erro, setErro] = useState<string | null>(null);
-  const [salvando, setSalvando] = useState(false);
-
-  async function salvar(e: React.FormEvent) {
-    e.preventDefault();
-    setErro(null);
-    setSalvando(true);
-    const corpo = { nome, descricao: descricao.trim() || null, icpId, status };
-    const r = await chamar(campanha ? `/api/sdr/campanhas/${campanha.id}` : "/api/sdr/campanhas", campanha ? "PATCH" : "POST", corpo);
-    setSalvando(false);
-    if (!r.ok) return setErro(r.erro ?? "não deu pra salvar");
-    onSalvo();
-  }
-
-  return (
-    <Modal titulo={campanha ? "Editar campanha" : "Nova campanha"} onFechar={onFechar}>
-      <form onSubmit={salvar} className="flex flex-col gap-3">
-        <label>
-          <span className={rotulo}>Nome</span>
-          <input id="campanha-nome" value={nome} onChange={(e) => setNome(e.target.value)} required minLength={2} maxLength={80} className={campo} />
-        </label>
-        <label>
-          <span className={rotulo}>Descrição</span>
-          <textarea id="campanha-descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} rows={2} className={campo} />
-        </label>
-        <label>
-          <span className={rotulo}>Perfil de cliente</span>
-          <select id="campanha-perfil" value={icpId} onChange={(e) => setIcpId(e.target.value)} required className={campo}>
-            {perfis.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className={rotulo}>Status</span>
-          <select id="campanha-status" value={status} onChange={(e) => setStatus(e.target.value as Status)} className={campo}>
-            {STATUS_CAMPANHA.map((s) => (
-              <option key={s} value={s}>
-                {ROTULO_STATUS_CAMPANHA[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        {erro && <p className="text-sm text-red-600">{erro}</p>}
-        <Rodape salvando={salvando} onFechar={onFechar} />
-      </form>
-    </Modal>
   );
 }
 
