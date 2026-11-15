@@ -22,8 +22,45 @@ type Product = {
   duracaoMinutos: number | null;
   descricao: string | null;
   fotoKey?: string | null;
+  /** Código na loja online: vínculo da baixa de estoque das vendas do site. */
+  codigoSite?: string | null;
   _count?: { materiais: number; orderItems: number };
 };
+
+type PendenciaDoSite = { codigo: string; nome: string; quantidade: number; pedidos: string[] };
+
+/**
+ * Produtos vendidos no site que ainda não estão vinculados a um produto daqui: a venda não baixou o estoque
+ * deles. Some sozinho quando o código é informado no cadastro do produto (aí a baixa acontece).
+ */
+function PendenciasDoSite() {
+  const { data } = useSWR<{ pendencias: PendenciaDoSite[] }>("/api/products/pendencias-do-site", fetcher, { revalidateOnFocus: false });
+  const [aberto, setAberto] = useState(false);
+  const lista = data?.pendencias ?? [];
+  if (lista.length === 0) return null;
+  return (
+    <div role="status" className="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      <button onClick={() => setAberto((a) => !a)} className="text-left font-medium">
+        {lista.length} produto(s) vendido(s) no site ainda sem vínculo aqui: o estoque deles não baixou. {aberto ? "Ocultar" : "Ver quais"}
+      </button>
+      {aberto && (
+        <>
+          <p className="mt-1 text-xs">
+            Abra o produto correspondente, cole o código abaixo em <b>Código no site</b> e salve: as vendas pendentes baixam na hora.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {lista.map((p) => (
+              <li key={p.codigo}>
+                <b>{p.nome}</b> · {p.quantidade} un. · código <code className="rounded bg-white px-1">{p.codigo}</code>
+                {p.pedidos.length > 0 && <span className="text-amber-800"> · pedidos {p.pedidos.slice(0, 6).join(", ")}</span>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
 
 type Movimento = {
   id: string;
@@ -227,6 +264,7 @@ export function ProductsPanel({
 
   return (
     <div className="p-4 md:p-6 max-w-6xl">
+      {podeEditar && <PendenciasDoSite />}
       <div className="flex items-start justify-between gap-4 mb-1 flex-wrap">
         <h1 className="text-xl font-semibold">Produtos</h1>
         {podeEditar && (
@@ -709,6 +747,7 @@ function EditorProduto({
   const existente = "id" in inicial;
   const [name, setName] = useState(inicial.name);
   const [sku, setSku] = useState(inicial.sku ?? "");
+  const [codigoSite, setCodigoSite] = useState(existente ? ((inicial as Product).codigoSite ?? "") : "");
   const [categoria, setCategoria] = useState(inicial.categoria ?? "");
   const [preco, setPreco] = useState(
     existente ? ((inicial as Product).priceCents / 100).toFixed(2).replace(".", ",") : ""
@@ -778,6 +817,8 @@ function EditorProduto({
         // se alguém trocar o tipo depois de digitar, o número não fica
         // pendurado num cadastro onde não quer dizer nada.
         duracaoMinutos: tipo === "SERVICO" && duracao ? Number(duracao) : null,
+        // Só na edição: o vínculo com o site baixa as vendas pendentes, e isso precisa do produto já existente.
+        ...(existente ? { codigoSite } : {}),
       }),
     });
 
@@ -952,6 +993,21 @@ function EditorProduto({
             />
           </label>
         </div>
+
+        {existente && tipo === "PRODUTO" && (
+          <label className="block text-sm mb-5">
+            <span className="text-neutral-700">Código no site (opcional)</span>
+            <input
+              value={codigoSite}
+              onChange={(e) => setCodigoSite(e.target.value)}
+              placeholder="Ex: mpremium-ouse-shampoo-300ml"
+              className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 font-mono text-xs"
+            />
+            <span className="block mt-1 text-xs text-neutral-500">
+              Com o código, cada venda deste produto na loja online baixa o estoque aqui.
+            </span>
+          </label>
+        )}
 
         <div className="flex justify-end gap-3 text-sm">
           <button type="button" onClick={onFechar} className="px-4 py-2 text-neutral-600">
