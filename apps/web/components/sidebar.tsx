@@ -60,6 +60,14 @@ const NAV_ITEMS = [
     icon: icon(<><path d="M5 17h14M3 17v-4l2-5a2 2 0 0 1 1.9-1.4h10.2A2 2 0 0 1 19 8l2 5v4" /><circle cx="7.5" cy="17" r="2" /><circle cx="16.5" cy="17" r="2" /><path d="M4 12h16" /></>),
   },
   {
+    // Os números da loja online (vindos do site da empresa). Só quem tem o recurso e é gestão.
+    href: "/site",
+    recurso: "PAINEL_ECOMMERCE" as Recurso,
+    label: "Site",
+    icon: icon(<><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>),
+    somenteGestao: true,
+  },
+  {
     href: "/grupos",
     recurso: "GRUPOS" as Recurso,
     label: "Grupos",

@@ -27,7 +27,8 @@ export type Recurso =
   | "SDR"
   | "OTICA"
   | "VEICULOS"
-  | "VENDEDOR_IA";
+  | "VENDEDOR_IA"
+  | "PAINEL_ECOMMERCE";
 
 /** O que a escada dos planos distribui — e o que a regra antiga entrega inteiro. */
 export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS", "CONTAS_RECEBER", "INTEGRACAO_API", "MATERIAIS"];
@@ -47,7 +48,8 @@ export const TODOS_RECURSOS: Recurso[] = ["URA", "SETORES", "GRUPOS", "PEDIDOS",
 // serviço que elas nunca vão usar.
 // A revenda de veículos segue a mesma regra: vertical, sob demanda.
 // O Vendedor IA também: cada conversa tem custo de API.
-export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS", "OTICA", "VEICULOS", "VENDEDOR_IA"];
+// O painel do e-commerce também: só quem tem loja própria e entregou a chave do site.
+export const RECURSOS_SOB_DEMANDA: Recurso[] = ["MULTI_NUMERO", "FUNIL_SAAS", "OTICA", "VEICULOS", "VENDEDOR_IA", "PAINEL_ECOMMERCE"];
 
 /**
  * Recursos fora também do painel do superadmin. O SDR está em validação na
@@ -112,6 +114,7 @@ export const ROTULO_RECURSO: Record<Recurso, string> = {
   OTICA: "Ótica (ordens de serviço e receitas)",
   VEICULOS: "Revenda de veículos (estoque, custos e vendas)",
   VENDEDOR_IA: "Vendedor IA (atendimento automático com o estoque)",
+  PAINEL_ECOMMERCE: "Painel do e-commerce (aba Site, com os números da loja online)",
 };
 
 export type Assinatura = {

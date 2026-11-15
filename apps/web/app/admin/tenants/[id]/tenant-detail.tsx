@@ -6,6 +6,7 @@ import useSWR from "swr";
 import { PlanoPanel } from "./plano-panel";
 import { ErpPanel } from "./erp-panel";
 import { RevendaPanel } from "./revenda-panel";
+import { PainelEcommercePanel } from "./painel-ecommerce-panel";
 import { AjustesEmpresa } from "./ajustes-empresa";
 import { ExcluirEmpresa } from "./excluir-empresa";
 import type { Recurso } from "@/lib/plano-regras";
@@ -217,6 +218,7 @@ export function TenantDetail({ tenantId }: { tenantId: string }) {
         onSalvo={mutate}
       />
       <RevendaPanel tenantId={tenant.id} />
+      <PainelEcommercePanel tenantId={tenant.id} />
       <ErpPanel tenantId={tenant.id} tenantName={tenant.name} onSalvo={mutate} />
       <BillingSection tenantId={tenant.id} subscription={tenant.subscription} invoices={tenant.invoices} onChanged={mutate} />
 
