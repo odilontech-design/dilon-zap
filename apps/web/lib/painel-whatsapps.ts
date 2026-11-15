@@ -5,22 +5,25 @@
  * rotulada. Referência fora do padrão não quebra: aparece como "Mensagem do site".
  */
 
+// Os eventos de lib/regua.ts do site da Believe.
 const EVENTOS: Record<string, string> = {
   pago: "Pagamento confirmado",
   separacao: "Em separação",
-  enviado: "Pedido enviado",
+  enviado: "Enviado / pronto para retirada",
   entregue: "Pedido entregue",
-  retirada: "Pronto para retirada",
-  pagamento: "Lembrete de pagamento",
-  lembrete1: "Lembrete de carrinho (1 h)",
-  lembrete2: "Lembrete de carrinho (24 h)",
+  cancelado: "Pedido cancelado",
+  reembolsado: "Pedido reembolsado",
+  lembrete_1: "Lembrete de pagamento (1 h)",
+  lembrete_2: "Lembrete de pagamento (24 h)",
 };
 
+/** `believe-pedido-19-pago` (envio normal) ou `believe-pedido-19-pago-1794709439239` (reenvio pelo admin). */
 export function rotuloDaReferencia(ref: string | null): { tipo: string; pedido: string | null } {
-  const m = /^[a-z0-9]+-([a-z0-9]+)-(\d+)-([a-z0-9_]+)-\d+$/i.exec(ref ?? "");
+  const m = /^[a-z0-9]+-([a-z0-9]+)-(\d+)-([a-z0-9_]+?)(-\d{10,})?$/i.exec(ref ?? "");
   if (!m) return { tipo: "Mensagem do site", pedido: null };
   const evento = m[3].toLowerCase();
-  return { tipo: EVENTOS[evento] ?? evento.replace(/_/g, " "), pedido: m[2] };
+  const tipo = EVENTOS[evento] ?? evento.replace(/_/g, " ");
+  return { tipo: m[4] ? `${tipo} (reenvio)` : tipo, pedido: m[2] };
 }
 
 /** Limites do período em UTC, a partir de datas no relógio de Brasília (UTC−3): de 00:00 até 24:00 (exclusivo). */

@@ -198,6 +198,49 @@ type Opcoes = { fetchFn?: typeof fetch; resolver?: Resolver; agora?: () => numbe
 
 /** Uma chamada ao site, sem cache. Lança ErroDoPainel com mensagem para a pessoa (nunca com a chave). */
 export async function chamarSite(cfg: { url: string; chave: string }, de: string, ate: string, o: Opcoes = {}): Promise<PainelV1> {
+  return lerPainel(await buscarJsonDoSite(cfg, de, ate, CAMINHO_DO_PAINEL, "", o));
+}
+
+/** Os avisos da régua do site (e-mail e WhatsApp), rota /api/integracao/avisos. Mesmas proteções do painel. */
+export async function chamarAvisos(
+  cfg: { url: string; chave: string },
+  de: string,
+  ate: string,
+  filtros: { canal?: "EMAIL" | "WHATSAPP"; status?: "ENVIADO" | "FALHOU" | "PULADO" } = {},
+  o: Opcoes = {}
+): Promise<AvisoDoSite[]> {
+  const extra = `${filtros.canal ? `&canal=${filtros.canal}` : ""}${filtros.status ? `&status=${filtros.status}` : ""}`;
+  const json = await buscarJsonDoSite(cfg, de, ate, CAMINHO_DOS_AVISOS, extra, o);
+  const r = avisosSchema.safeParse(json);
+  if (!r.success) throw new ErroDoPainel("O site respondeu a lista de avisos num formato que a tela não entende.", 502);
+  return r.data.avisos;
+}
+
+const CAMINHO_DOS_AVISOS = "/api/integracao/avisos";
+const avisosSchema = z.object({
+  versao: z.literal(1),
+  avisos: z
+    .array(
+      z.object({
+        id: z.string(),
+        quando: z.string(),
+        pedido: z.number(),
+        evento: z.string(),
+        eventoRotulo: z.string(),
+        canal: z.enum(["EMAIL", "WHATSAPP"]),
+        status: z.string(),
+        detalhe: z.string().nullable(),
+        cliente: z.string(),
+        destino: z.string().nullable(),
+        assunto: z.string().nullable(),
+        texto: z.string().nullable(),
+      })
+    )
+    .max(500),
+});
+export type AvisoDoSite = z.infer<typeof avisosSchema>["avisos"][number];
+
+async function buscarJsonDoSite(cfg: { url: string; chave: string }, de: string, ate: string, caminho: string, extra: string, o: Opcoes): Promise<unknown> {
   const u = urlDoSite(cfg.url);
   if (!u.ok) throw new ErroDoPainel(u.erro, 400);
   const motivo = motivoDePeriodoInvalido(de, ate);
@@ -213,7 +256,7 @@ export async function chamarSite(cfg: { url: string; chave: string }, de: string
   }
   if (enderecos.length === 0 || enderecos.some(enderecoPrivado)) throw new ErroDoPainel("Esse endereço aponta para uma rede interna e não pode ser usado.", 400);
 
-  const url = `${u.base}${CAMINHO_DO_PAINEL}?de=${de}&ate=${ate}`;
+  const url = `${u.base}${caminho}?de=${de}&ate=${ate}${extra}`;
   let r: Response;
   try {
     r = await (o.fetchFn ?? fetch)(url, {
@@ -230,17 +273,16 @@ export async function chamarSite(cfg: { url: string; chave: string }, de: string
 
   if (r.status === 401) throw new ErroDoPainel("O site recusou a chave (401). Confira a chave no cadastro da empresa.", 502);
   if (r.status === 400) throw new ErroDoPainel("O site recusou o período pedido.", 400);
+  if (r.status === 404) throw new ErroDoPainel("O site ainda não oferece esta informação (404). Falta publicar a versão nova do site.", 502);
   if (!r.ok) throw new ErroDoPainel(`O site respondeu com erro (${r.status}).`, 502);
 
   const texto = await r.text().catch(() => "");
   if (texto.length > MAX_BYTES) throw new ErroDoPainel("A resposta do site veio grande demais.", 502);
-  let json: unknown;
   try {
-    json = JSON.parse(texto);
+    return JSON.parse(texto);
   } catch {
     throw new ErroDoPainel("O site respondeu em um formato que a tela não entende.", 502);
   }
-  return lerPainel(json);
 }
 
 /**
