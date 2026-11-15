@@ -74,6 +74,7 @@ export async function listarEmpresas(tenantId: string, filtro: FiltroDeEmpresas 
           telefone: x.telefone,
           email: x.email,
           site: x.site,
+          instagram: x.instagram,
           segmento: x.segmento,
           porte: x.porte,
           cnae: x.cnae,

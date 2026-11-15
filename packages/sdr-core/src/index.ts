@@ -39,3 +39,8 @@ export type { EnviadorDeEmail, MensagemDeEmail, LimitesDoWhatsapp } from "./cana
 
 export { filtroDaFilaSchema, preparoSchema, resultadoEmLoteSchema, ETAPAS_EM_LOTE, FILA_PADRAO, FILA_MAXIMA } from "./fila-diaria";
 export type { EstadoNaFila } from "./fila-diaria";
+export { META_DIARIA_PADRAO, metaDoDia, temContatoNoCanal } from "./fila-diaria";
+export type { MetaDoDia, CanalDaFila } from "./fila-diaria";
+
+export { VARIAVEIS_DO_MODELO, variaveisDesconhecidas, preencherModelo, valoresDoModelo, modeloDaCampanha, campanhaTemModelo, normalizarInstagram, arrobaDoInstagram } from "./modelos-de-campanha";
+export type { VariavelDoModelo, ValoresDoModelo, CanalDoModelo, ModelosDaCampanha } from "./modelos-de-campanha";

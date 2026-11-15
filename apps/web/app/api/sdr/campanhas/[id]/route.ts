@@ -18,7 +18,7 @@ export async function PATCH(req: Request, { params }: Contexto) {
   if (!acesso.ok) return recusa(acesso);
 
   const parsed = editarCampanhaSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return dadosInvalidos();
+  if (!parsed.success) return dadosInvalidos(parsed.error);
   try {
     const campanha = await acesso.repo.editarCampanha(params.id, parsed.data);
     await logAudit({ actor: acesso.user, action: "sdr.campanha.editada", metadata: { campanhaId: params.id, status: parsed.data.status } });

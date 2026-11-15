@@ -2638,6 +2638,30 @@ model SdrCampanha {
   icpId String
   icp   SdrIcp @relation(fields: [tenantId, icpId], references: [tenantId, id], onDelete: Restrict)
 
+  // Roteiro de venda da campanha: o que a pessoa usa para abordar e responder. Tudo opcional; sem modelo de
+  // um canal, o preparo da fila usa o modelo neutro.
+  produto     ProdutoSdr?
+  /// Quantas empresas novas abordar por dia nesta campanha. Nulo = 25.
+  metaDiaria  Int?
+  /// Para quem é a campanha, em texto livre (ex.: revendas de seminovos de RJ e SP que usam AutoCerto).
+  publico     String?
+  /// O argumento principal: por que trocar, em poucas linhas.
+  argumento   String?
+  /// Planos, preços e condições que podem ser oferecidos.
+  ofertas     String?
+  provaSocial String?
+  /// [{ objecao, resposta }]. Validado por zod ao gravar.
+  objecoes    Json    @default("[]")
+  /// Link para a pessoa agendar a demonstração (ex.: Google Agenda).
+  linkAgenda  String?
+
+  // Modelos por canal, com variáveis entre chaves ({empresa}, {saudacao}, {autor}, {link_agenda}...).
+  modeloWhatsapp     String?
+  modeloEmailAssunto String?
+  modeloEmail        String?
+  modeloLigacao      String?
+  modeloDirect       String?
+
   criadoPorId   String?
   criadoPorNome String?
   createdAt     DateTime @default(now())
@@ -2672,6 +2696,8 @@ model SdrEmpresa {
   dominio      String?
   /// Domínio do e-mail. Nulo para provedores genéricos (gmail e afins).
   emailDominio String?
+  /// Perfil do Instagram, normalizado (https://instagram.com/usuario). Destino do direct, que a pessoa envia.
+  instagram    String?
   uf           String?
   cidade       String?
   segmento     String?

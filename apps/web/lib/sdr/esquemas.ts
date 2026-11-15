@@ -1,4 +1,6 @@
 import { z } from "zod";
+// Módulo puro (sem banco): pode ir para o navegador, que importa este arquivo pelas constantes.
+import { VARIAVEIS_DO_MODELO, variaveisDesconhecidas } from "@dilon-zap/sdr-core/src/modelos-de-campanha";
 
 /**
  * O que as rotas do SDR aceitam. Todos são `.strict()`: um `tenantId` enviado
@@ -68,12 +70,47 @@ export const criarPerfilSchema = z
 
 export const editarPerfilSchema = z.object(camposDoPerfil).partial().strict();
 
+/** Texto opcional do roteiro: vazio vira null, para o modelo neutro voltar a valer. */
+const textoDoRoteiro = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .nullable()
+    .optional()
+    .transform((v) => (v === "" ? null : v));
+
+/** Variável que o modelo não conhece não é preenchida: melhor recusar ao salvar do que descobrir na revisão. */
+const modeloDeMensagem = (max: number) =>
+  textoDoRoteiro(max).refine((v) => !v || variaveisDesconhecidas(v).length === 0, (v) => ({
+    message: `variável desconhecida: ${variaveisDesconhecidas(v ?? "").map((n) => `{${n}}`).join(", ")}. Use ${Object.keys(VARIAVEIS_DO_MODELO).map((n) => `{${n}}`).join(", ")}`,
+  }));
+
+export const objecaoSchema = z.object({ objecao: z.string().trim().min(1).max(300), resposta: z.string().trim().min(1).max(1500) }).strict();
+
+const camposDoRoteiro = {
+  produto: z.enum(["DILON_ZAP", "DILON_FACILITIES"]).nullable().optional(),
+  metaDiaria: z.number().int().min(1).max(200).nullable().optional(),
+  publico: textoDoRoteiro(1000),
+  argumento: textoDoRoteiro(3000),
+  ofertas: textoDoRoteiro(3000),
+  provaSocial: textoDoRoteiro(2000),
+  objecoes: z.array(objecaoSchema).max(30).optional(),
+  linkAgenda: textoDoRoteiro(500).refine((v) => !v || /^https:\/\/\S+$/.test(v), "o link da agenda precisa começar com https://"),
+  modeloWhatsapp: modeloDeMensagem(2000),
+  modeloEmailAssunto: modeloDeMensagem(200),
+  modeloEmail: modeloDeMensagem(6000),
+  modeloLigacao: modeloDeMensagem(6000),
+  modeloDirect: modeloDeMensagem(1000),
+};
+
 export const criarCampanhaSchema = z
   .object({
     nome: z.string().trim().min(2).max(80),
     descricao: z.string().trim().max(500).nullable().optional(),
     icpId: z.string().trim().min(1).max(60),
     status: z.enum(STATUS_CAMPANHA).optional(),
+    ...camposDoRoteiro,
   })
   .strict();
 
@@ -128,6 +165,7 @@ export const filtroEmpresasSchema = z
     segmento: z.string().trim().min(1).max(80).optional(),
     telefone: z.enum(["sim", "nao"]).optional(),
     email: z.enum(["sim", "nao"]).optional(),
+    instagram: z.enum(["sim", "nao"]).optional(),
     ordem: z.enum(["pontuacao", "data", "prontas", "acao", "prioridade"]).optional(),
     etapa: z.enum(["NAO_CONTATADA", "CONTATADA", "RESPONDEU", "INTERESSE", "INFO_SOLICITADA", "REUNIAO", "SEM_INTERESSE", "NAO_CONTATAR", "CONVERTIDA"]).optional(),
     produto: z.enum(["DILON_ZAP", "DILON_FACILITIES"]).optional(),

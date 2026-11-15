@@ -11,6 +11,7 @@ const SINONIMOS: Record<Campo, string[]> = {
   telefone: ["telefone", "telefone 1", "tel", "fone", "celular", "whatsapp", "contato telefone", "telefone principal", "numero de telefone"],
   email: ["email", "e mail", "e-mail", "email principal", "correio eletronico", "email contato"],
   site: ["site", "website", "web site", "url", "pagina web", "endereco do site", "site da empresa"],
+  instagram: ["instagram", "insta", "perfil instagram", "perfil do instagram", "instagram da empresa", "ig"],
   uf: ["uf", "estado", "estado uf", "sigla uf", "sigla do estado"],
   cidade: ["cidade", "municipio", "cidade municipio", "localidade"],
   segmento: ["segmento", "ramo", "setor", "ramo de atividade", "segmento de mercado", "categoria", "atividade"],
