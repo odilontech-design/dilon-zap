@@ -337,3 +337,15 @@ Conector construído sobre o **Swagger público** (`open-api.mobiauto.com.br/v2/
 - **Catálogo** por nome (marca → modelo → versão/*trim* filtrada pelo ano, cor, câmbio, combustível, opcionais), com pendências legíveis, como nas outras integrações.
 - **Falta / a confirmar com a MobiAuto**: o fluxo de autorização liberado para a Dilon Tech (código de autorização ou outro), campos obrigatórios do deal em produção, e os **leads** (webhook `lead-callback`: o formato do corpo não está no Swagger; usar `test-callback` quando houver acesso).
 - **Troca de sistema** (Sales): além da AutoCerto, desativar a integração **WebMotors** e a **Meu Carro Novo** no Mobigestor (aba Integrações > Estoque), que também empurram estoque.
+
+## NaPista (v1.74.0)
+
+Conector construído sobre a **documentação oficial** (`developers.napista.com.br`, API "seller-inventory-api") e testado com um NaPista falso + Postgres. **Ainda não rodou contra o NaPista de verdade**: falta o `client_id` da Dilon Tech (pedido em andamento; a URL de retorno informada foi `https://zap.dilontech.com.br/api/portais/napista/retorno`).
+
+- **Acesso**: OAuth2 por código de autorização (Keycloak, realm `marketplace-dealer`) com **cliente público** (só `client_id` e URL de retorno, sem segredo). O lojista entra com o mesmo usuário e senha do NaPista e autoriza; guardamos a loja (`sellerId`, de `GET /seller/access`) e os tokens cifrados, e renovamos o token sozinhos.
+- **Variáveis**: `NAPISTA_CLIENT_ID`; `NAPISTA_AMBIENTE=development` enquanto o acesso for só ao ambiente de desenvolvimento (`api.development.napista.com.br` / `auth.development.napista.com.br`); sem ela, produção. (Para teste: `NAPISTA_API_URL`, `NAPISTA_AUTH_URL`.)
+- **Anúncios** (`cicloNapista` no worker dos portais, depois da MobiAuto): `POST /seller/{id}/offer`, `PATCH …/offer/{id}`, fotos por endereço (`POST …/photos/url`, substitui as anteriores), status (`PUT …/offer/{id}/{status}`). Reservado → `UNPUBLISHED`; vendido → `SOLD`; devolvido ou desligado pela loja → apagado. **Adota** pela placa o anúncio que já existe (no ar, pausado ou rascunho). O NaPista não tem plano por anúncio na API.
+- **Tradução**: versão pelo catálogo (marca → modelo → versão, filtrados pelo ano); cor, combustível e câmbio viram os valores fixos do NaPista (CVT/automatizado = automático); opcionais reconhecidos viram equipamentos. Cor fora da lista do NaPista vira pendência.
+- **Km**: a API do NaPista aceita anúncio sem km, mas a regra da gestão vale: **sem km informada o Zap não publica**.
+- **Leads**: a API é de consulta (`GET /seller/{id}/leads`), então o cron `/api/cron/napista-leads` (a cada 10 min, com `CRON_SECRET`) busca os últimos 3 dias e registra os novos no CRM (contato + negociação + tarefa), com o carro pela placa e, em simulação de financiamento, entrada, parcelas e "crédito pré-aprovado".
+- **A confirmar com o NaPista**: a unidade do preço (o contrato diz inteiro; assumimos **reais, sem centavos**), se o `sellerId` em `/leads` é o mesmo de `/seller/access`, limites de requisição e a passagem do `client_id` de desenvolvimento para produção.

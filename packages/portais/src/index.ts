@@ -19,3 +19,7 @@ export * from "./mobiauto/cliente";
 export * from "./mobiauto/mapa";
 export * from "./mobiauto/catalogo";
 export { cicloMobiauto, contaMobiautoGuardada, guardarContaMobiauto, type ContaMobiauto } from "./sincronizar-mobiauto";
+export * from "./napista/cliente";
+export * from "./napista/mapa";
+export * from "./napista/catalogo";
+export { cicloNapista, contaNapistaGuardada, guardarContaNapista, type ContaNapista } from "./sincronizar-napista";
