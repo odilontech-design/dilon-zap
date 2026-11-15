@@ -6,6 +6,11 @@ import { carroParaJsonLd, JsonLd } from "./dados-estruturados";
 import { Suspense } from "react";
 import Link from "next/link";
 import { Hero } from "./hero";
+import { CarrosselDeBanners } from "./carrossel-banners";
+import { OfertaAoEntrar } from "./oferta-ao-entrar";
+import { CartaoDeCarro } from "./cartao-de-carro";
+import { bannersDaLoja, carrosEmDestaque } from "@/lib/meu-site";
+import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { FaixaDeMarcas } from "./marcas";
 import { ListaDeCarros } from "./lista-de-carros";
 import { cidadeDaLoja, gruposDoEstoque } from "@/lib/vitrine-seo";
@@ -34,7 +39,10 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LojaPage({ params }: { params: { slug: string } }) {
   const loja = await lojaPublica(params.slug);
   if (!loja) notFound();
-  const carros = await carrosDaVitrine(loja);
+  const [carros, banners] = await Promise.all([carrosDaVitrine(loja), bannersDaLoja(loja.tenantId)]);
+  const destaques = carrosEmDestaque(loja.destaques, carros.filter((c) => c.status === "DISPONIVEL"));
+  const oferta = loja.ofertaVeiculoId ? carros.find((c) => c.id === loja.ofertaVeiculoId && c.status === "DISPONIVEL") ?? null : null;
+  const baseDosCarros = `${baseDaLoja(loja.dominio)}/loja/${loja.slug}`;
 
   const urlDaLoja = linkDaLoja(loja.slug, loja.dominio);
   return (
@@ -53,11 +61,23 @@ export default async function LojaPage({ params }: { params: { slug: string } })
           makesOffer: carros.slice(0, 50).map((c) => ({ "@type": "Offer", price: (c.precoCents / 100).toFixed(2), priceCurrency: "BRL", itemOffered: carroParaJsonLd(c, linkDoCarro(loja.slug, c.id, loja.dominio), []) })),
         }}
       />
-      <Hero loja={loja} menorPreco={carros.length ? Math.min(...carros.map((c) => c.precoCents)) : 0} cambios={[...new Set(carros.map((c) => c.cambio).filter(Boolean) as string[])].sort()} total={carros.length} />
+      <CarrosselDeBanners slug={loja.slug} banners={banners.map((b) => ({ id: b.id, titulo: b.titulo, link: b.link, temCelular: !!b.chaveCelular }))} />
+      <Hero compacto={banners.length > 0} loja={loja} menorPreco={carros.length ? Math.min(...carros.map((c) => c.precoCents)) : 0} cambios={[...new Set(carros.map((c) => c.cambio).filter(Boolean) as string[])].sort()} total={carros.length} />
+      {destaques.length > 0 && (
+        <section aria-label="Últimas ofertas" className="mx-auto w-full max-w-6xl px-4 pt-10">
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <h2 className="text-xl font-bold tracking-tight md:text-2xl">Últimas ofertas</h2>
+            <a href="#estoque" className="text-sm font-medium hover:underline" style={{ color: "var(--loja)" }}>Ver todo o estoque →</a>
+          </div>
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {destaques.map((c) => <CartaoDeCarro key={c.id} slug={loja.slug} c={c} whatsapp={loja.whatsapp} baseUrl={baseDosCarros} />)}
+          </div>
+        </section>
+      )}
       <FaixaDeMarcas slug={loja.slug} grupos={gruposDoEstoque(carros)} />
       <main className="mx-auto max-w-6xl px-4 py-8">
         <Suspense>
-          <ListaDeCarros slug={loja.slug} carros={carros} whatsapp={loja.whatsapp} baseUrl={`${baseDaLoja(loja.dominio)}/loja/${loja.slug}`} />
+          <ListaDeCarros slug={loja.slug} carros={carros} whatsapp={loja.whatsapp} baseUrl={baseDosCarros} />
         </Suspense>
         {gruposDoEstoque(carros).length > 0 && (
           <nav aria-label="Procurar por marca e modelo" className="mt-10 border-t border-neutral-200 pt-6">
@@ -78,6 +98,13 @@ export default async function LojaPage({ params }: { params: { slug: string } })
           </nav>
         )}
       </main>
+      {oferta && (
+        <OfertaAoEntrar
+          slug={loja.slug}
+          carro={{ id: oferta.id, nome: nomeDoVeiculo(oferta), precoCents: oferta.precoCents, fotoId: oferta.fotos[0]?.id ?? null }}
+          whatsapp={loja.whatsapp ? `https://wa.me/${loja.whatsapp}?text=${encodeURIComponent(`Olá! Vi a oferta do ${nomeDoVeiculo(oferta)} no site: ${baseDosCarros}/${oferta.id}`)}` : null}
+        />
+      )}
     </CascaDaLoja>
   );
 }

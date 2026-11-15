@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/session";
 import { recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { AbasVeiculos } from "../comum";
+import Link from "next/link";
 import { ConfigVitrine } from "./config-vitrine";
 
 export default async function ConfigVeiculosPage() {
@@ -12,6 +13,7 @@ export default async function ConfigVeiculosPage() {
   return (
     <div className="p-4 md:p-8">
       <AbasVeiculos atual="vitrine" gerencia />
+      <Link href="/veiculos/site" className="mx-auto mb-4 block max-w-3xl text-sm text-accent hover:underline">← Meu site (banners, destaques, páginas)</Link>
       <ConfigVitrine />
     </div>
   );

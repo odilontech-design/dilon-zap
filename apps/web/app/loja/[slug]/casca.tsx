@@ -20,6 +20,7 @@ export type Aba = "vitrine" | PaginaDaLoja;
 
 const MENU: { aba: Aba; rotulo: string; pagina?: PaginaDaLoja }[] = [
   { aba: "vitrine", rotulo: "Estoque" },
+  { aba: "quem-somos", rotulo: "Quem somos", pagina: "quem-somos" },
   { aba: "venda-seu-carro", rotulo: "Venda seu carro", pagina: "venda-seu-carro" },
   { aba: "financiamento", rotulo: "Financiamento", pagina: "financiamento" },
   { aba: "localizacao", rotulo: "Localização", pagina: "localizacao" },

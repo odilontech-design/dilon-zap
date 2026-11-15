@@ -77,7 +77,7 @@ export function horarioEmLinhas(texto: string | null | undefined): string[] {
   return (texto ?? "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(0, 8);
 }
 
-export const PAGINAS = ["venda-seu-carro", "financiamento", "localizacao", "privacidade"] as const;
+export const PAGINAS = ["quem-somos", "venda-seu-carro", "financiamento", "localizacao", "privacidade"] as const;
 export type PaginaDaLoja = (typeof PAGINAS)[number];
 
 /**

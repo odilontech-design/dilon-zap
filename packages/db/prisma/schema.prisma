@@ -244,6 +244,7 @@ model Tenant {
   leadsPortal           LeadPortal[]
   emailsDeLead          EmailDeLead[]
   instagramConta        InstagramConta?
+  bannersVitrine        BannerVitrine[]
   painelEcommerce       PainelEcommerceConfig?
   baixasDoSite          BaixaDoSite[]
   movimentosArmacao     MovimentoArmacao[]
@@ -3819,10 +3820,16 @@ model VeiculosConfig {
   distribuirLeads Boolean @default(false)
 
   // Vitrine: cabeçalho e rodapé claros (o padrão é escuro, que valoriza logos prateadas/claras).
-  cabecalhoClaro Boolean @default(false)
+  cabecalhoClaro  Boolean  @default(false)
   // Segunda cor da marca (destaques: botões de chamada, selos, menu ativo). Nulo = usa só a cor da loja.
-  corSecundaria  String?
-  tenant         Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // Meu site: até 8 carros em destaque na página inicial (ids, na ordem), o carro da
+  // oferta que abre ao entrar no site e o texto da página "Quem somos".
+  destaques       String[] @default([])
+  ofertaVeiculoId String?
+  quemSomosTitulo String?
+  quemSomosTexto  String?
+  corSecundaria   String?
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   // Plano contratado da revenda, definido no Super Admin. Nulo = sem plano
   // de tabela (contrato sob medida ou teste interno): sem limites.
@@ -4208,13 +4215,30 @@ model InstagramMensagem {
 /// De onde o painel "Site" lê os números do e-commerce da empresa. A chave fica cifrada (AES-256-GCM, a mesma
 /// PORTAIS_CHAVE dos portais) e nunca volta para o navegador: quem chama o site é o servidor do Zap.
 model PainelEcommerceConfig {
-  tenantId     String   @id
-  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenantId     String    @id
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   /// Endereço do site, só https (ex.: https://believecosmeticos.com). O caminho do painel é fixo (contrato v1).
   url          String
   chaveCripto  String
   /// Resultado do último "Testar conexão" salvo.
   testadoEm    DateTime?
   testeOk      Boolean?
-  atualizadoEm DateTime @updatedAt
+  atualizadoEm DateTime  @updatedAt
+}
+
+/// Banner da página inicial do site da loja (o carrossel do topo). Imagem para computador e,
+/// opcional, uma para celular; um link opcional (página do site ou endereço externo).
+model BannerVitrine {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ordem        Int      @default(0)
+  titulo       String?
+  link         String?
+  chaveDesktop String
+  chaveCelular String?
+  ativo        Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, ordem])
 }

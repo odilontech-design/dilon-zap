@@ -16,6 +16,7 @@ const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replac
 export const ROBOS_DE_IA = ["GPTBot", "OAI-SearchBot", "ChatGPT-User", "PerplexityBot", "ClaudeBot", "Claude-SearchBot", "Claude-User", "Google-Extended", "Applebot-Extended", "Bingbot"];
 
 const NOME_DA_PAGINA: Record<(typeof PAGINAS)[number], string> = {
+  "quem-somos": "Quem somos",
   "venda-seu-carro": "Venda seu carro",
   financiamento: "Simule o financiamento",
   localizacao: "Como chegar",

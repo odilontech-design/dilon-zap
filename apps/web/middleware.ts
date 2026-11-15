@@ -20,7 +20,7 @@ import { NextResponse, type NextRequest } from "next/server";
  */
 
 /** As páginas internas da vitrine (a mesma lista de PAGINAS em lib/vitrine-aparencia.ts; o middleware não importa o módulo, para ficar leve). */
-const PAGINAS_DA_LOJA = new Set(["venda-seu-carro", "financiamento", "localizacao", "privacidade"]);
+const PAGINAS_DA_LOJA = new Set(["quem-somos", "venda-seu-carro", "financiamento", "localizacao", "privacidade"]);
 
 const cache = new Map<string, { slug: string | null; ate: number }>();
 const TTL_MS = 60_000;

@@ -152,6 +152,11 @@ export type LojaPublica = {
   facebook: string | null;
   /** Texto próprio da política de privacidade; nulo = o modelo padrão. */
   politica: string | null;
+  /** Meu site: carros em destaque (ids, na ordem), o carro da oferta que abre ao entrar e a página "Quem somos". */
+  destaques: string[];
+  ofertaVeiculoId: string | null;
+  quemSomosTitulo: string | null;
+  quemSomosTexto: string | null;
 };
 
 /** A loja pelo slug, ou null se não existe, não tem o recurso ou não ligou a vitrine. */
@@ -191,6 +196,10 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     instagram: linkInstagram(cfg.instagram),
     facebook: linkFacebook(cfg.facebook),
     politica: cfg.politicaPrivacidade?.trim() || null,
+    destaques: cfg.destaques ?? [],
+    ofertaVeiculoId: cfg.ofertaVeiculoId,
+    quemSomosTitulo: cfg.quemSomosTitulo?.trim() || null,
+    quemSomosTexto: cfg.quemSomosTexto?.trim() || null,
   };
 }
 
