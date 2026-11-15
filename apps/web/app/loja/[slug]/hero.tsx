@@ -20,7 +20,7 @@ function Icone({ nome }: { nome: "financiamento" | "troca" | "fotos" }) {
  * comum de quem chega) e três atalhos para o que mais gera contato. Fundo escuro
  * da marca (ou o banner da loja), com um brilho na cor principal.
  */
-export function Hero({ loja, menorPreco, cambios, total }: { loja: LojaPublica; menorPreco: number; cambios: string[]; total: number }) {
+export function Hero({ loja, menorPreco, cambios, total, compacto = false }: { loja: LojaPublica; menorPreco: number; cambios: string[]; total: number; /** Com banners no topo: abertura mais baixa, só a busca e os atalhos. */ compacto?: boolean }) {
   const cidade = cidadeDaLoja(loja.endereco);
   const faixas = FAIXAS.filter((f) => f * 100 >= menorPreco).slice(0, 7);
   const atalhos = [
@@ -37,12 +37,12 @@ export function Hero({ loja, menorPreco, cambios, total }: { loja: LojaPublica; 
         <div className="absolute inset-0 -z-20" style={{ background: "radial-gradient(70% 90% at 88% 0%, color-mix(in srgb, var(--loja) 55%, transparent), transparent 70%), radial-gradient(50% 70% at 0% 100%, color-mix(in srgb, var(--loja2) 18%, transparent), transparent 70%)" }} />
       )}
       <div className="absolute inset-0 -z-10 bg-gradient-to-b from-black/30 via-transparent to-black/50" />
-      <div className="mx-auto flex max-w-6xl flex-col gap-6 px-4 pb-8 pt-12 md:pb-12 md:pt-20">
+      <div className={`mx-auto flex max-w-6xl flex-col gap-6 px-4 ${compacto ? "py-8" : "pb-8 pt-12 md:pb-12 md:pt-20"}`}>
         <div className="max-w-3xl">
           <p className="text-xs font-semibold uppercase tracking-[0.22em]" style={{ color: "var(--loja2)" }}>
             {loja.nome}
           </p>
-          <h1 className="mt-3 text-3xl font-extrabold leading-[1.1] tracking-tight md:text-5xl">
+          <h1 className={`mt-3 font-extrabold leading-[1.1] tracking-tight ${compacto ? "text-2xl md:text-3xl" : "text-3xl md:text-5xl"}`}>
             Carros usados e seminovos
             {cidade && (
               <>
@@ -51,7 +51,7 @@ export function Hero({ loja, menorPreco, cambios, total }: { loja: LojaPublica; 
               </>
             )}
           </h1>
-          {loja.sobre && <p className="mt-4 max-w-2xl whitespace-pre-line text-sm text-neutral-200 md:text-base">{loja.sobre}</p>}
+          {loja.sobre && !compacto && <p className="mt-4 max-w-2xl whitespace-pre-line text-sm text-neutral-200 md:text-base">{loja.sobre}</p>}
         </div>
         <BuscaRapida caminho={caminhoDaLoja(loja.slug, loja.dominio)} faixas={faixas} cambios={cambios} />
         <ul className="grid gap-3 md:grid-cols-3">

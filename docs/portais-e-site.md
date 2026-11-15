@@ -349,3 +349,14 @@ Conector construído sobre a **documentação oficial** (`developers.napista.com
 - **Km**: a API do NaPista aceita anúncio sem km, mas a regra da gestão vale: **sem km informada o Zap não publica**.
 - **Leads**: a API é de consulta (`GET /seller/{id}/leads`), então o cron `/api/cron/napista-leads` (a cada 10 min, com `CRON_SECRET`) busca os últimos 3 dias e registra os novos no CRM (contato + negociação + tarefa), com o carro pela placa e, em simulação de financiamento, entrada, parcelas e "crédito pré-aprovado".
 - **A confirmar com o NaPista**: a unidade do preço (o contrato diz inteiro; assumimos **reais, sem centavos**), se o `sellerId` em `/leads` é o mesmo de `/seller/access`, limites de requisição e a passagem do `client_id` de desenvolvimento para produção.
+
+## Meu site, no jeito do AutoCerto (v1.75.0)
+
+A aba **Veículos > Meu site** (antes "Vitrine") reúne o que a loja controla no site, com a mesma organização do AutoCerto, que é o que a equipe conhece:
+
+- **Início**: site no ar ou desligado, domínio, veículos no site, contatos pelo site nos últimos 30 dias (com a variação sobre os 30 anteriores), contatos por formulário (proposta no anúncio, ficha de financiamento, venda seu carro), **"Precisa de atenção"** (site desligado, sem logo, sem WhatsApp, sem banner, sem destaque, destaque que já foi vendido, carro sem foto ou sem preço, "Quem somos" vazio) e **últimas alterações** (quem mudou o quê, pelo log de auditoria).
+- **Banners** (`BannerVitrine`): até 10, imagem de computador (1920 × 600) e, opcional, de celular; título e link (página do site ou https). Ordem por setas, pôr/tirar do ar, apagar. No site, carrossel no topo da página inicial (passa a cada 6 s, para com o mouse, setas e bolinhas). Imagem servida por `/api/loja/<slug>/banner/<id>` (só banner ativo de loja no ar).
+- **Destaques e ofertas**: até 8 carros em destaque, na ordem escolhida ("Últimas ofertas" na página inicial; carro vendido sai sozinho) e a **oferta que abre ao entrar no site** (janela com o carro, uma vez por visita).
+- **Páginas**: redes sociais e **Quem somos** (título e texto), com página própria `/quem-somos` no menu, no sitemap e no llms.txt.
+- **Aparência, dados e domínio**: a tela que já existia (logo, cores, dados da loja, WhatsApp, domínio, pixel e Analytics).
+- Schema (só adições): `BannerVitrine`; em `VeiculosConfig`: `destaques`, `ofertaVeiculoId`, `quemSomosTitulo`, `quemSomosTexto`.
