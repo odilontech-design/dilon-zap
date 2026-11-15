@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { registrarContato } from "./rastreio";
+import { CAMPOS, type Campo, type ConfigFicha } from "@/lib/ficha-campos";
 
 /** Formulários das páginas "Venda seu carro" e "Financiamento". Mandam para o CRM da loja. */
 
@@ -124,6 +125,118 @@ export function FormularioFinanciamento({ slug, carros, carroInicial }: { slug: 
         </button>
       </div>
       <p className="text-xs text-neutral-500">Não pedimos CPF nem dados bancários por aqui. A simulação é feita pela nossa equipe, por WhatsApp.</p>
+    </form>
+  );
+}
+
+// ---- Ficha completa de financiamento (quando a loja liga em Meu site > Páginas) ----
+
+type Grupo = Record<string, string>;
+
+function CampoDaFicha({ c, valor, onChange, aoSairDoCep }: { c: Campo; valor: string; onChange: (v: string) => void; aoSairDoCep?: () => void }) {
+  const comum = { "aria-label": c.rotulo, required: c.obrigatorio, value: valor, className: campo };
+  const entrada =
+    c.tipo === "escolha" || c.tipo === "uf" ? (
+      <select {...comum} onChange={(e) => onChange(e.target.value)}>
+        <option value="">{c.obrigatorio ? "Escolha" : "—"}</option>
+        {c.opcoes?.map((o) => <option key={o}>{o}</option>)}
+      </select>
+    ) : (
+      <input
+        {...comum}
+        onChange={(e) => onChange(e.target.value)}
+        onBlur={c.tipo === "cep" ? aoSairDoCep : undefined}
+        type={c.tipo === "data" ? "date" : c.tipo === "email" ? "email" : "text"}
+        inputMode={c.tipo === "cpf" || c.tipo === "cep" ? "numeric" : c.tipo === "telefone" ? "tel" : c.tipo === "dinheiro" ? "decimal" : undefined}
+        autoComplete={c.tipo === "cpf" ? "off" : undefined}
+        placeholder={c.dica ?? (c.tipo === "cpf" ? "000.000.000-00" : c.tipo === "telefone" ? "(21) 99999-9999" : c.tipo === "dinheiro" ? "0,00" : undefined)}
+      />
+    );
+  return (
+    <label className={`flex flex-col gap-1 ${c.largo ? "sm:col-span-2" : ""}`}>
+      <span className="text-xs font-medium text-neutral-600">{c.rotulo}{c.obrigatorio && <span className="text-red-600"> *</span>}</span>
+      {entrada}
+    </label>
+  );
+}
+
+function Bloco({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <fieldset className="flex flex-col gap-3 rounded-xl border border-neutral-200 bg-surface p-5">
+      <legend className="px-1 text-sm font-semibold">{titulo}</legend>
+      {children}
+    </fieldset>
+  );
+}
+
+export function FichaFinanciamento({ slug, carros, carroInicial, config, nomeDaLoja, linkPolitica }: { slug: string; carros: CarroDaLista[]; carroInicial: string; config: ConfigFicha; nomeDaLoja: string; linkPolitica: string }) {
+  const { estado, erro, enviar } = useEnvio(slug, "financiamento");
+  const [g, setG] = useState<Record<string, Grupo>>({ veiculo: { veiculoId: carroInicial } });
+  const [refP, setRefP] = useState<Grupo[]>(Array.from({ length: config.refPessoais }, () => ({})));
+  const [refB, setRefB] = useState<Grupo[]>(Array.from({ length: config.refBancarias }, () => ({})));
+  const [consentimento, setConsentimento] = useState(false);
+  const [isca, setIsca] = useState("");
+  if (estado === "feito") return <Feito texto="Sua ficha chegou à loja. A equipe vai analisar com os bancos e chamar você no WhatsApp." />;
+  const set = (grupo: string, chave: string) => (v: string) => setG((a) => ({ ...a, [grupo]: { ...a[grupo], [chave]: v } }));
+  const grade = (grupo: keyof typeof CAMPOS, campos: Campo[], extra?: (c: Campo) => (() => void) | undefined) => (
+    <div className="grid gap-3 sm:grid-cols-2">
+      {campos.map((c) => <CampoDaFicha key={c.chave} c={c} valor={g[grupo]?.[c.chave] ?? ""} onChange={set(grupo, c.chave)} aoSairDoCep={extra?.(c)} />)}
+    </div>
+  );
+  const cepDoEndereco = async () => {
+    const cep = (g.endereco?.cep ?? "").replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then((x) => x.json()).catch(() => null);
+    if (!r || r.erro) return;
+    setG((a) => ({ ...a, endereco: { ...a.endereco, logradouro: a.endereco?.logradouro || r.logradouro || "", bairro: r.bairro || a.endereco?.bairro || "", cidade: r.localidade || a.endereco?.cidade || "", uf: r.uf || a.endereco?.uf || "" } }));
+  };
+  const lista = (itens: Grupo[], setItens: (x: Grupo[]) => void, campos: Campo[], nome: string) =>
+    itens.map((item, i) => (
+      <div key={i} className="flex flex-col gap-2">
+        {itens.length > 1 && <p className="text-xs font-medium text-neutral-500">{nome} {i + 1}</p>}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {campos.map((c) => <CampoDaFicha key={c.chave} c={c} valor={item[c.chave] ?? ""} onChange={(v) => setItens(itens.map((x, j) => (j === i ? { ...x, [c.chave]: v } : x)))} />)}
+        </div>
+      </div>
+    ));
+  return (
+    <form
+      className="relative flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        enviar({ ficha: { ...g, refPessoais: refP, refBancarias: refB }, consentimento, site: isca });
+      }}
+    >
+      <Bloco titulo="Dados pessoais">{grade("pessoais", CAMPOS.pessoais)}</Bloco>
+      {config.endereco && <Bloco titulo="Endereço">{grade("endereco", CAMPOS.endereco, (c) => (c.tipo === "cep" ? cepDoEndereco : undefined))}</Bloco>}
+      {config.profissional && <Bloco titulo="Dados profissionais">{grade("profissional", CAMPOS.profissional)}</Bloco>}
+      {config.conjuge && <Bloco titulo="Cônjuge">{grade("conjuge", CAMPOS.conjuge)}</Bloco>}
+      {config.refPessoais > 0 && <Bloco titulo={config.refPessoais > 1 ? "Referências pessoais" : "Referência pessoal"}>{lista(refP, setRefP, CAMPOS.refPessoal, "Referência")}</Bloco>}
+      {config.refBancarias > 0 && <Bloco titulo={config.refBancarias > 1 ? "Referências bancárias" : "Referência bancária"}>{lista(refB, setRefB, CAMPOS.refBancaria, "Conta")}</Bloco>}
+      {config.veiculo && (
+        <Bloco titulo="Veículo e financiamento">
+          <label className="flex flex-col gap-1">
+            <span className="text-xs font-medium text-neutral-600">Carro de interesse</span>
+            <select aria-label="Carro de interesse" value={g.veiculo?.veiculoId ?? ""} onChange={(e) => set("veiculo", "veiculoId")(e.target.value)} className={campo}>
+              <option value="">Ainda não escolhi / não está na lista</option>
+              {carros.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+          </label>
+          {grade("veiculo", CAMPOS.veiculo)}
+        </Bloco>
+      )}
+      <Isca valor={isca} onChange={setIsca} />
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" required checked={consentimento} onChange={(e) => setConsentimento(e.target.checked)} className="mt-1" />
+        <span>Autorizo a {nomeDaLoja} a usar estes dados para analisar meu crédito junto a bancos e financeiras, conforme a <a href={linkPolitica} target="_blank" rel="noreferrer" className="underline">política de privacidade</a>.</span>
+      </label>
+      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      <div>
+        <button disabled={estado === "enviando"} className={botao} style={{ background: "var(--loja)", color: "var(--loja-texto)" }}>
+          {estado === "enviando" ? "Enviando…" : "Enviar ficha"}
+        </button>
+      </div>
+      <p className="text-xs text-neutral-500">Seus dados chegam protegidos à loja, são usados só para a análise de crédito e apagados em até 180 dias.</p>
     </form>
   );
 }

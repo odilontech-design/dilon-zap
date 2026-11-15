@@ -245,6 +245,7 @@ model Tenant {
   emailsDeLead          EmailDeLead[]
   instagramConta        InstagramConta?
   bannersVitrine        BannerVitrine[]
+  fichasFinanciamento   FichaFinanciamento[]
   painelEcommerce       PainelEcommerceConfig?
   baixasDoSite          BaixaDoSite[]
   movimentosArmacao     MovimentoArmacao[]
@@ -651,6 +652,7 @@ model Negociacao {
   id       String @id @default(cuid())
   tenantId String
   tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fichasFinanciamento FichaFinanciamento[]
 
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
@@ -3907,6 +3909,9 @@ model VeiculosConfig {
   // domínio próprio da loja, nunca no endereço do Zap (é código livre da loja).
   googleAdsId String?
   gtmId       String?
+  // Meu site > Páginas > Financiamento: ficha completa (como a do AutoCerto) ou o formulário
+  // curto de sempre, e as seções que o cliente preenche. Ver lib/ficha-financiamento.ts.
+  fichaFinanciamento Json?
 
   updatedAt DateTime @updatedAt
 }
@@ -4263,4 +4268,22 @@ model BannerVitrine {
   createdAt    DateTime @default(now())
 
   @@index([tenantId, ordem])
+}
+
+// Ficha de financiamento enviada pelo site da loja (CPF, renda, referências, conta...).
+// Os dados ficam cifrados (AES-256-GCM) em `dados`; fora dele só o que não é sensível.
+// Apagada sozinha depois de `apagarEm` (180 dias) ou pela gestão. Ver lib/ficha-financiamento.ts.
+model FichaFinanciamento {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  negociacaoId String
+  negociacao   Negociacao @relation(fields: [negociacaoId], references: [id], onDelete: Cascade)
+  secoes       String[]
+  dados        String
+  apagarEm     DateTime
+  createdAt    DateTime   @default(now())
+
+  @@index([tenantId, negociacaoId])
+  @@index([apagarEm])
 }
