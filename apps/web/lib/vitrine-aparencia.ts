@@ -90,7 +90,7 @@ export function caminhoDaLoja(slug: string, dominio?: string | null, pagina?: Pa
   return pagina ? `/loja/${slug}/${pagina}` : `/loja/${slug}`;
 }
 
-export type DadosDaPolitica = { nome: string; endereco: string | null; whatsapp: string | null; usaPixel: boolean; usaAnalytics: boolean };
+export type DadosDaPolitica = { nome: string; endereco: string | null; whatsapp: string | null; usaPixel: boolean; usaAnalytics: boolean; fichaCompleta?: boolean };
 
 /**
  * Política de privacidade padrão (LGPD) da vitrine: o que o site coleta de
@@ -103,7 +103,7 @@ export function politicaPadrao(d: DadosDaPolitica): { titulo: string; texto: str
   const terceiros = [d.usaPixel && "o Pixel da Meta (Facebook e Instagram)", d.usaAnalytics && "o Google Analytics"].filter(Boolean) as string[];
   return [
     { titulo: "Quem somos", texto: `Este site é da ${d.nome}${d.endereco ? `, ${d.endereco}` : ""}. A ${d.nome} é a responsável (controladora) pelos dados pessoais tratados aqui, nos termos da Lei Geral de Proteção de Dados (Lei nº 13.709/2018).` },
-    { titulo: "Quais dados coletamos", texto: "Só o que você digita nos formulários do site: nome, telefone (WhatsApp), e-mail quando pedido, e as informações que você escolhe enviar, como o carro que quer comprar, o carro que quer vender (marca, modelo, ano e quilometragem), o valor de entrada e a mensagem. Não pedimos CPF, dados de cartão nem senhas." },
+    { titulo: "Quais dados coletamos", texto: `Só o que você digita nos formulários do site: nome, telefone (WhatsApp), e-mail quando pedido, e as informações que você escolhe enviar, como o carro que quer comprar, o carro que quer vender (marca, modelo, ano e quilometragem), o valor de entrada e a mensagem.${d.fichaCompleta ? " Na ficha de financiamento, também pedimos os dados que os bancos exigem para a análise de crédito: CPF, data de nascimento, endereço, dados profissionais e renda e, conforme a ficha, dados do cônjuge e referências pessoais e bancárias. Esses dados ficam guardados de forma cifrada, só a equipe da loja os vê, e são apagados em até 180 dias. Não pedimos dados de cartão nem senhas." : " Não pedimos CPF, dados de cartão nem senhas."}` },
     { titulo: "Para que usamos", texto: "Para responder ao seu contato, apresentar o veículo de seu interesse, avaliar o seu carro, simular financiamento e dar continuidade à negociação. Também para registrar o atendimento e cumprir obrigações legais. Não vendemos seus dados." },
     { titulo: "Com quem compartilhamos", texto: `Seus dados ficam num sistema de gestão de atendimento contratado pela loja e, quando você pede financiamento, podem ser enviados às instituições financeiras para a simulação${terceiros.length ? `. O site também usa ${terceiros.join(" e ")}, que coletam dados de navegação (páginas visitadas, tipo de aparelho) para medir visitas e mostrar anúncios` : ""}.` },
     { titulo: "Por quanto tempo guardamos", texto: "Pelo tempo necessário para o atendimento e para cumprir obrigações legais e contratuais. Depois disso, apagamos ou tornamos anônimos." },

@@ -5,7 +5,8 @@ import { caminhoDaLoja } from "@/lib/vitrine-aparencia";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { BotaoWhatsapp } from "../rastreio";
 import { CabecalhoDaPagina, CascaDaLoja } from "../casca";
-import { FormularioFinanciamento } from "../formularios";
+import { FichaFinanciamento, FormularioFinanciamento } from "../formularios";
+import { fichaDaLoja } from "@/lib/ficha-financiamento";
 
 export const dynamic = "force-dynamic";
 
@@ -25,12 +26,18 @@ export default async function FinanciamentoPage({ params, searchParams }: { para
   if (!loja) notFound();
   const carros = await carrosDaVitrine(loja);
   const lista = carros.map((c) => ({ id: c.id, nome: `${nomeDoVeiculo(c)} · ${(c.precoCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}` }));
+  const ficha = await fichaDaLoja(loja.tenantId);
   const inicial = lista.some((c) => c.id === searchParams.carro) ? (searchParams.carro as string) : "";
   return (
     <CascaDaLoja loja={loja} aba="financiamento">
-      <CabecalhoDaPagina titulo="Financiamento" texto="Escolha o carro, diga se tem entrada e a nossa equipe chama você no WhatsApp com as condições. Sem compromisso." />
+      <CabecalhoDaPagina
+        titulo="Financiamento"
+        texto={ficha.completa ? "Preencha a ficha e a nossa equipe analisa o seu crédito com os bancos e chama você no WhatsApp com as condições." : "Escolha o carro, diga se tem entrada e a nossa equipe chama você no WhatsApp com as condições. Sem compromisso."}
+      />
       <main className="mx-auto max-w-3xl px-4 py-6">
-        {loja.formularioAtivo ? (
+        {loja.formularioAtivo && ficha.completa ? (
+          <FichaFinanciamento slug={loja.slug} carros={lista} carroInicial={inicial} config={ficha} nomeDaLoja={loja.nome} linkPolitica={caminhoDaLoja(loja.slug, loja.dominio, "privacidade")} />
+        ) : loja.formularioAtivo ? (
           <FormularioFinanciamento slug={loja.slug} carros={lista} carroInicial={inicial} />
         ) : (
           loja.whatsapp && (

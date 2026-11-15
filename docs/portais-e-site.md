@@ -382,3 +382,15 @@ Três abas novas em **Meu site**, no jeito do AutoCerto:
 Endereço, horário, WhatsApp, Pixel e GA4 saíram da tela "Aparência e domínio" (o `PUT /api/veiculos/config` só mexe neles se receber o campo). Rota nova: `GET/PUT /api/veiculos/site/loja` (`secao`: `dados` | `whatsapp` | `avancado`), na auditoria como `site.dados`, `site.whatsapp`, `site.avancado`. Teste: `apps/web/lib/dados-da-loja.test-manual.ts`.
 
 **Na troca do domínio (AutoCerto → Zap):** no AutoCerto, o DNS do domínio fica com eles (aba Avançado > Entradas de DNS). Antes de mudar o domínio de lugar, copie todas as entradas de e-mail (MX, TXT/SPF e o `autodiscover`) para o novo DNS; só a entrada do site (`www`) passa a apontar para o Zap. Sem isso, o e-mail da loja para de funcionar.
+
+## Ficha de financiamento completa (v1.78.0)
+
+Em **Meu site > Páginas > Financiamento** a loja escolhe entre o **formulário curto** de sempre (nome, WhatsApp, carro e entrada) e a **ficha completa**, como a do AutoCerto: dados pessoais (sempre: nome, CPF validado, nascimento, WhatsApp, e-mail, estado civil, CNH) e, se ligados, endereço (CEP pelo ViaCEP), dados profissionais, cônjuge, de 0 a 3 referências pessoais, de 0 a 2 referências bancárias e veículo e financiamento (carro do estoque, entrada, valor a financiar e parcelas). Os campos ficam em `lib/ficha-campos.ts` (formulário, conferência no servidor e a tela da negociação usam a mesma lista).
+
+Cuidados com os dados (LGPD), em `lib/ficha-financiamento.ts`:
+- o cliente marca que autoriza o uso para a análise de crédito (fica guardado com data e hora); a política de privacidade padrão passa a citar os dados da ficha;
+- a ficha fica **cifrada** (AES-256-GCM) em `FichaFinanciamento.dados`; a negociação, a tarefa e o contato levam só nome, WhatsApp, carro e entrada;
+- na negociação, o quadro **Ficha de financiamento** lista as fichas sem dados; **Abrir** mostra a ficha (e permite imprimir/PDF) e cada abertura vai para a auditoria (`negociacao.ficha.ver`); **Apagar** é da gestão;
+- a ficha se apaga sozinha em **180 dias** (a limpeza roda a cada ficha nova e a cada consulta).
+
+Chave: `FICHAS_CHAVE` (32 bytes em base64), se existir; senão, uma chave derivada de `PORTAIS_CHAVE` (HKDF, rótulo próprio). Sem nenhuma das duas, a opção da ficha completa fica desligada e o site usa o formulário curto. **Trocar a chave torna ilegíveis as fichas já guardadas.** Rotas: `GET/PUT /api/veiculos/site/ficha`, `GET/DELETE /api/negociacoes/[id]/ficha`, e o `POST /api/loja/[slug]/financiamento` aceita `{ ficha, consentimento }`. Teste: `apps/web/lib/ficha-financiamento.test-manual.ts`.

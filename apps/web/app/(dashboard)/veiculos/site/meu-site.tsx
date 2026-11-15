@@ -77,6 +77,7 @@ export function MeuSite() {
       {aba === "banners" && <Banners d={data} recarregar={mutate} />}
       {aba === "destaques" && <Destaques d={data} recarregar={mutate} />}
       {aba === "paginas" && <Paginas d={data} recarregar={mutate} />}
+      {aba === "paginas" && <ConfigDaFicha />}
       {(aba === "dados" || aba === "whatsapp" || aba === "avancado") && <AbasDaLoja aba={aba} recarregar={mutate} />}
     </div>
   );
@@ -534,5 +535,74 @@ function Avancado({ d, recarregar }: { d: DadosLoja; recarregar: () => void }) {
         </p>
       </section>
     </div>
+  );
+}
+
+// ---- Páginas > Financiamento: o que o cliente preenche ----
+
+type Ficha = { completa: boolean; endereco: boolean; profissional: boolean; conjuge: boolean; refPessoais: number; refBancarias: number; veiculo: boolean; semChave: boolean };
+
+function ConfigDaFicha() {
+  const { data, mutate } = useSWR<Ficha>("/api/veiculos/site/ficha", fetcher);
+  const [f, setF] = useState<Ficha | null>(null);
+  const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
+  useEffect(() => { if (data) setF(data); }, [data]);
+  if (!f) return null;
+  const opcao = (k: "endereco" | "profissional" | "conjuge" | "veiculo", titulo: string, texto: string) => (
+    <label className={`flex items-start gap-3 rounded-lg border p-3 ${f[k] ? "border-accent/50 bg-accent/5" : "border-neutral-200"}`}>
+      <input type="checkbox" className="mt-1" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />
+      <span><span className="block text-sm font-medium">{titulo}</span><span className="text-xs text-neutral-500">{texto}</span></span>
+    </label>
+  );
+  const quantas = (k: "refPessoais" | "refBancarias", titulo: string, texto: string, max: number, nome: (n: number) => string) => (
+    <div className={`flex items-start justify-between gap-3 rounded-lg border p-3 ${f[k] > 0 ? "border-accent/50 bg-accent/5" : "border-neutral-200"}`}>
+      <span><span className="block text-sm font-medium">{titulo}</span><span className="text-xs text-neutral-500">{texto}</span></span>
+      <select className={`${campo} w-36`} value={f[k]} onChange={(e) => setF({ ...f, [k]: Number(e.target.value) })}>
+        {Array.from({ length: max + 1 }, (_, n) => <option key={n} value={n}>{n === 0 ? "Não pedir" : nome(n)}</option>)}
+      </select>
+    </div>
+  );
+  const salvar = async () => {
+    setAviso(null);
+    const { semChave, ...corpo } = f;
+    void semChave;
+    const erro = await chamar("/api/veiculos/site/ficha", "PUT", corpo);
+    setAviso(erro ? { texto: erro, erro: true } : { texto: "Financiamento salvo. Já vale no site." });
+    mutate();
+  };
+  return (
+    <section className={secao} data-testid="site-ficha">
+      <div className="flex items-center justify-between gap-3">
+        <h3 className="text-sm font-semibold">Financiamento</h3>
+        <span className="text-xs text-neutral-500">Página “Financiamento” no menu</span>
+      </div>
+      <div className="flex flex-col gap-2 text-sm">
+        <label className="flex items-center gap-2"><input type="radio" checked={!f.completa} onChange={() => setF({ ...f, completa: false })} /> Formulário curto: nome, WhatsApp, carro e entrada (a equipe pede o resto no WhatsApp)</label>
+        <label className="flex items-center gap-2"><input type="radio" checked={f.completa} disabled={f.semChave} onChange={() => setF({ ...f, completa: true })} /> Ficha completa, como a do AutoCerto (CPF, renda, referências…)</label>
+        {f.semChave && <p className="text-xs text-amber-700">A ficha completa precisa da chave de proteção configurada no servidor. Fale com a Dilon Tech.</p>}
+      </div>
+      {f.completa && (
+        <>
+          <p className="text-xs font-semibold text-neutral-700">O que o cliente preenche</p>
+          <div className="grid gap-2 md:grid-cols-2">
+            <label className="flex items-start gap-3 rounded-lg border border-accent/50 bg-accent/5 p-3 opacity-80">
+              <input type="checkbox" className="mt-1" checked disabled />
+              <span><span className="block text-sm font-medium">Dados pessoais <span className="text-xs text-neutral-500">· sempre</span></span><span className="text-xs text-neutral-500">Nome, e-mail, CPF, telefone, celular, CNH, estado civil e data de nascimento.</span></span>
+            </label>
+            {opcao("endereco", "Endereço", "Endereço completo, tempo de residência e tipo de residência (própria, alugada etc.).")}
+            {opcao("profissional", "Dados profissionais", "Empresa, endereço da empresa, data de admissão, telefone, cargo, setor, salário e outras rendas.")}
+            {opcao("conjuge", "Cônjuge", "Nome, CPF, data de nascimento, renda, RG, empresa, cargo, data de admissão e telefone.")}
+            {quantas("refPessoais", "Referências pessoais", "Nome, telefone e endereço de cada referência.", 3, (n) => `${n} referência${n > 1 ? "s" : ""}`)}
+            {quantas("refBancarias", "Referências bancárias", "Banco, agência, conta e cliente desde.", 2, (n) => `${n} conta${n > 1 ? "s" : ""}`)}
+            {opcao("veiculo", "Veículo e financiamento", "Carro do estoque (marca, modelo, ano, cor e preço); entrada, valor a financiar e número de parcelas.")}
+          </div>
+          <p className="text-xs text-neutral-500">A ficha chega na negociação do CRM, guardada de forma cifrada. Cada vez que alguém abre, fica registrado. Ela se apaga sozinha em 180 dias, e a gestão pode apagar antes.</p>
+        </>
+      )}
+      <div className="flex items-center gap-3">
+        <button className={botaoPrimario} onClick={salvar}>Salvar</button>
+        {aviso && <span className={`text-sm ${aviso.erro ? "text-red-600" : "text-accent"}`}>{aviso.texto}</span>}
+      </div>
+    </section>
   );
 }

@@ -1,3 +1,4 @@
+import { fichaDaLoja } from "@/lib/ficha-financiamento";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { baseDaLoja, lojaPublica } from "@/lib/vitrine";
@@ -19,7 +20,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function PrivacidadePage({ params }: { params: { slug: string } }) {
   const loja = await lojaPublica(params.slug);
   if (!loja) notFound();
-  const secoes = loja.politica ? null : politicaPadrao({ nome: loja.nome, endereco: loja.endereco, whatsapp: loja.whatsapp, usaPixel: !!loja.metaPixelId, usaAnalytics: !!(loja.ga4Id || loja.googleAdsId || loja.gtmId) });
+  const secoes = loja.politica ? null : politicaPadrao({ nome: loja.nome, endereco: loja.endereco, whatsapp: loja.whatsapp, usaPixel: !!loja.metaPixelId, usaAnalytics: !!(loja.ga4Id || loja.googleAdsId || loja.gtmId), fichaCompleta: loja.formularioAtivo && (await fichaDaLoja(loja.tenantId)).completa });
   return (
     <CascaDaLoja loja={loja} aba="privacidade">
       <CabecalhoDaPagina titulo="Política de privacidade" />

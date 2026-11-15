@@ -1,5 +1,6 @@
 "use client";
 
+import { FichaDeFinanciamento } from "./ficha-financiamento";
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -290,6 +291,7 @@ export function NegociacaoPagina({ id, userId, podeGerir }: { id: string; userId
             ocupado={ocupado}
             enviar={enviar}
           />
+          <FichaDeFinanciamento negociacaoId={id} />
 
           <CondicaoPagamento
             key={JSON.stringify(n.pagamento) + n.valorCents}
