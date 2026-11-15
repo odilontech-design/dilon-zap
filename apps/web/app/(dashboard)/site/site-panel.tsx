@@ -128,6 +128,7 @@ function Painel({ d, buscadoEm, origem }: { d: PainelV1; buscadoEm: number; orig
   const desc = v.descontos;
   const totalDescontos = desc.comboCents + desc.cupomCents + desc.indicacaoCents + desc.cashbackCents;
   const [verWpp, setVerWpp] = useState<null | "todos" | "falhas">(null);
+  const [verEmail, setVerEmail] = useState<null | "todos" | "falhas">(null);
 
   return (
     <div className="space-y-6">
@@ -217,11 +218,12 @@ function Painel({ d, buscadoEm, origem }: { d: PainelV1; buscadoEm: number; orig
       </Grupo>
 
       <Grupo titulo="Avisos às clientes">
-        <Cartao rotulo="E-mails enviados" valor={inteiro(d.avisos.email.enviados)} dica={`${inteiro(d.avisos.email.pulados)} pulado(s)`} />
-        <Cartao rotulo="E-mails com falha" valor={inteiro(d.avisos.email.falhas)} alerta={d.avisos.email.falhas > 0} />
+        <Cartao rotulo="E-mails enviados" valor={inteiro(d.avisos.email.enviados)} dica={`${inteiro(d.avisos.email.pulados)} pulado(s) · clique para ver`} onClick={() => setVerEmail(verEmail === "todos" ? null : "todos")} ativo={verEmail === "todos"} />
+        <Cartao rotulo="E-mails com falha" valor={inteiro(d.avisos.email.falhas)} alerta={d.avisos.email.falhas > 0} dica="clique para ver" onClick={() => setVerEmail(verEmail === "falhas" ? null : "falhas")} ativo={verEmail === "falhas"} />
         <Cartao rotulo="WhatsApps enviados" valor={inteiro(d.avisos.whatsapp.enviados)} dica={`${inteiro(d.avisos.whatsapp.pulados)} pulado(s) · clique para ver`} onClick={() => setVerWpp(verWpp === "todos" ? null : "todos")} ativo={verWpp === "todos"} />
         <Cartao rotulo="WhatsApps com falha" valor={inteiro(d.avisos.whatsapp.falhas)} alerta={d.avisos.whatsapp.falhas > 0} dica="clique para ver" onClick={() => setVerWpp(verWpp === "falhas" ? null : "falhas")} ativo={verWpp === "falhas"} />
       </Grupo>
+      {verEmail && <DetalheEmails de={d.periodo.de} ate={d.periodo.ate} soFalhas={verEmail === "falhas"} />}
       {verWpp && <DetalheWhatsapps de={d.periodo.de} ate={d.periodo.ate} soFalhas={verWpp === "falhas"} />}
     </div>
   );
@@ -322,6 +324,74 @@ function GraficoDiario({ serie }: { serie: PainelV1["serieDiaria"] }) {
 type Whatsapp = { id: string; quando: number; status: string; erro: string | null; tipo: string; pedido: string | null; contato: string; telefone: string; texto: string; conversationId: string };
 const ROTULO_ENVIO: Record<string, string> = { PENDING: "Na fila", SENT: "Enviada", DELIVERED: "Entregue", READ: "Lida", FAILED: "Falhou" };
 const quandoBR = (ms: number) => new Date(ms).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+
+type AvisoEmail = { id: string; quando: string; pedido: number; eventoRotulo: string; status: string; detalhe: string | null; cliente: string; destino: string | null; assunto: string | null; texto: string | null };
+const ROTULO_AVISO: Record<string, string> = { ENVIADO: "Enviado", FALHOU: "Falhou", PULADO: "Pulado", ENVIANDO: "Enviando" };
+
+/**
+ * Os e-mails que o site mandou, lidos do próprio site (o e-mail sai direto do site por SMTP, o Dilon Zap não o vê
+ * passar): quando, para quem, assunto, texto e, se falhou, o motivo.
+ */
+function DetalheEmails({ de, ate, soFalhas }: { de: string; ate: string; soFalhas: boolean }) {
+  const [aberta, setAberta] = useState<string | null>(null);
+  const { data, error, isLoading } = useSWR<{ avisos: AvisoEmail[] }>(
+    `/api/painel-ecommerce/avisos?de=${de}&ate=${ate}&canal=EMAIL${soFalhas ? "&status=FALHOU" : ""}`,
+    async (u: string) => {
+      const r = await fetch(u);
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j) throw new Error(typeof j?.error === "string" ? j.error : "Não deu para carregar os e-mails.");
+      return j;
+    },
+    { revalidateOnFocus: false, shouldRetryOnError: false }
+  );
+  const lista = data?.avisos ?? [];
+  return (
+    <section>
+      <h2 className="mb-2 text-sm font-semibold">{soFalhas ? "E-mails do site que falharam" : "E-mails enviados pelo site"}</h2>
+      {isLoading && <p className="text-sm text-neutral-500">Carregando…</p>}
+      {error && <p role="alert" className="text-sm text-red-700">{(error as Error).message}</p>}
+      {data && lista.length === 0 && <p className="rounded-lg border border-neutral-200 bg-surface px-4 py-5 text-center text-sm text-neutral-400">Nenhum e-mail no período.</p>}
+      {lista.length > 0 && (
+        <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-surface">
+          <table className="w-full text-sm">
+            <thead className="bg-neutral-50 text-xs text-neutral-500">
+              <tr>
+                <th className="px-3 py-2 text-left font-medium">Quando</th>
+                <th className="px-3 py-2 text-left font-medium">Para</th>
+                <th className="px-3 py-2 text-left font-medium">E-mail</th>
+                <th className="px-3 py-2 text-left font-medium">Situação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {lista.map((a) => (
+                <tr key={a.id} className="border-t border-neutral-100 align-top">
+                  <td className="whitespace-nowrap px-3 py-2 tabular-nums">{quandoBR(Date.parse(a.quando))}</td>
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{a.cliente}</p>
+                    <p className="text-[11px] text-neutral-500">{a.destino ?? "sem e-mail"}</p>
+                  </td>
+                  <td className="px-3 py-2">
+                    <p className="font-medium">{a.eventoRotulo} · pedido #{a.pedido}</p>
+                    {a.assunto && <p className="text-[11px] text-neutral-500">{a.assunto}</p>}
+                    {a.texto && (
+                      <button onClick={() => setAberta(aberta === a.id ? null : a.id)} className="text-[11px] text-accent hover:underline">{aberta === a.id ? "ocultar texto" : "ver texto"}</button>
+                    )}
+                    {aberta === a.id && <p className="mt-1 max-w-xl whitespace-pre-wrap rounded-md bg-neutral-50 p-2 text-xs">{a.texto}</p>}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={a.status === "FALHOU" ? "text-red-700" : a.status === "PULADO" ? "text-neutral-500" : ""}>{ROTULO_AVISO[a.status] ?? a.status}</span>
+                    {a.detalhe && a.status !== "ENVIADO" && <p className="max-w-[18rem] break-words text-[11px] text-red-700">{a.detalhe}</p>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="mt-1.5 text-[11px] text-neutral-500">Lido do site, até 300 e-mails, os mais recentes primeiro. Os textos são editados no admin do site, em Mensagens.</p>
+    </section>
+  );
+}
 
 /** Os WhatsApps que o site mandou, lidos do Inbox: quando, para quem, o quê, e se chegou. */
 function DetalheWhatsapps({ de, ate, soFalhas }: { de: string; ate: string; soFalhas: boolean }) {

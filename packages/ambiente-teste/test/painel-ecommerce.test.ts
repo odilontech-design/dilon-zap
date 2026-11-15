@@ -7,6 +7,7 @@ process.env.PORTAIS_CHAVE = Buffer.alloc(32, 7).toString("base64");
 import { prisma } from "@dilon-zap/db";
 import {
   buscarPainel,
+  chamarAvisos,
   chamarSite,
   enderecoPrivado,
   ErroDoPainel,
@@ -150,6 +151,26 @@ describe("chamar o site", () => {
     await assert.rejects(chamarSite(cfg, "2026-11-01", "2026-11-13", { resolver: async () => { throw new Error("ENOTFOUND"); }, fetchFn: async () => respostaJson(PAINEL) }), /Não encontrei/);
     await assert.rejects(chamarSite({ ...cfg, url: "http://loja.com.br" }, "2026-11-01", "2026-11-13", { resolver: publico }), /https/);
     await assert.rejects(chamarSite(cfg, "2026-11-13", "2026-11-01", { resolver: publico }), /depois/);
+  });
+});
+
+describe("avisos da régua (e-mails do site)", () => {
+  const AVISO = {
+    id: "n1", quando: "2026-11-15T03:34:00.000Z", pedido: 19, evento: "pago", eventoRotulo: "Pagamento confirmado", canal: "EMAIL",
+    status: "FALHOU", detalhe: "Invalid login", cliente: "Felipe", destino: "f@x.com", assunto: "Pedido #19 confirmado", texto: "Oi",
+  };
+  test("pede a rota de avisos com período e filtros, e lê a lista", async () => {
+    let url = "";
+    const r = await chamarAvisos(cfg, "2026-11-01", "2026-11-15", { canal: "EMAIL", status: "FALHOU" }, {
+      resolver: publico,
+      fetchFn: async (u) => { url = String(u); return respostaJson({ versao: 1, avisos: [AVISO] }); },
+    });
+    assert.equal(url, "https://believecosmeticos.com/api/integracao/avisos?de=2026-11-01&ate=2026-11-15&canal=EMAIL&status=FALHOU");
+    assert.equal(r[0].detalhe, "Invalid login");
+  });
+  test("site sem a rota nova (404) e formato errado viram aviso claro", async () => {
+    await assert.rejects(chamarAvisos(cfg, "2026-11-01", "2026-11-15", {}, { resolver: publico, fetchFn: async () => respostaJson({ error: "x" }, 404) }), /publicar a versão nova/);
+    await assert.rejects(chamarAvisos(cfg, "2026-11-01", "2026-11-15", {}, { resolver: publico, fetchFn: async () => respostaJson({ versao: 1, avisos: [{ id: 1 }] }) }), /formato/);
   });
 });
 

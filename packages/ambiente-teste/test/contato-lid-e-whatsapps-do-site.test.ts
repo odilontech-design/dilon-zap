@@ -45,8 +45,10 @@ describe("contato escondido atrás de @lid", () => {
 
 describe("detalhe dos WhatsApps do site", () => {
   test("rótulo pela referência da régua", () => {
-    assert.deepEqual(rotuloDaReferencia("believe-pedido-19-pago-1794709439239"), { tipo: "Pagamento confirmado", pedido: "19" });
-    assert.deepEqual(rotuloDaReferencia("believe-pedido-7-novo_evento-1"), { tipo: "novo evento", pedido: "7" });
+    assert.deepEqual(rotuloDaReferencia("believe-pedido-19-pago"), { tipo: "Pagamento confirmado", pedido: "19" });
+    assert.deepEqual(rotuloDaReferencia("believe-pedido-19-pago-1794709439239"), { tipo: "Pagamento confirmado (reenvio)", pedido: "19" });
+    assert.deepEqual(rotuloDaReferencia("believe-pedido-20-lembrete_2"), { tipo: "Lembrete de pagamento (24 h)", pedido: "20" });
+    assert.deepEqual(rotuloDaReferencia("believe-pedido-7-novo_evento"), { tipo: "novo evento", pedido: "7" });
   });
   test("referência fora do padrão não quebra", () => {
     assert.deepEqual(rotuloDaReferencia("abc"), { tipo: "Mensagem do site", pedido: null });
