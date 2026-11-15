@@ -35,7 +35,10 @@ const ABAS = [
   { id: "banners", rotulo: "Banners" },
   { id: "destaques", rotulo: "Destaques e ofertas" },
   { id: "paginas", rotulo: "Páginas" },
-  { id: "configuracoes", rotulo: "Aparência, dados e domínio" },
+  { id: "dados", rotulo: "Dados da loja" },
+  { id: "whatsapp", rotulo: "WhatsApp" },
+  { id: "avancado", rotulo: "Avançado" },
+  { id: "configuracoes", rotulo: "Aparência e domínio" },
 ] as const;
 type Aba = (typeof ABAS)[number]["id"];
 
@@ -74,6 +77,7 @@ export function MeuSite() {
       {aba === "banners" && <Banners d={data} recarregar={mutate} />}
       {aba === "destaques" && <Destaques d={data} recarregar={mutate} />}
       {aba === "paginas" && <Paginas d={data} recarregar={mutate} />}
+      {(aba === "dados" || aba === "whatsapp" || aba === "avancado") && <AbasDaLoja aba={aba} recarregar={mutate} />}
     </div>
   );
 }
@@ -349,6 +353,186 @@ function Paginas({ d, recarregar }: { d: Dados; recarregar: () => void }) {
         <button className={botaoPrimario} onClick={salvar}>Salvar páginas</button>
         {aviso && <span className={`text-sm ${aviso.erro ? "text-red-600" : "text-accent"}`}>{aviso.texto}</span>}
       </div>
+    </div>
+  );
+}
+
+// ---- Dados da loja, WhatsApp e Avançado ----
+
+type Telefone = { tipo: string; numero: string };
+type DadosLoja = {
+  cep: string; logradouro: string; bairro: string; cidade: string; uf: string;
+  telefones: Telefone[]; mapaAtivo: boolean; ponto: string;
+  horarioSemana: string; horarioSabado: string; horarioDomingo: string; horarioAntigo: string;
+  whatsapp: string; whatsappMensagem: string;
+  metaPixelId: string; ga4Id: string; googleAdsId: string; gtmId: string; dominio: string | null;
+};
+const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
+
+function useSalvar(recarregar: () => void) {
+  const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
+  const [salvando, setSalvando] = useState(false);
+  const salvar = async (corpo: object, ok: string) => {
+    setAviso(null);
+    setSalvando(true);
+    const erro = await chamar("/api/veiculos/site/loja", "PUT", corpo);
+    setSalvando(false);
+    setAviso(erro ? { texto: erro, erro: true } : { texto: ok });
+    recarregar();
+  };
+  const Aviso = () => (aviso ? <span className={`text-sm ${aviso.erro ? "text-red-600" : "text-accent"}`}>{aviso.texto}</span> : null);
+  return { salvar, salvando, Aviso };
+}
+
+function AbasDaLoja({ aba, recarregar }: { aba: "dados" | "whatsapp" | "avancado"; recarregar: () => void }) {
+  const { data, mutate } = useSWR<DadosLoja>("/api/veiculos/site/loja", fetcher);
+  if (!data) return <p className="text-sm text-neutral-500">Carregando…</p>;
+  const tudo = () => { mutate(); recarregar(); };
+  if (aba === "dados") return <DadosDaLoja d={data} recarregar={tudo} />;
+  if (aba === "whatsapp") return <WhatsappDoSite d={data} recarregar={tudo} />;
+  return <Avancado d={data} recarregar={tudo} />;
+}
+
+function DadosDaLoja({ d, recarregar }: { d: DadosLoja; recarregar: () => void }) {
+  const [f, setF] = useState(d);
+  const [tels, setTels] = useState<Telefone[]>(d.telefones.length ? d.telefones : [{ tipo: "WHATSAPP", numero: "" }]);
+  const [buscandoCep, setBuscandoCep] = useState(false);
+  const { salvar, salvando, Aviso } = useSalvar(recarregar);
+  const set = (k: keyof DadosLoja) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
+  // Preenche rua, bairro, cidade e estado pelo CEP (ViaCEP, direto do navegador).
+  const buscarCep = async () => {
+    const cep = f.cep.replace(/\D/g, "");
+    if (cep.length !== 8) return;
+    setBuscandoCep(true);
+    const r = await fetch(`https://viacep.com.br/ws/${cep}/json/`).then((x) => x.json()).catch(() => null);
+    setBuscandoCep(false);
+    if (!r || r.erro) return;
+    setF((a) => ({ ...a, logradouro: a.logradouro || r.logradouro || "", bairro: r.bairro || a.bairro, cidade: r.localidade || a.cidade, uf: r.uf || a.uf }));
+  };
+  const ponto = f.ponto.match(/^(-?\d+\.\d+),\s*(-?\d+\.\d+)$/);
+  return (
+    <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]" data-testid="site-dados">
+      <div className="flex flex-col gap-4">
+        <section className={secao}>
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="text-sm font-semibold">Endereço e telefones</h3>
+            <span className="text-xs text-neutral-500">Aparecem no topo, no rodapé e na página Localização</span>
+          </div>
+          <p className="rounded-md bg-sky-500/10 px-3 py-2 text-xs text-sky-800">O CEP e o 1º telefone também vão nos anúncios dos portais (OLX, Webmotors e outros).</p>
+          <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+            <label className="flex flex-col gap-1"><span className={rotulo}>CEP</span><input className={campo} value={f.cep} onChange={set("cep")} onBlur={buscarCep} inputMode="numeric" placeholder="25071-182" /></label>
+            <label className="flex flex-col gap-1"><span className={rotulo}>Endereço e número {buscandoCep && <span className="text-neutral-400">· buscando CEP…</span>}</span><input className={campo} value={f.logradouro} onChange={set("logradouro")} placeholder="Av. Brigadeiro Lima e Silva, nº 1120" /></label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_100px]">
+            <label className="flex flex-col gap-1"><span className={rotulo}>Bairro</span><input className={campo} value={f.bairro} onChange={set("bairro")} /></label>
+            <label className="flex flex-col gap-1"><span className={rotulo}>Cidade</span><input className={campo} value={f.cidade} onChange={set("cidade")} /></label>
+            <label className="flex flex-col gap-1"><span className={rotulo}>Estado</span><select className={campo} value={f.uf} onChange={set("uf")}><option value="">—</option>{UFS.map((u) => <option key={u}>{u}</option>)}</select></label>
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className={rotulo}>Telefones <span className="text-neutral-400">até 3</span></span>
+            {tels.map((t, i) => (
+              <div key={i} className="flex gap-2">
+                <select aria-label="Tipo" className={`${campo} max-w-[150px]`} value={t.tipo} onChange={(e) => setTels(tels.map((x, j) => (j === i ? { ...x, tipo: e.target.value } : x)))}>
+                  <option value="WHATSAPP">WhatsApp</option><option value="CELULAR">Celular</option><option value="FIXO">Fixo</option>
+                </select>
+                <input aria-label="Número" className={campo} value={t.numero} inputMode="tel" placeholder="(21) 96762-9631" onChange={(e) => setTels(tels.map((x, j) => (j === i ? { ...x, numero: e.target.value } : x)))} />
+                <button type="button" aria-label="Tirar telefone" className={botaoSecundario} onClick={() => setTels(tels.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+            {tels.length < 3 && <button type="button" className={`${botaoSecundario} self-start`} onClick={() => setTels([...tels, { tipo: "WHATSAPP", numero: "" }])}>+ Telefone</button>}
+          </div>
+        </section>
+        <section className={secao}>
+          <h3 className="text-sm font-semibold">Horário de funcionamento</h3>
+          {d.horarioAntigo && <p className="text-xs text-amber-700">Horário de antes (texto livre): {d.horarioAntigo.replace(/\n/g, " · ")}. Preencha as faixas abaixo para trocar.</p>}
+          <div className="grid gap-3 sm:grid-cols-3">
+            <label className="flex flex-col gap-1"><span className={rotulo}>Segunda a sexta</span><input className={campo} value={f.horarioSemana} onChange={set("horarioSemana")} placeholder="8h às 19h" /></label>
+            <label className="flex flex-col gap-1"><span className={rotulo}>Sábado</span><input className={campo} value={f.horarioSabado} onChange={set("horarioSabado")} placeholder="8h às 16h" /></label>
+            <label className="flex flex-col gap-1"><span className={rotulo}>Domingo</span><input className={campo} value={f.horarioDomingo} onChange={set("horarioDomingo")} placeholder="Fechado" /></label>
+          </div>
+          <p className="text-xs text-neutral-500">Em branco aparece “Fechado”.</p>
+        </section>
+        <div className="flex items-center gap-3">
+          <button className={botaoPrimario} disabled={salvando} onClick={() => salvar({ secao: "dados", cep: f.cep, logradouro: f.logradouro, bairro: f.bairro, cidade: f.cidade, uf: f.uf, telefones: tels.filter((t) => t.numero.trim()), mapaAtivo: f.mapaAtivo, ponto: f.ponto, horarioSemana: f.horarioSemana, horarioSabado: f.horarioSabado, horarioDomingo: f.horarioDomingo }, "Dados da loja salvos. Já aparecem no site.")}>{salvando ? "Salvando…" : "Salvar"}</button>
+          <Aviso />
+        </div>
+      </div>
+      <section className={`${secao} self-start`}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Mapa no site</h3>
+          <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f.mapaAtivo} onChange={(e) => setF({ ...f, mapaAtivo: e.target.checked })} /> Mostrar</label>
+        </div>
+        <label className="flex flex-col gap-1">
+          <span className={rotulo}>Ponto exato da loja (opcional)</span>
+          <input className={campo} value={f.ponto} onChange={set("ponto")} placeholder="Cole o link do Google Maps ou -22.79373, -43.29856" />
+          <span className="text-xs text-neutral-500">No Google Maps, ache a porta da loja, toque e segure no ponto e copie as coordenadas (ou o link). Vazio = o mapa usa o endereço.</span>
+        </label>
+        {f.mapaAtivo && (f.ponto || f.logradouro) && (
+          <iframe title="Prévia do mapa" className="h-56 w-full rounded-md border border-neutral-200" loading="lazy" src={`https://www.google.com/maps?q=${encodeURIComponent(ponto ? `${ponto[1]},${ponto[2]}` : [f.logradouro, f.bairro, f.cidade, f.uf].filter(Boolean).join(", "))}&z=17&output=embed`} />
+        )}
+        {ponto && <a className="text-xs text-accent hover:underline" target="_blank" rel="noreferrer" href={`https://www.google.com/maps/search/?api=1&query=${ponto[1]},${ponto[2]}`}>Ver no Google Maps</a>}
+      </section>
+    </div>
+  );
+}
+
+function WhatsappDoSite({ d, recarregar }: { d: DadosLoja; recarregar: () => void }) {
+  const [numero, setNumero] = useState(d.whatsapp);
+  const [mensagem, setMensagem] = useState(d.whatsappMensagem);
+  const { salvar, salvando, Aviso } = useSalvar(recarregar);
+  const previa = mensagem.trim() || "Olá! Vim pelo site da loja e quero mais informações.";
+  return (
+    <section className={secao} data-testid="site-whatsapp">
+      <h3 className="text-sm font-semibold">WhatsApp do site</h3>
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="flex flex-col gap-3">
+          <label className="flex flex-col gap-1"><span className={rotulo}>Número do botão</span><input className={campo} value={numero} onChange={(e) => setNumero(e.target.value)} inputMode="tel" placeholder="vazio = número conectado ao Zap" /></label>
+          <label className="flex flex-col gap-1"><span className={rotulo}>Mensagem que já vem escrita</span><textarea className={`${campo} min-h-[90px]`} maxLength={300} value={mensagem} onChange={(e) => setMensagem(e.target.value)} placeholder="Olá! Vim pelo site e quero mais informações." /></label>
+          <p className="text-xs text-neutral-500">Vale para o botão verde flutuante, o rodapé e a página Localização. No anúncio de cada carro, a mensagem leva o carro e o link dele.</p>
+        </div>
+        <div className="rounded-lg bg-[#efeae2] p-4 text-sm">
+          <p className="text-xs text-neutral-500">O cliente toca no botão e já abre a conversa:</p>
+          <p className="mt-2 rounded-md bg-[#075e54] px-3 py-2 font-semibold text-white">{numero || "Número conectado"}</p>
+          <p className="ml-auto mt-3 max-w-[85%] whitespace-pre-line rounded-lg bg-[#d9fdd3] px-3 py-2 text-neutral-800">{previa}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3">
+        <button className={botaoPrimario} disabled={salvando} onClick={() => salvar({ secao: "whatsapp", numero, mensagem }, "WhatsApp do site salvo.")}>{salvando ? "Salvando…" : "Salvar"}</button>
+        <Aviso />
+      </div>
+    </section>
+  );
+}
+
+function Avancado({ d, recarregar }: { d: DadosLoja; recarregar: () => void }) {
+  const [f, setF] = useState({ metaPixelId: d.metaPixelId, ga4Id: d.ga4Id, googleAdsId: d.googleAdsId, gtmId: d.gtmId });
+  const { salvar, salvando, Aviso } = useSalvar(recarregar);
+  const linha = (k: keyof typeof f, nome: string, exemplo: string, dica: string) => (
+    <label className="flex flex-col gap-1"><span className={rotulo}>{nome}</span><input className={campo} value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} placeholder={exemplo} /><span className="text-xs text-neutral-500">{dica}</span></label>
+  );
+  return (
+    <div className="flex flex-col gap-4" data-testid="site-avancado">
+      <section className={secao}>
+        <h3 className="text-sm font-semibold">Códigos de medição</h3>
+        <p className="text-xs text-neutral-500">Em vez de colar scripts, informe só o ID de cada serviço: o Zap coloca o código certo em todas as páginas e conta cada clique no WhatsApp como contato e cada formulário como lead.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {linha("metaPixelId", "Pixel da Meta (Facebook/Instagram)", "só números", "Gerenciador de Eventos da Meta › Fontes de dados.")}
+          {linha("ga4Id", "Google Analytics 4", "G-XXXXXXXXXX", "Analytics › Administrador › Fluxos de dados.")}
+          {linha("googleAdsId", "Google Ads (tag de conversão)", "AW-123456789", "Google Ads › Metas › Conversões › Tag.")}
+          {linha("gtmId", "Google Tag Manager", "GTM-XXXXXXX", d.dominio ? `Carrega só em ${d.dominio}.` : "Carrega só quando o site estiver no domínio próprio da loja.")}
+        </div>
+        <div className="flex items-center gap-3">
+          <button className={botaoPrimario} disabled={salvando} onClick={() => salvar({ secao: "avancado", ...f }, "Códigos salvos.")}>{salvando ? "Salvando…" : "Salvar"}</button>
+          <Aviso />
+        </div>
+      </section>
+      <section className={secao}>
+        <h3 className="text-sm font-semibold">Domínio e e-mail</h3>
+        <p className="text-xs text-neutral-500">
+          O DNS do domínio (inclusive as entradas do e-mail, MX e TXT) fica no painel onde o domínio está registrado ou hospedado, não aqui. Ao trazer o domínio para o Zap, só a
+          entrada do site (www) muda: as entradas de e-mail precisam continuar iguais, senão o e-mail da loja para. Veja em <a href="/veiculos/configuracoes" className="text-accent hover:underline">Aparência e domínio</a>.
+        </p>
+      </section>
     </div>
   );
 }

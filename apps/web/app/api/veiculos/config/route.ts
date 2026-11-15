@@ -67,22 +67,25 @@ export async function PUT(req: Request) {
   if (d.instagram && !linkInstagram(d.instagram)) return NextResponse.json({ error: "Instagram inválido: use @usuario ou o endereço do perfil" }, { status: 400 });
   if (d.facebook && !linkFacebook(d.facebook)) return NextResponse.json({ error: "Facebook inválido: use o nome da página ou o endereço dela" }, { status: 400 });
 
+  // Endereço, horário, WhatsApp e medição agora são editados em Meu site (Dados da loja,
+  // WhatsApp e Avançado): só mexe neles quem ainda os manda (versões antigas da tela).
+  const opcional = <T,>(chave: keyof typeof d, valor: T) => (d[chave] !== undefined ? { [chave]: valor } : {});
   const dados = {
     vitrineAtiva: d.vitrineAtiva,
     dominio,
-    metaPixelId: d.metaPixelId || null,
-    ga4Id: d.ga4Id || null,
+    ...opcional("metaPixelId", d.metaPixelId || null),
+    ...opcional("ga4Id", d.ga4Id || null),
     formularioAtivo: d.formularioAtivo,
     exigirKm: d.exigirKm,
-    whatsapp,
+    ...opcional("whatsapp", whatsapp),
     nomeLoja: d.nomeLoja || null,
-    endereco: d.endereco || null,
+    ...opcional("endereco", d.endereco || null),
     sobre: d.sobre || null,
     mostrarReservados: d.mostrarReservados,
     corPrimaria: corValida(d.corPrimaria),
     ...(d.cabecalhoClaro !== undefined ? { cabecalhoClaro: d.cabecalhoClaro } : {}),
     ...(d.corSecundaria !== undefined ? { corSecundaria: corValida(d.corSecundaria) } : {}),
-    horario: d.horario || null,
+    ...opcional("horario", d.horario || null),
     // Guarda o que a loja digitou (o link é remontado na vitrine, nunca repassado como veio).
     instagram: d.instagram || null,
     facebook: d.facebook || null,

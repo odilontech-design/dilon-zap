@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { baseDaLoja, linkWhatsapp, lojaPublica } from "@/lib/vitrine";
-import { caminhoDaLoja, mapaDoEndereco } from "@/lib/vitrine-aparencia";
+import { caminhoDaLoja } from "@/lib/vitrine-aparencia";
+import { formatarTelefone } from "@/lib/dados-da-loja";
 import { BotaoWhatsapp } from "../rastreio";
 import { CabecalhoDaPagina, CascaDaLoja } from "../casca";
 
@@ -20,7 +21,7 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 export default async function LocalizacaoPage({ params }: { params: { slug: string } }) {
   const loja = await lojaPublica(params.slug);
   if (!loja) notFound();
-  const mapa = mapaDoEndereco(loja.endereco);
+  const mapa = loja.mapa;
   return (
     <CascaDaLoja loja={loja} aba="localizacao">
       <CabecalhoDaPagina titulo="Localização e contato" texto="Venha conhecer os carros pessoalmente." />
@@ -49,11 +50,25 @@ export default async function LocalizacaoPage({ params }: { params: { slug: stri
               </ul>
             </div>
           )}
+          {loja.telefones.length > 0 && (
+            <div>
+              <h2 className="font-semibold">Telefones</h2>
+              <ul className="mt-1 text-neutral-700">
+                {[...new Map(loja.telefones.map((t) => [t.numero, t])).values()].map((t) => (
+                  <li key={t.numero}>
+                    <a href={t.tipo === "WHATSAPP" ? linkWhatsapp(t.numero, loja.mensagemWhatsapp) : `tel:+${t.numero}`} target={t.tipo === "WHATSAPP" ? "_blank" : undefined} rel="noreferrer" className="hover:underline">
+                      {t.tipo === "WHATSAPP" ? "WhatsApp" : t.tipo === "FIXO" ? "Telefone" : "Celular"} {formatarTelefone(t.numero)}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           {loja.whatsapp && (
             <div>
               <h2 className="font-semibold">WhatsApp</h2>
               <BotaoWhatsapp
-                href={linkWhatsapp(loja.whatsapp, `Olá! Vi o site da ${loja.nome} e quero falar com vocês.`)}
+                href={linkWhatsapp(loja.whatsapp, loja.mensagemWhatsapp)}
                 className="mt-2 inline-flex items-center gap-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-medium text-white hover:opacity-90"
               >
                 Chamar agora

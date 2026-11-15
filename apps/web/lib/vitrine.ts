@@ -1,3 +1,4 @@
+import { idDeMedicao, mapaDaLoja, mensagemDoWhatsapp, telefonesDaLoja, type Telefone } from "@/lib/dados-da-loja";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { recursosDoTenant } from "@/lib/plano";
 import { numeroGeral } from "@/lib/whatsapp-sessions";
@@ -157,6 +158,13 @@ export type LojaPublica = {
   ofertaVeiculoId: string | null;
   quemSomosTitulo: string | null;
   quemSomosTexto: string | null;
+  /** Dados da loja: até 3 telefones, endereço em partes (para o Google), o mapa (nulo = sem mapa), a mensagem do WhatsApp e as tags do Google. */
+  telefones: Telefone[];
+  enderecoPartes: { cep: string | null; logradouro: string | null; bairro: string | null; cidade: string | null; uf: string | null };
+  mapa: { embed: string; abrir: string } | null;
+  mensagemWhatsapp: string;
+  googleAdsId: string | null;
+  gtmId: string | null;
 };
 
 /** A loja pelo slug, ou null se não existe, não tem o recurso ou não ligou a vitrine. */
@@ -200,6 +208,12 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     ofertaVeiculoId: cfg.ofertaVeiculoId,
     quemSomosTitulo: cfg.quemSomosTitulo?.trim() || null,
     quemSomosTexto: cfg.quemSomosTexto?.trim() || null,
+    telefones: telefonesDaLoja(cfg.telefones),
+    enderecoPartes: { cep: cfg.cep, logradouro: cfg.logradouro, bairro: cfg.bairro, cidade: cfg.cidade, uf: cfg.uf },
+    mapa: mapaDaLoja(cfg),
+    mensagemWhatsapp: mensagemDoWhatsapp(cfg.whatsappMensagem, cfg.nomeLoja?.trim() || tenant.name),
+    googleAdsId: idDeMedicao("googleAdsId", cfg.googleAdsId),
+    gtmId: idDeMedicao("gtmId", cfg.gtmId),
   };
 }
 

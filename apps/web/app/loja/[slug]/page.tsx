@@ -53,8 +53,12 @@ export default async function LojaPage({ params }: { params: { slug: string } })
           "@type": "AutoDealer",
           name: loja.nome,
           url: urlDaLoja,
-          ...(loja.endereco ? { address: loja.endereco } : {}),
-          ...(loja.whatsapp ? { telephone: `+${loja.whatsapp}` } : {}),
+          ...(loja.enderecoPartes.cidade
+            ? { address: { "@type": "PostalAddress", streetAddress: loja.enderecoPartes.logradouro ?? undefined, addressLocality: loja.enderecoPartes.cidade, addressRegion: loja.enderecoPartes.uf ?? undefined, postalCode: loja.enderecoPartes.cep ?? undefined, addressCountry: "BR" } }
+            : loja.endereco
+              ? { address: loja.endereco }
+              : {}),
+          ...(loja.telefones[0] ? { telephone: `+${loja.telefones[0].numero}` } : loja.whatsapp ? { telephone: `+${loja.whatsapp}` } : {}),
           ...(loja.temLogo ? { image: `${baseDaLoja(loja.dominio)}/api/loja/${loja.slug}/marca/logo` } : {}),
           ...(loja.horario.length ? { openingHours: loja.horario } : {}),
           ...(loja.instagram || loja.facebook ? { sameAs: [loja.instagram, loja.facebook].filter(Boolean) } : {}),

@@ -44,18 +44,25 @@ export function CascaDaLoja({ loja, aba, subirBotao = false, children }: { loja:
   const marca = (tipo: "logo" | "banner") => `/api/loja/${loja.slug}/marca/${tipo}`;
   const escuro = !loja.cabecalhoClaro;
   const cidade = cidadeDaLoja(loja.endereco);
-  const zap = loja.whatsapp ? linkWhatsapp(loja.whatsapp, `Olá! Vi o site da ${loja.nome} e quero mais informações.`) : null;
+  const zap = loja.whatsapp ? linkWhatsapp(loja.whatsapp, loja.mensagemWhatsapp) : null;
+  // Os telefones da loja (Dados da loja); sem eles, o WhatsApp do site.
+  const telefones = loja.telefones.length ? loja.telefones : loja.whatsapp ? [{ tipo: "WHATSAPP" as const, numero: loja.whatsapp }] : [];
+  const linkDoTelefone = (t: { tipo: string; numero: string }) => (t.tipo === "WHATSAPP" ? linkWhatsapp(t.numero, loja.mensagemWhatsapp) : `tel:+${t.numero}`);
   const itens = MENU.map((m) => ({ rotulo: m.rotulo, href: caminho(m.pagina), ativo: aba === m.aba }));
   const sub = escuro ? "text-neutral-400" : "text-neutral-600";
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-neutral-900" style={estiloDaLoja(loja)}>
       {/* Faixa de contato: telefone, onde fica e quando abre, sempre à vista no computador. */}
-      {(loja.whatsapp || loja.endereco || loja.horario.length > 0) && (
+      {(telefones.length > 0 || loja.endereco || loja.horario.length > 0) && (
         <div className="hidden text-xs text-neutral-300 md:block" style={{ background: "#0a0a0a" }}>
           <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-1.5">
             <div className="flex items-center gap-4">
-              {loja.whatsapp && <span>WhatsApp {formatarWhatsapp(loja.whatsapp)}</span>}
+              {[...new Map(telefones.map((t) => [t.numero, t])).values()].slice(0, 2).map((t) => (
+                <a key={t.numero} href={linkDoTelefone(t)} target={t.tipo === "WHATSAPP" ? "_blank" : undefined} rel="noreferrer" className="hover:underline">
+                  {t.tipo === "WHATSAPP" ? "WhatsApp" : "Tel."} {formatarWhatsapp(t.numero)}
+                </a>
+              ))}
               {(cidade || loja.endereco) && <span className="text-neutral-400">{cidade ?? loja.endereco}</span>}
             </div>
             {loja.horario[0] && <span className="text-neutral-400">{loja.horario[0]}</span>}
@@ -128,11 +135,11 @@ export function CascaDaLoja({ loja, aba, subirBotao = false, children }: { loja:
           </div>
           <div>
             <p className="font-semibold">Fale com a gente</p>
-            {loja.whatsapp && (
-              <a href={linkWhatsapp(loja.whatsapp, `Olá! Vi o site da ${loja.nome}.`)} target="_blank" rel="noreferrer" className={`mt-2 block ${sub} hover:underline`}>
-                WhatsApp {formatarWhatsapp(loja.whatsapp)}
+            {[...new Map(telefones.map((t) => [t.numero, t])).values()].map((t) => (
+              <a key={t.numero} href={linkDoTelefone(t)} target={t.tipo === "WHATSAPP" ? "_blank" : undefined} rel="noreferrer" className={`mt-2 block ${sub} hover:underline`}>
+                {t.tipo === "WHATSAPP" ? "WhatsApp" : t.tipo === "FIXO" ? "Telefone" : "Celular"} {formatarWhatsapp(t.numero)}
               </a>
-            )}
+            ))}
             <Link href={caminho("localizacao")} className={`mt-1.5 block ${sub} hover:underline`}>Como chegar</Link>
           </div>
           {loja.horario.length > 0 && (

@@ -27,6 +27,9 @@ const ROTULO_ACAO: Record<string, string> = {
   "site.destaques": "Destaques e oferta",
   "site.paginas": "Páginas do site",
   "site.trazer": "Trazido do site atual",
+  "site.dados": "Dados da loja",
+  "site.whatsapp": "WhatsApp do site",
+  "site.avancado": "Medição (Pixel, Google)",
 };
 
 /** Link de banner: uma página do próprio site ("/...") ou um endereço https. Outra coisa vira nulo. */

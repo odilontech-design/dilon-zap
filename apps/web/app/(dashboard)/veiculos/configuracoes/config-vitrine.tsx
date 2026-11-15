@@ -38,7 +38,7 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, whatsapp: "", nomeLoja: "", endereco: "", sobre: "", mostrarReservados: true, dominio: "", metaPixelId: "", ga4Id: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, corSecundaria: "", corPrimaria: "", horario: "", instagram: "", facebook: "", politicaPrivacidade: "" });
+  const [f, setF] = useState({ vitrineAtiva: false, nomeLoja: "", sobre: "", mostrarReservados: true, dominio: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, corSecundaria: "", corPrimaria: "", instagram: "", facebook: "", politicaPrivacidade: "" });
   const [versaoImagens, setVersaoImagens] = useState(0);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -46,20 +46,15 @@ export function ConfigVitrine() {
     if (data)
       setF({
         vitrineAtiva: data.vitrineAtiva,
-        whatsapp: data.whatsapp ?? "",
         nomeLoja: data.nomeLoja ?? "",
-        endereco: data.endereco ?? "",
         sobre: data.sobre ?? "",
         mostrarReservados: data.mostrarReservados,
         dominio: data.dominio ?? "",
-        metaPixelId: data.metaPixelId ?? "",
-        ga4Id: data.ga4Id ?? "",
         formularioAtivo: data.formularioAtivo,
         exigirKm: data.exigirKm,
         cabecalhoClaro: data.cabecalhoClaro ?? false,
         corSecundaria: data.corSecundaria ?? "",
         corPrimaria: data.corPrimaria ?? "",
-        horario: data.horario ?? "",
         instagram: data.instagram ?? "",
         facebook: data.facebook ?? "",
         politicaPrivacidade: data.politicaPrivacidade ?? "",
@@ -109,15 +104,10 @@ export function ConfigVitrine() {
           <span className={rotulo}>Nome da loja na vitrine</span>
           <input id="vitrine-nome" value={f.nomeLoja} onChange={(e) => setF({ ...f, nomeLoja: e.target.value })} placeholder={data.nomeEmpresa} className={campo} />
         </label>
-        <label className="flex flex-col gap-1">
-          <span className={rotulo}>WhatsApp do botão “Tenho interesse”</span>
-          <input id="vitrine-whatsapp" value={f.whatsapp} onChange={(e) => setF({ ...f, whatsapp: e.target.value })} placeholder={data.numeroConectado ? `vazio = número conectado (${data.numeroConectado})` : "DDD + número"} inputMode="tel" className={campo} />
-          {!f.whatsapp && !data.numeroConectado && <span className="text-xs text-amber-700">Sem número conectado e sem WhatsApp aqui, a vitrine fica sem o botão.</span>}
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className={rotulo}>Endereço</span>
-          <input id="vitrine-endereco" value={f.endereco} onChange={(e) => setF({ ...f, endereco: e.target.value })} placeholder="Av. Brasil, 1000 · Centro · Cidade/UF" className={campo} />
-        </label>
+        <p className="text-xs text-neutral-500">
+          Endereço, telefones, horário e WhatsApp do site ficam em <a href="/veiculos/site?aba=dados" className="text-accent hover:underline">Meu site › Dados da loja</a> e{" "}
+          <a href="/veiculos/site?aba=whatsapp" className="text-accent hover:underline">WhatsApp</a>.
+        </p>
         <label className="flex flex-col gap-1">
           <span className={rotulo}>Sobre a loja</span>
           <textarea id="vitrine-sobre" rows={3} value={f.sobre} onChange={(e) => setF({ ...f, sobre: e.target.value })} placeholder="Seminovos revisados, financiamento em até 60x, aceitamos seu usado na troca." className={campo} />
@@ -158,12 +148,7 @@ export function ConfigVitrine() {
       </section>
 
       <section className={secao}>
-        <h2 className="text-sm font-semibold">Horário e redes sociais</h2>
-        <label className="flex flex-col gap-1" htmlFor="vitrine-horario">
-          <span className={rotulo}>Horário de funcionamento</span>
-          <textarea id="vitrine-horario" rows={3} value={f.horario} onChange={(e) => setF({ ...f, horario: e.target.value })} placeholder={"Segunda a sexta, das 8h às 18h\nSábado, das 8h às 12h"} className={campo} />
-          <span className="text-xs text-neutral-500">Uma faixa por linha.</span>
-        </label>
+        <h2 className="text-sm font-semibold">Redes sociais</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1" htmlFor="vitrine-instagram">
             <span className={rotulo}>Instagram</span>
@@ -198,16 +183,7 @@ export function ConfigVitrine() {
           <input type="checkbox" checked={f.formularioAtivo} onChange={(e) => setF({ ...f, formularioAtivo: e.target.checked })} />
           Formulário “Quero ser chamado” na página do carro (vira negociação no CRM, com a tarefa de chamar no WhatsApp)
         </label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="flex flex-col gap-1">
-            <span className={rotulo}>ID do Pixel do Facebook/Instagram</span>
-            <input id="vitrine-pixel" value={f.metaPixelId} onChange={(e) => setF({ ...f, metaPixelId: e.target.value })} placeholder="só números" inputMode="numeric" className={campo} />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className={rotulo}>ID do Google Analytics 4</span>
-            <input id="vitrine-ga4" value={f.ga4Id} onChange={(e) => setF({ ...f, ga4Id: e.target.value })} placeholder="G-XXXXXXXXXX" className={campo} />
-          </label>
-        </div>
+        <p className="text-xs text-neutral-500">Pixel da Meta, Google Analytics, Google Ads e Tag Manager ficam em <a href="/veiculos/site?aba=avancado" className="text-accent hover:underline">Meu site › Avançado</a>.</p>
         <p className="text-xs text-neutral-500">Com o pixel, cada clique em “Tenho interesse” conta como contato e cada formulário como lead: dá para anunciar para quem viu um carro e não chamou.</p>
         <div className="flex flex-col gap-1 text-xs">
           <span className={rotulo}>Feeds do estoque (atualizados sozinhos, só o que a vitrine mostra)</span>
