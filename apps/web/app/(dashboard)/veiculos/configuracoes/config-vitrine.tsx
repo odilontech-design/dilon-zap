@@ -19,6 +19,7 @@ type Config = {
   exigirKm: boolean;
   cabecalhoClaro: boolean;
   estiloSite: string;
+  observacaoPadrao: string | null;
   corSecundaria: string | null;
   corPrimaria: string | null;
   horario: string | null;
@@ -39,7 +40,7 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, nomeLoja: "", sobre: "", mostrarReservados: true, dominio: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, estiloSite: "moderno", corSecundaria: "", corPrimaria: "", instagram: "", facebook: "", politicaPrivacidade: "" });
+  const [f, setF] = useState({ vitrineAtiva: false, nomeLoja: "", sobre: "", mostrarReservados: true, dominio: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, estiloSite: "moderno", observacaoPadrao: "", corSecundaria: "", corPrimaria: "", instagram: "", facebook: "", politicaPrivacidade: "" });
   const [versaoImagens, setVersaoImagens] = useState(0);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -55,6 +56,7 @@ export function ConfigVitrine() {
         exigirKm: data.exigirKm,
         cabecalhoClaro: data.cabecalhoClaro ?? false,
         estiloSite: data.estiloSite ?? "moderno",
+        observacaoPadrao: data.observacaoPadrao ?? "",
         corSecundaria: data.corSecundaria ?? "",
         corPrimaria: data.corPrimaria ?? "",
         instagram: data.instagram ?? "",
@@ -212,6 +214,13 @@ export function ConfigVitrine() {
           ))}
           <span className="text-neutral-500">No Gerenciador de Comércio da Meta: Catálogos → Veículos → Fonte de dados → Feed programado, colando o link do CSV.</span>
         </div>
+      </section>
+
+      <section className={secao} id="observacao-padrao">
+        <h2 className="text-sm font-semibold">Observação padrão dos anúncios</h2>
+        <p className="text-xs text-neutral-500">Já vem escrita em todo carro novo (dá para mudar em cada um). Use para o que vale para a loja toda: financiamento, garantia, endereço, horário.</p>
+        <textarea aria-label="Observação padrão dos anúncios" rows={6} maxLength={4000} value={f.observacaoPadrao} onChange={(e) => setF({ ...f, observacaoPadrao: e.target.value })} className={campo} placeholder="Fazemos financiamento com entrada facilitada… Venha nos visitar: Av. …" />
+        <span className="self-end text-xs text-neutral-400">{f.observacaoPadrao.length} caracteres</span>
       </section>
 
       <section className={secao}>

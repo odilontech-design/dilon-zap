@@ -1,3 +1,4 @@
+import { idDoYoutube } from "@/lib/veiculos-cadastro";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -114,8 +115,28 @@ export default async function CarroPage({
           <div className="flex min-w-0 flex-col gap-8">
             <Galeria slug={loja.slug} fotos={carro.fotos.map((f) => f.id)} alt={titulo(carro)} />
 
-            {(carro.descricao || carro.opcionais.length > 0) && (
+            {idDoYoutube(carro.videoUrl) && (
+              <div className="aspect-video overflow-hidden rounded-2xl border border-neutral-200 bg-black">
+                <iframe
+                  title={`Vídeo: ${titulo(carro)}`}
+                  src={`https://www.youtube-nocookie.com/embed/${idDoYoutube(carro.videoUrl)}`}
+                  className="h-full w-full"
+                  loading="lazy"
+                  allow="accelerometer; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                />
+              </div>
+            )}
+
+            {(carro.descricao || carro.opcionais.length > 0 || carro.caracteristicas.length > 0) && (
               <section className="flex flex-col gap-5 rounded-2xl border border-neutral-200 bg-surface p-5 md:p-6">
+                {carro.caracteristicas.length > 0 && (
+                  <ul className="flex flex-wrap gap-2" aria-label="Características">
+                    {carro.caracteristicas.map((c) => (
+                      <li key={c} className="rounded-full px-3 py-1 text-xs font-semibold" style={{ background: "color-mix(in srgb, var(--loja) 10%, transparent)", color: "var(--loja)" }}>✓ {c}</li>
+                    ))}
+                  </ul>
+                )}
                 {carro.descricao && (
                   <div>
                     <h2 className="mb-2 text-base font-bold">Sobre este veículo</h2>

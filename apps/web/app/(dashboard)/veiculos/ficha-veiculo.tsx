@@ -393,6 +393,8 @@ function Dados({ v, gerencia, onSalvou }: { v: Ficha; gerencia: boolean; onSalvo
       ["Combustível", v.combustivel],
       ["Cor", v.cor],
       ["Portas", v.portas],
+      ["Carroceria", (v as Record<string, unknown>).carroceria as string | null],
+      ["Características", Array.isArray((v as Record<string, unknown>).caracteristicas) ? ((v as Record<string, unknown>).caracteristicas as string[]).join(", ") : ""],
       ["Opcionais", Array.isArray(v.opcionais) ? (v.opcionais as string[]).join(", ") : ""],
       ["Anúncio", v.descricao],
     ];
@@ -430,7 +432,7 @@ function Dados({ v, gerencia, onSalvou }: { v: Ficha; gerencia: boolean; onSalvo
   return (
     <form onSubmit={salvar} className={secao}>
       <h2 className="text-sm font-semibold">Ficha do carro</h2>
-      <CamposVeiculo f={f} set={(p) => setF((x) => ({ ...x, ...p }))} gerencia />
+      <CamposVeiculo f={f} set={(p) => setF((x) => ({ ...x, ...p }))} gerencia fotos={v.fotos.length} />
       {erro && <p className="text-sm text-red-600">{erro}</p>}
       <div className="flex justify-end">
         <button disabled={salvando} className={botaoPrimario}>

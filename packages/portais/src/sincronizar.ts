@@ -1,3 +1,4 @@
+import { paraOPortal } from "./ajustes";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { decidir, deveEstarNoAr, hashDoAnuncio, proximaTentativa } from "./decisao";
 import { assinarFoto, decifrar } from "./seguranca";
@@ -134,7 +135,7 @@ async function enviarPendentes(tenantId: string, contaId: string, token: string,
   const planejados: Planejado[] = [];
   const r = { enviados: 0, removidos: 0, erros: 0 };
   for (const p of pubs) {
-    const v = p.veiculo;
+    const v = paraOPortal(p.veiculo, "OLX");
     const noAr = deveEstarNoAr(v.status, p.ativo);
     const mapa = montarAnuncioOlx(
       { ...v, opcionais: v.opcionais, fotos: v.fotos.map((f) => linkDaFotoParaPortal(op.urlBase, f.id, op.segredoFotos)) },

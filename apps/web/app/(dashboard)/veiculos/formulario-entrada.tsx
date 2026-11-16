@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CamposVeiculo, FORM_VAZIO, paraRota, type FormVeiculo } from "./campos-veiculo";
@@ -52,9 +52,24 @@ export function FormularioEntrada() {
   const [consignadoAte, setConsignadoAte] = useState(diaDaqui(90));
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [feito, setFeito] = useState<{ id: string; nome: string } | null>(null);
+  const outro = useRef(false);
+  const [padrao, setPadrao] = useState("");
+  // A observação padrão da loja (Configurações) já vem escrita em todo carro novo.
+  useEffect(() => {
+    fetch("/api/veiculos/config")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c) => {
+        const t = (c?.observacaoPadrao as string | null) ?? "";
+        setPadrao(t);
+        if (t) setF((x) => (x.descricao ? x : { ...x, descricao: t }));
+      })
+      .catch(() => {});
+  }, []);
 
   async function salvar(e: React.FormEvent) {
     e.preventDefault();
+    setFeito(null);
     setErro(null);
     let veiculo;
     try {
@@ -89,6 +104,15 @@ export function FormularioEntrada() {
       return;
     }
     const { id } = await r.json();
+    if (outro.current) {
+      // "Cadastrar e começar outro": limpa o carro (fica a forma de entrada) e volta ao topo.
+      setFeito({ id, nome: `${f.marca} ${f.modelo}`.trim() });
+      setF({ ...FORM_VAZIO, descricao: padrao });
+      setValorCompra(null);
+      setValorDono(null);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     router.push(`/veiculos/${id}`);
   }
 
@@ -103,6 +127,11 @@ export function FormularioEntrada() {
         </Link>
       </div>
 
+      {feito && (
+        <p role="status" className="rounded-md bg-emerald-500/10 px-3 py-2 text-sm text-emerald-800">
+          {feito.nome || "Carro"} cadastrado. <Link href={`/veiculos/${feito.id}`} className="font-medium underline">Abrir a ficha (para as fotos)</Link> ou siga com o próximo.
+        </p>
+      )}
       <section className={secao}>
         <h2 className="text-sm font-semibold">Como o carro entrou</h2>
         <div className="flex flex-wrap gap-2 text-sm">
@@ -187,7 +216,8 @@ export function FormularioEntrada() {
 
       <section className={secao}>
         <h2 className="text-sm font-semibold">O carro</h2>
-        <CamposVeiculo f={f} set={(p) => setF((x) => ({ ...x, ...p }))} gerencia />
+        <CamposVeiculo f={f} set={(p) => setF((x) => ({ ...x, ...p }))} gerencia fotos={0} />
+        <p className="text-xs text-neutral-500">As fotos entram na ficha do carro, logo depois de dar entrada.</p>
         {margemPrevista !== null && (
           <p className={`text-xs ${margemPrevista < 0 ? "text-red-600" : "text-neutral-500"}`}>
             Margem antes dos gastos de preparação: {brl(margemPrevista)}
@@ -200,8 +230,12 @@ export function FormularioEntrada() {
       </section>
 
       {erro && <p className="rounded-md bg-red-500/10 px-3 py-2 text-sm text-red-600">{erro}</p>}
-      <div className="flex justify-end">
-        <button disabled={salvando} className={botaoPrimario}>
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-neutral-200 bg-canvas/95 py-3 backdrop-blur">
+        <Link href="/veiculos" className="mr-auto text-sm text-neutral-500 hover:text-neutral-800">Voltar ao estoque</Link>
+        <button type="submit" disabled={salvando} onClick={() => (outro.current = true)} className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:border-accent disabled:opacity-50">
+          Dar entrada e começar outro
+        </button>
+        <button type="submit" disabled={salvando} onClick={() => (outro.current = false)} className={botaoPrimario}>
           {salvando ? "Salvando…" : "Dar entrada"}
         </button>
       </div>

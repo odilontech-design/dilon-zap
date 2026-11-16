@@ -85,6 +85,7 @@ export async function PUT(req: Request) {
     corPrimaria: corValida(d.corPrimaria),
     ...(d.cabecalhoClaro !== undefined ? { cabecalhoClaro: d.cabecalhoClaro } : {}),
     ...(d.estiloSite !== undefined ? { estiloSite: d.estiloSite } : {}),
+    ...(d.observacaoPadrao !== undefined ? { observacaoPadrao: d.observacaoPadrao || null } : {}),
     ...(d.corSecundaria !== undefined ? { corSecundaria: corValida(d.corSecundaria) } : {}),
     ...opcional("horario", d.horario || null),
     // Guarda o que a loja digitou (o link é remontado na vitrine, nunca repassado como veio).
