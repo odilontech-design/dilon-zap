@@ -161,6 +161,24 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
     recarregar();
   }
 
+  /** Descarta os rascunhos de uma vez (ex.: depois de trocar o modelo da campanha). Não envia nem toca no que já foi aprovado. */
+  async function descartarLote() {
+    const n = r?.aRevisar ?? 0;
+    const quantos = Math.min(n, 50);
+    if (!window.confirm(`Descartar ${quantos} rascunho(s) de ${NOME_DO_CANAL[canal]}?\n\nIsso serve para refazer as mensagens com o modelo atual da campanha: depois é só clicar em "Preparar mensagens". Só rascunhos são descartados; o que você já aprovou não muda e nada é enviado.`)) return;
+    setOcupado(true);
+    setAviso(null);
+    const res = await chamar("/api/sdr/fila/descartar-lote", "POST", { canal, limite: 50, ...(campanhaId ? { campanhaId } : {}) });
+    setOcupado(false);
+    if (!res.ok) return setAviso({ tipo: "erro", texto: res.erro ?? "não deu pra descartar o lote" });
+    const d = res.dados as { descartadas: number; falhas: { erro: string }[] };
+    setAviso({
+      tipo: d.falhas.length ? "erro" : "ok",
+      texto: `${d.descartadas} rascunho(s) descartado(s)${d.falhas.length ? ` · ${d.falhas.length} não descartado(s) (${d.falhas[0].erro})` : ""}. Clique em "Preparar mensagens" para gerar de novo com o modelo atual.`,
+    });
+    recarregar();
+  }
+
   async function preparar() {
     setOcupado(true);
     setAviso(null);
@@ -260,7 +278,10 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
             <button onClick={aprovarLote} disabled={ocupado || !r || r.aRevisar === 0} className={botaoSecundario}>
               Aprovar o lote{r && r.aRevisar > 0 ? ` (${Math.min(r.aRevisar, meta)})` : ""}
             </button>
-            <span className="text-[11px] text-neutral-500">Preparar só cria rascunhos pelo modelo; nada é aprovado nem enviado sem você. Aprovar o lote libera as mensagens, e o envio continua sendo seu, um por clique.</span>
+            <button onClick={descartarLote} disabled={ocupado || !r || r.aRevisar === 0} className={botaoSecundario}>
+              Descartar o lote{r && r.aRevisar > 0 ? ` (${Math.min(r.aRevisar, 50)})` : ""}
+            </button>
+            <span className="text-[11px] text-neutral-500">Preparar só cria rascunhos pelo modelo; nada é aprovado nem enviado sem você. Aprovar o lote libera as mensagens, e o envio continua sendo seu, um por clique. Mudou o modelo da campanha? Descarte o lote e prepare de novo.</span>
           </div>
         )}
         {aviso && <p className={`mt-3 rounded-md px-3 py-2 text-xs ${aviso.tipo === "ok" ? "bg-accent/10 text-accent" : "bg-red-50 text-red-700"}`}>{aviso.texto}</p>}

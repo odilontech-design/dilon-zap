@@ -1,7 +1,7 @@
 import { prisma, Prisma } from "@dilon-zap/db";
 import { z } from "zod";
 import { PREFIXO_ABERTURA, type LimitesDoWhatsapp } from "./canais";
-import { aprovarAbordagem, criarAbordagem, exigirContatavel, exigirEmpresa, registrarResultado, resultadoSchema } from "./comercial";
+import { aprovarAbordagem, criarAbordagem, exigirContatavel, exigirEmpresa, registrarResultado, rejeitarAbordagem, resultadoSchema } from "./comercial";
 import { origemDaConsulta, type FiltroDeEmpresas } from "./consulta";
 import { listarEmpresas } from "./empresas";
 import { ErroSdrCore } from "./erros";
@@ -451,6 +451,34 @@ export async function aprovarLote(tenantId: string, bruto: unknown, autor: Autor
       await aprovarAbordagem(tenantId, id, autor);
       r.aprovadas++;
       r.abordagemIds.push(id);
+    } catch (e) {
+      r.falhas.push({ abordagemId: id, erro: nomeDoErro(e) });
+    }
+  }
+  return r;
+}
+
+export type ResultadoDoDescarteEmLote = { descartadas: number; falhas: { abordagemId: string; erro: string }[] };
+
+/**
+ * Descarta de uma vez os rascunhos da fila (ou os escolhidos), por exemplo depois de trocar o modelo da campanha: as
+ * empresas voltam para "a preparar" e o próximo Preparar gera o texto de novo. Só mexe em RASCUNHO que a revisão mostraria:
+ * nada aprovado nem contatado é tocado. Mesmo filtro e mesmo teto (50) do aprovar o lote.
+ */
+export async function descartarLote(tenantId: string, bruto: unknown, autor: Autor): Promise<ResultadoDoDescarteEmLote> {
+  const d = aprovacaoEmLoteSchema.parse(bruto);
+  const ids = d.abordagemIds
+    ? [...new Set(d.abordagemIds)]
+    : (await filaDeRevisao(tenantId, { ...(d.canal ? { canal: d.canal } : {}), ...(d.campanhaId ? { campanhaId: d.campanhaId } : {}), ...(d.limite ? { limite: d.limite } : {}) })).itens.map((i) => i.abordagemId);
+  const r: ResultadoDoDescarteEmLote = { descartadas: 0, falhas: [] };
+  for (const id of ids) {
+    try {
+      // Só rascunho: aprovada já foi autorizada por uma pessoa, e rejeitar essa é decisão individual.
+      const a = await prisma.sdrAbordagem.findFirst({ where: { id, tenantId }, select: { status: true } });
+      if (!a) throw new ErroSdrCore("abordagem não encontrada", 404);
+      if (a.status !== "RASCUNHO") throw new ErroSdrCore("só rascunho pode ser descartado em lote", 409);
+      await rejeitarAbordagem(tenantId, id, autor);
+      r.descartadas++;
     } catch (e) {
       r.falhas.push({ abordagemId: id, erro: nomeDoErro(e) });
     }
