@@ -165,6 +165,15 @@ services:
       PORTAIS_CHAVE: ${PORTAIS_CHAVE}
       # Endereço público do Zap: a OLX baixa as fotos dos anúncios por ele.
       NEXTAUTH_URL: ${NEXTAUTH_URL}
+      # O worker renova os tokens dos portais sozinho, então precisa do mesmo client_id do site:
+      # sem estas variáveis o carro é enviado, mas a renovação do token falha quando ele vence.
+      # Vazias, o portal correspondente simplesmente não sincroniza (o resto segue).
+      NAPISTA_CLIENT_ID: ${NAPISTA_CLIENT_ID:-}
+      NAPISTA_AMBIENTE: ${NAPISTA_AMBIENTE:-}
+      MOBIAUTO_CLIENT_ID: ${MOBIAUTO_CLIENT_ID:-}
+      MOBIAUTO_CLIENT_SECRET: ${MOBIAUTO_CLIENT_SECRET:-}
+      OLX_CLIENT_ID: ${OLX_CLIENT_ID:-}
+      OLX_CLIENT_SECRET: ${OLX_CLIENT_SECRET:-}
       NODE_OPTIONS: --max-old-space-size=256
     mem_limit: 384m
     stop_grace_period: 30s
