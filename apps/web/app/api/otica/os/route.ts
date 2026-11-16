@@ -5,7 +5,7 @@ import { casaComBusca } from "@/lib/busca";
 import { exigirRecurso } from "@/lib/plano";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { configDaOtica, consultorValido, dadosDoCliente, previsaoDaTela, reservarNumeroOS } from "@/lib/otica";
-import { criarContaDaOS, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
+import { criarContaDaOS, criarContaDaOSHistorica, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
 import { ErroDeConta } from "@/lib/contas-receber";
 import { baixarParaOS } from "@/lib/otica-estoque";
 import { numeroOS, validadeDaReceita } from "@/lib/otica-regras";
@@ -219,8 +219,24 @@ export async function POST(req: Request) {
         ? { ordemId: criada.id, para: "ENTREGUE", porId: user.id, aviso: "registro histórico do talão de papel: cliente não avisado" }
         : { ordemId: criada.id, para: "ABERTA", porId: user.id },
     });
-    // OS histórica é só o registro: nada de estoque nem de dinheiro.
-    if (historica) return criada;
+    // OS histórica: nada de estoque nem de WhatsApp. O dinheiro entra já quitado,
+    // no dia do talão, para constar no Financeiro do mês de referência.
+    if (historica) {
+      if (d.dataVenda && (d.valorCents ?? 0) > 0) {
+        const c = await tx.contact.findUniqueOrThrow({ where: { id: contactId! }, select: { name: true, waName: true } });
+        await criarContaDaOSHistorica(tx, {
+          tenantId: user.tenantId,
+          ordemId: criada.id,
+          numero,
+          contactId: contactId!,
+          nomeCliente: c.name ?? c.waName,
+          valorCents: d.valorCents!,
+          diaDoTalao: d.dataVenda,
+          userId: user.id,
+        });
+      }
+      return criada;
+    }
 
     // A armação escolhida do estoque é vendida: sai da lista de disponíveis.
     // Falha (peça já vendida) derruba a OS inteira, e o número reservado volta.
