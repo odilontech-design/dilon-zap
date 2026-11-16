@@ -8,7 +8,7 @@ import { prisma } from "@dilon-zap/db";
 import { ErroSdrCore } from "../../sdr-core/src/erros";
 import { CONFIG_PADRAO, configIaSchema, custoEmMicro, inicioDoDia, inicioDoMes, obterConfigIa, salvarConfigIa, type ConfigIa } from "../../sdr-core/src/ia/config";
 import { executarTarefaIa, extrairJson } from "../../sdr-core/src/ia/executar";
-import { provedorAnthropic, provedorGemini, semSegredos, type Provedor, type Provedores } from "../../sdr-core/src/ia/provedores";
+import { chaveGeminiDoServidor, provedorAnthropic, provedorGemini, semSegredos, type Provedor, type Provedores } from "../../sdr-core/src/ia/provedores";
 import { sdrDoTenant } from "../../sdr-core/src/index";
 import { USUARIOS } from "../src/semente";
 import { Sessao, logado } from "./ajudantes";
@@ -337,6 +337,25 @@ describe("IA: falha, timeout e reserva", () => {
     } finally {
       if (antes === undefined) delete process.env.ANTHROPIC_API_KEY;
       else process.env.ANTHROPIC_API_KEY = antes;
+    }
+  });
+  test("a leitura de OS da Ótica prefere a chave própria e cai na do SDR", () => {
+    const g = process.env.GEMINI_API_KEY;
+    const o = process.env.OTICA_GEMINI_API_KEY;
+    try {
+      process.env.GEMINI_API_KEY = "chave-do-sdr";
+      delete process.env.OTICA_GEMINI_API_KEY;
+      assert.equal(chaveGeminiDoServidor(), "chave-do-sdr");
+      process.env.OTICA_GEMINI_API_KEY = "  chave-da-otica ";
+      assert.equal(chaveGeminiDoServidor(), "chave-da-otica");
+      process.env.OTICA_GEMINI_API_KEY = "";
+      assert.equal(chaveGeminiDoServidor(), "chave-do-sdr");
+      assert.equal(semSegredos("x chave-do-sdr y"), "x [oculto] y");
+    } finally {
+      if (g === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = g;
+      if (o === undefined) delete process.env.OTICA_GEMINI_API_KEY;
+      else process.env.OTICA_GEMINI_API_KEY = o;
     }
   });
   test("semSegredos", () => {
