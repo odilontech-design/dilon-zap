@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { prisma } from "@dilon-zap/db";
 import { ErroSdrCore } from "@dilon-zap/sdr-core";
 import type { PedidoAoProvedor, Provedores } from "../../sdr-core/src/ia/provedores";
-import { cicloDoVendedor, descartarSugestao, enviarSugestao, listarConversasDoVendedor, obterConfigDoVendedor, salvarConfigDoVendedor } from "../../vendedor-ia/src/saas/vendedor";
+import { cicloDoVendedor, definirControleDaConversa, descartarSugestao, enviarSugestao, listarConversasDoVendedor, obterConfigDoVendedor, obterControleDaConversa, salvarConfigDoVendedor } from "../../vendedor-ia/src/saas/vendedor";
 import { decidir, dentroDoHorario, ESPERA_MS, linksNaoPermitidos, montarHistorico, paraWhatsApp, PREFIXO_DA_IA, type EstadoDaConversa, type MensagemDaConversa } from "../../vendedor-ia/src/saas/regras";
 import { cnpjDe } from "./dados";
 
@@ -87,6 +87,29 @@ describe("regras: quando o vendedor responde", () => {
   test("mensagem com mais de 48 h não é respondida por robô", () => {
     const antigo = new Date(AGORA.getTime() - 49 * 3_600_000);
     assert.deepEqual(decidir(estado([abertura(minutosAtras(60, antigo)), resposta(antigo)], { ativadoEm: new Date(antigo.getTime() - 3_600_000) }), AGORA), { acao: "ignorar", motivo: "mensagem velha" });
+  });
+});
+
+describe("regras: controle manual da conversa", () => {
+  const ms = [abertura(minutosAtras(10)), resposta(minutosAtras(2))];
+  test("desligado é o freio: nada é respondido, nem uma conversa que o automático atenderia", () => {
+    assert.equal(decidir(estado(ms), AGORA).acao, "responder");
+    assert.deepEqual(decidir(estado(ms, { controle: "DESLIGADO" }), AGORA), { acao: "ignorar", motivo: "desligado nesta conversa" });
+  });
+  test("ligado à mão responde fora do SDR: sem abordagem nossa antes, e também a mensagem que já esperava", () => {
+    const soDaEmpresa = [resposta(minutosAtras(3))];
+    assert.equal(decidir(estado(soDaEmpresa), AGORA).acao, "ignorar", "no automático, a empresa não escreveu depois de uma abordagem nossa");
+    assert.deepEqual(decidir(estado(soDaEmpresa, { controle: "LIGADO" }), AGORA), { acao: "responder" });
+    const antigaDeHoje = [resposta(new Date(AGORA.getTime() - 3 * 3_600_000))];
+    assert.equal(decidir(estado(antigaDeHoje, { ativadoEm: minutosAtras(1) }), AGORA).acao, "ignorar", "automático: mensagem de antes de ligar o vendedor");
+    assert.deepEqual(decidir(estado(antigaDeHoje, { ativadoEm: minutosAtras(1), controle: "LIGADO" }), AGORA), { acao: "responder" });
+  });
+  test("ligado à mão ainda respeita horário, limite de respostas e a equipe falando depois", () => {
+    const noite = new Date("2026-11-19T01:00:00Z");
+    assert.equal(decidir(estado([resposta(minutosAtras(2, noite))], { controle: "LIGADO" }), noite).acao, "esperar");
+    assert.equal(decidir(estado([resposta(minutosAtras(2))], { controle: "LIGADO", conversa: ativa({ turnos: 8 }) }), AGORA).acao, "transferir");
+    const comEquipe = [resposta(minutosAtras(7)), msg("OUTBOUND", minutosAtras(5), { senderUserId: "u1" }), resposta(minutosAtras(2))];
+    assert.deepEqual(decidir(estado(comEquipe, { controle: "LIGADO", conversa: ativa({ iniciadaEm: minutosAtras(8) }) }), AGORA), { acao: "transferir", motivo: "equipe respondeu" });
   });
 });
 
@@ -499,6 +522,153 @@ describe("configuração e painel", () => {
     assert.equal(outroPainel.itens.length, 0);
   });
 });
+
+describe("controle manual do vendedor, conversa a conversa", () => {
+  const CONFIG = { limiteTurnos: 8, horaInicio: 8, horaFim: 20 };
+  before(() => configurar("AUTOMATICO", CONFIG));
+  const controle = (conversationId: string, acao: "ligar" | "desligar" | "automatico", campanha?: string) => definirControleDaConversa(tenant, conversationId, { acao, ...(campanha ? { campanhaId: campanha } : {}) }, autor, AGORA);
+
+  /** Um contato qualquer que escreveu: sem empresa do SDR, sem negociação, sem abordagem nossa. */
+  async function avulso(nome: string, texto = "Oi, quanto custa?", t = tenant) {
+    telefone++;
+    const sessaoDoTenant = t === tenant ? sessao : (await prisma.whatsAppSession.create({ data: { tenantId: t, label: "Outro avulso" } })).id;
+    const contato = await prisma.contact.create({ data: { tenantId: t, waJid: `${telefone}@s.whatsapp.net`, phoneNumber: String(telefone), name: nome } });
+    const conversa = await prisma.conversation.create({ data: { tenantId: t, sessionId: sessaoDoTenant, contactId: contato.id, status: "OPEN", lastMessageAt: minutosAtras(2) } });
+    await prisma.message.create({ data: { conversationId: conversa.id, sessionId: sessaoDoTenant, direction: "INBOUND", body: texto, createdAt: minutosAtras(2) } });
+    return { conversationId: conversa.id, sessionId: sessaoDoTenant, telefone: String(telefone) };
+  }
+
+  test("conversa fora do SDR: sem controle, o vendedor não entra; ligado à mão, responde (só o nome do contato vai ao modelo)", async () => {
+    const c = await avulso("Cliente Avulso");
+    await cicloDoVendedor(deps);
+    assert.equal(await estadoDe(c.conversationId), null);
+    assert.equal((await mensagensDaIa(c.conversationId)).length, 0);
+
+    const antes = chamadas.length;
+    programar({ resposta: "Oi! O plano Revenda custa R$ 597/mês até 70 carros. Posso te mostrar em 20 minutos?", acao: "interesse", resumo: "Perguntou o preço." });
+    const ligado = await controle(c.conversationId, "ligar");
+    assert.equal(ligado.controle, "LIGADO");
+    assert.equal(ligado.doSdr, false);
+    await cicloDoVendedor(deps);
+    assert.equal(chamadas.length, antes + 1);
+    const ms = await mensagensDaIa(c.conversationId);
+    assert.equal(ms.length, 1);
+    assert.equal(ms[0].status, "PENDING");
+    const e = await estadoDe(c.conversationId);
+    assert.equal(e?.empresaId, null);
+    assert.equal(e?.turnos, 1);
+    const p = chamadas[chamadas.length - 1];
+    assert.ok(p.usuario.includes("Cliente Avulso"), "o nome do contato vai ao modelo");
+    assert.ok(p.usuario.includes("R$ 597/mês até 70 carros"), "sem roteiro escolhido, vale a campanha ativa mais recente");
+    assert.ok(!p.usuario.includes(c.telefone), "o telefone do contato não vai ao modelo");
+  });
+  test("ligar exige o vendedor ligado na empresa e a IA do SDR com o modelo da tarefa", async () => {
+    const c = await avulso("Cliente Sem Vendedor");
+    await prisma.sdrVendedorConfig.update({ where: { tenantId: tenant }, data: { ativo: false } });
+    await assert.rejects(() => controle(c.conversationId, "ligar"), (e: unknown) => e instanceof ErroSdrCore && e.status === 409 && /aba Vendedor IA/.test(e.message));
+    await configurar("AUTOMATICO", CONFIG);
+    await prisma.sdrIaConfig.update({ where: { tenantId: tenant }, data: { ativa: false } });
+    await assert.rejects(() => controle(c.conversationId, "ligar"), (e: unknown) => e instanceof ErroSdrCore && e.status === 409);
+    assert.equal((await obterControleDaConversa(tenant, c.conversationId)).vendedorPronto, false);
+    await prisma.sdrIaConfig.update({ where: { tenantId: tenant }, data: { ativa: true } });
+    assert.equal((await obterControleDaConversa(tenant, c.conversationId)).vendedorPronto, true);
+    assert.equal(await prisma.conversaAgente.count({ where: { conversationId: c.conversationId } }), 0, "nada foi gravado nas recusas");
+  });
+  test("o roteiro escolhido ao ligar vale; campanha de outra organização é recusada", async () => {
+    const c = await avulso("Cliente Roteiro");
+    const outraIcp = await prisma.sdrIcp.create({ data: { tenantId: outro, nome: "Perfil de fora" } });
+    const alheia = await prisma.sdrCampanha.create({ data: { tenantId: outro, nome: "Campanha de fora", icpId: outraIcp.id, status: "ATIVA" } });
+    await assert.rejects(() => controle(c.conversationId, "ligar", alheia.id), (e: unknown) => e instanceof ErroSdrCore && e.status === 404);
+    const icpId = (await prisma.sdrCampanha.findUniqueOrThrow({ where: { id: campanhaId } })).icpId;
+    const propria = await prisma.sdrCampanha.create({ data: { tenantId: tenant, nome: "Roteiro Escolhido", icpId, status: "ATIVA", argumento: "ARGUMENTO-ESCOLHIDO-123", linkAgenda: "https://agenda.teste/escolhida" } });
+    programar({ resposta: "Olá! Posso explicar como funciona.", acao: "continuar" });
+    await controle(c.conversationId, "ligar", propria.id);
+    await cicloDoVendedor(deps);
+    assert.ok(chamadas[chamadas.length - 1].usuario.includes("ARGUMENTO-ESCOLHIDO-123"));
+    assert.equal((await obterControleDaConversa(tenant, c.conversationId)).campanhaId, propria.id);
+  });
+  test("parar a IA: cancela o que ela deixou na fila (sem tocar nas mensagens de pessoas), limpa a sugestão e nada mais é respondido", async () => {
+    const c = await avulso("Cliente Freio");
+    programar({ resposta: "Oi, tudo bem?", acao: "continuar" });
+    await controle(c.conversationId, "ligar");
+    await cicloDoVendedor(deps);
+    assert.equal((await mensagensDaIa(c.conversationId)).length, 1);
+    await prisma.sdrVendedorConversa.update({ where: { conversationId: c.conversationId }, data: { sugestao: "Texto sugerido", sugestaoAcao: "continuar" } });
+    const pessoa = await prisma.message.create({ data: { conversationId: c.conversationId, sessionId: c.sessionId, direction: "OUTBOUND", status: "PENDING", body: "Mensagem de uma pessoa, ainda na fila", createdAt: AGORA } });
+
+    const r = await controle(c.conversationId, "desligar");
+    assert.equal(r.controle, "DESLIGADO");
+    assert.equal(r.canceladas, 1);
+    const [daIa] = await mensagensDaIa(c.conversationId);
+    assert.equal(daIa.status, "FAILED");
+    assert.match(daIa.errorMessage ?? "", /Cancelada/);
+    assert.equal((await prisma.message.findUniqueOrThrow({ where: { id: pessoa.id } })).status, "PENDING", "mensagem que não é da IA fica como está");
+    assert.equal((await estadoDe(c.conversationId))?.sugestao, null);
+
+    await prisma.message.create({ data: { conversationId: c.conversationId, sessionId: c.sessionId, direction: "INBOUND", body: "E então?", createdAt: minutosAtras(1) } });
+    const antes = chamadas.length;
+    await cicloDoVendedor(deps);
+    assert.equal(chamadas.length, antes, "parada, a IA não chama o modelo");
+    assert.equal((await mensagensDaIa(c.conversationId)).length, 1);
+  });
+  test("o freio vale também para uma conversa do SDR que o automático atenderia; voltar ao automático devolve a conversa às regras", async () => {
+    const c = await montar("Auto Freio Manual", { resposta: "Boa tarde, quanto custa?" });
+    await controle(c.conversationId, "desligar");
+    const antes = chamadas.length;
+    await cicloDoVendedor(deps);
+    assert.equal(chamadas.length, antes);
+    assert.equal(await estadoDe(c.conversationId), null);
+
+    programar({ resposta: "Boa tarde! O plano Revenda custa R$ 597/mês.", acao: "continuar" });
+    const r = await controle(c.conversationId, "automatico");
+    assert.equal(r.controle, null);
+    assert.equal(r.doSdr, true);
+    await cicloDoVendedor(deps);
+    assert.equal((await mensagensDaIa(c.conversationId)).length, 1);
+  });
+  test("depois que a equipe respondeu e a IA saiu, ligar de novo recomeça: zera respostas e falhas", async () => {
+    const c = await montar("Auto Retomada", { resposta: "Oi" });
+    programar({ resposta: "Olá! Em que posso ajudar?", acao: "continuar" });
+    await cicloDoVendedor(deps);
+    const depois = new Date(AGORA.getTime() + 5 * 60_000);
+    await prisma.message.create({ data: { conversationId: c.conversationId, sessionId: c.sessionId, direction: "OUTBOUND", status: "SENT", body: "Aqui é o Felipe.", deCelular: true, createdAt: minutosAtras(2, depois) } });
+    await prisma.message.create({ data: { conversationId: c.conversationId, sessionId: c.sessionId, direction: "INBOUND", body: "Ok, e o preço?", createdAt: minutosAtras(1, depois) } });
+    await cicloDoVendedor({ ...deps, agora: () => depois });
+    assert.equal((await estadoDe(c.conversationId))?.status, "TRANSFERIDA");
+
+    const depois2 = new Date(AGORA.getTime() + 10 * 60_000);
+    programar({ resposta: "O plano Revenda custa R$ 597/mês até 70 carros.", acao: "continuar" });
+    const r = await definirControleDaConversa(tenant, c.conversationId, { acao: "ligar" }, autor, depois2);
+    assert.equal(r.estado?.status, "ATIVA");
+    assert.equal(r.estado?.turnos, 0);
+    await prisma.message.create({ data: { conversationId: c.conversationId, sessionId: c.sessionId, direction: "INBOUND", body: "Pode me explicar?", createdAt: minutosAtras(1, depois2) } });
+    await cicloDoVendedor({ ...deps, agora: () => depois2 });
+    assert.equal((await mensagensDaIa(c.conversationId)).length, 2);
+  });
+  test("fora do SDR, pedir para não ser contatado bloqueia o telefone, encerra e deixa o freio ligado", async () => {
+    const c = await avulso("Cliente Pediu Parar", "Parem de me mandar mensagem");
+    programar({ resposta: "Claro, vou parar.", acao: "nao_contatar", resumo: "Pediu para parar." });
+    await controle(c.conversationId, "ligar");
+    await cicloDoVendedor(deps);
+    const ms = await mensagensDaIa(c.conversationId);
+    assert.equal(ms.length, 1);
+    assert.ok(ms[0].body.includes("não enviaremos mais mensagens"));
+    assert.equal((await estadoDe(c.conversationId))?.status, "ENCERRADA");
+    assert.equal(await prisma.sdrSupressao.count({ where: { tenantId: tenant, tipo: "TELEFONE", valor: { contains: c.telefone.slice(-9) } } }), 1);
+    assert.equal((await obterControleDaConversa(tenant, c.conversationId)).controle, "DESLIGADO");
+  });
+  test("conversa de outra organização e grupo são recusados; o painel mostra o contato quando não há empresa", async () => {
+    const alheia = await avulso("Cliente De Fora", "Oi", outro);
+    await assert.rejects(() => controle(alheia.conversationId, "ligar"), (e: unknown) => e instanceof ErroSdrCore && e.status === 404);
+    await assert.rejects(() => obterControleDaConversa(tenant, alheia.conversationId), (e: unknown) => e instanceof ErroSdrCore && e.status === 404);
+    const contatoGrupo = await prisma.contact.create({ data: { tenantId: tenant, waJid: "120363000000000001@g.us", name: "Grupo Teste", grupo: true } });
+    const conversaGrupo = await prisma.conversation.create({ data: { tenantId: tenant, sessionId: sessao, contactId: contatoGrupo.id, status: "OPEN" } });
+    await assert.rejects(() => controle(conversaGrupo.id, "ligar"), (e: unknown) => e instanceof ErroSdrCore && e.status === 409);
+    const painel = await listarConversasDoVendedor(tenant);
+    assert.ok(painel.itens.some((i) => i.empresa === "Cliente Avulso"), "conversa sem empresa aparece com o nome do contato");
+    await assert.rejects(() => definirControleDaConversa(tenant, alheia.conversationId, { acao: "ligar", tenantId: "x" }, autor), (e: unknown) => e instanceof Error && e.name === "ZodError");
+  });
+});
 });
 
 describe("vendedor de SaaS: arquitetura (guardas por leitura do código)", () => {
@@ -507,7 +677,7 @@ describe("vendedor de SaaS: arquitetura (guardas por leitura do código)", () =>
 
   test("toda rota do vendedor passa pelo portão do SDR (recurso ligado na empresa e papel da pessoa)", () => {
     const rotas = arquivos(path.join(raiz, "apps/web/app/api/vendedor-saas")).filter((p) => p.endsWith("route.ts"));
-    assert.equal(rotas.length, 3, "configuração, enviar e descartar");
+    assert.equal(rotas.length, 4, "configuração, enviar, descartar e controle da conversa");
     for (const r of rotas) assert.match(fs.readFileSync(r, "utf8"), /rotaSdr\(/, r);
   });
   test("o tenant vem sempre da sessão: nenhuma rota lê tenantId do corpo ou da URL", () => {

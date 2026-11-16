@@ -7,3 +7,4 @@ export { ciclo, atenderConversa, usoDoMes, type Dependencias, type ClienteIa } f
 export { cicloDoVendedor, obterConfigDoVendedor, salvarConfigDoVendedor, listarConversasDoVendedor, enviarSugestao, descartarSugestao, configDoVendedorSchema, edicaoDaSugestaoSchema } from "./saas/vendedor";
 export type { ConfigDoVendedor, DependenciasDoVendedor, ResultadoDoCicloDoVendedor } from "./saas/vendedor";
 export { TAREFA_DO_VENDEDOR, ACOES_DO_VENDEDOR } from "./saas/prompt";
+export { obterControleDaConversa, definirControleDaConversa, controleDaConversaSchema } from "./saas/vendedor";

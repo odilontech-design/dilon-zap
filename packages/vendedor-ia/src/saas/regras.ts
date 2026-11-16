@@ -62,6 +62,12 @@ export type EstadoDaConversa = {
   limiteTurnos: number;
   horaInicio: number;
   horaFim: number;
+  /**
+   * O controle manual da conversa (Inbox). DESLIGADO é o freio: nada é respondido. LIGADO é uma pessoa pedindo para o vendedor
+   * falar com este contato: não exige que a conversa tenha vindo do SDR nem que a empresa tenha respondido a uma abordagem,
+   * e a IA também responde a mensagem que já estava esperando. Sem controle (null), valem as regras automáticas do SDR.
+   */
+  controle?: "LIGADO" | "DESLIGADO" | null;
 };
 
 export type Decisao =
@@ -98,16 +104,19 @@ export function decidir(e: EstadoDaConversa, agora: Date): Decisao {
   const validas = e.mensagens.filter((m) => !m.isDeleted);
   const ultima = validas[validas.length - 1];
   if (!ultima) return { acao: "ignorar", motivo: "sem mensagens" };
+  if (e.controle === "DESLIGADO") return { acao: "ignorar", motivo: "desligado nesta conversa" };
+  const manual = e.controle === "LIGADO";
 
   if (e.conversa && e.conversa.status !== "ATIVA") return { acao: "ignorar", motivo: e.conversa.status === "TRANSFERIDA" ? "já transferida" : "já encerrada" };
 
   if (e.conversa && validas.some((m) => m.createdAt > e.conversa!.iniciadaEm && ehDaEquipe(m))) return { acao: "transferir", motivo: "equipe respondeu" };
 
   if (ultima.direction !== "INBOUND") return { acao: "ignorar", motivo: "a última mensagem é nossa" };
-  if (ultima.createdAt <= e.ativadoEm) return { acao: "ignorar", motivo: "mensagem de antes de ligar o vendedor" };
+  // Ligado à mão, a IA responde também a mensagem que já estava esperando; no automático, só o que chegou depois de ligar o vendedor.
+  if (!manual && ultima.createdAt <= e.ativadoEm) return { acao: "ignorar", motivo: "mensagem de antes de ligar o vendedor" };
   if (e.conversa?.respondidoAte && ultima.createdAt <= e.conversa.respondidoAte) return { acao: "ignorar", motivo: "já tratada" };
 
-  if (!e.conversa) {
+  if (!e.conversa && !manual) {
     // Conversa longa demais para a janela: não dá para saber se a equipe já atendia.
     if (e.mensagens.length >= e.janela) return { acao: "ignorar", motivo: "conversa longa demais para assumir" };
     const primeira = validas.find((m) => m.direction === "INBOUND")!;
