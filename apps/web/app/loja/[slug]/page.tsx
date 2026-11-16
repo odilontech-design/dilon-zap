@@ -1,3 +1,5 @@
+import { caminhoDaLoja } from "@/lib/vitrine-aparencia";
+import { BuscaClassica } from "./busca-classica";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { baseDaLoja, carrosDaVitrine, linkDaLoja, linkDoCarro, lojaPublica } from "@/lib/vitrine";
@@ -66,7 +68,11 @@ export default async function LojaPage({ params }: { params: { slug: string } })
         }}
       />
       <CarrosselDeBanners slug={loja.slug} banners={banners.map((b) => ({ id: b.id, titulo: b.titulo, link: b.link, temCelular: !!b.chaveCelular }))} />
+      {loja.estiloSite === "classico" ? (
+        <BuscaClassica caminho={caminhoDaLoja(loja.slug, loja.dominio)} carros={carros.map((c) => ({ marca: c.marca, modelo: c.modelo, anoModelo: c.anoModelo, precoCents: c.precoCents }))} />
+      ) : (
       <Hero compacto={banners.length > 0} loja={loja} menorPreco={carros.length ? Math.min(...carros.map((c) => c.precoCents)) : 0} cambios={[...new Set(carros.map((c) => c.cambio).filter(Boolean) as string[])].sort()} total={carros.length} />
+      )}
       {destaques.length > 0 && (
         <section aria-label="Últimas ofertas" className="mx-auto w-full max-w-6xl px-4 pt-10">
           <div className="mb-4 flex items-end justify-between gap-3">

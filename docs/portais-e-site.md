@@ -394,3 +394,14 @@ Cuidados com os dados (LGPD), em `lib/ficha-financiamento.ts`:
 - a ficha se apaga sozinha em **180 dias** (a limpeza roda a cada ficha nova e a cada consulta).
 
 Chave: `FICHAS_CHAVE` (32 bytes em base64), se existir; senão, uma chave derivada de `PORTAIS_CHAVE` (HKDF, rótulo próprio). Sem nenhuma das duas, a opção da ficha completa fica desligada e o site usa o formulário curto. **Trocar a chave torna ilegíveis as fichas já guardadas.** Rotas: `GET/PUT /api/veiculos/site/ficha`, `GET/DELETE /api/negociacoes/[id]/ficha`, e o `POST /api/loja/[slug]/financiamento` aceita `{ ficha, consentimento }`. Teste: `apps/web/lib/ficha-financiamento.test-manual.ts`.
+
+## Estilo clássico do site (v1.80.0)
+
+Em **Aparência e domínio > Estilo do site**, a loja escolhe entre **Moderno** (o padrão: cabeçalho escuro, menu em botões, busca na abertura) e **Clássico**, que repete a identidade dos sites AutoCerto, a que a loja e os clientes dela já conhecem:
+
+- faixa na cor da loja com o logo grande à esquerda e, à direita, **Endereço** e **Telefone** (rótulos na segunda cor, telefones de WhatsApp com o ícone verde);
+- menu numa faixa da **segunda cor**, com texto na cor da loja e ícones, na ordem do AutoCerto (Home, Quem somos, Veículos, Financiamento, Localização, Venda seu carro), preso no topo ao rolar;
+- logo abaixo dos banners, a faixa cinza **Encontre seu veículo** (marca, modelo, preço de/até, ano de/até e **Localizar**), que leva à lista já filtrada (`?min=` e `?anoate=` são novos na lista);
+- abas de **Facebook, Instagram e WhatsApp** presas na lateral direita no computador; no celular, o botão verde de sempre e uma faixa da segunda cor abaixo do cabeçalho.
+
+Campo novo: `VeiculosConfig.estiloSite` (`"moderno"` | `"classico"`, padrão `"moderno"`). Componentes: `app/loja/[slug]/classico.tsx` e `busca-classica.tsx`. Para ficar igual ao site antigo da Sales, use as cores dele: `#A50303` (vermelho) e `#FECB00` (amarelo).

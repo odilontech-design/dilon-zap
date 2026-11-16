@@ -22,6 +22,9 @@ export function ListaDeCarros({ slug, carros, whatsapp = null, baseUrl, titulo }
   const [modelo, setModelo] = useState("");
   const [anoMin, setAnoMin] = useState("");
   const [precoMax, setPrecoMax] = useState("");
+  // Vindos só da busca do estilo clássico (?min= e ?anoate=): sem campo próprio na lista.
+  const [precoMin, setPrecoMin] = useState("");
+  const [anoMax, setAnoMax] = useState("");
   const [cambio, setCambio] = useState("");
   const [comb, setComb] = useState("");
   const [ordem, setOrdem] = useState<Ordem>("recentes");
@@ -35,6 +38,8 @@ export function ListaDeCarros({ slug, carros, whatsapp = null, baseUrl, titulo }
     setModelo(sp.get("modelo") ?? "");
     setAnoMin(sp.get("ano") ?? "");
     setPrecoMax(sp.get("max") ?? "");
+    setPrecoMin(sp.get("min") ?? "");
+    setAnoMax(sp.get("anoate") ?? "");
     setCambio(sp.get("cambio") ?? "");
     setComb(sp.get("comb") ?? "");
     if (sp.get("cambio") || sp.get("comb") || sp.get("ano") || sp.get("modelo")) setMaisFiltros(true);
@@ -56,12 +61,15 @@ export function ListaDeCarros({ slug, carros, whatsapp = null, baseUrl, titulo }
   const lista = useMemo(() => {
     const termo = semAcento(busca.trim());
     const max = Number(precoMax.replace(/\D/g, "")) * 100;
+    const min = Number(precoMin.replace(/\D/g, "")) * 100;
     const f = carros.filter(
       (c) =>
         (!marca || c.marca === marca) &&
         (!modelo || c.modelo === modelo) &&
         (!anoMin || c.anoModelo >= Number(anoMin)) &&
         (!max || c.precoCents <= max) &&
+        (!min || c.precoCents >= min) &&
+        (!anoMax || c.anoModelo <= Number(anoMax)) &&
         (!cambio || c.cambio === cambio) &&
         (!comb || c.combustivel === comb) &&
         (!termo || semAcento(`${c.marca} ${c.modelo} ${c.versao ?? ""} ${c.anoModelo} ${c.cor ?? ""}`).includes(termo)),
@@ -70,11 +78,11 @@ export function ListaDeCarros({ slug, carros, whatsapp = null, baseUrl, titulo }
     if (ordem === "maior") f.sort((a, b) => b.precoCents - a.precoCents);
     if (ordem === "km") f.sort((a, b) => (a.kmInformado ? a.km : Infinity) - (b.kmInformado ? b.km : Infinity)); // sem km informada vai para o fim
     return f;
-  }, [carros, busca, marca, modelo, anoMin, precoMax, cambio, comb, ordem]);
+  }, [carros, busca, marca, modelo, anoMin, precoMax, precoMin, anoMax, cambio, comb, ordem]);
 
-  const filtrando = !!(busca || marca || modelo || anoMin || precoMax || cambio || comb);
+  const filtrando = !!(busca || marca || modelo || anoMin || precoMax || precoMin || anoMax || cambio || comb);
   const limpar = () => {
-    setBusca(""); setMarca(""); setModelo(""); setAnoMin(""); setPrecoMax(""); setCambio(""); setComb("");
+    setBusca(""); setMarca(""); setModelo(""); setAnoMin(""); setPrecoMax(""); setPrecoMin(""); setAnoMax(""); setCambio(""); setComb("");
     if (typeof window !== "undefined" && window.location.search) window.history.replaceState(null, "", `${window.location.pathname}#estoque`);
   };
 

@@ -3849,6 +3849,9 @@ model VeiculosConfig {
 
   // Vitrine: cabeçalho e rodapé claros (o padrão é escuro, que valoriza logos prateadas/claras).
   cabecalhoClaro  Boolean  @default(false)
+  // Estilo do site: "moderno" (cabeçalho escuro, menu em pílulas) ou "classico" (faixa na cor da
+  // loja com endereço e telefones, menu na segunda cor, busca em faixa cinza: o jeito dos sites AutoCerto).
+  estiloSite      String   @default("moderno")
   // Segunda cor da marca (destaques: botões de chamada, selos, menu ativo). Nulo = usa só a cor da loja.
   // Meu site: até 8 carros em destaque na página inicial (ids, na ordem), o carro da
   // oferta que abre ao entrar no site e o texto da página "Quem somos".

@@ -18,6 +18,7 @@ type Config = {
   formularioAtivo: boolean;
   exigirKm: boolean;
   cabecalhoClaro: boolean;
+  estiloSite: string;
   corSecundaria: string | null;
   corPrimaria: string | null;
   horario: string | null;
@@ -38,7 +39,7 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, nomeLoja: "", sobre: "", mostrarReservados: true, dominio: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, corSecundaria: "", corPrimaria: "", instagram: "", facebook: "", politicaPrivacidade: "" });
+  const [f, setF] = useState({ vitrineAtiva: false, nomeLoja: "", sobre: "", mostrarReservados: true, dominio: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, estiloSite: "moderno", corSecundaria: "", corPrimaria: "", instagram: "", facebook: "", politicaPrivacidade: "" });
   const [versaoImagens, setVersaoImagens] = useState(0);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -53,6 +54,7 @@ export function ConfigVitrine() {
         formularioAtivo: data.formularioAtivo,
         exigirKm: data.exigirKm,
         cabecalhoClaro: data.cabecalhoClaro ?? false,
+        estiloSite: data.estiloSite ?? "moderno",
         corSecundaria: data.corSecundaria ?? "",
         corPrimaria: data.corPrimaria ?? "",
         instagram: data.instagram ?? "",
@@ -141,6 +143,11 @@ export function ConfigVitrine() {
           </div>
           <span className="text-xs text-neutral-500">Para lojas com duas cores (ex.: vermelho e amarelo): a primeira vira o fundo do cabeçalho e da abertura; a segunda, os botões de chamada, o menu ativo e os selos.</span>
         </label>
+        <fieldset className="flex flex-col gap-2 text-sm">
+          <legend className={rotulo}>Estilo do site</legend>
+          <label className="flex items-start gap-2"><input type="radio" className="mt-1" checked={f.estiloSite !== "classico"} onChange={() => setF({ ...f, estiloSite: "moderno" })} /> <span><strong>Moderno</strong>: cabeçalho escuro com o menu em botões e a busca na abertura.</span></label>
+          <label className="flex items-start gap-2"><input type="radio" className="mt-1" checked={f.estiloSite === "classico"} onChange={() => setF({ ...f, estiloSite: "classico" })} /> <span><strong>Clássico</strong>: faixa na cor da loja com logo, endereço e telefones; menu na segunda cor; busca numa faixa cinza abaixo dos banners (o jeito dos sites AutoCerto).</span></label>
+        </fieldset>
         <label className="flex items-center gap-2 text-sm">
           <input type="checkbox" checked={f.cabecalhoClaro} onChange={(e) => setF({ ...f, cabecalhoClaro: e.target.checked })} />
           Cabeçalho e rodapé claros (desmarcado = escuro, que valoriza logos claras ou prateadas)
