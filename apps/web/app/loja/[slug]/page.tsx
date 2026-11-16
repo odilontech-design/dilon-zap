@@ -11,7 +11,7 @@ import { Hero } from "./hero";
 import { CarrosselDeBanners } from "./carrossel-banners";
 import { OfertaAoEntrar } from "./oferta-ao-entrar";
 import { CartaoDeCarro } from "./cartao-de-carro";
-import { bannersDaLoja, carrosEmDestaque } from "@/lib/meu-site";
+import { bannersDaLoja, completarDestaques, carrosEmDestaque } from "@/lib/meu-site";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { FaixaDeMarcas } from "./marcas";
 import { ListaDeCarros } from "./lista-de-carros";
@@ -42,7 +42,8 @@ export default async function LojaPage({ params }: { params: { slug: string } })
   const loja = await lojaPublica(params.slug);
   if (!loja) notFound();
   const [carros, banners] = await Promise.all([carrosDaVitrine(loja), bannersDaLoja(loja.tenantId)]);
-  const destaques = carrosEmDestaque(loja.destaques, carros.filter((c) => c.status === "DISPONIVEL"));
+  const aVenda = carros.filter((c) => c.status === "DISPONIVEL");
+  const destaques = completarDestaques(carrosEmDestaque(loja.destaques, aVenda), [...aVenda].sort((a, b) => +new Date(b.entradaEm) - +new Date(a.entradaEm)));
   const oferta = loja.ofertaVeiculoId ? carros.find((c) => c.id === loja.ofertaVeiculoId && c.status === "DISPONIVEL") ?? null : null;
   const baseDosCarros = `${baseDaLoja(loja.dominio)}/loja/${loja.slug}`;
 

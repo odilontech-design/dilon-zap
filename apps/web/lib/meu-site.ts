@@ -204,3 +204,14 @@ export function carrosEmDestaque<T extends { id: string }>(ids: string[], carros
   const porId = new Map(carros.map((c) => [c.id, c]));
   return ids.map((id) => porId.get(id)).filter((c): c is T => !!c);
 }
+
+/**
+ * Completa os destaques até fechar a linha (4 por linha, no máximo 8) com os carros mais recentes
+ * que ainda não estão lá: quando um destaque é vendido, a grade não fica com um buraco.
+ */
+export function completarDestaques<T extends { id: string }>(escolhidos: T[], recentes: T[], porLinha = 4, max = MAX_DESTAQUES): T[] {
+  if (escolhidos.length === 0 || escolhidos.length % porLinha === 0) return escolhidos;
+  const alvo = Math.min(max, Math.ceil(escolhidos.length / porLinha) * porLinha);
+  const ja = new Set(escolhidos.map((c) => c.id));
+  return [...escolhidos, ...recentes.filter((c) => !ja.has(c.id)).slice(0, alvo - escolhidos.length)];
+}

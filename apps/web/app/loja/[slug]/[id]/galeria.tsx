@@ -19,7 +19,7 @@ export function Galeria({ slug, fotos, alt }: { slug: string; fotos: string[]; a
   return (
     <div className="flex min-w-0 flex-col gap-3" onKeyDown={(e) => (e.key === "ArrowRight" ? ir(1) : e.key === "ArrowLeft" ? ir(-1) : null)} tabIndex={0}>
       <div
-        className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-neutral-100 shadow-sm"
+        className="foto-moldura relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-neutral-100 shadow-sm"
         onTouchStart={(e) => (toque.current = e.touches[0].clientX)}
         onTouchEnd={(e) => {
           if (toque.current === null) return;
@@ -54,7 +54,7 @@ export function Galeria({ slug, fotos, alt }: { slug: string; fotos: string[]; a
       {fotos.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
           {fotos.map((f, j) => (
-            <button key={f} onClick={() => setI(j)} aria-label={`Ver foto ${j + 1}`} aria-current={j === i} className={`relative aspect-[4/3] w-20 shrink-0 overflow-hidden rounded-lg border-2 transition md:w-24 ${j === i ? "border-[var(--loja)]" : "border-transparent opacity-70 hover:opacity-100"}`}>
+            <button key={f} onClick={() => setI(j)} aria-label={`Ver foto ${j + 1}`} aria-current={j === i} className={`foto-moldura relative aspect-[4/3] w-20 shrink-0 overflow-hidden rounded-lg border-2 transition md:w-24 ${j === i ? "border-[var(--loja)]" : "border-transparent opacity-70 hover:opacity-100"}`}>
               <FotoSemCortes src={fotoUrl(slug, f, 240)} alt="" />
             </button>
           ))}

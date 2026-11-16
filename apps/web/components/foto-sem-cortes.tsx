@@ -9,7 +9,7 @@ export function FotoSemCortes({ src, fundo, srcSet, sizes, alt, loading = "lazy"
   return (
     <>
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={fundo ?? src} alt="" aria-hidden loading="lazy" decoding="async" className="absolute inset-0 h-full w-full scale-125 object-cover opacity-70 blur-2xl" />
+      <img src={fundo ?? src} alt="" aria-hidden loading="lazy" decoding="async" className="foto-desfoque absolute inset-0 h-full w-full scale-125 object-cover opacity-70 blur-2xl" />
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img src={src} srcSet={srcSet} sizes={sizes} alt={alt} loading={loading} decoding="async" fetchPriority={prioridade ? "high" : undefined} className={`absolute inset-0 h-full w-full object-contain text-transparent ${className}`} />
     </>

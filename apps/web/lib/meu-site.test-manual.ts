@@ -1,7 +1,7 @@
 // "Meu site": banners, destaques, páginas e o painel. Rodar de apps/web com:
 //   DATABASE_URL=postgresql://... npx tsx lib/meu-site.test-manual.ts
 import { prisma } from "@dilon-zap/db";
-import { carrosEmDestaque, criarBanner, dadosDoSite, editarBanner, excluirBanner, imagemDoBanner, linkDeBanner, painelDoSite, salvarDestaques, salvarPaginas, bannersDaLoja } from "./meu-site";
+import { completarDestaques, carrosEmDestaque, criarBanner, dadosDoSite, editarBanner, excluirBanner, imagemDoBanner, linkDeBanner, painelDoSite, salvarDestaques, salvarPaginas, bannersDaLoja } from "./meu-site";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -51,6 +51,10 @@ async function main() {
   checa("no máximo 8 destaques", (await salvarDestaques(t.id, Array.from({ length: 12 }, () => a.id).concat([b.id]), undefined)).destaques.length <= 8, true);
   await salvarDestaques(t.id, [c.id, b.id, a.id], null);
   checa("no site, destaque vendido cai fora sozinho", carrosEmDestaque([c.id, b.id, a.id], [a, b]).map((v) => v.id), [b.id, a.id]);
+
+  const ids = (xs: { id: string }[]) => xs.map((v) => v.id);
+  const c4 = ["a", "b", "c", "d", "e", "f", "g", "h", "i"].map((id) => ({ id }));
+  checa("grade de destaques: completa a linha com os mais recentes (7 → 8; 4 fica 4; 0 fica 0; 3 → 4)", [ids(completarDestaques(c4.slice(0, 7), c4)), ids(completarDestaques(c4.slice(0, 4), c4)), ids(completarDestaques([], c4)), ids(completarDestaques([c4[8], c4[0], c4[1]], c4))], [["a", "b", "c", "d", "e", "f", "g", "h"], ["a", "b", "c", "d"], [], ["i", "a", "b", "c"]]);
 
   // páginas
   await salvarPaginas(t.id, { quemSomosTitulo: "  Tradição em Caxias  ", quemSomosTexto: "Somos a loja.", instagram: "@loja" });

@@ -98,9 +98,10 @@ export function ListaDeCarros({ slug, carros, whatsapp = null, baseUrl, titulo }
       </div>
 
       <div className="rounded-2xl border border-neutral-200 bg-surface p-3 shadow-sm md:p-4">
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        {/* Uma linha só, todos com rótulo, para os campos ficarem alinhados; "Mais filtros" abre a segunda linha. */}
+        <div className="grid grid-cols-2 items-end gap-3 md:grid-cols-5">
           <label className="col-span-2 md:col-span-2">
-            <span className="sr-only">Buscar</span>
+            <span className={rotulo}>Buscar</span>
             <input aria-label="Buscar" value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar por marca, modelo, ano ou cor" className={campo} />
           </label>
           <label>
