@@ -6,6 +6,7 @@ import { BotaoWhatsapp } from "./rastreio";
 import { BotaoFlutuante } from "./botao-flutuante";
 import { MenuMovel } from "./menu-movel";
 import { AbasSociais, CabecalhoClassico } from "./classico";
+import { Rodape } from "./rodape";
 
 /**
  * A moldura de toda página pública da loja: faixa de contato, cabeçalho com
@@ -65,7 +66,7 @@ export function CascaDaLoja({ loja, aba, subirBotao = false, children }: { loja:
   const sub = escuro ? "text-neutral-400" : "text-neutral-600";
 
   return (
-    <div className="flex min-h-screen flex-col bg-canvas text-neutral-900" style={estiloDaLoja(loja)}>
+    <div className={`flex min-h-screen flex-col bg-canvas text-neutral-900 ${classico ? "estilo-classico" : ""}`} style={estiloDaLoja(loja)}>
       {classico ? (
         <CabecalhoClassico loja={loja} itens={itens} telefones={telefonesUnicos} linkDoTelefone={linkDoTelefone} logo={loja.temLogo ? marca("logo") : null} />
       ) : (
@@ -124,57 +125,16 @@ export function CascaDaLoja({ loja, aba, subirBotao = false, children }: { loja:
 
       <div className="flex-1">{children}</div>
 
-      <footer className={`mt-14 ${escuro ? "text-neutral-200" : "border-t border-neutral-200 bg-surface"}`} style={escuro ? { background: "var(--loja-mais-escuro)" } : undefined}>
-        <div className="h-[3px] w-full" style={{ background: "linear-gradient(90deg, var(--loja), var(--loja2))" }} />
-        <div className="mx-auto grid max-w-6xl gap-8 px-4 py-10 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            {loja.temLogo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={marca("logo")} alt={loja.nome} className="h-10 max-w-[170px] object-contain object-left" loading="lazy" />
-            ) : (
-              <p className="text-base font-bold">{loja.nome}</p>
-            )}
-            {loja.endereco && <p className={`mt-3 ${sub}`}>{loja.endereco}</p>}
-            <div className="mt-3 flex gap-3">
-              {loja.instagram && (
-                <a href={loja.instagram} target="_blank" rel="noreferrer me" className="font-medium hover:underline" style={{ color: "var(--loja2)" }}>Instagram</a>
-              )}
-              {loja.facebook && (
-                <a href={loja.facebook} target="_blank" rel="noreferrer me" className="font-medium hover:underline" style={{ color: "var(--loja2)" }}>Facebook</a>
-              )}
-            </div>
-          </div>
-          <div>
-            <p className="font-semibold">Navegue</p>
-            <ul className={`mt-2 flex flex-col gap-1.5 ${sub}`}>
-              {itens.map((i) => (
-                <li key={i.href}><Link href={i.href} className="hover:underline">{i.rotulo}</Link></li>
-              ))}
-              <li><Link href={caminho("privacidade")} className="hover:underline">Política de privacidade</Link></li>
-            </ul>
-          </div>
-          <div>
-            <p className="font-semibold">Fale com a gente</p>
-            {[...new Map(telefones.map((t) => [t.numero, t])).values()].map((t) => (
-              <a key={t.numero} href={linkDoTelefone(t)} target={t.tipo === "WHATSAPP" ? "_blank" : undefined} rel="noreferrer" className={`mt-2 block ${sub} hover:underline`}>
-                {t.tipo === "WHATSAPP" ? "WhatsApp" : t.tipo === "FIXO" ? "Telefone" : "Celular"} {formatarWhatsapp(t.numero)}
-              </a>
-            ))}
-            <Link href={caminho("localizacao")} className={`mt-1.5 block ${sub} hover:underline`}>Como chegar</Link>
-          </div>
-          {loja.horario.length > 0 && (
-            <div>
-              <p className="font-semibold">Horário de atendimento</p>
-              <ul className={`mt-2 ${sub}`}>
-                {loja.horario.map((h) => (
-                  <li key={h}>{h}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-        <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-neutral-500">Preços e disponibilidade sujeitos a alteração sem aviso. Confirme pelo WhatsApp. Marcas e logotipos pertencem às respectivas montadoras.</p>
-      </footer>
+      <Rodape
+        loja={loja}
+        itens={itens}
+        telefones={telefonesUnicos}
+        linkDoTelefone={linkDoTelefone}
+        logo={loja.temLogo ? marca("logo") : null}
+        escuro={escuro || classico}
+        linkPrivacidade={caminho("privacidade")}
+        linkLocalizacao={caminho("localizacao")}
+      />
 
       {classico && <AbasSociais loja={loja} zap={zap} />}
       {zap && <BotaoFlutuante href={zap} subirNoCelular={subirBotao} soCelular={classico} />}

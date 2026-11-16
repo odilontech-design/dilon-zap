@@ -3,6 +3,7 @@ import type { LojaPublica } from "@/lib/vitrine";
 import { IconeWhatsapp } from "./comum";
 import { MenuMovel } from "./menu-movel";
 import { BotaoWhatsapp } from "./rastreio";
+import { MenuFixo } from "./menu-fixo";
 
 /**
  * Estilo "clássico" do site (Aparência > Estilo do site): o jeito dos sites AutoCerto, que é a
@@ -48,7 +49,7 @@ export function CabecalhoClassico({ loja, itens, telefones, linkDoTelefone, logo
   const zap = telefones.find((t) => t.tipo === "WHATSAPP");
   return (
     <>
-      <header className="relative z-30" style={{ background: "var(--loja)", color: "var(--loja-texto)" }}>
+      <header className="sticky top-0 z-30 md:relative" style={{ background: "var(--loja)", color: "var(--loja-texto)" }}>
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3 md:py-4">
           <Link href={inicio} className="flex min-w-0 items-center" aria-label={`${loja.nome}: página inicial`}>
             {logo ? (
@@ -96,8 +97,8 @@ export function CabecalhoClassico({ loja, itens, telefones, linkDoTelefone, logo
       {/* No celular o menu abre pelo botão; a faixa da segunda cor mantém a identidade. */}
       <div className="h-1.5 md:hidden" style={{ background: "var(--loja2)" }} />
 
-      <nav aria-label="Menu da loja" className="sticky top-0 z-20 hidden shadow-md md:block" style={{ background: "var(--loja2)", color: "var(--loja)" }}>
-        <ul className="mx-auto flex max-w-6xl items-center justify-between px-4">
+      <MenuFixo logo={logo} nome={loja.nome} inicio={inicio}>
+        <ul className="flex flex-1 items-center justify-between">
           {itens.map((i) => (
             <li key={i.href}>
               <Link href={i.href} aria-current={i.ativo ? "page" : undefined} className={`flex items-center gap-2 whitespace-nowrap px-3 py-3 text-[17px] transition hover:bg-black/10 ${i.ativo ? "bg-black/10 font-semibold" : ""}`}>
@@ -107,7 +108,7 @@ export function CabecalhoClassico({ loja, itens, telefones, linkDoTelefone, logo
             </li>
           ))}
         </ul>
-      </nav>
+      </MenuFixo>
     </>
   );
 }

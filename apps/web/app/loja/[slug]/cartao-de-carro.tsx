@@ -18,7 +18,7 @@ export function CartaoDeCarro({ slug, c, whatsapp, baseUrl, novidade = false }: 
   const chips = [`${c.anoFabricacao}/${c.anoModelo}`, c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel].filter(Boolean) as string[];
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-surface shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-xl">
-      <div className="relative aspect-square overflow-hidden bg-neutral-100">
+      <div className="foto-moldura relative aspect-square overflow-hidden bg-neutral-100">
         {c.fotos[0] ? (
           <FotoSemCortes
             src={fotoUrl(slug, c.fotos[0].id, 800)}

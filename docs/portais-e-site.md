@@ -405,3 +405,11 @@ Em **Aparência e domínio > Estilo do site**, a loja escolhe entre **Moderno** 
 - abas de **Facebook, Instagram e WhatsApp** presas na lateral direita no computador; no celular, o botão verde de sempre e uma faixa da segunda cor abaixo do cabeçalho.
 
 Campo novo: `VeiculosConfig.estiloSite` (`"moderno"` | `"classico"`, padrão `"moderno"`). Componentes: `app/loja/[slug]/classico.tsx` e `busca-classica.tsx`. Para ficar igual ao site antigo da Sales, use as cores dele: `#A50303` (vermelho) e `#FECB00` (amarelo).
+
+## Ajustes do estilo clássico e rodapé novo (v1.81.0)
+
+- **Logo sempre à vista**: no computador, quando a faixa da cor da loja sai da tela, o logo aparece à esquerda do menu preso no topo, num bloco da cor da loja (`menu-fixo.tsx`). No celular, a faixa com o logo fica presa no topo.
+- **Capas sólidas no clássico**: sem a cópia desfocada atrás da foto; a arte da loja aparece sobre fundo branco (classes `foto-desfoque` e `foto-moldura`, regra em `app/globals.css`), nos cartões e na galeria.
+- **Filtros da lista alinhados**: uma linha só, todos com rótulo (Buscar, Marca, Preço até, Ordenar); "Mais filtros" abre a segunda linha.
+- **Últimas ofertas sem buraco**: se um destaque foi vendido, a linha é completada com os carros mais recentes (até 8; `completarDestaques` em `lib/meu-site.ts`).
+- **Rodapé novo** (todos os estilos, `rodape.tsx`): marca, resumo e redes; páginas; contato com todos os telefones, endereço e "Como chegar"; horário em colunas; embaixo, direitos, privacidade e **"Desenvolvido por Dilon Tech"** com o símbolo, levando à página de vendas do Zap para revendas (`zap.dilontech.com.br/revenda-de-veiculos`, com `utm_source=site-loja&utm_medium=rodape&utm_campaign=<slug>` para saber de qual loja veio).
