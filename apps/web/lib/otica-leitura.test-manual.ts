@@ -118,12 +118,40 @@ await ok("chamada ao provedor: chave no cabeçalho, imagem em inlineData, JSON d
   assert.equal(visto!.corpo.contents[0].parts[1].inlineData.data, "AAAA");
 });
 
+await ok("503 passageiro: repete o modelo e cai no reserva; 429 e 4xx não repetem", async () => {
+  const bom = JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(bruto) }] } }] });
+  // 503, 503 e o reserva responde: leu, e usou o reserva na terceira chamada.
+  const modelos: string[] = [];
+  const f1 = (async (url: string) => {
+    modelos.push(String(url).match(/models\/([^:]+):/)![1]!);
+    return modelos.length < 3 ? new Response("high demand", { status: 503 }) : new Response(bom, { status: 200 });
+  }) as unknown as typeof fetch;
+  const r = (await lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", modelo: "principal", reserva: "reserva", esperaMs: 0, fetchFn: f1 })) as typeof bruto;
+  assert.equal(r.numeroOS, "0498");
+  assert.deepEqual(modelos, ["principal", "principal", "reserva"]);
+  // Passa na segunda tentativa do mesmo modelo: não chega no reserva.
+  const m2: string[] = [];
+  const f2 = (async (url: string) => {
+    m2.push(String(url).match(/models\/([^:]+):/)![1]!);
+    return m2.length < 2 ? new Response("x", { status: 503 }) : new Response(bom, { status: 200 });
+  }) as unknown as typeof fetch;
+  await lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", modelo: "principal", reserva: "reserva", esperaMs: 0, fetchFn: f2 });
+  assert.deepEqual(m2, ["principal", "principal"]);
+  // 429 e 400 não repetem.
+  for (const status of [429, 400]) {
+    let chamadas = 0;
+    const f3 = (async () => (chamadas++, new Response("x", { status }))) as unknown as typeof fetch;
+    await assert.rejects(lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", esperaMs: 0, fetchFn: f3 }));
+    assert.equal(chamadas, 1, `status ${status} não repete`);
+  }
+});
+
 await ok("erros do provedor viram mensagem clara, sem vazar a chave", async () => {
   const resp = (status: number, corpo: string) => (async () => new Response(corpo, { status })) as unknown as typeof fetch;
   await assert.rejects(lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "", fetchFn: resp(200, "") }), (e: ErroDeLeitura) => e.status === 503);
   await assert.rejects(lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", fetchFn: resp(429, "") }), (e: ErroDeLeitura) => e.status === 429 && /limite/.test(e.message));
   await assert.rejects(
-    lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", fetchFn: resp(500, "falha com k-12345678 no meio") }),
+    lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", esperaMs: 0, fetchFn: resp(500, "falha com k-12345678 no meio") }),
     (e: ErroDeLeitura) => e.status === 502 && !e.message.includes("k-12345678"),
   );
   await assert.rejects(lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k", fetchFn: resp(200, JSON.stringify({ candidates: [] })) }), (e: ErroDeLeitura) => e.status === 422);

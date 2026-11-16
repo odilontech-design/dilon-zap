@@ -21,7 +21,10 @@ import {
  * por um falso. Rodar o teste com: npx tsx apps/web/lib/otica-leitura.test-manual.ts
  */
 
-export const MODELO_PADRAO = "gemini-2.5-flash";
+// Os modelos 2.5 foram aposentados pelo Google (404). O padrão é o que a Visuallis usa em produção
+// (OTICA_LEITURA_MODELO), e o reserva é um alias "lite" que o Google mantém atualizado.
+export const MODELO_PADRAO = "gemini-3-flash-preview";
+export const MODELO_RESERVA = "gemini-flash-lite-latest";
 export const LIMITE_FOTO_BYTES = 8 * 1024 * 1024;
 export const TIPOS_DE_FOTO = ["image/jpeg", "image/png", "image/webp"];
 
@@ -293,7 +296,7 @@ export class ErroDeLeitura extends Error {
   }
 }
 
-type Opcoes = { chave?: string; modelo?: string; fetchFn?: typeof fetch; signal?: AbortSignal };
+type Opcoes = { chave?: string; modelo?: string; reserva?: string; esperaMs?: number; fetchFn?: typeof fetch; signal?: AbortSignal };
 
 /** Manda a foto à IA e devolve o JSON que ela escreveu (ainda cru: passe por normalizarLeitura). */
 export async function lerFotoDaOS(foto: { base64: string; mime: string }, opcoes: Opcoes = {}): Promise<unknown> {
@@ -303,16 +306,29 @@ export async function lerFotoDaOS(foto: { base64: string; mime: string }, opcoes
   const modelo = opcoes.modelo ?? (process.env.OTICA_LEITURA_MODELO?.trim() || MODELO_PADRAO);
   const fetchFn = opcoes.fetchFn ?? fetch;
 
-  const r = await fetchFn(`${process.env.GEMINI_API_BASE?.trim() || "https://generativelanguage.googleapis.com"}/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
-    method: "POST",
-    signal: opcoes.signal,
-    // A chave vai no cabeçalho, e não na URL, para não aparecer em log nem em mensagem de erro.
-    headers: { "content-type": "application/json", "x-goog-api-key": chave },
-    body: JSON.stringify({
-      contents: [{ role: "user", parts: [{ text: PROMPT_DA_LEITURA }, { inlineData: { mimeType: foto.mime, data: foto.base64 } }] }],
-      generationConfig: { temperature: 0, maxOutputTokens: 4000, responseMimeType: "application/json" },
-    }),
-  });
+  const chamar = (m: string) =>
+    fetchFn(`${process.env.GEMINI_API_BASE?.trim() || "https://generativelanguage.googleapis.com"}/v1beta/models/${encodeURIComponent(m)}:generateContent`, {
+      method: "POST",
+      signal: opcoes.signal,
+      // A chave vai no cabeçalho, e não na URL, para não aparecer em log nem em mensagem de erro.
+      headers: { "content-type": "application/json", "x-goog-api-key": chave },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: PROMPT_DA_LEITURA }, { inlineData: { mimeType: foto.mime, data: foto.base64 } }] }],
+        generationConfig: { temperature: 0, maxOutputTokens: 4000, responseMimeType: "application/json" },
+      }),
+    });
+
+  // O Google devolve 5xx ("alta demanda") em picos, sobretudo nos modelos "preview". É passageiro:
+  // tenta o mesmo modelo de novo e, se persistir, o modelo reserva. Só 5xx; 429 e 4xx não repetem.
+  const reserva = opcoes.reserva ?? (process.env.OTICA_LEITURA_MODELO_RESERVA?.trim() || MODELO_RESERVA);
+  const espera = opcoes.esperaMs ?? 1500;
+  const tentativas = [modelo, modelo, ...(reserva && reserva !== modelo ? [reserva] : [])];
+  let r!: Response;
+  for (let i = 0; i < tentativas.length; i++) {
+    r = await chamar(tentativas[i]!);
+    if (r.status < 500 || i === tentativas.length - 1) break;
+    if (espera > 0) await new Promise((res) => setTimeout(res, espera * (i + 1)));
+  }
   if (r.status === 429) throw new ErroDeLeitura("A leitura por foto atingiu o limite gratuito por agora. Espere alguns minutos ou preencha à mão.", 429);
   if (!r.ok) {
     const corpo = (await r.text().catch(() => "")).slice(0, 160).replace(/\s+/g, " ");

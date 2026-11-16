@@ -204,3 +204,8 @@ Teste das regras: `npx tsx apps/web/lib/otica-regras.test-manual.ts`.
 A OS histórica (talão de papel escaneado) com **valor e data do talão** vira uma conta a receber **já quitada**, com vencimento e recebimento no **dia do talão**, forma **dinheiro**. Assim ela consta no Financeiro e no Caixa do mês de referência, e não no dia da digitação. Não mexe em estoque nem em WhatsApp. Sem data do talão ou sem valor, nada é lançado (um mês chutado bagunça o caixa). O valor de uma OS histórica já lançada não é editado pela tela da OS: ajuste em Financeiro → A receber.
 
 As escaneadas antes da 1.85.2 são corrigidas uma vez por `scripts/backfill-os-historicas.sql` (`fim=ROLLBACK` ensaia, `fim=COMMIT` grava).
+
+**Picos do Google (v1.85.4).** Quando o provedor devolve 5xx ("high demand", comum em modelos
+"preview"), a leitura repete o mesmo modelo e, se persistir, usa o reserva (`OTICA_LEITURA_MODELO_RESERVA`,
+padrão `gemini-flash-lite-latest`). 429 (limite) e erros 4xx não repetem. Os modelos 2.5 foram
+aposentados pelo Google (404): o padrão agora é `gemini-3-flash-preview`.
