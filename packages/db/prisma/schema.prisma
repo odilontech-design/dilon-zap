@@ -221,6 +221,8 @@ model Tenant {
   sdrTrabalhos          SdrTrabalho[]
   sdrIaConfig           SdrIaConfig?
   sdrIaUsos             SdrIaUso[]
+  sdrVendedorConfig     SdrVendedorConfig?
+  sdrVendedorConversas  SdrVendedorConversa[]
   sdrIaCaches           SdrIaCache[]
   sdrAcompanhamentos    SdrAcompanhamento[]
   sdrAbordagens         SdrAbordagem[]
@@ -4315,4 +4317,83 @@ model FichaFinanciamento {
 
   @@index([tenantId, negociacaoId])
   @@index([apagarEm])
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Vendedor de SaaS do SDR: responde quem respondeu a uma abordagem do SDR, no WhatsApp.
+// Nunca puxa assunto: só entra depois que a empresa escreveu. Roda no sdr-worker.
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum ModoVendedorSaas {
+  /// A IA só escreve a resposta; uma pessoa vê, e envia ou descarta.
+  SUGERIR
+  /// A IA envia sozinha, dentro das regras (horário, limite de respostas, sai quando a equipe fala).
+  AUTOMATICO
+}
+
+enum StatusVendedorSaas {
+  ATIVA
+  /// Passou para uma pessoa (pediu demonstração, assunto fora do roteiro, equipe respondeu, limite de respostas).
+  TRANSFERIDA
+  /// Sem interesse ou pediu para não ser contatada.
+  ENCERRADA
+}
+
+/// Configuração por empresa. Nasce desligada. O modelo e o preço ficam em SdrIaConfig (tarefa "vendedor_saas").
+model SdrVendedorConfig {
+  id       String @id @default(cuid())
+  tenantId String @unique
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  ativo     Boolean          @default(false)
+  modo      ModoVendedorSaas @default(SUGERIR)
+  /// Só conversas cuja resposta chegou depois deste momento.
+  ativadoEm DateTime?
+
+  nomeAssistente String  @default("Assistente da Dilon Tech")
+  /// O que a IA precisa saber além do roteiro da campanha: o que não prometer, assuntos para passar a uma pessoa.
+  instrucoes     String?
+  /// Quantas respostas a IA dá numa conversa antes de passar para uma pessoa.
+  limiteTurnos   Int     @default(8)
+  /// Horário de Brasília, de segunda a sábado. Fora dele a IA espera, e responde na próxima janela.
+  horaInicio     Int     @default(8)
+  horaFim        Int     @default(20)
+
+  atualizadoPorId   String?
+  atualizadoPorNome String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+/// Uma conversa de WhatsApp que o vendedor assumiu (ou sugeriu resposta). Sem relação com Conversation, como o Vendedor IA de carros.
+model SdrVendedorConversa {
+  conversationId String @id
+  tenantId       String
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  empresaId      String
+
+  status StatusVendedorSaas @default(ATIVA)
+  motivo String?
+  resumo String?
+
+  /// createdAt da última mensagem da empresa já tratada.
+  respondidoAte      DateTime?
+  turnos             Int       @default(0)
+  /// Falhas seguidas do provedor de IA: depois de algumas, passa para uma pessoa.
+  tentativas         Int       @default(0)
+  proximaTentativaEm DateTime?
+
+  /// Resposta escrita pela IA e ainda não enviada (modo SUGERIR). Texto já pronto para o WhatsApp.
+  sugestao      String?
+  sugestaoAcao  String?
+  sugestaoEtapa String?
+  sugestaoEm    DateTime?
+
+  iniciadaEm    DateTime  @default(now())
+  transferidaEm DateTime?
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId, status])
+  @@index([tenantId, iniciadaEm])
 }

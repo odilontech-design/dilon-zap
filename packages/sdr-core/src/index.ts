@@ -44,3 +44,9 @@ export type { MetaDoDia, CanalDaFila } from "./fila-diaria";
 
 export { VARIAVEIS_DO_MODELO, variaveisDesconhecidas, preencherModelo, valoresDoModelo, modeloDaCampanha, campanhaTemModelo, normalizarInstagram, arrobaDoInstagram } from "./modelos-de-campanha";
 export type { VariavelDoModelo, ValoresDoModelo, CanalDoModelo, ModelosDaCampanha } from "./modelos-de-campanha";
+
+// API pública que o vendedor de SaaS (packages/vendedor-ia/src/saas) usa. O vendedor mora fora do núcleo de propósito:
+// o SDR não toca em conversa nem mensagem do WhatsApp (guardas em test/comercial.test.ts e test/ia.test.ts).
+export { obterConfigIa, inicioDoMes } from "./ia/config";
+export type { OpcoesDeExecucao } from "./ia/executar";
+export { registrarNota, registrarResultado, DESCRICAO_DO_PRODUTO } from "./comercial";

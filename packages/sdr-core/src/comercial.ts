@@ -240,7 +240,7 @@ export const novaAbordagemSchema = z
 export const edicaoDeAbordagemSchema = z.object({ assunto: texto(200).nullable().optional(), texto: texto(6000).min(1) }).strict();
 
 export const NOME_DO_PRODUTO: Record<Produto, string> = { DILON_ZAP: "Dilon Zap", DILON_FACILITIES: "Dilon Facilities" };
-const DESCRICAO_DO_PRODUTO: Record<Produto, string> = {
+export const DESCRICAO_DO_PRODUTO: Record<Produto, string> = {
   DILON_ZAP: "Dilon Zap é uma plataforma de atendimento e CRM que reúne as conversas de WhatsApp da empresa em uma caixa de entrada compartilhada, com funil de negociações, tarefas e relatórios.",
   DILON_FACILITIES: "Dilon Facilities é uma solução para empresas de serviços terceirizados, como limpeza e conservação, que ajuda a comprovar a execução dos serviços, acompanhar a produtividade operacional e centralizar as ocorrências.",
 };

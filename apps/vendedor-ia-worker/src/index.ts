@@ -27,13 +27,15 @@ const numero = (nome: string, padrao: number) => {
 
 async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-  const { ciclo } = await import("@dilon-zap/vendedor-ia");
+  const { ciclo, cicloDoVendedor } = await import("@dilon-zap/vendedor-ia");
   const { chaveAnthropicDoServidor } = await import("@dilon-zap/sdr-core");
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
 
   const apiKey = chaveAnthropicDoServidor();
   if (!apiKey) {
-    console.error("[vendedor-ia] ANTHROPIC_API_KEY não configurada: o worker fica parado até configurar.");
+    // Só o Vendedor IA de carros depende dela. O vendedor de SaaS do SDR escolhe o provedor (Claude ou Gemini) pela
+    // configuração da IA do SDR e, se faltar chave, passa a conversa para uma pessoa em vez de travar.
+    console.error("[vendedor-ia] ANTHROPIC_API_KEY não configurada: o Vendedor IA de carros fica parado. O vendedor de SaaS do SDR segue pela configuração dele.");
   }
   // Timeout curto e poucas tentativas: o cliente está esperando no WhatsApp,
   // e uma resposta que demora minutos já perdeu o sentido.
@@ -72,6 +74,14 @@ async function main() {
       } catch (e) {
         console.error("[vendedor-ia] ciclo falhou:", e instanceof Error ? e.message : e);
       }
+    }
+    // Vendedor de SaaS do SDR: só age em empresa com o SDR e o vendedor ligados, e só em conversa de quem respondeu a uma
+    // abordagem do SDR. Independente do de carros: uma falha de um não para o outro.
+    try {
+      const r = await cicloDoVendedor({ acordarFila });
+      if (r.respondidas || r.sugeridas || r.transferidas || r.erros) console.log(`[vendedor-saas] respondidas ${r.respondidas}, sugeridas ${r.sugeridas}, transferidas ${r.transferidas}, erros ${r.erros}`);
+    } catch (e) {
+      console.error("[vendedor-saas] ciclo falhou:", e instanceof Error ? e.message : e);
     }
     await new Promise<void>((r) => {
       acordar = r;

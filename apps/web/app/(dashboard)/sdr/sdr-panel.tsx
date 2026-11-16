@@ -12,6 +12,7 @@ import { HojePanel } from "./hoje-panel";
 import { IaPanel } from "./ia-panel";
 import { ImportacoesPanel } from "./importacoes-panel";
 import { PainelIndicadores } from "./painel-indicadores";
+import { VendedorPanel } from "./vendedor-panel";
 
 type Criterio = { nome: string; descricao?: string; peso: number; obrigatorio: boolean };
 type Perfil = {
@@ -41,7 +42,7 @@ const CORES_STATUS: Record<Status, string> = {
 
 const paraLista = (texto: string) => [...new Set(texto.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))];
 
-type Aba = "hoje" | "fila" | "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios" | "ia";
+type Aba = "hoje" | "fila" | "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios" | "ia" | "vendedor";
 
 export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
   const [aba, setAba] = useState<Aba>("hoje");
@@ -67,7 +68,7 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
         <p className="text-sm text-neutral-500">Sua rotina de prospecção: empresas, decisores, abordagens, contatos e follow-ups.</p>
       </div>
       <p className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-        O Dilon Zap não envia mensagens por você: você envia pelo seu e-mail ou telefone e registra aqui. As empresas vêm só do que você importa ou cadastra (nada é pesquisado na internet), e nada vai para o CRM sem a sua ação. Os dados não foram verificados por ninguém.
+        O Dilon Zap não faz o primeiro contato por você: você envia pelo seu e-mail ou telefone e registra aqui. Só o Vendedor IA, se você ligar na aba dele, responde as empresas que já responderam a você. As empresas vêm só do que você importa ou cadastra (nada é pesquisado na internet), e nada vai para o CRM sem a sua ação. Os dados não foram verificados por ninguém.
       </p>
 
       {aba === "empresas" && (
@@ -90,6 +91,7 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
         {aba_("importacoes", "Importações")}
         {aba_("bloqueios", "Bloqueios")}
         {aba_("ia", "IA")}
+        {aba_("vendedor", "Vendedor IA")}
       </div>
 
       {aba === "fila" && <FilaPanel podeEscrever={podeEscrever} campanhas={listaDeCampanhas} />}
@@ -104,6 +106,7 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
         />
       )}
       {aba === "ia" && <IaPanel podeEscrever={podeEscrever} />}
+      {aba === "vendedor" && <VendedorPanel podeEscrever={podeEscrever} />}
       {aba === "campanhas" && (
         <Campanhas
           lista={campanhas.data?.campanhas}
