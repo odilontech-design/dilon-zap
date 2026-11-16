@@ -48,6 +48,8 @@ const medidasSchema = z
 /** Dados do cliente que o talão pede e que ficam na ficha do contato. */
 export const dadosClienteSchema = z
   .object({
+    // Só na edição da OS: corrige o nome na ficha do contato. Vazio = não mexe.
+    nome: texto(120),
     documento: texto(20),
     rgIe: texto(30),
     nascimento: data,

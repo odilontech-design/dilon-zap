@@ -211,6 +211,7 @@ export async function consultorValido(tenantId: string, id: string | null | unde
 /** Só grava o que veio: campo ausente mantém a ficha; texto vazio limpa. */
 export function dadosDoCliente(c: DadosCliente): Prisma.ContactUpdateInput {
   const out: Prisma.ContactUpdateInput = {};
+  if (c.nome?.trim()) out.name = c.nome.trim();
   const textos = ["documento", "rgIe", "email", "cep", "logradouro", "numeroEndereco", "bairro", "cidade"] as const;
   for (const k of textos) if (c[k] !== undefined) out[k] = c[k] || null;
   if (c.nascimento !== undefined) out.nascimento = paraData(c.nascimento) ?? null;

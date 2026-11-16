@@ -133,6 +133,57 @@ export async function criarContaDaOS(db: Db, i: NovaContaDaOS): Promise<string |
   return conta.id;
 }
 
+export type ContaDaOSHistorica = {
+  tenantId: string;
+  ordemId: string;
+  numero: number;
+  contactId: string;
+  nomeCliente: string | null;
+  valorCents: number;
+  /** O dia do talão (AAAA-MM-DD): é o mês de referência no Financeiro e no Caixa. */
+  diaDoTalao: string;
+  userId?: string;
+};
+
+/**
+ * OS antiga do talão de papel: a venda já aconteceu e foi paga por inteiro na
+ * data do talão. Lança a conta a receber JÁ QUITADA, com vencimento e
+ * recebimento no dia do talão, para o dinheiro cair no mês de referência (e
+ * não no dia em que a OS foi digitada). Forma de pagamento: dinheiro — o papel
+ * não diz. Não mexe em estoque nem em WhatsApp.
+ *
+ * Sem valor ou sem data, não lança nada: um mês chutado bagunça o caixa.
+ * Chame DENTRO da transação que cria a OS, depois de `garantirPlano`.
+ */
+export async function criarContaDaOSHistorica(db: Db, i: ContaDaOSHistorica): Promise<string | null> {
+  if (i.valorCents <= 0 || !/^\d{4}-\d{2}-\d{2}$/.test(i.diaDoTalao)) return null;
+  const dia = new Date(`${i.diaDoTalao}T12:00:00Z`);
+  const conta = await db.contaReceber.create({
+    data: {
+      tenantId: i.tenantId,
+      contactId: i.contactId,
+      origem: "MANUAL",
+      descricao: `OS ${numeroOS(i.numero)}${i.nomeCliente ? ` · ${primeiroNome(i.nomeCliente)}` : ""} (talão antigo)`,
+      categoriaId: await categoriaDeVendas(db, i.tenantId),
+      createdById: i.userId,
+      parcelas: { create: [{ tenantId: i.tenantId, numero: 1, totalParcelas: 1, tipo: "UNICA", vencimento: dia, valorCents: i.valorCents }] },
+    },
+    select: { id: true, parcelas: { select: { id: true } } },
+  });
+  await receberNaConta(db, {
+    tenantId: i.tenantId,
+    contaId: conta.id,
+    parcelaId: conta.parcelas[0]!.id,
+    valorCents: i.valorCents,
+    meio: "DINHEIRO",
+    recebidoEm: dia,
+    observacao: `OS ${numeroOS(i.numero)}: talão antigo, recebido na data do talão`,
+    userId: i.userId,
+  });
+  await db.ordemServico.update({ where: { id: i.ordemId }, data: { contaId: conta.id } });
+  return conta.id;
+}
+
 /** Prepara o que `criarContaDaOS` precisa fora da transação (o plano de categorias usa o prisma direto). */
 export async function prepararFinanceiro(tenantId: string) {
   await garantirPlano(tenantId);

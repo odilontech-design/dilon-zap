@@ -154,7 +154,12 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
 
   // Dinheiro: o valor da venda mora na conta a receber. Mudar o valor é
   // corrigir a parcela em aberto; OS que ainda não tinha valor ganha a conta agora.
-  // OS histórica não tem conta: o valor e o sinal são só o registro do papel.
+  // OS histórica: sem conta, o valor e o sinal são só o registro do papel. Com
+  // conta (lançada já quitada na data do talão), o valor mora no Financeiro e
+  // não é mudado por aqui, para o caixa daquele mês não divergir da OS.
+  if (ordem.historica && ordem.contaId && d.valorCents !== undefined && d.valorCents !== ordem.valorCents) {
+    return NextResponse.json({ error: "As demais alterações foram salvas, mas o valor não: ele já está lançado no Financeiro. Ajuste em Financeiro → A receber." }, { status: 409 });
+  }
   if (ordem.historica && d.valorCents !== undefined) {
     await prisma.ordemServico.update({ where: { id: ordem.id }, data: { valorCents: d.valorCents, sinalCents: Math.min(d.sinalCents ?? 0, d.valorCents) } });
   } else if (d.valorCents !== undefined && d.valorCents !== ordem.valorCents) {
