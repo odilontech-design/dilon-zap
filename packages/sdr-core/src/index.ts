@@ -10,7 +10,7 @@ export type { Mapeamento } from "./mapeamento";
 export { IndiceDeEmpresas, mesclarPreenchendoVazios } from "./dedup";
 export { qualificar } from "./qualificacao";
 export type { CriterioAvaliado, ResultadoQualificacao } from "./qualificacao";
-export { podeProspectar, bloqueiosDaEmpresa, ROTULO_MOTIVO } from "./supressao";
+export { podeProspectar, bloqueiosDaEmpresa, normalizarValorDeSupressao, ROTULO_MOTIVO } from "./supressao";
 export type { TipoSupressao, MotivoSupressao } from "./supressao";
 export { enfileirar, reivindicar, renovarReserva, concluir, falhar, devolver, falharEsgotados } from "./fila";
 export { processarProximoTrabalho } from "./trabalhos";

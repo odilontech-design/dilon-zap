@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "@dilon-zap/db";
 import { z } from "zod";
-import { DESCRICAO_DO_PRODUTO, ErroSdrCore, executarTarefaIa, inicioDoMes, NOME_DO_PRODUTO, obterConfigIa, registrarNota, registrarResultado, type Provedores } from "@dilon-zap/sdr-core";
+import { DESCRICAO_DO_PRODUTO, ErroSdrCore, executarTarefaIa, inicioDoMes, NOME_DO_PRODUTO, normalizarValorDeSupressao, obterConfigIa, registrarNota, registrarResultado, type Provedores } from "@dilon-zap/sdr-core";
 import { ACOES_DO_VENDEDOR, esquemaDaResposta, montarSistema, TAREFA_DO_VENDEDOR, TEXTO_DE_DESCADASTRO, VERSAO_DO_PROMPT_DO_VENDEDOR, type AcaoDoVendedor } from "./prompt";
 import { decidir, linksNaoPermitidos, montarHistorico, paraWhatsApp, PREFIXO_DA_IA, VELHA_MS, type MensagemDaConversa } from "./regras";
 
@@ -97,23 +97,27 @@ export async function listarConversasDoVendedor(tenantId: string) {
     prisma.sdrVendedorConversa.groupBy({ by: ["status"], where: { tenantId, iniciadaEm: { gte: inicioDoMes(new Date()) } }, _count: { _all: true } }),
   ]);
   const ids = linhas.map((l) => l.conversationId);
-  const empresaIds = [...new Set(linhas.map((l) => l.empresaId))];
+  const empresaIds = [...new Set(linhas.map((l) => l.empresaId).filter((x): x is string => !!x))];
   const [empresas, entradas] = await Promise.all([
     empresaIds.length ? prisma.sdrEmpresa.findMany({ where: { tenantId, id: { in: empresaIds } }, select: { id: true, nomeFantasia: true, razaoSocial: true, cidade: true, uf: true } }) : [],
     ids.length ? prisma.message.findMany({ where: { conversationId: { in: ids }, direction: "INBOUND" }, orderBy: { createdAt: "desc" }, take: 300, select: { conversationId: true, body: true, createdAt: true } }) : [],
   ]);
   const empresa = new Map(empresas.map((e) => [e.id, e]));
+  // Conversa ligada à mão fora do SDR não tem empresa: o painel mostra o nome do contato.
+  const contatos = new Map(
+    (ids.length ? await prisma.conversation.findMany({ where: { tenantId, id: { in: linhas.filter((l) => !l.empresaId).map((l) => l.conversationId) } }, select: { id: true, contact: { select: { name: true } } } }) : []).map((c) => [c.id, c.contact.name])
+  );
   const ultima = new Map<string, { body: string; createdAt: Date }>();
   for (const m of entradas) if (!ultima.has(m.conversationId)) ultima.set(m.conversationId, m);
   const mes = Object.fromEntries(doMes.map((g) => [g.status, g._count._all])) as Record<string, number>;
   return {
     resumoDoMes: { atendidas: (mes.ATIVA ?? 0) + (mes.TRANSFERIDA ?? 0) + (mes.ENCERRADA ?? 0), ativas: mes.ATIVA ?? 0, transferidas: mes.TRANSFERIDA ?? 0, encerradas: mes.ENCERRADA ?? 0 },
     itens: linhas.map((l) => {
-      const e = empresa.get(l.empresaId);
+      const e = l.empresaId ? empresa.get(l.empresaId) : undefined;
       return {
         conversationId: l.conversationId,
         empresaId: l.empresaId,
-        empresa: e?.nomeFantasia ?? e?.razaoSocial ?? "Empresa",
+        empresa: e?.nomeFantasia ?? e?.razaoSocial ?? contatos.get(l.conversationId) ?? "Contato",
         local: [e?.cidade, e?.uf].filter(Boolean).join(" / ") || null,
         status: l.status,
         motivo: l.motivo,
@@ -142,26 +146,41 @@ export type ResultadoDoCicloDoVendedor = { respondidas: number; sugeridas: numbe
 type Desfecho = "respondida" | "sugerida" | "transferida" | null;
 type Conversa = { id: string; tenantId: string; sessionId: string; setorId: string | null };
 
-/** As conversas recentes cujo contato tem negociação do SDR com acompanhamento ainda em andamento. */
-async function conversasCandidatas(tenantId: string, desde: Date) {
+type Candidato = { conversationId: string; empresaId: string | null; controle: "LIGADO" | null; campanhaId: string | null };
+
+/**
+ * As conversas que o vendedor pode atender agora:
+ *  - as ligadas à mão no Inbox (controle LIGADO), de qualquer contato, mesmo fora do SDR;
+ *  - as do SDR: contato com negociação de origem "SDR" ligada a um acompanhamento ainda em andamento, com mensagem depois de o
+ *    vendedor ser ligado na empresa.
+ * As desligadas à mão (controle DESLIGADO, o freio) nunca entram, nem pelo automático.
+ */
+async function conversasCandidatas(tenantId: string, ativadoEm: Date, agora: Date): Promise<Candidato[]> {
+  const desde = new Date(agora.getTime() - VELHA_MS);
   const conversas = await prisma.conversation.findMany({
     where: { tenantId, lastMessageAt: { gt: desde }, contact: { grupo: false } },
     orderBy: { lastMessageAt: "desc" },
     take: 200,
-    select: { id: true, contactId: true },
+    select: { id: true, contactId: true, lastMessageAt: true },
   });
   if (!conversas.length) return [];
+  const controles = await prisma.conversaAgente.findMany({ where: { tenantId, conversationId: { in: conversas.map((c) => c.id) } }, select: { conversationId: true, estado: true, campanhaId: true } });
+  const controleDe = new Map(controles.map((c) => [c.conversationId, c]));
+
   const negociacoes = await prisma.negociacao.findMany({ where: { tenantId, origem: "SDR", contactId: { in: [...new Set(conversas.map((c) => c.contactId))] } }, select: { id: true, contactId: true } });
-  if (!negociacoes.length) return [];
-  const acompanhamentos = await prisma.sdrAcompanhamento.findMany({
-    where: { tenantId, negociacaoId: { in: negociacoes.map((n) => n.id) }, etapa: { in: [...ETAPAS_ATENDIVEIS] } },
-    select: { empresaId: true, negociacaoId: true },
-  });
-  const empresaDaNegociacao = new Map(acompanhamentos.map((a) => [a.negociacaoId!, a.empresaId]));
+  const acompanhamentos = negociacoes.length
+    ? await prisma.sdrAcompanhamento.findMany({ where: { tenantId, negociacaoId: { in: negociacoes.map((n) => n.id) } }, select: { empresaId: true, negociacaoId: true, etapa: true } })
+    : [];
+  const acompDaNegociacao = new Map(acompanhamentos.map((a) => [a.negociacaoId!, a]));
   const negociacaoDoContato = new Map(negociacoes.map((n) => [n.contactId, n.id]));
-  return conversas.flatMap((c) => {
-    const empresaId = empresaDaNegociacao.get(negociacaoDoContato.get(c.contactId) ?? "");
-    return empresaId ? [{ conversationId: c.id, empresaId }] : [];
+
+  return conversas.flatMap((c): Candidato[] => {
+    const ctl = controleDe.get(c.id);
+    if (ctl?.estado === "DESLIGADO") return [];
+    const acomp = acompDaNegociacao.get(negociacaoDoContato.get(c.contactId) ?? "");
+    if (ctl?.estado === "LIGADO") return [{ conversationId: c.id, empresaId: acomp?.empresaId ?? null, controle: "LIGADO", campanhaId: ctl.campanhaId }];
+    if (!acomp || !(ETAPAS_ATENDIVEIS as readonly string[]).includes(acomp.etapa) || c.lastMessageAt <= ativadoEm) return [];
+    return [{ conversationId: c.id, empresaId: acomp.empresaId, controle: null, campanhaId: null }];
   });
 }
 
@@ -177,10 +196,9 @@ export async function cicloDoVendedor(deps: DependenciasDoVendedor = {}): Promis
     const ia = await obterConfigIa(cfg.tenantId);
     if (!ia.ativa || !ia.modelos[TAREFA_DO_VENDEDOR]) continue;
     const config: ConfigDoVendedor = { ...(await obterConfigDoVendedor(cfg.tenantId)), ativadoEm: cfg.ativadoEm };
-    const desde = new Date(Math.max(cfg.ativadoEm!.getTime(), agora.getTime() - VELHA_MS));
-    for (const c of await conversasCandidatas(cfg.tenantId, desde)) {
+    for (const c of await conversasCandidatas(cfg.tenantId, cfg.ativadoEm!, agora)) {
       try {
-        const d = await atenderConversa(c.conversationId, c.empresaId, config, deps, agora);
+        const d = await atenderConversa(c, config, deps, agora);
         if (d === "respondida") r.respondidas++;
         else if (d === "sugerida") r.sugeridas++;
         else if (d === "transferida") r.transferidas++;
@@ -195,7 +213,7 @@ export async function cicloDoVendedor(deps: DependenciasDoVendedor = {}): Promis
 }
 
 /** Falha inesperada: espera um pouco e tenta de novo; na terceira, passa para uma pessoa. */
-async function registrarFalha(tenantId: string, conversationId: string, empresaId: string, agora: Date) {
+async function registrarFalha(tenantId: string, conversationId: string, empresaId: string | null, agora: Date) {
   const atual = await prisma.sdrVendedorConversa.findUnique({ where: { conversationId } });
   const tentativas = (atual?.tentativas ?? 0) + 1;
   if (tentativas >= MAX_TENTATIVAS) {
@@ -211,7 +229,8 @@ async function registrarFalha(tenantId: string, conversationId: string, empresaI
   });
 }
 
-async function atenderConversa(conversationId: string, empresaId: string, cfg: ConfigDoVendedor, deps: DependenciasDoVendedor, agora: Date): Promise<Desfecho> {
+async function atenderConversa(c: Candidato, cfg: ConfigDoVendedor, deps: DependenciasDoVendedor, agora: Date): Promise<Desfecho> {
+  const { conversationId, empresaId } = c;
   const conversa = await prisma.conversation.findUnique({ where: { id: conversationId }, select: { id: true, tenantId: true, sessionId: true, setorId: true } });
   if (!conversa || conversa.tenantId !== cfg.tenantId) return null;
 
@@ -233,10 +252,11 @@ async function atenderConversa(conversationId: string, empresaId: string, cfg: C
       limiteTurnos: cfg.limiteTurnos,
       horaInicio: cfg.horaInicio,
       horaFim: cfg.horaFim,
+      controle: c.controle,
     },
     agora
   );
-  const ctx = { conversa, empresaId, agora, cfg, deps };
+  const ctx = { conversa, empresaId, agora, cfg, deps, campanhaId: c.campanhaId, manual: c.controle === "LIGADO" };
   if (decisao.acao === "transferir") {
     await transferir(ctx, decisao.motivo, estado?.resumo ?? null);
     return "transferida";
@@ -249,32 +269,65 @@ async function atenderConversa(conversationId: string, empresaId: string, cfg: C
   return gerar(ctx, historico, ultimaDaEmpresa, estado?.turnos ?? 0);
 }
 
-type Contexto = { conversa: Conversa; empresaId: string; agora: Date; cfg?: ConfigDoVendedor; deps?: DependenciasDoVendedor };
+type Contexto = {
+  conversa: Conversa;
+  /** Nulo quando o vendedor foi ligado à mão numa conversa que não é de empresa do SDR. */
+  empresaId: string | null;
+  agora: Date;
+  cfg?: ConfigDoVendedor;
+  deps?: DependenciasDoVendedor;
+  /** Campanha escolhida ao ligar à mão (o roteiro). */
+  campanhaId?: string | null;
+  /** Ligado à mão no Inbox. */
+  manual?: boolean;
+};
+
+const SELECAO_DA_CAMPANHA = { id: true, produto: true, publico: true, argumento: true, ofertas: true, provaSocial: true, objecoes: true, linkAgenda: true } as const;
 
 /** A campanha mais recente da empresa que ainda não terminou: o roteiro de venda vem dela. */
 async function campanhaDaEmpresa(tenantId: string, empresaId: string) {
   const p = await prisma.sdrProspecto.findFirst({
     where: { tenantId, empresaId, campanha: { status: { not: "ENCERRADA" } } },
     orderBy: { createdAt: "desc" },
-    select: { campanha: { select: { id: true, produto: true, publico: true, argumento: true, ofertas: true, provaSocial: true, objecoes: true, linkAgenda: true } } },
+    select: { campanha: { select: SELECAO_DA_CAMPANHA } },
   });
   return p?.campanha ?? null;
+}
+
+/**
+ * O roteiro da conversa: a campanha escolhida ao ligar à mão, senão a da empresa do SDR. Ligado à mão e sem nenhuma das duas,
+ * vale a campanha ativa mais recente (a pessoa pediu para o vendedor falar; sem roteiro ele transferiria quase tudo).
+ * No automático, sem campanha da empresa, não há roteiro: a regra de sempre.
+ */
+async function campanhaDaConversa(tenantId: string, empresaId: string | null, campanhaId: string | null | undefined, manual: boolean) {
+  if (campanhaId) {
+    const c = await prisma.sdrCampanha.findFirst({ where: { id: campanhaId, tenantId }, select: SELECAO_DA_CAMPANHA });
+    if (c) return c;
+  }
+  if (empresaId) {
+    const c = await campanhaDaEmpresa(tenantId, empresaId);
+    if (c) return c;
+  }
+  if (!manual) return null;
+  return prisma.sdrCampanha.findFirst({ where: { tenantId, status: "ATIVA" }, orderBy: { createdAt: "desc" }, select: SELECAO_DA_CAMPANHA });
 }
 
 async function gerar(ctx: Contexto & { cfg: ConfigDoVendedor }, historico: { de: string; texto: string }[], ultimaDaEmpresa: Date, turnos: number): Promise<Desfecho> {
   const { conversa, empresaId, agora, cfg, deps } = ctx;
   const tenantId = conversa.tenantId;
-  const [empresa, acomp, campanha] = await Promise.all([
-    prisma.sdrEmpresa.findFirst({ where: { id: empresaId, tenantId }, select: { nomeFantasia: true, razaoSocial: true, segmento: true, cidade: true, uf: true } }),
-    prisma.sdrAcompanhamento.findUnique({ where: { tenantId_empresaId: { tenantId, empresaId } }, select: { decisorNome: true, produto: true } }),
-    campanhaDaEmpresa(tenantId, empresaId),
+  const [empresa, acomp, campanha, contato] = await Promise.all([
+    empresaId ? prisma.sdrEmpresa.findFirst({ where: { id: empresaId, tenantId }, select: { nomeFantasia: true, razaoSocial: true, segmento: true, cidade: true, uf: true } }) : null,
+    empresaId ? prisma.sdrAcompanhamento.findUnique({ where: { tenantId_empresaId: { tenantId, empresaId } }, select: { decisorNome: true, produto: true } }) : null,
+    campanhaDaConversa(tenantId, empresaId, ctx.campanhaId, !!ctx.manual),
+    // Conversa fora do SDR: só o nome do contato vai ao modelo (sem telefone).
+    empresaId ? null : prisma.conversation.findUnique({ where: { id: conversa.id }, select: { contact: { select: { name: true } } } }),
   ]);
-  if (!empresa) return null;
+  if (empresaId && !empresa) return null;
   const produto = acomp?.produto ?? campanha?.produto ?? "DILON_ZAP";
 
   // Só o necessário vai ao modelo: sem telefone, e-mail nem CNPJ.
   const entrada = {
-    empresa: { nome: empresa.nomeFantasia ?? empresa.razaoSocial, segmento: empresa.segmento, cidade: empresa.cidade, uf: empresa.uf },
+    empresa: { nome: empresa?.nomeFantasia ?? empresa?.razaoSocial ?? contato?.contact.name ?? "Contato", segmento: empresa?.segmento ?? null, cidade: empresa?.cidade ?? null, uf: empresa?.uf ?? null },
     decisor: acomp?.decisorNome ?? null,
     produto: { nome: NOME_DO_PRODUTO[produto], descricao: DESCRICAO_DO_PRODUTO[produto] },
     roteiro: {
@@ -385,7 +438,7 @@ async function executarAcao(ctx: Contexto, d: { acao: AcaoDoVendedor; texto: str
   const { conversa, empresaId, agora } = ctx;
   const tenantId = conversa.tenantId;
   const etapa = etapaDaAcao(d.acao);
-  if (etapa) {
+  if (etapa && empresaId) {
     try {
       await atualizarEtapa(tenantId, empresaId, etapa, d.resumo, agora);
     } catch (e) {
@@ -394,6 +447,8 @@ async function executarAcao(ctx: Contexto, d: { acao: AcaoDoVendedor; texto: str
       console.error("[vendedor-saas] etapa não atualizada:", e instanceof Error ? e.message : e);
     }
   }
+  // Conversa fora do SDR: não há acompanhamento, então o pedido de não contatar entra na lista de bloqueio pelo telefone do contato.
+  if (d.acao === "nao_contatar" && !empresaId) await bloquearTelefoneDoContato(conversa);
   await enfileirar(ctx, d.texto);
 
   const base = { respondidoAte: ultimaDaEmpresa ?? undefined, tentativas: 0, proximaTentativaEm: null, sugestao: null, sugestaoAcao: null, sugestaoEtapa: null, sugestaoEm: null, ...(d.resumo ? { resumo: d.resumo } : {}) };
@@ -405,8 +460,22 @@ async function executarAcao(ctx: Contexto, d: { acao: AcaoDoVendedor; texto: str
 
   if (d.acao === "sem_interesse" || d.acao === "nao_contatar") {
     await prisma.sdrVendedorConversa.update({ where: { conversationId: conversa.id }, data: { status: "ENCERRADA", motivo: d.acao === "nao_contatar" ? "pediu para não ser contatada" : "sem interesse" } });
+    // Quem pediu para parar não volta para a IA nem ligando à mão por engano: o freio fica ligado nesta conversa.
+    if (d.acao === "nao_contatar") await prisma.conversaAgente.upsert({ where: { conversationId: conversa.id }, create: { conversationId: conversa.id, tenantId, estado: "DESLIGADO", alteradoPorNome: AUTOR_DA_IA.name }, update: { estado: "DESLIGADO", alteradoPorNome: AUTOR_DA_IA.name } });
   } else if (d.acao === "demonstracao" || d.acao === "transferir") {
     await transferir(ctx, d.acao === "demonstracao" ? "a empresa quer a demonstração" : "assunto para uma pessoa tratar", d.resumo || null);
+  }
+}
+
+async function bloquearTelefoneDoContato(conversa: Conversa) {
+  const c = await prisma.conversation.findUnique({ where: { id: conversa.id }, select: { contact: { select: { phoneNumber: true } } } });
+  const n = c?.contact.phoneNumber ? normalizarValorDeSupressao("TELEFONE", c.contact.phoneNumber) : null;
+  if (!n || "erro" in n) return;
+  try {
+    await prisma.sdrSupressao.create({ data: { tenantId: conversa.tenantId, tipo: "TELEFONE", valor: n.valor, motivo: "SOLICITOU_NAO_CONTATO", observacao: "Pedido feito na conversa com o Vendedor IA", criadoPorId: AUTOR_DA_IA.id, criadoPorNome: AUTOR_DA_IA.name } });
+  } catch (e) {
+    // Já estava na lista: tudo certo.
+    if ((e as { code?: string }).code !== "P2002") throw e;
   }
 }
 
@@ -421,7 +490,7 @@ async function transferir(ctx: Pick<Contexto, "conversa" | "empresaId" | "agora"
   });
   // "Equipe respondeu": já está com uma pessoa, não mexe na conversa.
   if (motivo !== "equipe respondeu") await prisma.conversation.update({ where: { id: conversa.id }, data: { status: "PENDING" } });
-  await registrarNota(tenantId, empresaId, `Vendedor IA passou a conversa para a equipe: ${motivo}.${resumo ? ` ${resumo}` : ""}`, AUTOR_DA_IA).catch(() => undefined);
+  if (empresaId) await registrarNota(tenantId, empresaId, `Vendedor IA passou a conversa para a equipe: ${motivo}.${resumo ? ` ${resumo}` : ""}`, AUTOR_DA_IA).catch(() => undefined);
 }
 
 /* ------------------------------------------------ Modo "sugerir": a pessoa decide ---- */
@@ -443,10 +512,11 @@ export async function enviarSugestao(tenantId: string, conversationId: string, b
   const conversa = await prisma.conversation.findFirst({ where: { id: conversationId, tenantId }, select: { id: true, tenantId: true, sessionId: true, setorId: true } });
   if (!conversa) throw new ErroSdrCore("conversa não encontrada", 404);
   const acao = (ACOES_DO_VENDEDOR as readonly string[]).includes(estado.sugestaoAcao ?? "") ? (estado.sugestaoAcao as AcaoDoVendedor) : "continuar";
-  const campanha = await campanhaDaEmpresa(tenantId, estado.empresaId);
+  const controle = await prisma.conversaAgente.findUnique({ where: { conversationId } });
+  const campanha = await campanhaDaConversa(tenantId, estado.empresaId, controle?.campanhaId, controle?.estado === "LIGADO");
   const texto = acao === "nao_contatar" ? TEXTO_DE_DESCADASTRO : paraWhatsApp(editado ?? estado.sugestao);
   if (linksNaoPermitidos(texto, [campanha?.linkAgenda, SITE_DA_DILON]).length) throw new ErroSdrCore("o texto tem um endereço que não está no roteiro da campanha", 400);
-  await executarAcao({ conversa, empresaId: estado.empresaId, agora: deps.agora?.() ?? new Date(), deps }, { acao, texto, resumo: estado.resumo ?? "" }, null);
+  await executarAcao({ conversa, empresaId: estado.empresaId, agora: deps.agora?.() ?? new Date(), deps, campanhaId: controle?.campanhaId, manual: controle?.estado === "LIGADO" }, { acao, texto, resumo: estado.resumo ?? "" }, null);
   return { enviada: true as const, acao };
 }
 
@@ -454,4 +524,94 @@ export async function descartarSugestao(tenantId: string, conversationId: string
   await carregarSugestao(tenantId, conversationId);
   await prisma.sdrVendedorConversa.updateMany({ where: { conversationId, tenantId }, data: { sugestao: null, sugestaoAcao: null, sugestaoEtapa: null, sugestaoEm: null } });
   return { descartada: true as const };
+}
+
+/* ------------------------------------------- Controle manual, conversa a conversa ---- */
+
+export const controleDaConversaSchema = z
+  .object({
+    /** ligar: o vendedor passa a responder esta conversa; desligar: o freio; automatico: volta às regras do SDR. */
+    acao: z.enum(["ligar", "desligar", "automatico"]),
+    /** Roteiro a usar ao ligar numa conversa fora do SDR. Sem ele, vale o da empresa ou a campanha ativa mais recente. */
+    campanhaId: z.string().trim().min(1).max(60).nullable().optional(),
+  })
+  .strict();
+
+async function exigirConversaDoTenant(tenantId: string, conversationId: string) {
+  const c = await prisma.conversation.findFirst({ where: { id: conversationId, tenantId }, select: { id: true, contactId: true, contact: { select: { grupo: true } } } });
+  if (!c) throw new ErroSdrCore("conversa não encontrada", 404);
+  if (c.contact.grupo) throw new ErroSdrCore("o vendedor não atende grupos", 409);
+  return c;
+}
+
+/** A empresa do SDR a que esta conversa pertence (contato com negociação de origem "SDR"), se houver. */
+async function empresaDoContato(tenantId: string, contactId: string): Promise<string | null> {
+  const n = await prisma.negociacao.findFirst({ where: { tenantId, origem: "SDR", contactId }, orderBy: { createdAt: "desc" }, select: { id: true } });
+  if (!n) return null;
+  const a = await prisma.sdrAcompanhamento.findFirst({ where: { tenantId, negociacaoId: n.id }, select: { empresaId: true } });
+  return a?.empresaId ?? null;
+}
+
+/** O estado do vendedor nesta conversa, para a faixa do Inbox. */
+export async function obterControleDaConversa(tenantId: string, conversationId: string) {
+  const c = await exigirConversaDoTenant(tenantId, conversationId);
+  const [controle, estado, cfg, ia, campanhas, empresaId] = await Promise.all([
+    prisma.conversaAgente.findUnique({ where: { conversationId } }),
+    prisma.sdrVendedorConversa.findUnique({ where: { conversationId } }),
+    obterConfigDoVendedor(tenantId),
+    obterConfigIa(tenantId),
+    prisma.sdrCampanha.findMany({ where: { tenantId, status: { not: "ENCERRADA" } }, orderBy: { createdAt: "desc" }, take: 30, select: { id: true, nome: true } }),
+    empresaDoContato(tenantId, c.contactId),
+  ]);
+  return {
+    /** O vendedor está ligado na empresa e a IA do SDR tem o modelo da tarefa: só então dá para ligar numa conversa. */
+    vendedorPronto: cfg.ativo && ia.ativa && !!ia.modelos[TAREFA_DO_VENDEDOR],
+    modo: cfg.modo,
+    controle: controle?.estado ?? null,
+    campanhaId: controle?.campanhaId ?? null,
+    alteradoPor: controle?.alteradoPorNome ?? null,
+    /** A conversa é de uma empresa do SDR (o vendedor entra sozinho quando ela responde, se estiver ligado). */
+    doSdr: !!empresaId,
+    estado: estado ? { status: estado.status, motivo: estado.motivo, resumo: estado.resumo, turnos: estado.turnos, sugestao: estado.sugestao, sugestaoAcao: estado.sugestaoAcao } : null,
+    campanhas,
+  };
+}
+
+/** Respostas da IA que ainda não saíram (PENDING) são canceladas: parar tem de valer já, e não só na próxima mensagem. */
+async function cancelarPendentesDaIa(conversationId: string, agora: Date) {
+  const r = await prisma.message.updateMany({
+    where: { conversationId, direction: "OUTBOUND", status: "PENDING", referenciaExterna: { startsWith: PREFIXO_DA_IA } },
+    data: { status: "FAILED", errorMessage: "Cancelada: o vendedor foi parado nesta conversa.", statusUpdatedAt: agora },
+  });
+  return r.count;
+}
+
+export async function definirControleDaConversa(tenantId: string, conversationId: string, bruto: unknown, autor: Autor, agora: Date = new Date()) {
+  const d = controleDaConversaSchema.parse(bruto);
+  const c = await exigirConversaDoTenant(tenantId, conversationId);
+  const quem = { alteradoPorId: autor.id, alteradoPorNome: autor.name };
+  let canceladas = 0;
+
+  if (d.acao === "automatico") {
+    await prisma.conversaAgente.deleteMany({ where: { conversationId, tenantId } });
+  } else if (d.acao === "desligar") {
+    await prisma.conversaAgente.upsert({ where: { conversationId }, create: { conversationId, tenantId, estado: "DESLIGADO", ...quem }, update: { estado: "DESLIGADO", campanhaId: null, ...quem } });
+    canceladas = await cancelarPendentesDaIa(conversationId, agora);
+    await prisma.sdrVendedorConversa.updateMany({ where: { conversationId, tenantId }, data: { sugestao: null, sugestaoAcao: null, sugestaoEtapa: null, sugestaoEm: null } });
+  } else {
+    const [cfg, ia] = await Promise.all([obterConfigDoVendedor(tenantId), obterConfigIa(tenantId)]);
+    if (!cfg.ativo) throw new ErroSdrCore("ligue o Vendedor IA na aba Vendedor IA do SDR antes de ligá-lo numa conversa", 409);
+    if (!ia.ativa || !ia.modelos[TAREFA_DO_VENDEDOR]) throw new ErroSdrCore(`ligue a IA do SDR e escolha o modelo da tarefa ${TAREFA_DO_VENDEDOR} (aba IA)`, 409);
+    if (d.campanhaId && !(await prisma.sdrCampanha.findFirst({ where: { id: d.campanhaId, tenantId }, select: { id: true } }))) throw new ErroSdrCore("campanha não encontrada", 404);
+    const empresaId = await empresaDoContato(tenantId, c.contactId);
+    await prisma.conversaAgente.upsert({
+      where: { conversationId },
+      create: { conversationId, tenantId, estado: "LIGADO", campanhaId: d.campanhaId ?? null, ...quem },
+      update: { estado: "LIGADO", campanhaId: d.campanhaId ?? null, ...quem },
+    });
+    // Ligar recomeça a conversa para a IA: zera o limite de respostas e as falhas, e conta só as falas de pessoas dali em diante.
+    const zerado = { empresaId, status: "ATIVA" as const, motivo: null, resumo: null, turnos: 0, tentativas: 0, proximaTentativaEm: null, respondidoAte: null, sugestao: null, sugestaoAcao: null, sugestaoEtapa: null, sugestaoEm: null, transferidaEm: null, iniciadaEm: agora };
+    await prisma.sdrVendedorConversa.upsert({ where: { conversationId }, create: { conversationId, tenantId, ...zerado }, update: zerado });
+  }
+  return { ...(await obterControleDaConversa(tenantId, conversationId)), canceladas };
 }

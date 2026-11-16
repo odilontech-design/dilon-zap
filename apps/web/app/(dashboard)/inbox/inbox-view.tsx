@@ -45,6 +45,7 @@ import {
   UNREAD_COUNT_INTERVAL,
 } from "@/lib/polling";
 import { EscolherVeiculo } from "@/components/escolher-veiculo";
+import { AgenteDaConversa } from "@/components/agente-da-conversa";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
@@ -884,6 +885,8 @@ export function ConversationThread({
   const [escolhendoMaterial, setEscolhendoMaterial] = useState(false);
   // Revenda de veículos: mandar um carro do estoque na conversa.
   const temVeiculos = useRecurso("VEICULOS");
+  // O vendedor de IA por conversa existe só onde o SDR está ligado (hoje, a Dilon Tech).
+  const temSdr = useRecurso("SDR");
   const [escolhendoVeiculo, setEscolhendoVeiculo] = useState(false);
   const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
     temPedidos && !modoGrupo ? `/api/orders?conversationId=${conversationId}` : null,
@@ -1704,6 +1707,7 @@ export function ConversationThread({
           </div>
         )}
         {aviso && <AvisoDeConexao aviso={aviso} />}
+        {temSdr && !modoGrupo && <AgenteDaConversa conversationId={conversationId} />}
 
         {buscaAberta && (
           <div className="flex items-center gap-2 px-3 md:px-6 py-2 border-b border-neutral-200 bg-surface">

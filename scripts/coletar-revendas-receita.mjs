@@ -73,6 +73,9 @@ async function lerZip(arquivo, aoLer) {
   await new Promise((resolve, reject) => tar.on("close", (c) => (c === 0 ? resolve() : reject(new Error(`tar saiu com ${c}`)))));
 }
 
+/** O cadastro guarda muito celular no formato antigo, com 8 dígitos começando por 6 a 9: falta o 9 na frente. Fixo começa por 2 a 5. */
+const acertarNumero = (n) => (n.length === 8 && /^[6-9]/.test(n) ? `9${n}` : n);
+
 const campos = (linha) => linha.slice(1, -1).split('";"');
 const digitos = (s) => (s ?? "").replace(/\D/g, "");
 const titulo = (s) =>
@@ -117,7 +120,9 @@ for (const n of ORDEM) {
     // O e-mail do cadastro muitas vezes é do escritório de contabilidade, e abordar o contador não leva à revenda: descarta.
     const bruto = (p[27] ?? "").trim().toLowerCase();
     const email = EMAIL_DE_CONTADOR.test(bruto) ? "" : bruto;
-    const telefones = [ddd1 && tel1 ? { ddd: ddd1, numero: tel1 } : null, ddd2 && tel2 ? { ddd: ddd2, numero: tel2 } : null].filter(Boolean);
+    const telefones = [ddd1 && tel1 ? { ddd: ddd1, numero: acertarNumero(tel1) } : null, ddd2 && tel2 ? { ddd: ddd2, numero: acertarNumero(tel2) } : null]
+      .filter(Boolean)
+      .filter((t, i, todos) => todos.findIndex((o) => o.ddd === t.ddd && o.numero === t.numero) === i);
     if (!telefones.length && !email.includes("@")) return;
     achadas.set(p[0], {
       basico: p[0],
@@ -154,7 +159,7 @@ for (const n of ORDEM) {
 
 /* ----------------------------------------------------------- 4. pontuar e gravar ---- */
 
-const PORTE = { "01": "ME", "03": "EPP", "05": "Demais" };
+const PORTE = { "01": "ME", "03": "EPP" }; // "05" (demais) fica em branco: o importador do SDR não tem esse porte
 const ehCelular = (t) => t.numero.length === 9 && t.numero.startsWith("9");
 const formatar = (t) => (t.numero.length === 9 ? `(${t.ddd}) ${t.numero.slice(0, 5)}-${t.numero.slice(5)}` : `(${t.ddd}) ${t.numero.slice(0, 4)}-${t.numero.slice(4)}`);
 const anoAtual = Number(MES.slice(0, 4));

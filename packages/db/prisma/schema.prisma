@@ -223,6 +223,7 @@ model Tenant {
   sdrIaUsos             SdrIaUso[]
   sdrVendedorConfig     SdrVendedorConfig?
   sdrVendedorConversas  SdrVendedorConversa[]
+  conversasAgente       ConversaAgente[]
   sdrIaCaches           SdrIaCache[]
   sdrAcompanhamentos    SdrAcompanhamento[]
   sdrAbordagens         SdrAbordagem[]
@@ -4384,7 +4385,8 @@ model SdrVendedorConversa {
   conversationId String @id
   tenantId       String
   tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  empresaId      String
+  /// Nulo quando o vendedor foi ligado à mão numa conversa que não veio do SDR.
+  empresaId      String?
 
   status StatusVendedorSaas @default(ATIVA)
   motivo String?
@@ -4418,4 +4420,28 @@ model ConsultaPlaca {
   origem       String
   dados        Json
   consultadaEm DateTime @default(now())
+}
+
+/// O controle manual de um agente de IA numa conversa. Vale mais que as regras automáticas: LIGADO põe o vendedor para
+/// responder esta conversa (mesmo fora do SDR), DESLIGADO é o freio (nem o automático entra). Sem linha, valem as regras.
+enum EstadoAgenteConversa {
+  LIGADO
+  DESLIGADO
+}
+
+model ConversaAgente {
+  conversationId String @id
+  tenantId       String
+  tenant         Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  estado EstadoAgenteConversa
+  /// Campanha cujo roteiro o vendedor usa quando ligado numa conversa fora do SDR (opcional).
+  campanhaId String?
+
+  alteradoPorId   String?
+  alteradoPorNome String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([tenantId, estado])
 }
