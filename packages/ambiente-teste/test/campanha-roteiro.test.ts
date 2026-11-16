@@ -212,3 +212,77 @@ describe("meta do dia", () => {
     assert.ok(geral.novasHoje >= 3);
   });
 });
+
+describe("aprovação do lote do dia", () => {
+  let camp = "";
+  const criarRascunho = async (nome: string, extra: Record<string, unknown> = {}) => {
+    const e = await empresa(nome, extra);
+    await naCampanha(e.id, camp);
+    return e;
+  };
+  before(async () => {
+    camp = (await campanha("Camp Lote", { produto: "DILON_ZAP" })).id;
+  });
+
+  test("aprova de uma vez os rascunhos da revisão, com o texto exato, sem enviar nada nem contatar", async () => {
+    const a = await criarRascunho("Lote A");
+    const b = await criarRascunho("Lote B");
+    const prep = await S().fila.preparar({ canal: "LIGACAO", produto: "DILON_ZAP", campanhaId: camp }, autor);
+    assert.equal(prep.criadas >= 2, true);
+    const antes = await prisma.sdrAbordagem.findMany({ where: { tenantId: tenant, empresaId: { in: [a.id, b.id] }, canal: "LIGACAO" } });
+    assert.ok(antes.every((x) => x.status === "RASCUNHO"));
+
+    const r = await S().fila.aprovarLote({ canal: "LIGACAO", campanhaId: camp }, autor);
+    assert.equal(r.falhas.length, 0);
+    assert.ok(r.aprovadas >= 2);
+    const depois = await prisma.sdrAbordagem.findMany({ where: { tenantId: tenant, empresaId: { in: [a.id, b.id] }, canal: "LIGACAO" } });
+    for (const x of depois) {
+      assert.equal(x.status, "APROVADA");
+      assert.equal(x.textoAprovado, x.texto, "o texto aprovado é exatamente o que estava na tela");
+      assert.equal(x.aprovadaPorNome, autor.name);
+    }
+    // Aprovar não contata: a etapa continua "não contatada" e nenhum contato foi registrado.
+    for (const e of [a, b]) {
+      assert.equal((await prisma.sdrAcompanhamento.findUnique({ where: { tenantId_empresaId: { tenantId: tenant, empresaId: e.id } } }))?.etapa ?? "NAO_CONTATADA", "NAO_CONTATADA");
+      assert.equal(await prisma.sdrInteracao.count({ where: { tenantId: tenant, empresaId: e.id, tipo: "CONTATO" } }), 0);
+    }
+    assert.equal(await prisma.sdrEnvioEmail.count({ where: { tenantId: tenant, empresaId: { in: [a.id, b.id] } } }), 0);
+  });
+  test("repetir o lote não aprova de novo nem duplica: não sobra rascunho para aprovar", async () => {
+    const r = await S().fila.aprovarLote({ canal: "LIGACAO", campanhaId: camp }, autor);
+    assert.equal(r.aprovadas, 0);
+  });
+  test("empresa bloqueada no meio do lote não é aprovada, e as outras seguem", async () => {
+    const ok = await criarRascunho("Lote Livre");
+    const bloq = await criarRascunho("Lote Bloqueada");
+    await S().fila.preparar({ canal: "LIGACAO", produto: "DILON_ZAP", campanhaId: camp, empresaIds: [ok.id, bloq.id] }, autor);
+    await prisma.sdrSupressao.create({ data: { tenantId: tenant, tipo: "TELEFONE", valor: bloq.telefone!, motivo: "EMPRESA_BLOQUEADA" } });
+    const ab = await prisma.sdrAbordagem.findMany({ where: { tenantId: tenant, empresaId: { in: [ok.id, bloq.id] }, canal: "LIGACAO" } });
+    const r = await S().fila.aprovarLote({ abordagemIds: ab.map((x) => x.id) }, autor);
+    assert.equal(r.aprovadas, 1);
+    assert.equal(r.falhas.length, 1);
+    assert.equal((await prisma.sdrAbordagem.findFirstOrThrow({ where: { tenantId: tenant, empresaId: ok.id, canal: "LIGACAO" } })).status, "APROVADA");
+    assert.equal((await prisma.sdrAbordagem.findFirstOrThrow({ where: { tenantId: tenant, empresaId: bloq.id, canal: "LIGACAO" } })).status, "RASCUNHO");
+  });
+  test("o limite pedido vale, e abordagem de outra organização nunca é aprovada", async () => {
+    for (const n of ["Lote L1", "Lote L2", "Lote L3"]) await criarRascunho(n);
+    await S().fila.preparar({ canal: "LIGACAO", produto: "DILON_ZAP", campanhaId: camp }, autor);
+    const r = await S().fila.aprovarLote({ canal: "LIGACAO", campanhaId: camp, limite: 2 }, autor);
+    assert.equal(r.aprovadas, 2);
+
+    const icp2 = await prisma.sdrIcp.create({ data: { tenantId: outro, nome: "Outro perfil lote" } });
+    void icp2;
+    const alheia = await empresa("Lote Alheia", {}, outro);
+    const ab = await prisma.sdrAbordagem.create({ data: { tenantId: outro, empresaId: alheia.id, produto: "DILON_ZAP", canal: "LIGACAO", texto: "Roteiro de outra organização." } });
+    const r2 = await S().fila.aprovarLote({ abordagemIds: [ab.id] }, autor);
+    assert.equal(r2.aprovadas, 0);
+    assert.equal(r2.falhas.length, 1);
+    assert.equal((await prisma.sdrAbordagem.findUniqueOrThrow({ where: { id: ab.id } })).status, "RASCUNHO");
+  });
+  test("recusa campo desconhecido, lista vazia e limite fora da faixa", async () => {
+    const invalido = (e: unknown) => e instanceof Error && e.name === "ZodError";
+    await assert.rejects(() => S().fila.aprovarLote({ tenantId: "x" }, autor), invalido);
+    await assert.rejects(() => S().fila.aprovarLote({ abordagemIds: [] }, autor), invalido);
+    await assert.rejects(() => S().fila.aprovarLote({ limite: 51 }, autor), invalido);
+  });
+});

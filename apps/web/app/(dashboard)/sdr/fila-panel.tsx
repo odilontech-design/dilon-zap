@@ -143,6 +143,24 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
   const r = resumo.data;
   const aPrepararNaFila = itens.filter((i) => i.estado === "A_PREPARAR").length;
 
+  /** A autorização do lote: aprova de uma vez os rascunhos que a revisão mostraria. Não envia nada. */
+  async function aprovarLote() {
+    const n = r?.aRevisar ?? 0;
+    const quantos = Math.min(n, meta);
+    if (!window.confirm(`Aprovar ${quantos} mensagem(ns) de ${NOME_DO_CANAL[canal]}?\n\nAprovar não envia nada: libera cada uma para você contatar, uma por clique, com o texto exatamente como está. Confira antes pela revisão se quiser.`)) return;
+    setOcupado(true);
+    setAviso(null);
+    const res = await chamar("/api/sdr/fila/aprovar-lote", "POST", { canal, limite: meta, ...(campanhaId ? { campanhaId } : {}) });
+    setOcupado(false);
+    if (!res.ok) return setAviso({ tipo: "erro", texto: res.erro ?? "não deu pra aprovar o lote" });
+    const d = res.dados as { aprovadas: number; falhas: { erro: string }[] };
+    setAviso({
+      tipo: d.falhas.length ? "erro" : "ok",
+      texto: `${d.aprovadas} mensagem(ns) aprovada(s) e prontas para contatar${d.falhas.length ? ` · ${d.falhas.length} não aprovada(s) (${d.falhas[0].erro})` : ""}. Nada foi enviado: o envio é seu, um por clique.`,
+    });
+    recarregar();
+  }
+
   async function preparar() {
     setOcupado(true);
     setAviso(null);
@@ -239,7 +257,10 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
             <button onClick={() => setRevisando(true)} disabled={!r || r.aRevisar === 0} className={botaoPrimario}>
               Revisar rascunhos{r && r.aRevisar > 0 ? ` (${r.aRevisar})` : ""}
             </button>
-            <span className="text-[11px] text-neutral-500">Preparar só cria rascunhos pelo modelo; nada é aprovado nem enviado sem você.</span>
+            <button onClick={aprovarLote} disabled={ocupado || !r || r.aRevisar === 0} className={botaoSecundario}>
+              Aprovar o lote{r && r.aRevisar > 0 ? ` (${Math.min(r.aRevisar, meta)})` : ""}
+            </button>
+            <span className="text-[11px] text-neutral-500">Preparar só cria rascunhos pelo modelo; nada é aprovado nem enviado sem você. Aprovar o lote libera as mensagens, e o envio continua sendo seu, um por clique.</span>
           </div>
         )}
         {aviso && <p className={`mt-3 rounded-md px-3 py-2 text-xs ${aviso.tipo === "ok" ? "bg-accent/10 text-accent" : "bg-red-50 text-red-700"}`}>{aviso.texto}</p>}

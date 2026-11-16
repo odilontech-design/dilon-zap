@@ -1,7 +1,7 @@
 import { prisma, Prisma } from "@dilon-zap/db";
 import { z } from "zod";
 import { PREFIXO_ABERTURA, type LimitesDoWhatsapp } from "./canais";
-import { criarAbordagem, exigirContatavel, exigirEmpresa, registrarResultado, resultadoSchema } from "./comercial";
+import { aprovarAbordagem, criarAbordagem, exigirContatavel, exigirEmpresa, registrarResultado, resultadoSchema } from "./comercial";
 import { origemDaConsulta, type FiltroDeEmpresas } from "./consulta";
 import { listarEmpresas } from "./empresas";
 import { ErroSdrCore } from "./erros";
@@ -40,6 +40,16 @@ export const preparoSchema = z
     limite: limite.optional(),
     /** Prepara só estas; sem a lista, prepara as que faltam na fila do dia. */
     empresaIds: z.array(idDoTenant).min(1).max(FILA_MAXIMA).optional(),
+  })
+  .strict();
+
+export const aprovacaoEmLoteSchema = z
+  .object({
+    canal: canalDaFila.optional(),
+    campanhaId: idDoTenant.optional(),
+    limite: limite.optional(),
+    /** Aprova só estas abordagens; sem a lista, aprova os rascunhos que a revisão mostraria agora. */
+    abordagemIds: z.array(idDoTenant).min(1).max(FILA_MAXIMA).optional(),
   })
   .strict();
 
@@ -418,4 +428,32 @@ export async function funilPorCampanha(tenantId: string) {
   const itens = campanhas.map((c) => monta(c.id, c.nome, c.status));
   if (porCampanha.has(null)) itens.push(monta(null, "Sem campanha", null));
   return { itens };
+}
+
+/* --------------------------------------------------------- Aprovação em lote ---- */
+
+export type ResultadoDaAprovacaoEmLote = { aprovadas: number; falhas: { abordagemId: string; erro: string }[]; abordagemIds: string[] };
+
+/**
+ * Aprova de uma vez os rascunhos do dia (ou os escolhidos). É a autorização do lote por uma pessoa: aprovar NÃO envia nada,
+ * só libera cada mensagem para ser contatada, uma por clique, com o texto exatamente como estava. Cada abordagem passa pelas
+ * mesmas regras da aprovação individual (empresa bloqueada ou que pediu para não ser contatada não é aprovada), e uma que
+ * falha não impede as outras. O teto é o da fila (50).
+ */
+export async function aprovarLote(tenantId: string, bruto: unknown, autor: Autor): Promise<ResultadoDaAprovacaoEmLote> {
+  const d = aprovacaoEmLoteSchema.parse(bruto);
+  const ids = d.abordagemIds
+    ? [...new Set(d.abordagemIds)]
+    : (await filaDeRevisao(tenantId, { ...(d.canal ? { canal: d.canal } : {}), ...(d.campanhaId ? { campanhaId: d.campanhaId } : {}), ...(d.limite ? { limite: d.limite } : {}) })).itens.map((i) => i.abordagemId);
+  const r: ResultadoDaAprovacaoEmLote = { aprovadas: 0, falhas: [], abordagemIds: [] };
+  for (const id of ids) {
+    try {
+      await aprovarAbordagem(tenantId, id, autor);
+      r.aprovadas++;
+      r.abordagemIds.push(id);
+    } catch (e) {
+      r.falhas.push({ abordagemId: id, erro: nomeDoErro(e) });
+    }
+  }
+  return r;
 }
