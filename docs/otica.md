@@ -162,6 +162,9 @@ no Caixa (com a forma de pagamento), baixa da armação do estoque e avisos ao c
 - `GEMINI_API_KEY` no `.env` da VPS (o container `web` lê o `.env`). Gere a chave em
   aistudio.google.com. Sem a chave, a tela avisa que a leitura não está ligada e a OS
   segue sendo preenchida à mão.
+- `OTICA_GEMINI_API_KEY` (opcional, v1.85.3): chave de um projeto do Google só da Ótica. Se existir, a
+  leitura das OS usa ela, com cota gratuita própria, e não divide o limite com a IA do SDR
+  (`GEMINI_API_KEY`). Sem ela, a leitura usa a `GEMINI_API_KEY`.
 - `OTICA_LEITURA_MODELO` (opcional): o modelo. Padrão `gemini-2.5-flash`. Se o Google
   aposentar o modelo, troque aqui sem nova versão.
 - Limites da camada gratuita: poucas dezenas de pedidos por minuto e um teto diário. A

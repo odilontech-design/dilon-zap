@@ -90,15 +90,18 @@ export function chaveAnthropicDoServidor(): string | undefined {
 /**
  * A chave do Gemini para quem fala com ele por fora do SDR (a leitura da foto da OS da Ótica). Existe pelo
  * mesmo motivo da anterior: a leitura da chave fica num lugar só, e o chamador a pede por aqui.
+ *
+ * Prefere OTICA_GEMINI_API_KEY (um projeto do Google só da Ótica, com cota gratuita própria, para a
+ * leitura das OS não brigar com o SDR pelo mesmo limite) e cai na GEMINI_API_KEY quando não existe.
  */
 export function chaveGeminiDoServidor(): string | undefined {
-  return process.env.GEMINI_API_KEY?.trim() || undefined;
+  return process.env.OTICA_GEMINI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim() || undefined;
 }
 
 /** Tira do texto de erro qualquer valor de chave que tenha escapado. */
 export function semSegredos(texto: string): string {
   let limpo = texto;
-  for (const segredo of [process.env.ANTHROPIC_API_KEY, process.env.GEMINI_API_KEY]) {
+  for (const segredo of [process.env.ANTHROPIC_API_KEY, process.env.GEMINI_API_KEY, process.env.OTICA_GEMINI_API_KEY]) {
     if (segredo && segredo.length >= 8) limpo = limpo.split(segredo).join("[oculto]");
   }
   return limpo;
