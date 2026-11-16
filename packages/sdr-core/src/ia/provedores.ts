@@ -35,7 +35,15 @@ export function provedorAnthropic({ chave, fetchFn = fetch }: Opcoes): Provedor 
         method: "POST",
         signal: p.signal,
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: p.modelo, max_tokens: p.maxTokensSaida, system: p.sistema, messages: [{ role: "user", content: p.usuario }] }),
+        body: JSON.stringify({
+          model: p.modelo,
+          max_tokens: p.maxTokensSaida,
+          system: p.sistema,
+          messages: [{ role: "user", content: p.usuario }],
+          // Os modelos 5.x pensam por padrão, e o raciocínio conta no limite de saída: esforço baixo
+          // evita a resposta (um JSON curto) sair cortada. Só nesses modelos: os antigos recusam o campo.
+          ...(/^claude-(haiku|sonnet|opus|fable|mythos)-5/.test(p.modelo) ? { output_config: { effort: "low" } } : {}),
+        }),
       });
       if (!r.ok) return falhaHttp("anthropic", r);
       const j = (await r.json()) as { content?: { type?: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
@@ -73,7 +81,9 @@ export type Provedores = Record<NomeProvedor, Provedor>;
 /** As chaves são lidas a cada chamada, no momento do uso, e só aqui. */
 export function provedoresPadrao(fetchFn?: typeof fetch): Provedores {
   return {
-    anthropic: provedorAnthropic({ chave: () => process.env.ANTHROPIC_API_KEY, fetchFn }),
+    // O SDR prefere a SUA chave (SDR_ANTHROPIC_API_KEY). A ANTHROPIC_API_KEY, quando existe, liga o
+    // Vendedor IA dos carros no worker; por isso a chave do Claude do SDR tem nome próprio.
+    anthropic: provedorAnthropic({ chave: () => process.env.SDR_ANTHROPIC_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY, fetchFn }),
     gemini: provedorGemini({ chave: () => process.env.GEMINI_API_KEY, fetchFn }),
   };
 }
@@ -101,7 +111,7 @@ export function chaveGeminiDoServidor(): string | undefined {
 /** Tira do texto de erro qualquer valor de chave que tenha escapado. */
 export function semSegredos(texto: string): string {
   let limpo = texto;
-  for (const segredo of [process.env.ANTHROPIC_API_KEY, process.env.GEMINI_API_KEY, process.env.OTICA_GEMINI_API_KEY]) {
+  for (const segredo of [process.env.ANTHROPIC_API_KEY, process.env.SDR_ANTHROPIC_API_KEY, process.env.GEMINI_API_KEY, process.env.OTICA_GEMINI_API_KEY]) {
     if (segredo && segredo.length >= 8) limpo = limpo.split(segredo).join("[oculto]");
   }
   return limpo;

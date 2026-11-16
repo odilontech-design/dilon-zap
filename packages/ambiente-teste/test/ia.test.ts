@@ -8,7 +8,7 @@ import { prisma } from "@dilon-zap/db";
 import { ErroSdrCore } from "../../sdr-core/src/erros";
 import { CONFIG_PADRAO, configIaSchema, custoEmMicro, inicioDoDia, inicioDoMes, obterConfigIa, salvarConfigIa, type ConfigIa } from "../../sdr-core/src/ia/config";
 import { executarTarefaIa, extrairJson } from "../../sdr-core/src/ia/executar";
-import { chaveGeminiDoServidor, provedorAnthropic, provedorGemini, semSegredos, type Provedor, type Provedores } from "../../sdr-core/src/ia/provedores";
+import { chaveGeminiDoServidor, provedorAnthropic, provedorGemini, provedoresPadrao, semSegredos, type Provedor, type Provedores } from "../../sdr-core/src/ia/provedores";
 import { sdrDoTenant } from "../../sdr-core/src/index";
 import { USUARIOS } from "../src/semente";
 import { Sessao, logado } from "./ajudantes";
@@ -457,6 +457,44 @@ describe("IA: provedores reais, com fetch falso", () => {
     assert.equal(h["anthropic-version"], "2023-06-01");
     const corpo = JSON.parse(String(visto!.init.body));
     assert.deepEqual([corpo.model, corpo.max_tokens, corpo.system, corpo.messages[0].content], ["m1", 100, "S", "U"]);
+  });
+  test("Anthropic: modelos 5.x pedem esforço baixo (o raciocínio conta no limite de saída); os antigos não recebem o campo", async () => {
+    const corpos: any[] = [];
+    const fetchFn = (async (_url: string, init: RequestInit) => {
+      corpos.push(JSON.parse(String(init.body)));
+      return new Response(JSON.stringify({ content: [{ type: "text", text: "{}" }], usage: { input_tokens: 1, output_tokens: 1 } }), { status: 200 });
+    }) as unknown as typeof fetch;
+    const p = provedorAnthropic({ chave: () => "k", fetchFn });
+    await p.chamar({ ...pedidoHttp, modelo: "claude-haiku-5-5" });
+    await p.chamar({ ...pedidoHttp, modelo: "claude-sonnet-5-5" });
+    await p.chamar({ ...pedidoHttp, modelo: "claude-haiku-4-5" });
+    assert.deepEqual(corpos[0].output_config, { effort: "low" });
+    assert.deepEqual(corpos[1].output_config, { effort: "low" });
+    assert.equal("output_config" in corpos[2], false);
+  });
+  test("a chave do Claude do SDR (SDR_ANTHROPIC_API_KEY) tem prioridade e não depende da ANTHROPIC_API_KEY", async () => {
+    const a = process.env.ANTHROPIC_API_KEY;
+    const s = process.env.SDR_ANTHROPIC_API_KEY;
+    const vistas: string[] = [];
+    const fetchFn = (async (_u: string, init: RequestInit) => {
+      vistas.push((init.headers as Record<string, string>)["x-api-key"]!);
+      return new Response(JSON.stringify({ content: [{ type: "text", text: "{}" }], usage: {} }), { status: 200 });
+    }) as unknown as typeof fetch;
+    try {
+      delete process.env.ANTHROPIC_API_KEY;
+      process.env.SDR_ANTHROPIC_API_KEY = " chave-do-sdr ";
+      await provedoresPadrao(fetchFn).anthropic.chamar(pedidoHttp);
+      process.env.ANTHROPIC_API_KEY = "chave-geral";
+      await provedoresPadrao(fetchFn).anthropic.chamar(pedidoHttp);
+      process.env.SDR_ANTHROPIC_API_KEY = "";
+      await provedoresPadrao(fetchFn).anthropic.chamar(pedidoHttp);
+      assert.deepEqual(vistas, ["chave-do-sdr", "chave-do-sdr", "chave-geral"]);
+    } finally {
+      if (a === undefined) delete process.env.ANTHROPIC_API_KEY;
+      else process.env.ANTHROPIC_API_KEY = a;
+      if (s === undefined) delete process.env.SDR_ANTHROPIC_API_KEY;
+      else process.env.SDR_ANTHROPIC_API_KEY = s;
+    }
   });
   test("Gemini: a chave vai no cabeçalho, nunca na URL", async () => {
     let visto: { url: string; init: RequestInit } | null = null;
