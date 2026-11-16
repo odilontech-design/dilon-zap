@@ -751,3 +751,16 @@ Na entrada e na ficha do veículo, ao lado da placa, o botão **"Buscar pela pla
 - **Cache** de 90 dias por placa (`ConsultaPlaca`, só as características): a mesma placa não é cobrada duas vezes.
 - Sem nenhum provedor, o botão avisa "A busca pela placa ainda não está liberada nesta conta".
 - **Pendente**: contratar um provedor de dados de veículo por placa (cobrança por consulta) e configurar `PLACA_API_URL`; o leitor tolerante deve aceitar a maioria, mas convém conferir com a resposta real do provedor escolhido (testado só com respostas simuladas).
+
+## Cadastro no jeito do AutoCerto (v1.84.0)
+
+A entrada e a ficha do carro ganharam o que o cadastro do AutoCerto tem (é o que a equipe das lojas conhece):
+
+- **Buscar pela placa** (v1.71.0, trazido para a versão atual): consulta a MobiAuto quando a conta da loja está conectada (ou um provedor configurado em `PLACA_API_URL`) e preenche marca, modelo, versão, anos, combustível, chassi e FIPE. Sem provedor, o botão avisa que a consulta ainda não está disponível. Cache de 90 dias por placa (`ConsultaPlaca`).
+- **Características** em etiquetas (7 lugares, IPVA pago, único dono, revisado em concessionária…) e **opcionais** em caixas de marcar, com busca, "Marcados (n)", "Marcar todos" e "Outro opcional" para o que não está na lista (`lib/veiculos-cadastro.ts`).
+- **Carroceria**, **Veículo 0 km**, **km "Não mostrar no site"** (o site trata como não informada; os portais continuam recebendo) e **vídeo do YouTube** (aparece na página do carro, por `youtube-nocookie`).
+- **Preço no site** e **preço nos classificados** (vazio = o mesmo; "Copiar do site"), **observação no site** com "Usar a mesma observação nos classificados" e **Diferente em algum portal** (preço e/ou observação só na OLX, Webmotors, MobiAuto ou NaPista). Os quatro conectores passam o carro por `paraOPortal` (`packages/portais/src/ajustes.ts`) antes de montar o anúncio; o hash sai do resultado, então mudar um ajuste reenvia só ao portal afetado.
+- **Observação padrão** (Aparência e domínio > Observação padrão dos anúncios): já vem escrita em todo carro novo.
+- **Qualidade do anúncio** (0 a 100%, com o que falta) e **Dar entrada e começar outro**.
+
+Campos novos em `Veiculo`: `caracteristicas`, `carroceria`, `zeroKm`, `ocultarKm`, `videoUrl`, `precoClassificadosCents`, `descricaoClassificados`, `ajustesPorPortal`; em `VeiculosConfig`: `observacaoPadrao`. Teste: `apps/web/lib/veiculos-cadastro.test-manual.ts`.

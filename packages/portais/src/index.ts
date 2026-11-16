@@ -23,3 +23,4 @@ export * from "./napista/cliente";
 export * from "./napista/mapa";
 export * from "./napista/catalogo";
 export { cicloNapista, contaNapistaGuardada, guardarContaNapista, type ContaNapista } from "./sincronizar-napista";
+export * from "./ajustes";

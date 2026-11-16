@@ -3665,6 +3665,17 @@ model Veiculo {
   cambio        String?
   portas        Int?
   opcionais     String[]
+  // Cadastro no jeito do AutoCerto: características (chips: IPVA pago, único dono…), carroceria,
+  // 0 km, km escondida no anúncio do site, vídeo do YouTube, preço e texto próprios dos classificados
+  // (nulo = os mesmos do site) e ajustes por portal ({ "WEBMOTORS": { precoCents, descricao } }).
+  caracteristicas         String[] @default([])
+  carroceria              String?
+  zeroKm                  Boolean  @default(false)
+  ocultarKm               Boolean  @default(false)
+  videoUrl                String?
+  precoClassificadosCents Int?
+  descricaoClassificados  String?
+  ajustesPorPortal        Json?
 
   // Tabela FIPE: o código e o último valor consultado, para comparar com o preço.
   codigoFipe     String?
@@ -3918,6 +3929,8 @@ model VeiculosConfig {
   // Dados que os portais exigem em todo anúncio (OLX: CEP e telefone com DDD).
   cepAnuncios      String?
   telefoneAnuncios String?
+  // Observação padrão dos anúncios: já vem escrita em todo carro novo (Configurações > Observação dos anúncios).
+  observacaoPadrao String?
 
   // Meu site > Dados da loja: endereço em partes (o campo "endereco" acima é montado a partir
   // delas), até 3 telefones [{ tipo: "WHATSAPP"|"CELULAR"|"FIXO", numero: "5521..." }], o ponto
@@ -4396,6 +4409,8 @@ model SdrVendedorConversa {
 
   @@index([tenantId, status])
   @@index([tenantId, iniciadaEm])
+}
+
 /// Cache da consulta de placa (só as características do veículo, nunca dados do dono): cada
 /// consulta a um provedor pago custa, então a mesma placa não é consultada de novo por 90 dias.
 model ConsultaPlaca {

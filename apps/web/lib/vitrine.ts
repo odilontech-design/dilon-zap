@@ -116,6 +116,10 @@ export const SELECT_PUBLICO = {
   cambio: true,
   portas: true,
   opcionais: true,
+  caracteristicas: true,
+  carroceria: true,
+  videoUrl: true,
+  ocultarKm: true,
   precoCents: true,
   descricao: true,
   status: true,
@@ -236,18 +240,25 @@ function ondePublico(loja: LojaPublica): Prisma.VeiculoWhereInput {
   };
 }
 
+/** Km escondida pela loja ("Não mostrar no site"): sai do site como se não tivesse sido informada. */
+export function semKmEscondida<T extends { ocultarKm: boolean; kmInformado: boolean; km: number }>(c: T): T {
+  return c.ocultarKm ? { ...c, kmInformado: false, km: 0 } : c;
+}
+
 export async function carrosDaVitrine(loja: LojaPublica): Promise<CarroPublico[]> {
-  return prisma.veiculo.findMany({
+  const carros = await prisma.veiculo.findMany({
     where: ondePublico(loja),
     // Disponível antes de reservado; dentro de cada um, o que chegou por último primeiro.
     orderBy: [{ status: "asc" }, { entradaEm: "desc" }],
     take: 500,
     select: SELECT_PUBLICO,
   });
+  return carros.map(semKmEscondida);
 }
 
 export async function carroDaVitrine(loja: LojaPublica, id: string): Promise<CarroPublico | null> {
-  return prisma.veiculo.findFirst({ where: { ...ondePublico(loja), id }, select: SELECT_PUBLICO });
+  const c = await prisma.veiculo.findFirst({ where: { ...ondePublico(loja), id }, select: SELECT_PUBLICO });
+  return c ? semKmEscondida(c) : null;
 }
 
 /** A foto, se ela é de um carro que a vitrine mostra. */

@@ -1,4 +1,5 @@
-import { prisma, type PaymentMethod, type Prisma } from "@dilon-zap/db";
+import { idDoYoutube } from "@/lib/veiculos-cadastro";
+import { prisma, Prisma, type PaymentMethod } from "@dilon-zap/db";
 import { diaAoMeioDia, gerarParcelas } from "@dilon-zap/receivables";
 import type { z } from "zod";
 import { categoriaDeVendas, garantirPlano } from "@/lib/categorias-financeiras";
@@ -100,6 +101,21 @@ export function dadosParaBanco(d: Partial<DadosVeiculo>): Prisma.VeiculoUnchecke
   if (d.km !== undefined) out.km = d.km;
   if (d.portas !== undefined) out.portas = d.portas ?? null;
   if (d.opcionais !== undefined) out.opcionais = [...new Set(d.opcionais)];
+  if (d.caracteristicas !== undefined) out.caracteristicas = [...new Set(d.caracteristicas)];
+  if (d.carroceria !== undefined) out.carroceria = d.carroceria || null;
+  if (d.zeroKm !== undefined) out.zeroKm = d.zeroKm;
+  if (d.ocultarKm !== undefined) out.ocultarKm = d.ocultarKm;
+  if (d.videoUrl !== undefined) {
+    if (d.videoUrl && !idDoYoutube(d.videoUrl)) throw new ErroDeVeiculo("vídeo: use um link do YouTube");
+    out.videoUrl = d.videoUrl || null;
+  }
+  if (d.precoClassificadosCents !== undefined) out.precoClassificadosCents = d.precoClassificadosCents || null;
+  if (d.descricaoClassificados !== undefined) out.descricaoClassificados = d.descricaoClassificados || null;
+  if (d.ajustesPorPortal !== undefined) {
+    // Só guarda o portal que muda alguma coisa.
+    const limpo = Object.fromEntries(Object.entries(d.ajustesPorPortal ?? {}).filter(([, a]) => a && (a.precoCents || a.descricao)).map(([p, a]) => [p, { ...(a.precoCents ? { precoCents: a.precoCents } : {}), ...(a.descricao ? { descricao: a.descricao } : {}) }]));
+    out.ajustesPorPortal = Object.keys(limpo).length ? limpo : Prisma.DbNull;
+  }
   if (d.fipeCents !== undefined) {
     out.fipeCents = d.fipeCents ?? null;
     out.fipeEm = d.fipeCents ? new Date() : null;

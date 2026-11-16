@@ -1,3 +1,4 @@
+import { paraOPortal } from "./ajustes";
 import { prisma } from "@dilon-zap/db";
 import { decidir, deveEstarNoAr, hashDoAnuncio, proximaTentativa } from "./decisao";
 import { cifrar, decifrar } from "./seguranca";
@@ -76,7 +77,7 @@ async function sincronizarLoja(tenantId: string, contaId: string, sessao: Sessao
 
   for (const p of pubs) {
     if (feitas >= MAX_POR_RODADA) break;
-    const v = p.veiculo;
+    const v = paraOPortal(p.veiculo, "NAPISTA");
     const noAr = deveEstarNoAr(v.status, p.ativo);
     const fotos = v.fotos.map((f) => linkDaFotoParaPortal(op.urlBase, f.id, op.segredoFotos)).slice(0, MAX_FOTOS);
     const hashFotos = hashDoAnuncio(fotos);
