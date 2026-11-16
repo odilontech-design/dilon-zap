@@ -143,6 +143,12 @@ depende do contador. Se o número já existe, a OS não é criada ("Já existe a
 0498"). Ao salvar com número do papel, a numeração automática nunca fica abaixo
 dele.
 
+**Onde achar as OS antigas e as entregues.** O quadro mostra só o que está andando e as entregues dos
+últimos 30 dias, então uma OS antiga escaneada não aparece nele. O botão **Histórico: entregues, canceladas e
+antigas** lista todas (as 300 mais recentes) e a **busca** acha qualquer OS, ignorando acento e maiúscula
+("caua" acha "Cauã"), por número, nome, telefone, CPF ou pedido do laboratório. A busca e o histórico também
+mostram as canceladas, que não são coluna do quadro.
+
 **OS antiga (histórica).** Guarda a OS, a receita e a foto, sem Caixa, sem estoque
 e sem WhatsApp: nenhuma conta a receber, nenhuma baixa de armação, nenhum aviso. Nasce
 como Entregue, longe da coluna Entregue do quadro, não muda de etapa e o valor e o
