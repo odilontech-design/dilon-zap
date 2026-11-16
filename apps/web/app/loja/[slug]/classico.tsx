@@ -21,7 +21,8 @@ const ICONES: Record<string, string> = {
   vitrine: "M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1v-9Z",
   veiculos: "M5 13l1.6-4.3A2 2 0 0 1 8.5 7.4h7a2 2 0 0 1 1.9 1.3L19 13M4 13h16v4a1 1 0 0 1-1 1h-1.5M4 13v4a1 1 0 0 0 1 1h1.5M7.5 18a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm9 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z",
   "quem-somos": "M4 21V5a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v16M15 9h4a1 1 0 0 1 1 1v11M8 8h3M8 12h3M8 16h3M3 21h18",
-  "venda-seu-carro": "M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2",
+  // Etiqueta de preço com o cifrão: "vender" (a seta para baixo parecia "baixar arquivo").
+  "venda-seu-carro": "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 12.8V3h9.8l7.8 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01M13 9.5c-.4-.6-1-1-1.8-1-1 0-1.7.6-1.7 1.3 0 1.8 3.6 1 3.6 2.8 0 .8-.8 1.4-1.9 1.4-.8 0-1.5-.4-1.9-1M11.2 7.5v1M11.2 14v1",
   financiamento: "M3 6h18v12H3zM3 10h18M7 15h4",
   localizacao: "M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11Zm0-8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z",
 };
