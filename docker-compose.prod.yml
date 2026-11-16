@@ -135,6 +135,8 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      # O vendedor de SaaS do SDR pode usar o Gemini (inclusive o plano gratuito): o provedor de cada tarefa vem da configuração da IA do SDR.
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
       # Para acordar a fila de saída do worker do WhatsApp na hora.
       WORKER_INTERNAL_URL: ${WORKER_INTERNAL_URL}
       WORKER_INTERNAL_SECRET: ${WORKER_INTERNAL_SECRET}
