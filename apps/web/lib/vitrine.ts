@@ -147,6 +147,8 @@ export type LojaPublica = {
   horario: string[];
   /** Cabeçalho e rodapé claros (o padrão é escuro). */
   cabecalhoClaro: boolean;
+  /** "classico": o jeito dos sites AutoCerto (faixa da cor da loja com endereço e telefones, menu na segunda cor). */
+  estiloSite: "moderno" | "classico";
   /** Segunda cor da marca; sem ela, os destaques usam a cor da loja. */
   corSecundaria: string;
   instagram: string | null;
@@ -200,6 +202,7 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     temBanner: !!cfg.bannerKey,
     horario: horarioEmLinhas(cfg.horario),
     cabecalhoClaro: cfg.cabecalhoClaro,
+    estiloSite: cfg.estiloSite === "classico" ? "classico" : "moderno",
     corSecundaria: corValida(cfg.corSecundaria) ?? clarear(corValida(cfg.corPrimaria) ?? COR_PADRAO, 0.62),
     instagram: linkInstagram(cfg.instagram),
     facebook: linkFacebook(cfg.facebook),

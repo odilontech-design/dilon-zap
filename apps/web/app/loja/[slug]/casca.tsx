@@ -5,6 +5,7 @@ import { cidadeDaLoja } from "@/lib/vitrine-seo";
 import { BotaoWhatsapp } from "./rastreio";
 import { BotaoFlutuante } from "./botao-flutuante";
 import { MenuMovel } from "./menu-movel";
+import { AbasSociais, CabecalhoClassico } from "./classico";
 
 /**
  * A moldura de toda página pública da loja: faixa de contato, cabeçalho com
@@ -48,11 +49,27 @@ export function CascaDaLoja({ loja, aba, subirBotao = false, children }: { loja:
   // Os telefones da loja (Dados da loja); sem eles, o WhatsApp do site.
   const telefones = loja.telefones.length ? loja.telefones : loja.whatsapp ? [{ tipo: "WHATSAPP" as const, numero: loja.whatsapp }] : [];
   const linkDoTelefone = (t: { tipo: string; numero: string }) => (t.tipo === "WHATSAPP" ? linkWhatsapp(t.numero, loja.mensagemWhatsapp) : `tel:+${t.numero}`);
-  const itens = MENU.map((m) => ({ rotulo: m.rotulo, href: caminho(m.pagina), ativo: aba === m.aba }));
+  const classico = loja.estiloSite === "classico";
+  const itens = classico
+    ? // Mesma ordem e nomes do site AutoCerto, que é o que o cliente da loja já conhece.
+      [
+        { aba: "vitrine", rotulo: "Home", href: caminho(), ativo: aba === "vitrine" },
+        { aba: "quem-somos", rotulo: "Quem somos", href: caminho("quem-somos"), ativo: aba === "quem-somos" },
+        { aba: "veiculos", rotulo: "Veículos", href: `${caminho()}#estoque`, ativo: false },
+        { aba: "financiamento", rotulo: "Financiamento", href: caminho("financiamento"), ativo: aba === "financiamento" },
+        { aba: "localizacao", rotulo: "Localização", href: caminho("localizacao"), ativo: aba === "localizacao" },
+        { aba: "venda-seu-carro", rotulo: "Venda seu carro", href: caminho("venda-seu-carro"), ativo: aba === "venda-seu-carro" },
+      ]
+    : MENU.map((m) => ({ aba: m.aba as string, rotulo: m.rotulo, href: caminho(m.pagina), ativo: aba === m.aba }));
+  const telefonesUnicos = [...new Map(telefones.map((t) => [t.numero, t])).values()];
   const sub = escuro ? "text-neutral-400" : "text-neutral-600";
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas text-neutral-900" style={estiloDaLoja(loja)}>
+      {classico ? (
+        <CabecalhoClassico loja={loja} itens={itens} telefones={telefonesUnicos} linkDoTelefone={linkDoTelefone} logo={loja.temLogo ? marca("logo") : null} />
+      ) : (
+        <>
       {/* Faixa de contato: telefone, onde fica e quando abre, sempre à vista no computador. */}
       {(telefones.length > 0 || loja.endereco || loja.horario.length > 0) && (
         <div className="hidden text-xs text-neutral-300 md:block" style={{ background: "#0a0a0a" }}>
@@ -101,6 +118,9 @@ export function CascaDaLoja({ loja, aba, subirBotao = false, children }: { loja:
           </div>
         </div>
       </header>
+
+        </>
+      )}
 
       <div className="flex-1">{children}</div>
 
@@ -156,7 +176,8 @@ export function CascaDaLoja({ loja, aba, subirBotao = false, children }: { loja:
         <p className="mx-auto max-w-6xl px-4 pb-8 text-xs text-neutral-500">Preços e disponibilidade sujeitos a alteração sem aviso. Confirme pelo WhatsApp. Marcas e logotipos pertencem às respectivas montadoras.</p>
       </footer>
 
-      {zap && <BotaoFlutuante href={zap} subirNoCelular={subirBotao} />}
+      {classico && <AbasSociais loja={loja} zap={zap} />}
+      {zap && <BotaoFlutuante href={zap} subirNoCelular={subirBotao} soCelular={classico} />}
     </div>
   );
 }
