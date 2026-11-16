@@ -1,3 +1,4 @@
+import { registrarEventoDoSite } from "@/lib/estatisticas-vitrine";
 import { prisma } from "@dilon-zap/db";
 import { garantirFunilPadrao } from "@/lib/funis";
 import { upsertContactByPhone } from "@/lib/contact-server";
@@ -36,6 +37,7 @@ export async function registrarLeadDoSite(input: {
     ? await prisma.veiculo.findFirst({ where: { id: input.veiculoId, tenantId: loja.tenantId }, select: { marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, precoCents: true } })
     : null;
   const { contact } = await upsertContactByPhone(loja.tenantId, input.telefone, input.nome);
+  await registrarEventoDoSite(loja.tenantId, carro ? input.veiculoId : null, "formulario").catch(() => {});
 
   const funil = await garantirFunilPadrao(loja.tenantId);
   // Funil ainda sem etapas (loja que nunca usou o CRM): cria a primeira, em
@@ -125,6 +127,7 @@ export async function registrarAvaliacaoDoSite(input: {
   mensagem: string | null;
 }) {
   const carro = `${input.marca} ${input.modelo}${input.ano ? ` ${input.ano}` : ""}`.trim();
+  await registrarEventoDoSite(input.loja.tenantId, null, "formulario").catch(() => {});
   const detalhes = [input.km != null ? `${input.km.toLocaleString("pt-BR")} km` : null, input.mensagem ? `"${input.mensagem.slice(0, 120)}"` : null].filter(Boolean).join(" · ");
   return negociacaoDaPagina({
     loja: input.loja,
@@ -150,6 +153,7 @@ export async function registrarFinanciamentoDoSite(input: {
     ? await prisma.veiculo.findFirst({ where: { id: input.veiculoId, tenantId: input.loja.tenantId }, select: { marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, precoCents: true } })
     : null;
   const nomeCarro = carro ? nomeDoVeiculo(carro) : null;
+  await registrarEventoDoSite(input.loja.tenantId, carro ? input.veiculoId : null, "formulario").catch(() => {});
   const detalhes = [input.entradaCents ? `entrada ${(input.entradaCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}` : null, input.mensagem ? `"${input.mensagem.slice(0, 120)}"` : null]
     .filter(Boolean)
     .join(" · ");
