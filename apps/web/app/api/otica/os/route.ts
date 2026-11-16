@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { casaComBusca } from "@/lib/busca";
 import { exigirRecurso } from "@/lib/plano";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { configDaOtica, consultorValido, dadosDoCliente, previsaoDaTela, reservarNumeroOS } from "@/lib/otica";
@@ -22,9 +23,25 @@ export async function GET(req: Request) {
   const bloqueio = await exigirRecurso(user, "OTICA");
   if (bloqueio) return bloqueio;
 
-  const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
+  const params = new URL(req.url).searchParams;
+  const q = (params.get("q") ?? "").trim();
+  // O quadro só mostra o que anda e as entregues dos últimos 30 dias. O histórico é a lista de
+  // tudo que já foi entregue ou cancelado, inclusive as OS antigas escaneadas do papel.
+  const historico = params.get("historico") === "1";
   const digitos = q.replace(/\D/g, "");
   const ha30dias = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Nome do cliente e pedido do laboratório: o banco não ignora acento ("caua" não acha "Cauã"), então
+  // o casamento é feito aqui, ignorando acento e maiúscula, e só os ids achados voltam para a consulta.
+  let idsPorTexto: string[] = [];
+  if (q && /\p{L}/u.test(q)) {
+    const todas = await prisma.ordemServico.findMany({
+      where: { tenantId: user.tenantId },
+      select: { id: true, pedidoLaboratorio: true, contact: { select: { name: true, waName: true } } },
+      take: 20_000,
+    });
+    idsPorTexto = todas.filter((o) => casaComBusca([o.contact.name, o.contact.waName, o.pedidoLaboratorio].filter(Boolean).join(" "), q)).map((o) => o.id);
+  }
 
   const where: Prisma.OrdemServicoWhereInput = q
     ? {
@@ -32,20 +49,22 @@ export async function GET(req: Request) {
         OR: [
           // Número de OS tem no máximo 7 dígitos; um CPF inteiro estouraria o inteiro do banco.
           ...(digitos && digitos.length <= 7 ? [{ numero: Number(digitos) }] : []),
-          { contact: { name: { contains: q, mode: "insensitive" } } },
+          ...(idsPorTexto.length ? [{ id: { in: idsPorTexto } }] : []),
           ...(digitos.length >= 4 ? [{ contact: { phoneNumber: { contains: digitos } } }, { contact: { documento: { contains: digitos } } }] : []),
           { pedidoLaboratorio: { contains: q, mode: "insensitive" } },
         ],
       }
-    : {
-        tenantId: user.tenantId,
-        OR: [{ etapa: { notIn: ["ENTREGUE", "CANCELADA"] } }, { etapa: "ENTREGUE", entregueEm: { gte: ha30dias } }],
-      };
+    : historico
+      ? { tenantId: user.tenantId, etapa: { in: ["ENTREGUE", "CANCELADA"] } }
+      : {
+          tenantId: user.tenantId,
+          OR: [{ etapa: { notIn: ["ENTREGUE", "CANCELADA"] } }, { etapa: "ENTREGUE", entregueEm: { gte: ha30dias } }],
+        };
 
   const ordens = await prisma.ordemServico.findMany({
     where,
-    orderBy: [{ previsaoEntrega: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
-    take: q ? 50 : 500,
+    orderBy: historico && !q ? [{ numero: "desc" }] : [{ previsaoEntrega: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
+    take: q ? 50 : historico ? 300 : 500,
     select: {
       id: true,
       numero: true,
@@ -57,6 +76,9 @@ export async function GET(req: Request) {
       valorCents: true,
       sinalCents: true,
       pedidoLaboratorio: true,
+      historica: true,
+      entregueEm: true,
+      fotoKey: true,
       // O dinheiro vem das parcelas da conta a receber.
       conta: { select: { parcelas: { select: SELECT_PARCELAS } } },
       contact: { select: { id: true, name: true, waName: true, phoneNumber: true } },
