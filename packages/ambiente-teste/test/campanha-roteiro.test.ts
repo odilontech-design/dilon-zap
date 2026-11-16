@@ -279,6 +279,42 @@ describe("aprovação do lote do dia", () => {
     assert.equal(r2.falhas.length, 1);
     assert.equal((await prisma.sdrAbordagem.findUniqueOrThrow({ where: { id: ab.id } })).status, "RASCUNHO");
   });
+  test("descartar o lote: rascunhos são rejeitados, aprovada não é tocada, e o Preparar gera de novo", async () => {
+    const d1 = await criarRascunho("Descarte 1");
+    const d2 = await criarRascunho("Descarte 2");
+    await S().fila.preparar({ canal: "LIGACAO", produto: "DILON_ZAP", campanhaId: camp, empresaIds: [d1.id, d2.id] }, autor);
+    const ab = await prisma.sdrAbordagem.findMany({ where: { tenantId: tenant, empresaId: { in: [d1.id, d2.id] }, canal: "LIGACAO" } });
+    // Uma já aprovada por uma pessoa: o descarte em lote não pode tocar nela.
+    await S().fila.aprovarLote({ abordagemIds: [ab.find((x) => x.empresaId === d1.id)!.id] }, autor);
+
+    const r = await S().fila.descartarLote({ canal: "LIGACAO", campanhaId: camp }, autor);
+    assert.equal(r.falhas.length, 0);
+    const depois = await prisma.sdrAbordagem.findMany({ where: { tenantId: tenant, empresaId: { in: [d1.id, d2.id] }, canal: "LIGACAO" } });
+    assert.equal(depois.find((x) => x.empresaId === d1.id)!.status, "APROVADA", "o que já foi aprovado não muda");
+    assert.equal(depois.find((x) => x.empresaId === d2.id)!.status, "REJEITADA");
+    assert.equal((await S().fila.descartarLote({ canal: "LIGACAO", campanhaId: camp }, autor)).descartadas, 0, "repetir não descarta de novo");
+
+    // A empresa descartada volta a ser preparada, com rascunho novo.
+    const prep = await S().fila.preparar({ canal: "LIGACAO", produto: "DILON_ZAP", campanhaId: camp, empresaIds: [d2.id] }, autor);
+    assert.equal(prep.criadas, 1);
+    assert.equal((await prisma.sdrAbordagem.count({ where: { tenantId: tenant, empresaId: d2.id, canal: "LIGACAO", status: "RASCUNHO" } })), 1);
+  });
+  test("descartar por ids: aprovada, de outra organização ou inexistente vira falha e nada muda", async () => {
+    const e = await criarRascunho("Descarte ids");
+    await S().fila.preparar({ canal: "LIGACAO", produto: "DILON_ZAP", campanhaId: camp, empresaIds: [e.id] }, autor);
+    const ab = await prisma.sdrAbordagem.findFirstOrThrow({ where: { tenantId: tenant, empresaId: e.id, canal: "LIGACAO" } });
+    await S().fila.aprovarLote({ abordagemIds: [ab.id] }, autor);
+    const alheia = await empresa("Descarte Alheia", {}, outro);
+    const ajena = await prisma.sdrAbordagem.create({ data: { tenantId: outro, empresaId: alheia.id, produto: "DILON_ZAP", canal: "LIGACAO", texto: "Roteiro de outra organização." } });
+    const r = await S().fila.descartarLote({ abordagemIds: [ab.id, ajena.id, "id-que-nao-existe"] }, autor);
+    assert.equal(r.descartadas, 0);
+    assert.equal(r.falhas.length, 3);
+    assert.equal((await prisma.sdrAbordagem.findUniqueOrThrow({ where: { id: ab.id } })).status, "APROVADA");
+    assert.equal((await prisma.sdrAbordagem.findUniqueOrThrow({ where: { id: ajena.id } })).status, "RASCUNHO");
+    const invalido = (x: unknown) => x instanceof Error && x.name === "ZodError";
+    await assert.rejects(() => S().fila.descartarLote({ tenantId: "x" }, autor), invalido);
+    await assert.rejects(() => S().fila.descartarLote({ limite: 51 }, autor), invalido);
+  });
   test("recusa campo desconhecido, lista vazia e limite fora da faixa", async () => {
     const invalido = (e: unknown) => e instanceof Error && e.name === "ZodError";
     await assert.rejects(() => S().fila.aprovarLote({ tenantId: "x" }, autor), invalido);
