@@ -75,8 +75,8 @@ Medido em 15/11/2026 com a chave gratuita da Dilon Tech:
   modelo da tarefa por um pago ou por Claude, sem mudar código.
 - Há limite de requisições por minuto e por dia. Estourou, o vendedor tenta de novo e, na terceira falha, passa a conversa
   para uma pessoa.
-- O modelo `gemini-2.5-flash` ainda é o padrão (`MODELO_PADRAO`) da leitura da foto da OS da Ótica
-  (`apps/web/lib/otica-leitura.ts`). Com a chave atual ele daria 404. A Ótica está desligada, mas troque antes de ligar.
+- A leitura da foto da OS da Ótica usa `OTICA_LEITURA_MODELO` (na VPS: `gemini-3-flash-preview`, que funciona com a mesma
+  chave). O padrão do código (`gemini-2.5-flash`) está obsoleto, mas só vale se a variável faltar.
 
 ## Como ligar (nesta ordem)
 
