@@ -96,3 +96,15 @@ Medido em 15/11/2026 com a chave gratuita da Dilon Tech:
 - Não ouve áudio nem vê foto (vira `[áudio]` / `[foto]` no histórico); a IA pede para escrever.
 - A etapa muda no SDR, mas não no funil do CRM (o espelho do CRM é feito pelas rotas do SDR, com a sessão de uma pessoa).
 - Atende em conversas do número que recebeu a resposta, qualquer que seja; não separa por setor.
+
+## Claude como modelo reserva (v1.85.5)
+
+A chave do Claude do SDR é a `SDR_ANTHROPIC_API_KEY` (no `.env` da VPS). Ela tem nome próprio de
+propósito: a `ANTHROPIC_API_KEY` liga, no mesmo processo (`vendedor-ia-worker`), o Vendedor IA dos
+**carros** das revendas clientes. Com a `SDR_...`, só o SDR usa o Claude. O web lê pelo `env_file`; o
+worker recebe pelo `docker-compose.prod.yml`.
+
+A IA do SDR escolhe o modelo por tarefa (`SdrIaConfig.modelos`): o principal e, se falhar (limite, 503,
+resposta inválida), o `reserva`. Exemplo: principal `gemini:gemini-3.5-flash-lite` (gratuito) e reserva
+`anthropic:claude-sonnet-5-5`. Os preços entram em `precos` (micro-US$ por mil tokens). Modelos 5.x
+recebem `output_config.effort = "low"` para o raciocínio não estourar o limite de saída.
