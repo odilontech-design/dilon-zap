@@ -764,3 +764,14 @@ A entrada e a ficha do carro ganharam o que o cadastro do AutoCerto tem (é o qu
 - **Qualidade do anúncio** (0 a 100%, com o que falta) e **Dar entrada e começar outro**.
 
 Campos novos em `Veiculo`: `caracteristicas`, `carroceria`, `zeroKm`, `ocultarKm`, `videoUrl`, `precoClassificadosCents`, `descricaoClassificados`, `ajustesPorPortal`; em `VeiculosConfig`: `observacaoPadrao`. Teste: `apps/web/lib/veiculos-cadastro.test-manual.ts`.
+
+## Relatórios (v1.86.0)
+
+**Veículos > Relatórios** (só a gestão), no jeito do AutoCerto:
+
+- **Estoque**: carros no pátio do mais antigo ao mais novo, com situação, dias, km, preço, FIPE, custo lançado (consignado: o que o dono recebe + gastos), margem prevista, fotos e em quais portais está no ar; cartões de quantidade, valor à venda, idade média (alerta com 90 dias ou mais) e carros sem fotos; **planilha CSV** para o Excel.
+- **Visitas no site**: visitas, cliques no WhatsApp, formulários e a taxa que virou contato, com gráfico por dia e os carros mais vistos (7, 30 ou 90 dias, comparado ao período anterior).
+- **Integração**: por portal, se a conta está conectada, quantos anúncios no ar, na fila e com erro, e quantos carros à venda estão fora dele; lista dos anúncios com erro e a mensagem do portal.
+- **Desempenho por veículo**: carros à venda com visitas, WhatsApp, formulários e leads dos portais no período, ordenados por contatos, com alerta para "muitas visitas e nenhum contato" e "parado sem contato".
+
+**Contagem do site** (nova, começa a valer com esta versão): `EstatisticaVitrine` guarda só números por dia e por carro (visitas, cliques em qualquer link de WhatsApp do site, formulários). A visita conta uma vez por página por sessão do navegador; robôs e pré-visualizações (Google, WhatsApp, navegadores automatizados) não contam; nada do visitante é guardado. Rotas: `POST /api/loja/[slug]/evento` (público) e `GET /api/veiculos/relatorios?tipo=…`. Teste: `apps/web/lib/relatorios-veiculos.test-manual.ts`.

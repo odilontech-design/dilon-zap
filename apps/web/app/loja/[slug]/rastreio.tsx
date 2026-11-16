@@ -10,6 +10,7 @@ export function registrarContato(tipo: "whatsapp" | "formulario", valorCents?: n
   const valor = valorCents ? { value: valorCents / 100, currency: "BRL" } : {};
   w.fbq?.("track", tipo === "whatsapp" ? "Contact" : "Lead", valor);
   w.gtag?.("event", "generate_lead", { method: tipo, ...valor });
+
 }
 
 /** O botão verde do WhatsApp, contando o clique como contato. */

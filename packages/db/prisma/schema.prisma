@@ -249,6 +249,7 @@ model Tenant {
   instagramConta        InstagramConta?
   bannersVitrine        BannerVitrine[]
   fichasFinanciamento   FichaFinanciamento[]
+  estatisticasVitrine   EstatisticaVitrine[]
   painelEcommerce       PainelEcommerceConfig?
   baixasDoSite          BaixaDoSite[]
   movimentosArmacao     MovimentoArmacao[]
@@ -4444,4 +4445,20 @@ model ConversaAgente {
   updatedAt       DateTime @updatedAt
 
   @@index([tenantId, estado])
+}
+
+/// Números do site da loja por dia (Relatórios > Visitas no site e Desempenho por veículo):
+/// visitas, cliques no WhatsApp e formulários enviados, de cada carro ou do site em geral
+/// (veiculoId = "" para as páginas que não são de carro). Só contagem: nada do visitante é guardado.
+model EstatisticaVitrine {
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dia         DateTime @db.Date
+  veiculoId   String   @default("")
+  visitas     Int      @default(0)
+  whatsapp    Int      @default(0)
+  formularios Int      @default(0)
+
+  @@id([tenantId, dia, veiculoId])
+  @@index([tenantId, veiculoId])
 }
