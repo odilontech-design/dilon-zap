@@ -29,7 +29,7 @@ import {
   vincularNegociacao,
 } from "./comercial";
 import { enviarEmailDaAbordagem, prepararConversaNoWhatsapp, situacaoDoEmail, type EnviadorDeEmail, type LimitesDoWhatsapp } from "./canais";
-import { filaDeRevisao, filaDoDia, funilPorCampanha, prepararMensagens, registrarResultadosEmLote, resumoDoDia } from "./fila-diaria";
+import { aprovarLote, filaDeRevisao, filaDoDia, funilPorCampanha, prepararMensagens, registrarResultadosEmLote, resumoDoDia } from "./fila-diaria";
 import { obterConfigIa, salvarConfigIa, type ConfigIa } from "./ia/config";
 import { executarTarefaIa, type OpcoesDeExecucao, type PedidoDeTarefaIa } from "./ia/executar";
 import { resumoDeUsoIa } from "./ia/uso";
@@ -87,6 +87,7 @@ export function empresasDoTenantFacade(tenantId: string) {
       preparar: (dados: unknown, autor: { id: string; name: string }) => prepararMensagens(tenantId, dados, autor),
       revisao: (filtro?: unknown) => filaDeRevisao(tenantId, filtro),
       resultadosEmLote: (dados: unknown, autor: { id: string; name: string }) => registrarResultadosEmLote(tenantId, dados, autor),
+      aprovarLote: (dados: unknown, autor: { id: string; name: string }) => aprovarLote(tenantId, dados, autor),
       funil: () => funilPorCampanha(tenantId),
     },
     ia: {
