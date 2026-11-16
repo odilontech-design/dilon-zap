@@ -156,6 +156,8 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
 
   // Cliente
   const [contato, setContato] = useState<Contato | null>(null);
+  // Nome do cliente na edição da OS (corrige a ficha do contato).
+  const [nomeEdit, setNomeEdit] = useState("");
   const [busca, setBusca] = useState("");
   const [achados, setAchados] = useState<Contato[]>([]);
   const [novoNome, setNovoNome] = useState("");
@@ -216,6 +218,7 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
     if (!os) return;
     const c = os.contact;
     setContato({ id: c.id, nome: c.name, telefone: c.phoneNumber });
+    setNomeEdit(c.name ?? "");
     setCliente({
       documento: c.documento ?? "",
       rgIe: c.rgIe ?? "",
@@ -481,7 +484,7 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
     const corpo = {
       ...(escaneada ? { ...(numeroPapel.trim() ? { numero: Number(numeroPapel) } : {}), ...(historica ? { historica: true } : {}), dataVenda: dataVenda || null } : {}),
       ...(editando ? {} : contato ? { contactId: contato.id } : { novoCliente: { nome: novoNome.trim(), telefone: novoTelefone } }),
-      cliente: dadosCliente,
+      cliente: editando && nomeEdit.trim() ? { ...dadosCliente, nome: nomeEdit.trim() } : dadosCliente,
       ...(receitaId
         ? { receitaId }
         : receitaPreenchida
@@ -588,9 +591,24 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
           <Secao titulo="Cliente">
             {contato ? (
               <div className="flex items-center justify-between rounded-md border border-neutral-300 px-3 py-2 text-sm">
-                <span>
-                  <b>{contato.nome || "Sem nome"}</b> <span className="text-neutral-500">{contato.telefone}</span>
-                </span>
+                {editando ? (
+                  <span className="flex flex-1 flex-wrap items-center gap-2">
+                    <input
+                      id="os-nome-cliente"
+                      aria-label="Nome do cliente"
+                      value={nomeEdit}
+                      onChange={(e) => setNomeEdit(e.target.value)}
+                      maxLength={120}
+                      placeholder="Nome do cliente"
+                      className="min-w-[12rem] flex-1 rounded-md border border-neutral-300 px-2 py-1 font-semibold"
+                    />
+                    <span className="text-neutral-500">{contato.telefone}</span>
+                  </span>
+                ) : (
+                  <span>
+                    <b>{contato.nome || "Sem nome"}</b> <span className="text-neutral-500">{contato.telefone}</span>
+                  </span>
+                )}
                 {!editando && (
                   <button type="button" onClick={() => { setContato(null); setReceitaId(null); }} className="text-xs text-accent hover:underline">Trocar</button>
                 )}
