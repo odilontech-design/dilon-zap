@@ -296,7 +296,7 @@ function NovaTarefaGeral({
   const campo = "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent";
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={onFechar}>
-      <form onSubmit={salvar} onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
+      <form onSubmit={salvar} onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-lg">
         <h2 className="text-base font-semibold mb-1">Nova tarefa</h2>
         <p className="text-xs text-neutral-500 mb-4">Tarefa da equipe, sem cliente. A de cliente se cria dentro da negociação.</p>
         <div className="flex flex-col gap-3">

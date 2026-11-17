@@ -213,7 +213,7 @@ function NewTenantModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-md text-neutral-100">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto text-neutral-100">
         <h2 className="text-base font-semibold mb-4">Nova empresa</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>

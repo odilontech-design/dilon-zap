@@ -674,7 +674,7 @@ function NewConversationModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-lg">
         <h2 className="text-base font-semibold mb-4">Nova conversa</h2>
 
         <div className="mb-4">
@@ -2997,7 +2997,7 @@ function AgendarMensagem({
       <form
         onSubmit={salvar}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-md"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">Agendar mensagem</h2>
         <p className="text-xs text-neutral-500 mb-4">
@@ -3149,7 +3149,7 @@ function ConfirmarBloqueio({
     <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">Bloquear {nome}?</h2>
         <p className="text-sm text-neutral-600 mb-4">
@@ -3205,7 +3205,7 @@ function MotivoFechamento({
     <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">Como terminou este atendimento?</h2>
         <p className="text-xs text-neutral-500 mb-4">Aparece no funil e ajuda a entender onde as vendas param.</p>
@@ -3814,7 +3814,7 @@ function MotivoTransferencia({
     <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">
           {tipo === "pessoa" ? `Passar para ${destino}` : `Encaminhar para ${destino}`}

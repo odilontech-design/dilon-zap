@@ -58,7 +58,7 @@ export function FormularioLaboratorio({
   // Num portal: este formulário é aberto de dentro do formulário da OS, e <form> dentro de <form> não vale em HTML.
   return createPortal(
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" role="dialog" aria-modal="true" aria-label="Cadastrar laboratório">
-      <form onSubmit={salvar} className="bg-surface rounded-lg p-5 w-full max-w-md shadow-lg">
+      <form onSubmit={salvar} className="bg-surface rounded-lg p-5 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-lg">
         <h2 className="text-base font-semibold mb-1">Cadastrar laboratório</h2>
         <p className="text-xs text-neutral-500 mb-4">Fica na lista de laboratórios da ótica e já é escolhido nesta OS.</p>
         <div className="grid grid-cols-2 gap-3">

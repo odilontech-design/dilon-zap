@@ -70,7 +70,7 @@ export function FichaDeFinanciamento({ negociacaoId }: { negociacaoId: string })
         <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 print:static print:bg-white print:p-0" role="dialog" aria-modal="true" aria-label="Ficha de financiamento">
           {/* Ao imprimir, só a ficha sai no papel (o resto da página some). */}
           <style>{"@media print { body * { visibility: hidden !important; } .ficha-impressao, .ficha-impressao * { visibility: visible !important; } .ficha-impressao { position: absolute; left: 0; top: 0; } }"}</style>
-          <div className="ficha-impressao w-full max-w-3xl rounded-xl bg-surface p-6 shadow-xl print:max-w-none print:shadow-none">
+          <div className="ficha-impressao w-full max-w-3xl max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl bg-surface p-6 shadow-xl print:max-w-none print:shadow-none">
             <div className="mb-4 flex items-start justify-between gap-3 print:hidden">
               <h2 className="text-lg font-semibold">Ficha de financiamento</h2>
               <div className="flex gap-2">

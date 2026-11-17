@@ -382,7 +382,7 @@ export function OrderPanel({
       <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
         <div
           onClick={(e) => e.stopPropagation()}
-          className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm p-6 text-center"
+          className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 text-center"
         >
           <p className="text-sm text-neutral-500">{termo.singular} #{pedido.numero} fechado</p>
           <p className="text-2xl font-semibold tabular-nums mt-1">{centsToBRL(fechadoAgora)}</p>
@@ -1118,7 +1118,7 @@ function CancelarPedido({
 
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onVoltar}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md p-5 flex flex-col gap-3">
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 flex flex-col gap-3">
         <h3 className="font-semibold">
           {refazer ? `Editar ${termo.minusculo} #${numero}` : fechado ? `Cancelar ${termo.minusculo} #${numero}` : `Cancelar orçamento #${numero}`}
         </h3>

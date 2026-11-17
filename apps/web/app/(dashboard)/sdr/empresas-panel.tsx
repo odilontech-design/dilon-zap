@@ -498,7 +498,7 @@ function AdicionarEmpresa({ onFechar, aoAdicionar }: { onFechar: () => void; aoA
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onFechar}>
-      <form onSubmit={salvar} className="bg-surface rounded-lg shadow-lg w-full max-w-lg p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+      <form onSubmit={salvar} className="bg-surface rounded-lg shadow-lg w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold">Adicionar empresa</h2>
           <button type="button" onClick={onFechar} className="text-neutral-400 hover:text-neutral-700 text-lg leading-none" aria-label="Fechar">
