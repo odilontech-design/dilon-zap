@@ -346,7 +346,7 @@ function StageFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-lg">
         <h2 className="text-base font-semibold mb-4">{stage ? "Editar etapa" : "Nova etapa"}</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>

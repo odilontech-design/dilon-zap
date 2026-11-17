@@ -36,7 +36,7 @@ export function OfertaAoEntrar({ slug, carro, whatsapp }: { slug: string; carro:
   if (!aberta) return null;
   return (
     <div role="dialog" aria-modal="true" aria-label={`Oferta: ${carro.nome}`} className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={fechar}>
-      <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
+      <div className="relative w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-hidden rounded-2xl bg-surface shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <button type="button" aria-label="Fechar" onClick={fechar} className="absolute right-3 top-3 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-lg text-white">✕</button>
         <div className="relative aspect-square bg-neutral-100">
           {carro.fotoId && (

@@ -285,7 +285,7 @@ export function PagarModal({ parcelaId, titulo, saldoCents, formaPrevista, onFec
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={onFechar}>
-      <form onSubmit={salvar} onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
+      <form onSubmit={salvar} onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-lg">
         <h2 className="text-base font-semibold mb-1">Pagar</h2>
         <p className="text-xs text-neutral-500 mb-4">
           {titulo} · falta {centsToBRL(saldoCents)}
@@ -359,7 +359,7 @@ export function EditarParcelaPagarModal({ parcela, onFechar, onSalvo }: { parcel
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4" onClick={onFechar}>
-      <form onSubmit={salvar} onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
+      <form onSubmit={salvar} onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-lg">
         <h2 className="text-base font-semibold mb-4">Editar parcela</h2>
         <div className="flex flex-col gap-3">
           <label className="text-xs font-medium text-neutral-700">

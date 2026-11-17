@@ -642,7 +642,7 @@ function ContactFormModal({
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-surface rounded-lg p-6 w-full max-w-sm">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <h2 className="text-sm font-semibold mb-4">{contact ? "Editar contato" : "Novo contato"}</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>

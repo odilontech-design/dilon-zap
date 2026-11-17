@@ -194,7 +194,7 @@ function Formulario({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <form onSubmit={salvar} className="w-full max-w-md rounded-lg border border-neutral-200 bg-surface p-6">
+      <form onSubmit={salvar} className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-lg border border-neutral-200 bg-surface p-6">
         <h2 className="mb-4 text-lg font-semibold">{setor ? "Editar setor" : "Novo setor"}</h2>
 
         <label className="mb-3 block text-sm">

@@ -353,7 +353,7 @@ function NovoUsuario({
       <form
         onSubmit={salvar}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-6 w-full max-w-md"
+        className="bg-surface rounded-lg border border-neutral-200 p-6 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-lg font-semibold mb-4">Novo usuário</h2>
 

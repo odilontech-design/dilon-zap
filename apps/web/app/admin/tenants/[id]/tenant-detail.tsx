@@ -967,7 +967,7 @@ function SubscriptionForm({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-sm text-neutral-100">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto text-neutral-100">
         <h2 className="text-base font-semibold mb-4">Plano da empresa</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
@@ -1070,7 +1070,7 @@ function RenameTenantForm({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-sm text-neutral-100">
+      <div className="bg-neutral-900 border border-neutral-800 rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto text-neutral-100">
         <h2 className="text-base font-semibold mb-4">Renomear empresa</h2>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
           <div>
