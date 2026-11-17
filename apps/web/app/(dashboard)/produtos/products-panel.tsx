@@ -859,7 +859,8 @@ function EditorProduto({
       <form
         onSubmit={salvar}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-6 w-full max-w-md"
+        // Cabe em qualquer tela: o formulário rola por dentro e o Salvar fica sempre à vista no rodapé.
+        className="bg-surface rounded-lg border border-neutral-200 p-6 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-lg font-semibold mb-4">
           {existente ? "Editar item" : tipo === "SERVICO" ? "Novo serviço" : "Novo produto"}
@@ -1009,7 +1010,7 @@ function EditorProduto({
           </label>
         )}
 
-        <div className="flex justify-end gap-3 text-sm">
+        <div className="sticky bottom-0 -mx-6 -mb-6 mt-2 flex justify-end gap-3 border-t border-neutral-200 bg-surface px-6 py-3 text-sm">
           <button type="button" onClick={onFechar} className="px-4 py-2 text-neutral-600">
             Cancelar
           </button>
