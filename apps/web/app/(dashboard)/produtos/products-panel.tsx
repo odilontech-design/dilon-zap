@@ -1185,7 +1185,7 @@ function PainelMateriais({
                 }}
               />
             </div>
-            <p className="text-[11px] text-neutral-500 mb-2">PDF, documento, imagem ou vídeo de até 90s — até 16MB.</p>
+            <p className="text-[11px] text-neutral-500 mb-2">PDF ou documento até 50MB; imagem ou vídeo (até 90s) até 16MB.</p>
             {erro && <p className="text-xs text-red-600 mb-2">{erro}</p>}
 
             <ul className="divide-y divide-neutral-100 border border-neutral-200 rounded-md">

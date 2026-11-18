@@ -6,7 +6,7 @@ import { requireUser } from "@/lib/session";
 import { podeVerCanal } from "@/lib/team-chat";
 import { colegaPermitido, contextoDoChat } from "@/lib/suporte-chat";
 
-const MAX_SIZE_BYTES = 16 * 1024 * 1024; // mesmo teto do anexo do Inbox
+import { limiteDoAnexo, mensagemDeTamanho } from "@/lib/anexo-limite";
 
 function classify(mimeType: string): "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO" {
   if (mimeType.startsWith("audio/")) return "AUDIO";
@@ -48,8 +48,9 @@ export async function POST(req: Request) {
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "arquivo é obrigatório" }, { status: 400 });
   }
-  if (file.size > MAX_SIZE_BYTES) {
-    return NextResponse.json({ error: "arquivo maior que 16MB" }, { status: 400 });
+  const tipoDoArquivo = classify(file.type || "application/octet-stream");
+  if (file.size > limiteDoAnexo(tipoDoArquivo)) {
+    return NextResponse.json({ error: mensagemDeTamanho(tipoDoArquivo) }, { status: 400 });
   }
 
   if (destinatarioId) {

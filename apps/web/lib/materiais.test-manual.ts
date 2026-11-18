@@ -34,11 +34,18 @@ checa(
   "Não deu pra ler a duração do vídeo — tente outro formato (MP4)."
 );
 checa(
-  "acima de 16MB é recusado",
-  validarMaterial({ mimeType: "application/pdf", tamanhoBytes: TAMANHO_MAXIMO_BYTES + 1 }),
+  "imagem acima de 16MB é recusada",
+  validarMaterial({ mimeType: "image/png", tamanhoBytes: TAMANHO_MAXIMO_BYTES + 1 }),
   "Arquivo maior que 16MB — o WhatsApp não aceitaria."
 );
-checa("exatos 16MB passa", validarMaterial({ mimeType: "application/pdf", tamanhoBytes: TAMANHO_MAXIMO_BYTES }), ok);
+checa("exatos 16MB de imagem passa", validarMaterial({ mimeType: "image/png", tamanhoBytes: TAMANHO_MAXIMO_BYTES }), ok);
+checa("PDF de 40MB passa", validarMaterial({ mimeType: "application/pdf", tamanhoBytes: 40 * 1024 * 1024 }), ok);
+checa("exatos 50MB de PDF passa", validarMaterial({ mimeType: "application/pdf", tamanhoBytes: 50 * 1024 * 1024 }), ok);
+checa(
+  "PDF acima de 50MB é recusado",
+  validarMaterial({ mimeType: "application/pdf", tamanhoBytes: 50 * 1024 * 1024 + 1 }),
+  "Arquivo maior que 50MB — o WhatsApp não aceitaria."
+);
 checa("arquivo vazio é recusado", validarMaterial({ mimeType: "application/pdf", tamanhoBytes: 0 }), "O arquivo está vazio.");
 checa(
   "áudio é recusado",
