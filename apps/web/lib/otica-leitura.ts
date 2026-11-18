@@ -319,17 +319,35 @@ export async function lerFotoDaOS(foto: { base64: string; mime: string }, opcoes
     });
 
   // O Google devolve 5xx ("alta demanda") em picos, sobretudo nos modelos "preview". É passageiro:
-  // tenta o mesmo modelo de novo e, se persistir, o modelo reserva. Só 5xx; 429 e 4xx não repetem.
+  // tenta o mesmo modelo de novo e, se persistir, o modelo reserva. 429 (cota do modelo esgotada) vai
+  // direto ao reserva, que tem cota própria no Google, sem repetir o principal. 4xx não repete.
   const reserva = opcoes.reserva ?? (process.env.OTICA_LEITURA_MODELO_RESERVA?.trim() || MODELO_RESERVA);
   const espera = opcoes.esperaMs ?? 1500;
   const tentativas = [modelo, modelo, ...(reserva && reserva !== modelo ? [reserva] : [])];
+  const iReserva = tentativas.length - 1;
+  const temReserva = reserva && reserva !== modelo;
   let r!: Response;
   for (let i = 0; i < tentativas.length; i++) {
     r = await chamar(tentativas[i]!);
+    if (r.status === 429 && temReserva && i < iReserva) {
+      i = iReserva - 1; // o laço soma 1 e cai no reserva
+      continue;
+    }
     if (r.status < 500 || i === tentativas.length - 1) break;
     if (espera > 0) await new Promise((res) => setTimeout(res, espera * (i + 1)));
   }
-  if (r.status === 429) throw new ErroDeLeitura("A leitura por foto atingiu o limite gratuito por agora. Espere alguns minutos ou preencha à mão.", 429);
+  if (r.status === 429) {
+    const corpo = await r.text().catch(() => "");
+    const diario = /PerDay|per day/i.test(corpo);
+    const volta = corpo.match(/retry in (?:(\d+)h)?(?:(\d+)m)?/i);
+    const horas = volta ? Number(volta[1] ?? 0) + (Number(volta[2] ?? 0) >= 30 ? 1 : 0) : 0;
+    throw new ErroDeLeitura(
+      diario
+        ? `O limite diário gratuito da leitura por foto acabou${horas > 0 ? ` (volta em cerca de ${horas} h)` : ""}. Preencha à mão ou peça à Dilon Tech para liberar o uso pago.`
+        : "A leitura por foto atingiu o limite gratuito por agora. Espere alguns minutos ou preencha à mão.",
+      429,
+    );
+  }
   if (!r.ok) {
     const corpo = (await r.text().catch(() => "")).slice(0, 160).replace(/\s+/g, " ");
     throw new ErroDeLeitura(`A leitura por foto falhou (${r.status})${corpo ? `: ${corpo.split(chave).join("[oculto]")}` : ""}`, 502);

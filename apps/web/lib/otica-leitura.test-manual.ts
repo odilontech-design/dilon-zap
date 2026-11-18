@@ -137,13 +137,31 @@ await ok("503 passageiro: repete o modelo e cai no reserva; 429 e 4xx não repet
   }) as unknown as typeof fetch;
   await lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", modelo: "principal", reserva: "reserva", esperaMs: 0, fetchFn: f2 });
   assert.deepEqual(m2, ["principal", "principal"]);
-  // 429 e 400 não repetem.
-  for (const status of [429, 400]) {
-    let chamadas = 0;
-    const f3 = (async () => (chamadas++, new Response("x", { status }))) as unknown as typeof fetch;
-    await assert.rejects(lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", esperaMs: 0, fetchFn: f3 }));
-    assert.equal(chamadas, 1, `status ${status} não repete`);
-  }
+  // 400 não repete.
+  let chamadas = 0;
+  const f3 = (async () => (chamadas++, new Response("x", { status: 400 }))) as unknown as typeof fetch;
+  await assert.rejects(lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", esperaMs: 0, fetchFn: f3 }));
+  assert.equal(chamadas, 1, "status 400 não repete");
+});
+
+await ok("429 do modelo principal (cota diária) vai direto ao reserva, sem repetir o principal", async () => {
+  const bom = JSON.stringify({ candidates: [{ content: { parts: [{ text: JSON.stringify(bruto) }] } }] });
+  const modelos: string[] = [];
+  const f = (async (url: string) => {
+    const m = String(url).match(/models\/([^:]+):/)![1]!;
+    modelos.push(m);
+    return m === "principal" ? new Response("quota", { status: 429 }) : new Response(bom, { status: 200 });
+  }) as unknown as typeof fetch;
+  const r = (await lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", modelo: "principal", reserva: "reserva", esperaMs: 0, fetchFn: f })) as typeof bruto;
+  assert.equal(r.numeroOS, "0498");
+  assert.deepEqual(modelos, ["principal", "reserva"]);
+  // Os dois sem cota: mensagem diz que é o limite diário e quando volta.
+  const corpo = '{"error":{"message":"limit: 20 ... Please retry in 17h39m59.7s.","details":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}}';
+  const f2 = (async () => new Response(corpo, { status: 429 })) as unknown as typeof fetch;
+  await assert.rejects(
+    lerFotoDaOS({ base64: "A", mime: "image/png" }, { chave: "k-12345678", modelo: "principal", reserva: "reserva", esperaMs: 0, fetchFn: f2 }),
+    (e: ErroDeLeitura) => e.status === 429 && /limite diário/.test(e.message) && /18 h/.test(e.message) && /uso pago/.test(e.message),
+  );
 });
 
 await ok("erros do provedor viram mensagem clara, sem vazar a chave", async () => {
