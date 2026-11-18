@@ -2520,6 +2520,11 @@ function ForwardModal({
   const [selected, setSelected] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Legenda do arquivo encaminhado: só com UMA mensagem de imagem, vídeo ou
+  // documento. Já vem com a legenda original; quem encaminha pode trocar ou
+  // apagar (a Believe digitava a legenda numa mensagem separada, 18/11).
+  const aceitaLegenda = messages.length === 1 && !!messages[0].mediaType && messages[0].mediaType !== "AUDIO";
+  const [legenda, setLegenda] = useState(messages[0]?.body ?? "");
 
   const filtered = (targets ?? []).filter((t) =>
     contactLabel(t.contact).toLowerCase().includes(search.trim().toLowerCase())
@@ -2539,7 +2544,7 @@ function ForwardModal({
       const res = await fetch(`/api/messages/${message.id}/forward`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationIds: selected }),
+        body: JSON.stringify({ conversationIds: selected, ...(aceitaLegenda ? { legenda } : {}) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -2600,6 +2605,22 @@ function ForwardModal({
             </label>
           ))}
         </div>
+        {aceitaLegenda && (
+          <div className="px-4 pt-3">
+            <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="legenda-encaminhar">
+              Legenda (opcional)
+            </label>
+            <textarea
+              id="legenda-encaminhar"
+              value={legenda}
+              onChange={(e) => setLegenda(e.target.value)}
+              maxLength={1024}
+              rows={2}
+              placeholder="Escreva a legenda que vai junto do arquivo"
+              className="w-full resize-none rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+        )}
         {error && <p className="text-sm text-red-600 px-4 pt-2">{error}</p>}
         <div className="flex justify-end gap-2 p-4 border-t border-neutral-200">
           <button onClick={onClose} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-800">
