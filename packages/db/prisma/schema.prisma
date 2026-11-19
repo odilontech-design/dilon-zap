@@ -252,6 +252,7 @@ model Tenant {
   estatisticasVitrine   EstatisticaVitrine[]
   painelEcommerce       PainelEcommerceConfig?
   baixasDoSite          BaixaDoSite[]
+  vendasDoSite          VendaDoSite[]
   movimentosArmacao     MovimentoArmacao[]
 }
 
@@ -1299,6 +1300,8 @@ model Order {
   items OrderItem[]
   /// A conta a receber (com as parcelas) criada quando o pedido fechou devendo.
   conta ContaReceber?
+  /// Preenchido quando o pedido nasceu de uma venda da loja online (lib/venda-do-site.ts).
+  vendaDoSite VendaDoSite?
 
   /// De qual negociação do CRM nasceu, quando nasceu de uma.
   negociacaoId String?
@@ -1450,6 +1453,23 @@ model BaixaDoSite {
 
   @@unique([tenantId, referencia, tipo])
   @@index([tenantId, pendentes])
+}
+
+// A venda paga da loja online que virou pedido aqui (lib/venda-do-site.ts), para o dinheiro entrar no Financeiro.
+// A chave única é o que impede a mesma venda de virar dois pedidos quando o site repete o envio. O estoque dessa
+// venda NÃO é baixado pelo pedido: vem por BaixaDoSite, e é por isso que o pedido do site não pode ser cancelado
+// pela tela (o cancelamento do site manda o estorno de estoque e de valor).
+model VendaDoSite {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  referencia String
+  orderId    String    @unique
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  estornadaEm DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@unique([tenantId, referencia])
 }
 
 enum ScheduledMessageStatus {
