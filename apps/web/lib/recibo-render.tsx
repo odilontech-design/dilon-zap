@@ -6,6 +6,7 @@ import { telefoneConhecido } from "@/lib/contact";
 import { calcularTotais } from "@/lib/orders";
 import { montarRecibo, parcelasDoRecibo, type Recibo } from "@/lib/recibo";
 import { ReciboImagemJSX } from "@/lib/recibo-imagem";
+import type { SimulacaoDoParcelamento } from "@/lib/simulacao-parcelas";
 
 /**
  * Monta e desenha o recibo que vai pro cliente — compartilhado entre a prévia
@@ -153,18 +154,27 @@ export function montarReciboDoPedido(
   empresa: EmpresaDoRecibo,
   pedido: PedidoDoRecibo,
   cliente: { documento: string | null; nomeNoRecibo: string | null },
-  opcoes: { orcamento?: boolean } = {}
+  opcoes: { orcamento?: boolean; simulacao?: SimulacaoDoParcelamento | null } = {}
 ): Recibo {
+  // A simulação que a pessoa acabou de montar na tela vale mais que a condição que veio da negociação.
+  const sim = opcoes.simulacao;
   return montarRecibo({
     ...(opcoes.orcamento
       ? {
           orcamento: {
-            plano: {
-              entradaCents: pedido.planoEntradaCents,
-              numParcelas: pedido.planoNumParcelas,
-              periodicidade: pedido.planoPeriodicidade,
-              primeiroVencimento: pedido.planoPrimeiroVencimento,
-            },
+            plano: sim
+              ? {
+                  entradaCents: sim.entradaCents,
+                  numParcelas: sim.numParcelas,
+                  periodicidade: sim.periodicidade,
+                  primeiroVencimento: new Date(`${sim.primeiroVencimento}T12:00:00Z`),
+                }
+              : {
+                  entradaCents: pedido.planoEntradaCents,
+                  numParcelas: pedido.planoNumParcelas,
+                  periodicidade: pedido.planoPeriodicidade,
+                  primeiroVencimento: pedido.planoPrimeiroVencimento,
+                },
           },
         }
       : {}),

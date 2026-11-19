@@ -7,6 +7,7 @@ import {
   resolverDadosDoCliente,
   resolverMesReferencia,
 } from "@/lib/recibo-render";
+import { simulacaoDaBusca } from "@/lib/simulacao-parcelas";
 
 /**
  * O recibo exatamente como o cliente vai receber, pra conferir antes de
@@ -39,7 +40,10 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   const cliente = resolverDadosDoCliente(carregado.pedido.contact, ajustes);
   const mesReferencia = resolverMesReferencia(carregado.pedido, ajustes);
 
-  const recibo = montarReciboDoPedido(carregado.empresa, { ...carregado.pedido, mesReferencia }, cliente, { orcamento });
+  const recibo = montarReciboDoPedido(carregado.empresa, { ...carregado.pedido, mesReferencia }, cliente, {
+    orcamento,
+    simulacao: orcamento ? simulacaoDaBusca(busca) : null,
+  });
   const png = await desenharReciboPng(recibo, carregado.empresa.reciboLogoKey);
 
   return new Response(new Uint8Array(png), {
