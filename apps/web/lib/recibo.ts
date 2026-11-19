@@ -15,6 +15,7 @@
  */
 import { centsToBRL } from "./billing";
 import { montarBrCode } from "./pix";
+import { gerarParcelas } from "@dilon-zap/receivables";
 
 export type MeioDePagamento = "PIX" | "PIX_PENDENTE" | "CARTAO" | "DINHEIRO" | "BOLETO" | "FIADO";
 
@@ -318,16 +319,42 @@ export function montarRecibo(entrada: ReciboEntrada): Recibo {
   if (plano?.numParcelas) {
     const intervalo =
       plano.periodicidade === "SEMANAL" ? "semanais" : plano.periodicidade === "QUINZENAL" ? "quinzenais" : plano.periodicidade === "MENSAL" ? "mensais" : "";
-    const restante = pedido.totalCents - (plano.entradaCents ?? 0);
-    const parcela = Math.floor(restante / plano.numParcelas);
-    const condicao = [
-      plano.entradaCents ? `Entrada ${centsToBRL(plano.entradaCents)}` : null,
-      `${plano.numParcelas}x de ${centsToBRL(parcela)}${intervalo ? ` ${intervalo}` : ""}`,
-    ]
+    // Simulação (Believe, 19/11): com a data da 1ª parcela, a conta sai pela mesma função que gera as parcelas
+    // do pedido fechado, então o orçamento mostra exatamente o que o financeiro vai lançar — inclusive os
+    // centavos que sobram da divisão. Sem a data, ou com entrada que não cabe no total, fica só o resumo.
+    let lista: ReturnType<typeof gerarParcelas> | null = null;
+    if (plano.primeiroVencimento && plano.periodicidade && ["SEMANAL", "QUINZENAL", "MENSAL"].includes(plano.periodicidade)) {
+      try {
+        lista = gerarParcelas({
+          totalCents: pedido.totalCents,
+          entradaCents: plano.entradaCents ?? 0,
+          numParcelas: plano.numParcelas,
+          periodicidade: plano.periodicidade as "SEMANAL" | "QUINZENAL" | "MENSAL",
+          primeiroVencimento: plano.primeiroVencimento,
+        });
+      } catch {
+        lista = null;
+      }
+    }
+    const regulares = lista ? lista.filter((p) => p.tipo !== "ENTRADA") : [];
+    const valores = regulares.map((p) => p.valorCents);
+    const menor = valores.length ? Math.min(...valores) : Math.floor((pedido.totalCents - (plano.entradaCents ?? 0)) / plano.numParcelas);
+    const maior = valores.length ? Math.max(...valores) : menor;
+    const parcelaTxt = menor === maior ? `${plano.numParcelas}x de ${centsToBRL(menor)}` : `${plano.numParcelas} parcelas de ${centsToBRL(menor)} a ${centsToBRL(maior)}`;
+    const condicao = [plano.entradaCents ? `Entrada ${centsToBRL(plano.entradaCents)}` : null, `${parcelaTxt}${intervalo ? ` ${intervalo}` : ""}`]
       .filter(Boolean)
       .join(" + ");
     pagamento.push({ rotulo: "Condição", valor: condicao });
-    if (plano.primeiroVencimento) pagamento.push({ rotulo: "1ª parcela", valor: formatar(plano.primeiroVencimento, tz, false) });
+    if (lista) {
+      for (const p of lista) {
+        pagamento.push({
+          rotulo: p.tipo === "ENTRADA" ? "Entrada · na confirmação" : `Parcela ${p.numero}/${p.totalParcelas} · ${formatar(p.vencimento, tz, false)}`,
+          valor: centsToBRL(p.valorCents),
+        });
+      }
+    } else if (plano.primeiroVencimento) {
+      pagamento.push({ rotulo: "1ª parcela", valor: formatar(plano.primeiroVencimento, tz, false) });
+    }
   }
   return {
     ...recibo,

@@ -6,6 +6,7 @@ import { gerarParcelas } from "@dilon-zap/receivables";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
 import { useTermoPedido } from "@/components/recursos-context";
 import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
+import { simulacaoParaBusca, type SimulacaoDoParcelamento } from "@/lib/simulacao-parcelas";
 
 /**
  * Painel do pedido — o mesmo dos dois lados.
@@ -218,6 +219,43 @@ export function OrderPanel({
   const entradaCents = parseValor(entrada) ?? 0;
   const entradaDividida = entradasDoPlano(partesEntrada, entradaCents);
 
+  // Simulação de parcelamento do ORÇAMENTO (Believe, 19/11): a consultora escolhe entrada e parcelas e a cliente
+  // recebe o orçamento já com cada parcela. Estados próprios, separados do plano do fechamento acima.
+  const [simular, setSimular] = useState(true);
+  const [simEntrada, setSimEntrada] = useState(
+    pedido.planoEntradaCents ? (pedido.planoEntradaCents / 100).toFixed(2).replace(".", ",") : ""
+  );
+  const [simParcelas, setSimParcelas] = useState(String(pedido.planoNumParcelas ?? 3));
+  const [simPeriodicidade, setSimPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">(
+    pedido.planoPeriodicidade === "SEMANAL" || pedido.planoPeriodicidade === "QUINZENAL" ? pedido.planoPeriodicidade : "MENSAL"
+  );
+  const [simVencimento, setSimVencimento] = useState(
+    pedido.planoPrimeiroVencimento && pedido.planoPrimeiroVencimento.slice(0, 10) >= diaDaquiA(0)
+      ? pedido.planoPrimeiroVencimento.slice(0, 10)
+      : diaDaquiA(30)
+  );
+  const simulacao = useMemo(() => {
+    const vazio = { valor: null as SimulacaoDoParcelamento | null, erro: null as string | null };
+    if (!simular) return vazio;
+    const entradaSim = parseValor(simEntrada);
+    if (entradaSim === null) return { ...vazio, erro: "entrada inválida" };
+    const n = Number(simParcelas);
+    if (!Number.isInteger(n) || n < 1) return { ...vazio, erro: "informe o número de parcelas" };
+    if (!simVencimento) return { ...vazio, erro: "informe a data da 1ª parcela" };
+    try {
+      gerarParcelas({
+        totalCents: total,
+        entradaCents: entradaSim,
+        numParcelas: n,
+        periodicidade: simPeriodicidade,
+        primeiroVencimento: new Date(`${simVencimento}T12:00:00Z`),
+      });
+      return { valor: { entradaCents: entradaSim, numParcelas: n, periodicidade: simPeriodicidade, primeiroVencimento: simVencimento }, erro: null };
+    } catch (e) {
+      return { ...vazio, erro: (e as Error).message };
+    }
+  }, [simular, simEntrada, simParcelas, simPeriodicidade, simVencimento, total]);
+
   const previaParcelas = useMemo(() => {
     if (!aPrazo || !parcelar || total <= 0) return { erro: null as string | null, linhas: [] as ReturnType<typeof gerarParcelas> };
     const n = Number(numParcelas);
@@ -301,7 +339,7 @@ export function OrderPanel({
           documento: documento.trim() || null,
           nomeNoRecibo: nomeNoRecibo.trim() || null,
           mesReferencia: mesReferencia.trim() || null,
-          ...(envioDeOrcamento ? { orcamento: true } : {}),
+          ...(envioDeOrcamento ? { orcamento: true, ...(simulacao.valor ? { simulacao: simulacao.valor } : {}) } : {}),
         }),
       });
       const b = await res.json().catch(() => ({}));
@@ -935,6 +973,20 @@ export function OrderPanel({
           onEnviar={enviarReciboWhatsApp}
           onCancelar={() => setConfirmandoRecibo(false)}
           orcamento={envioDeOrcamento}
+          sim={{
+            ativa: simular,
+            setAtiva: setSimular,
+            entrada: simEntrada,
+            setEntrada: setSimEntrada,
+            parcelas: simParcelas,
+            setParcelas: setSimParcelas,
+            periodicidade: simPeriodicidade,
+            setPeriodicidade: setSimPeriodicidade,
+            vencimento: simVencimento,
+            setVencimento: setSimVencimento,
+            erro: simulacao.erro,
+            valor: simulacao.valor,
+          }}
         />
       )}
     </div>
@@ -963,8 +1015,24 @@ function ConfirmarEnvioDoRecibo({
   onEnviar,
   onCancelar,
   orcamento = false,
+  sim,
 }: {
   orcamento?: boolean;
+  /** Simulação de parcelamento (só no orçamento). */
+  sim?: {
+    ativa: boolean;
+    setAtiva: (v: boolean) => void;
+    entrada: string;
+    setEntrada: (v: string) => void;
+    parcelas: string;
+    setParcelas: (v: string) => void;
+    periodicidade: "SEMANAL" | "QUINZENAL" | "MENSAL";
+    setPeriodicidade: (v: "SEMANAL" | "QUINZENAL" | "MENSAL") => void;
+    vencimento: string;
+    setVencimento: (v: string) => void;
+    erro: string | null;
+    valor: SimulacaoDoParcelamento | null;
+  };
   pedidoId: string;
   nomeCliente: string;
   documento: string;
@@ -985,12 +1053,18 @@ function ConfirmarEnvioDoRecibo({
 
   useEffect(() => {
     const t = setTimeout(() => {
-      const p = new URLSearchParams({ documento, nomeNoRecibo, mesReferencia, ...(orcamento ? { orcamento: "1" } : {}) });
+      const p = new URLSearchParams({
+        documento,
+        nomeNoRecibo,
+        mesReferencia,
+        ...(orcamento ? { orcamento: "1" } : {}),
+        ...(orcamento && sim?.valor ? simulacaoParaBusca(sim.valor) : {}),
+      });
       setConsultaPrevia(p.toString());
       setCarregandoPrevia(true);
     }, 500);
     return () => clearTimeout(t);
-  }, [documento, nomeNoRecibo, mesReferencia, orcamento]);
+  }, [documento, nomeNoRecibo, mesReferencia, orcamento, sim?.valor]);
 
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onCancelar}>
@@ -1023,6 +1097,66 @@ function ConfirmarEnvioDoRecibo({
               />
             )}
           </div>
+
+        {orcamento && sim && (
+          <div className="mt-4 rounded-md border border-neutral-200 p-3 text-sm">
+            <label className="flex items-center gap-2 font-medium">
+              <input type="checkbox" checked={sim.ativa} onChange={(e) => sim.setAtiva(e.target.checked)} />
+              Mostrar simulação de parcelamento
+            </label>
+            {sim.ativa && (
+              <>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">Entrada (R$)</span>
+                    <input
+                      value={sim.entrada}
+                      onChange={(e) => sim.setEntrada(e.target.value)}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">Nº de parcelas</span>
+                    <input
+                      value={sim.parcelas}
+                      onChange={(e) => sim.setParcelas(e.target.value)}
+                      inputMode="numeric"
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">Periodicidade</span>
+                    <select
+                      value={sim.periodicidade}
+                      onChange={(e) => sim.setPeriodicidade(e.target.value as "SEMANAL" | "QUINZENAL" | "MENSAL")}
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    >
+                      <option value="MENSAL">Mensal</option>
+                      <option value="QUINZENAL">Quinzenal</option>
+                      <option value="SEMANAL">Semanal</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">1ª parcela em</span>
+                    <input
+                      type="date"
+                      value={sim.vencimento}
+                      onChange={(e) => sim.setVencimento(e.target.value)}
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    />
+                  </label>
+                </div>
+                {sim.erro ? (
+                  <p className="mt-2 text-xs text-red-600">{sim.erro}</p>
+                ) : (
+                  <p className="mt-2 text-xs text-neutral-500">A prévia acima mostra cada parcela com data e valor.</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <label className="block text-sm mt-4">
           <span className="text-xs font-medium text-neutral-700">Nome no recibo</span>
@@ -1081,7 +1215,7 @@ function ConfirmarEnvioDoRecibo({
           </button>
           <button
             onClick={onEnviar}
-            disabled={enviando}
+            disabled={enviando || (orcamento && !!sim?.ativa && !!sim.erro)}
             className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-50"
           >
             {enviando ? "Enviando..." : orcamento ? "Enviar orçamento" : "Enviar ao cliente"}

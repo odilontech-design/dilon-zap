@@ -14,6 +14,7 @@ import {
   resolverMesReferencia,
   type AjustesDoRecibo,
 } from "@/lib/recibo-render";
+import { lerSimulacao } from "@/lib/simulacao-parcelas";
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
@@ -22,7 +23,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   // Nome e documento vêm da tela de confirmação do envio. Campo ausente
   // mantém o que já está salvo na ficha; texto vazio limpa.
-  const corpo = (await req.json().catch(() => ({}))) as AjustesDoRecibo & { orcamento?: boolean };
+  const corpo = (await req.json().catch(() => ({}))) as AjustesDoRecibo & { orcamento?: boolean; simulacao?: unknown };
   // Orçamento: o pedido ainda em montagem, mandado para a cliente conferir.
   const orcamento = corpo.orcamento === true;
 
@@ -60,7 +61,22 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     await prisma.order.update({ where: { id: pedido.id }, data: { mesReferencia } });
   }
 
-  const recibo = montarReciboDoPedido(empresa, { ...pedido, mesReferencia }, cliente, { orcamento });
+  // Simulação de parcelamento do orçamento: sai na imagem e fica gravada como a condição combinada, que o
+  // financeiro já encontra ao fechar o pedido.
+  const simulacao = orcamento ? lerSimulacao(corpo.simulacao) : null;
+  if (simulacao) {
+    await prisma.order.update({
+      where: { id: pedido.id },
+      data: {
+        planoEntradaCents: simulacao.entradaCents > 0 ? simulacao.entradaCents : null,
+        planoNumParcelas: simulacao.numParcelas,
+        planoPeriodicidade: simulacao.periodicidade,
+        planoPrimeiroVencimento: new Date(`${simulacao.primeiroVencimento}T12:00:00Z`),
+      },
+    });
+  }
+
+  const recibo = montarReciboDoPedido(empresa, { ...pedido, mesReferencia }, cliente, { orcamento, simulacao });
   const png = await desenharReciboPng(recibo, empresa.reciboLogoKey);
 
   const mediaKey = `${user.tenantId}/recibos/${pedido.id}-${randomUUID().slice(0, 8)}.png`;
