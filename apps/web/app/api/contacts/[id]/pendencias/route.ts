@@ -3,6 +3,7 @@ import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
 import { pendenciaDoContato } from "@/lib/contas-receber";
 import { podeVerPendencia } from "@/lib/plano";
+import { resumoDoCredito } from "@/lib/credito";
 
 /**
  * Quanto o cliente deve em parcelas em aberto. Aberto a quem atende, de
@@ -13,12 +14,14 @@ import { podeVerPendencia } from "@/lib/plano";
  */
 export async function GET(req: Request, { params }: { params: { id: string } }) {
   const user = await requireUser();
-  const contato = await prisma.contact.findFirst({ where: { id: params.id, tenantId: user.tenantId }, select: { id: true } });
+  const contato = await prisma.contact.findFirst({ where: { id: params.id, tenantId: user.tenantId }, select: { id: true, limiteCreditoCents: true } });
   if (!contato) return NextResponse.json({ error: "contato não encontrado" }, { status: 404 });
 
   // Atendente da empresa que reservou isso à gerência não fica sabendo.
   if (!(await podeVerPendencia(user))) return NextResponse.json({ error: "sem acesso" }, { status: 403 });
 
   const excluir = new URL(req.url).searchParams.get("excluirPedido") ?? undefined;
-  return NextResponse.json(await pendenciaDoContato(user.tenantId, contato.id, excluir));
+  const pendencia = await pendenciaDoContato(user.tenantId, contato.id, excluir);
+  // A pendência de sempre, mais a linha de crédito (limite nulo = sem limite).
+  return NextResponse.json({ ...pendencia, credito: resumoDoCredito(contato.limiteCreditoCents, pendencia) });
 }

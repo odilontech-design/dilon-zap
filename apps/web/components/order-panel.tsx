@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
+import { excedenteDoCredito, valorQueUsaCredito, type ResumoDoCredito } from "@/lib/credito";
 import { useTermoPedido } from "@/components/recursos-context";
 import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
 import { simulacaoParaBusca, type SimulacaoDoParcelamento } from "@/lib/simulacao-parcelas";
@@ -177,7 +178,7 @@ export function OrderPanel({
 
   // Quanto o cliente já deve em outras compras. A consultora vê ao montar; o
   // financeiro vê ao fechar — venda a prazo para quem deve fica bloqueada.
-  const { data: pendencia } = useSWR<PendenciaResumo>(
+  const { data: pendencia } = useSWR<PendenciaResumo & { credito?: ResumoDoCredito }>(
     pedido.status === "FECHADO" || pedido.status === "CANCELADO" ? null : `/api/contacts/${pedido.contact.id}/pendencias?excluirPedido=${pedido.id}`,
     fetcher
   );
@@ -218,6 +219,13 @@ export function OrderPanel({
   const aPrazo = A_PRAZO.includes(pagamento);
   const entradaCents = parseValor(entrada) ?? 0;
   const entradaDividida = entradasDoPlano(partesEntrada, entradaCents);
+
+  // Linha de crédito do cliente (Believe, 20/11). Só avisa: o pedido fecha do mesmo jeito.
+  // A entrada recebida na hora não usa crédito; a que ainda vai entrar usa.
+  const credito = pendencia?.credito && pendencia.credito.limiteCents !== null ? pendencia.credito : null;
+  const usoDoCredito = valorQueUsaCredito(total, aPrazo && parcelar && entradaPaga ? entradaCents : 0);
+  const excedeCredito =
+    credito && credito.disponivelCents !== null ? excedenteDoCredito({ ...credito, limiteCents: credito.limiteCents!, disponivelCents: credito.disponivelCents }, usoDoCredito) : 0;
 
   // Simulação de parcelamento do ORÇAMENTO (Believe, 19/11): a consultora escolhe entrada e parcelas e a cliente
   // recebe o orçamento já com cada parcela. Estados próprios, separados do plano do fechamento acima.
@@ -521,7 +529,30 @@ export function OrderPanel({
             </div>
           )}
 
-          {pendencia && pendencia.saldoCents > 0 && editavel && (
+          {credito && editavel && (
+            <div
+              className={`rounded-md border px-3 py-2 text-sm flex flex-col gap-1 ${
+                excedeCredito > 0 ? "border-red-300 bg-red-50 text-red-900" : "border-neutral-200 bg-neutral-50 text-neutral-800"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-medium">Linha de crédito</span>
+                <span className="tabular-nums">
+                  disponível {centsToBRL(credito.disponivelCents ?? 0)} de {centsToBRL(credito.limiteCents ?? 0)}
+                </span>
+                {pendencia && pendencia.saldoCents > 0 && <SeloPendencia pendencia={pendencia} />}
+              </div>
+              {excedeCredito > 0 && (
+                <p>
+                  {aPrazo
+                    ? `Este pedido a prazo (${centsToBRL(usoDoCredito)}) passa do limite disponível em ${centsToBRL(excedeCredito)}. Dá para fechar, mas fica registrado.`
+                    : `Se for vendido a prazo, passa do limite disponível em ${centsToBRL(excedeCredito)}. Pago na hora não usa o limite.`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!credito && pendencia && pendencia.saldoCents > 0 && editavel && (
             <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
               <SeloPendencia pendencia={pendencia} />
               <span>Cliente com parcelas em aberto: venda a prazo (recorrente, boleto, PIX a pagar) fica bloqueada. Pago na hora pode.</span>

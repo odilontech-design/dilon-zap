@@ -8,6 +8,7 @@ import { registrarPagamento } from "@/lib/receivables";
 import { logAudit } from "@/lib/audit";
 import { ehGerencia } from "@/lib/papeis";
 import { pendenciaDoContato } from "@/lib/contas-receber";
+import { excedenteDoCredito, situacaoDoCredito, valorQueUsaCredito, type SituacaoDoCredito } from "@/lib/credito";
 import { valorDosPedidos, vincularPedidoANegociacao } from "@/lib/negociacoes";
 
 function ehFinanceiro(role: string) {
@@ -207,9 +208,18 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   // Believe — "em parcelamento, não deixar fazer nova compra"). Compra paga na
   // hora passa: não cria dívida nova. Só o responsável da conta libera, e a
   // liberação fica no registro de auditoria.
+  //
+  // Quem tem linha de crédito (limite definido na ficha) não cai nesse
+  // bloqueio: o limite é a regra dele, e ao passar dele o sistema só avisa na
+  // tela e registra o fechamento (Believe, 20/11 — "só avisa").
+  let creditoAntes: SituacaoDoCredito | null = null;
   if (!pagoNaHora) {
-    const pendencia = await pendenciaDoContato(user.tenantId, pedido.contactId, pedido.id);
-    if (pendencia.saldoCents > 0) {
+    const [pendencia, contatoDoPedido] = await Promise.all([
+      pendenciaDoContato(user.tenantId, pedido.contactId, pedido.id),
+      prisma.contact.findUnique({ where: { id: pedido.contactId }, select: { limiteCreditoCents: true } }),
+    ]);
+    creditoAntes = situacaoDoCredito(contatoDoPedido?.limiteCreditoCents, pendencia);
+    if (!creditoAntes && pendencia.saldoCents > 0) {
       const podeLiberar = user.role === "OWNER" || user.role === "SUPERADMIN";
       if (!(parsed.data.liberarPendencia && podeLiberar)) {
         const valor = (pendencia.saldoCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -266,6 +276,23 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
           pagamento: parsed.data.paymentMethod,
         },
       });
+      // Passou do limite: fecha do mesmo jeito, mas fica no registro quem fechou e por quanto.
+      if (creditoAntes) {
+        const entradaNaHora = plano?.entradaPaga ? plano.entradaCents : 0;
+        const excedenteCents = excedenteDoCredito(creditoAntes, valorQueUsaCredito(r.pedido.totalCents, entradaNaHora));
+        if (excedenteCents > 0) {
+          await logAudit({
+            actor: user,
+            action: "order.fechou_acima_do_limite",
+            metadata: {
+              numero: pedido.numero,
+              limiteCents: creditoAntes.limiteCents,
+              usadoAntesCents: creditoAntes.usadoCents,
+              excedenteCents,
+            },
+          });
+        }
+      }
     }
 
     await vincularPedidoANegociacao(pedido.id);
