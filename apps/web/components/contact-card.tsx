@@ -119,7 +119,6 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
   const { data: ficha, error: fichaErro, mutate } = useSWR<Ficha>(`/api/contacts/${contactId}`, fetcher);
 
   const [nome, setNome] = useState<string | null>(null);
-  const [valor, setValor] = useState<string | null>(null);
   const [anotacoes, setAnotacoes] = useState<string | null>(null);
 
   // Quando a gravação falha, a atendente precisa ver: sem aviso ela acha que salvou e perde o que digitou.
@@ -211,21 +210,8 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
             <div className="text-sm sm:col-span-2">
               <EtapasPorFunil contactId={contactId} onSalvo={() => mutate()} />
             </div>
-
-            <label className="text-sm">
-              <span className="block text-xs font-medium text-neutral-700">Valor do negócio</span>
-              <input
-                value={valor ?? (ficha.dealValueCents / 100).toFixed(2)}
-                onChange={(e) => setValor(e.target.value)}
-                onBlur={() => {
-                  if (valor === null) return;
-                  const cents = Math.round(parseFloat(valor.replace(",", ".")) * 100);
-                  salvar({ dealValueCents: Number.isFinite(cents) && cents >= 0 ? cents : 0 });
-                }}
-                inputMode="decimal"
-                className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5 tabular-nums"
-              />
-            </label>
+            {/* O valor do negócio não se edita mais aqui (Believe, 20/11): ele mora na negociação e no
+                pedido, e o total continua à vista em "Valor no funil", mais abaixo. */}
           </div>
 
           {ficha.credito && <LinhaDeCredito credito={ficha.credito} salvar={salvar} />}
