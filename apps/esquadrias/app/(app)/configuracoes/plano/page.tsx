@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { prisma } from "@dilon-zap/erp-db";
 import { Card, Etiqueta, TituloPagina } from "@/components/ui";
 import { requireDono } from "@/lib/session";

@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { notFound } from "next/navigation";
 import { agregarMateriais, formatarReais, planejarCorte, entradasDeCorte } from "@dilon-zap/esquadrias-core";
 import { Card, Tabela } from "@/components/ui";

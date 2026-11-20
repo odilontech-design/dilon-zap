@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import Link from "@/components/link";
 import { formatarM2, formatarReais } from "@dilon-zap/esquadrias-core";
 import { BotaoImprimir } from "@/components/botao-imprimir";
 import { expansoesDoOrcamento } from "@/lib/calculo";

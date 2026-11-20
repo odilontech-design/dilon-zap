@@ -1,0 +1,14 @@
+{
+  "name": "Dilon Ponto",
+  "short_name": "Ponto",
+  "description": "Registro de ponto pelo celular",
+  "start_url": "/bater",
+  "display": "standalone",
+  "background_color": "#F4F6F9",
+  "theme_color": "#C75E06",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icone.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}

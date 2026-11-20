@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { formatarReais } from "@dilon-zap/esquadrias-core";
 import { prisma } from "@dilon-zap/erp-db";
 import { Card, Etiqueta, Indicador, TituloPagina, Vazio } from "@/components/ui";

@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/link";
 import useSWR from "swr";
 import { formatarReais } from "@dilon-zap/esquadrias-core";
 import type { StatusObra } from "@dilon-zap/erp-db";

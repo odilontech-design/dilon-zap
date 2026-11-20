@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { notFound } from "next/navigation";
 import { entradasDeCorte, formatarReais, planejarCorte } from "@dilon-zap/esquadrias-core";
 import { BotaoImprimir } from "@/components/botao-imprimir";

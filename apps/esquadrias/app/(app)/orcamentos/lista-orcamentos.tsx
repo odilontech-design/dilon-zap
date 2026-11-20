@@ -1,9 +1,10 @@
 "use client";
 
-import Link from "next/link";
+import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import useSWR from "swr";
+import { useAtrasado } from "@/lib/use-atrasado";
 import { formatarReais } from "@dilon-zap/esquadrias-core";
 import type { PapelUsuario, StatusOrcamento } from "@dilon-zap/erp-db";
 import { Botao, Entrada, Selecao } from "@/components/campos";
@@ -39,7 +40,8 @@ export function ListaOrcamentos({ papel }: { papel: PapelUsuario }) {
   const [criando, setCriando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
-  const query = new URLSearchParams({ ...(busca ? { busca } : {}), ...(status ? { status } : {}) }).toString();
+  const buscaAtrasada = useAtrasado(busca);
+  const query = new URLSearchParams({ ...(buscaAtrasada ? { busca: buscaAtrasada } : {}), ...(status ? { status } : {}) }).toString();
   const { data, isLoading } = useSWR<OrcamentoLista[]>(`/api/orcamentos?${query}`, buscar);
 
   const mostrarValores = vePreco(papel);
