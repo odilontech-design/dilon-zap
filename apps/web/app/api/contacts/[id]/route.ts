@@ -11,6 +11,8 @@ import {
 } from "@/lib/negociacoes";
 import { pendenciaDoContato } from "@/lib/contas-receber";
 import { podeVerPendencia } from "@/lib/plano";
+import { ehGerencia } from "@/lib/papeis";
+import { resumoDoCredito } from "@/lib/credito";
 import { CAMPOS_ENDERECO, formatarCep, montarEndereco } from "@/lib/cadastro-cliente";
 
 const bodySchema = z.object({
@@ -36,6 +38,8 @@ const bodySchema = z.object({
   bairro: z.string().max(80).nullable().optional(),
   cidade: z.string().max(80).nullable().optional(),
   uf: z.string().max(2).nullable().optional(),
+  // Linha de crédito, em centavos. null tira o limite. Só a gerência define.
+  limiteCreditoCents: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
 });
 
 /**
@@ -72,6 +76,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       bairro: true,
       cidade: true,
       uf: true,
+      limiteCreditoCents: true,
       hasWhatsapp: true,
       createdAt: true,
       negociacoes: NEGOCIACAO_ABERTA_DO_CONTATO,
@@ -103,7 +108,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   const { negociacoes, ...resto } = contact;
   const pendencia = (await podeVerPendencia(user)) ? await pendenciaDoContato(user.tenantId, contact.id) : null;
-  return NextResponse.json({ ...resto, ...camposDoContato(negociacoes), pendencia: pendencia && pendencia.saldoCents > 0 ? pendencia : null });
+  return NextResponse.json({
+    ...resto,
+    ...camposDoContato(negociacoes),
+    pendencia: pendencia && pendencia.saldoCents > 0 ? pendencia : null,
+    // Quem não vê pendência também não vê crédito: o dado não sai do servidor.
+    credito: pendencia ? { ...resumoDoCredito(contact.limiteCreditoCents, pendencia), podeEditar: ehGerencia(user.role) } : null,
+  });
 }
 
 /**
@@ -145,6 +156,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     bairro,
     cidade,
     uf,
+    limiteCreditoCents,
     ...resto
   } = parsed.data;
 
@@ -158,6 +170,10 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   } catch (e) {
     if (e instanceof ErroDeNegocio) return NextResponse.json({ error: e.message }, { status: e.status });
     throw e;
+  }
+
+  if (limiteCreditoCents !== undefined && !ehGerencia(user.role)) {
+    return NextResponse.json({ error: "só o responsável ou o financeiro definem a linha de crédito" }, { status: 403 });
   }
 
   const nascimentoData = nascimento ? dataDoAniversario(nascimento) : null;
@@ -194,8 +210,16 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
       cidade: limpo(cidade),
       uf: uf === undefined ? undefined : uf?.trim().toUpperCase() || null,
       ...(nascimento !== undefined ? { nascimento: nascimentoData } : {}),
+      ...(limiteCreditoCents !== undefined ? { limiteCreditoCents } : {}),
     },
   });
+  if (limiteCreditoCents !== undefined && limiteCreditoCents !== contact.limiteCreditoCents) {
+    await logAudit({
+      actor: user,
+      action: "contact.limite_credito",
+      metadata: { contactId: contact.id, de: contact.limiteCreditoCents, para: limiteCreditoCents },
+    });
+  }
 
   // Mexeu numa parte do endereço: a linha do recibo é remontada a partir das
   // partes. Quem nunca preencheu as partes continua com o endereço livre de antes.

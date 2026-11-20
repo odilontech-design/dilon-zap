@@ -8,6 +8,7 @@ import { contactLabel, formatPhoneDisplay, type ContactRef } from "@/lib/contact
 import { corDoMotivo } from "@/lib/close-reasons";
 import { EtapasPorFunil } from "@/components/etapas-por-funil";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
+import { LinhaDeCredito, type CreditoDaFicha } from "@/components/linha-de-credito";
 import { salvarContato } from "@/lib/salvar-contato";
 
 /**
@@ -52,6 +53,8 @@ type Ficha = ContactRef & {
   cidade: string | null;
   uf: string | null;
   pendencia: PendenciaResumo | null;
+  // Linha de crédito; null pra quem não vê o financeiro do cliente.
+  credito: CreditoDaFicha | null;
   hasWhatsapp: boolean | null;
   createdAt: string;
   stage: { id: string; name: string; color: string } | null;
@@ -224,6 +227,8 @@ export function ContactCard({ contactId, onFechar }: { contactId: string; onFech
               />
             </label>
           </div>
+
+          {ficha.credito && <LinhaDeCredito credito={ficha.credito} salvar={salvar} />}
 
           <CadastroDoCliente ficha={ficha} salvar={salvar} />
 

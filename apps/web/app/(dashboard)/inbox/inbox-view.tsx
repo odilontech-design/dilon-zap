@@ -87,6 +87,8 @@ type ConversationSummary = {
   // pra quem recebeu a conversa e nada pros outros.
   transferidaParaMim: boolean;
   transferidaPor: string | null;
+  // Só com busca: pedaço da mensagem onde o que foi digitado aparece.
+  trechoDaBusca?: string;
   messages: { body: string; direction: "INBOUND" | "OUTBOUND"; createdAt: string }[];
 };
 
@@ -503,6 +505,16 @@ export function InboxView({ ehFinanceiro, meuId, alertaSemRespostaMin = null }: 
                       </span>
                     )}
                   </div>
+                  {/* Achada pelo texto: mostra onde a palavra aparece, pra
+                      conferir o endereço sem abrir a conversa. */}
+                  {c.trechoDaBusca && (
+                    <p
+                      title={c.trechoDaBusca}
+                      className="mt-0.5 text-[11px] leading-snug text-neutral-600 bg-amber-50 rounded px-1.5 py-0.5 line-clamp-2"
+                    >
+                      …{c.trechoDaBusca}…
+                    </p>
+                  )}
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                     {/* Some sozinho quando o responsável abre a conversa (ver
                         a rota /read) — não precisa de botão de "ok, vi". */}

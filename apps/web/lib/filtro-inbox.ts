@@ -1,7 +1,9 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import type { CurrentUser } from "@/lib/session";
 import { prisma } from "@dilon-zap/db";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
+import { normalizarParaBusca } from "@/lib/busca";
+import { termosDaBusca, padraoSemAcento, INICIO_DE_PALAVRA } from "@/lib/busca-texto";
 
 /**
  * O filtro do Inbox (busca, etiqueta, atendente, setor, só não lidas) num
@@ -13,42 +15,109 @@ import { conversationVisibilityWhere } from "@/lib/conversation-access";
  * Não inclui o status: a lista filtra pela aba aberta, e as abas contam as
  * três de uma vez.
  */
+export type AchadoDaBusca = { ids: string[]; trechos: Map<string, string> };
+
+type Escopo = { tenantId: string; setoresPermitidos: string[] | null };
+
+const CACHE_MS = 10_000;
+const LIMITE_DE_CONVERSAS = 3000;
+const cache = new Map<string, { em: number; achado: AchadoDaBusca }>();
+
 /**
- * Palavras da busca. A pontuação some e as iniciais soltas ("T." em "Marcelo T.
- * Affonso") não contam: quem digita o nome completo acha o contato salvo só
- * com o primeiro e o último nome. No máximo 6 palavras, para a consulta não
- * crescer sem limite.
+ * Conversas que a busca encontra: o contato (nome, telefone, CPF/CNPJ, e-mail)
+ * OU o texto de qualquer mensagem. Antes o texto só era olhado quando ninguém
+ * batia no contato; a Hemoderi consulta endereço, que só existe dentro das
+ * mensagens.
+ *
+ * Cada palavra digitada precisa aparecer, em qualquer ordem — no contato, ou
+ * todas na mesma mensagem. Nas mensagens a palavra casa no INÍCIO de uma palavra
+ * do texto (reclamação do André: "ibe" trazia "recebe").
+ *
+ * Resultado guardado por 10 s: a lista e os números das abas pedem o mesmo,
+ * cada atendente consulta em laço, e mensagem que chegou agora aparecer na
+ * busca 10 s depois não faz diferença.
  */
-export function termosDaBusca(busca: string | undefined): string[] {
-  if (!busca) return [];
-  const palavras = busca
-    .split(/\s+/)
-    .map((w) => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, ""))
-    .filter((w) => w.length > 1 || /\d/.test(w));
-  const unicas = [...new Set(palavras)].slice(0, 6);
-  return unicas.length ? unicas : [busca.trim()];
+export async function buscarNoInbox(escopo: Escopo, termos: string[]): Promise<AchadoDaBusca> {
+  const chave = [escopo.tenantId, escopo.setoresPermitidos?.join(",") ?? "*", ...termos.map(normalizarParaBusca)].join("\u0001");
+  const guardado = cache.get(chave);
+  if (guardado && Date.now() - guardado.em < CACHE_MS) return guardado.achado;
+
+  const padroes = termos.map(padraoSemAcento);
+
+  const porContato = Prisma.join(
+    termos.map((t, i) => {
+      const digitos = t.replace(/\D/g, "");
+      const telefone = digitos.length >= 4 || (termos.length === 1 && digitos.length > 0);
+      const alternativas: Prisma.Sql[] = [Prisma.sql`ct."name" ~* ${padroes[i]}`];
+      if (telefone) {
+        alternativas.push(Prisma.sql`position(${digitos} in ct."waJid") > 0`);
+        alternativas.push(Prisma.sql`position(${digitos} in coalesce(ct."phoneNumber", '')) > 0`);
+      }
+      // CPF/CNPJ guardado com ou sem pontuação.
+      if (digitos.length >= 4) alternativas.push(Prisma.sql`position(${digitos} in coalesce(ct."documento", '')) > 0`);
+      alternativas.push(Prisma.sql`position(${t} in coalesce(ct."documento", '')) > 0`);
+      // E-mail só com pedaço que o identifique: "ibe" solto casaria com meio mundo.
+      if (t.includes("@") || t.length >= 5) alternativas.push(Prisma.sql`ct."email" ~* ${padroes[i]}`);
+      return Prisma.sql`(${Prisma.join(alternativas, " OR ")})`;
+    }),
+    " AND "
+  );
+  const porTexto = Prisma.join(
+    padroes.map((p) => Prisma.sql`m."body" ~* ${INICIO_DE_PALAVRA + p}`),
+    " AND "
+  );
+  const soSetores = escopo.setoresPermitidos
+    ? escopo.setoresPermitidos.length
+      ? Prisma.sql`AND (m."setorId" IS NULL OR m."setorId" IN (${Prisma.join(escopo.setoresPermitidos)}))`
+      : Prisma.sql`AND m."setorId" IS NULL`
+    : Prisma.empty;
+
+  const [contatos, mensagens] = await Promise.all([
+    prisma.$queryRaw<{ id: string }[]>`
+      SELECT cv."id" FROM "Conversation" cv JOIN "Contact" ct ON ct."id" = cv."contactId"
+      WHERE cv."tenantId" = ${escopo.tenantId} AND ct."grupo" = false AND ${porContato}`,
+    prisma.$queryRaw<{ id: string; trecho: string }[]>`
+      SELECT x."id", x."trecho" FROM (
+        SELECT DISTINCT ON (m."conversationId") m."conversationId" AS "id", cv."lastMessageAt",
+          substr(m."body", greatest(1, regexp_instr(m."body", ${INICIO_DE_PALAVRA + padroes[0]}, 1, 1, 0, 'i') - 30), 140) AS "trecho"
+        FROM "Message" m
+        JOIN "Conversation" cv ON cv."id" = m."conversationId"
+        JOIN "Contact" ct ON ct."id" = cv."contactId"
+        WHERE cv."tenantId" = ${escopo.tenantId} AND ct."grupo" = false AND ${porTexto} ${soSetores}
+        ORDER BY m."conversationId", m."createdAt" DESC
+      ) x ORDER BY x."lastMessageAt" DESC LIMIT ${LIMITE_DE_CONVERSAS}`,
+  ]);
+
+  const trechos = new Map(mensagens.map((m) => [m.id, m.trecho.replace(/\s+/g, " ").trim()]));
+  const achado: AchadoDaBusca = { ids: [...new Set([...contatos.map((c) => c.id), ...trechos.keys()])], trechos };
+
+  if (cache.size > 200) cache.clear();
+  cache.set(chave, { em: Date.now(), achado });
+  return achado;
 }
 
 /**
- * Quem a busca identifica: nome, telefone, CPF/CNPJ ou e-mail do contato.
- * Cada palavra digitada precisa aparecer em algum desses, em qualquer ordem.
+ * Setores que quem busca pode ver, quando a empresa isola o histórico entre
+ * setores (Tenant.isolarHistoricoPorSetor). null = sem restrição. A busca nas
+ * mensagens obedece à mesma regra da conversa aberta: senão ela mostraria, no
+ * trecho da lista, o que a tela de mensagens esconde.
  */
-function porIdentidade(termos: string[]): Prisma.ConversationWhereInput[] {
-  return termos.map((t) => {
-    const digitos = t.replace(/\D/g, "");
-    const telefone = digitos.length >= 4 || (termos.length === 1 && digitos.length > 0);
-    return {
-      OR: [
-        { contact: { name: { contains: t, mode: "insensitive" as const } } },
-        ...(telefone ? [{ contact: { waJid: { contains: digitos } } }, { contact: { phoneNumber: { contains: digitos } } }] : []),
-        // CPF/CNPJ guardado com ou sem pontuação.
-        ...(digitos.length >= 4 ? [{ contact: { documento: { contains: digitos } } }] : []),
-        { contact: { documento: { contains: t } } },
-        // E-mail só com pedaço que o identifique: "ibe" solto casaria com meio mundo.
-        ...(t.includes("@") || t.length >= 5 ? [{ contact: { email: { contains: t, mode: "insensitive" as const } } }] : []),
-      ],
-    };
+async function setoresDaBusca(user: CurrentUser): Promise<string[] | null> {
+  const tenant = await prisma.tenant.findUniqueOrThrow({
+    where: { id: user.tenantId },
+    select: { isolarHistoricoPorSetor: true },
   });
+  if (!tenant.isolarHistoricoPorSetor || user.role === "OWNER" || user.role === "SUPERADMIN") return null;
+  const meus = await prisma.setorMembro.findMany({ where: { userId: user.id }, select: { setorId: true } });
+  return meus.map((m) => m.setorId).sort();
+}
+
+/** Onde a palavra aparece em cada conversa achada, pra lista mostrar; vazio sem busca. */
+export async function trechosDaBusca(user: CurrentUser, params: URLSearchParams): Promise<Map<string, string>> {
+  const termos = termosDaBusca(params.get("search")?.trim());
+  if (!termos.length) return new Map();
+  const escopo = { tenantId: user.tenantId, setoresPermitidos: await setoresDaBusca(user) };
+  return (await buscarNoInbox(escopo, termos)).trechos;
 }
 
 export async function filtroDoInbox(user: CurrentUser, params: URLSearchParams): Promise<Prisma.ConversationWhereInput> {
@@ -74,19 +143,8 @@ export async function filtroDoInbox(user: CurrentUser, params: URLSearchParams):
 
   let busca: Prisma.ConversationWhereInput[] = [];
   if (termos.length) {
-    // Busca em duas etapas (reclamação do André: "Odonto Ibe" trazia conversas
-    // sem relação). 1) Quem tem o que foi digitado no nome, telefone, CPF ou
-    // e-mail: se houver alguém, a lista é só essa gente. 2) Só se ninguém bater,
-    // procura a frase exata dentro das mensagens. Antes cada palavra podia
-    // aparecer numa mensagem diferente, e "ibe" casa com "recebe", "escreve"...
-    const identidade = porIdentidade(termos);
-    const achou = await prisma.conversation.findFirst({
-      where: { ...base, AND: [visibilidade, ...identidade] },
-      select: { id: true },
-    });
-    busca = achou
-      ? identidade
-      : [{ messages: { some: { body: { contains: termos.join(" "), mode: "insensitive" as const } } } }];
+    const escopo = { tenantId: user.tenantId, setoresPermitidos: await setoresDaBusca(user) };
+    busca = [{ id: { in: (await buscarNoInbox(escopo, termos)).ids } }];
   }
 
   return { ...base, AND: [visibilidade, ...busca] };

@@ -859,6 +859,13 @@ model Contact {
   cidade         String?
   uf             String?
 
+  // Linha de crédito (pedido da Believe, 20/11): quanto a pessoa pode ficar
+  // devendo em parcelas em aberto. Nulo = sem limite definido — e aí vale a
+  // regra antiga, que bloqueia venda a prazo para quem já deve. Com limite, o
+  // sistema só AVISA ao passar dele; o "usado" não é gravado, é a soma das
+  // parcelas em aberto (ver lib/credito).
+  limiteCreditoCents Int?
+
   // Como o cliente deve sair IMPRESSO, quando não é o nome que veio do
   // WhatsApp. Numa contabilidade o cliente é uma empresa: o contato se chama
   // "Paulo | PDUARTE" no celular, mas no comprovante precisa aparecer a razão
