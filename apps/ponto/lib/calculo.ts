@@ -294,18 +294,29 @@ export async function espelhoDoMes(
   mes: string,
 ): Promise<Espelho> {
   const lista = diasDoMes(mes);
-  const dias = await apurarIntervalo(empresa, colaborador, lista[0], lista[lista.length - 1]);
-  const totais = totalizar(dias, empresa);
+  const inicioMes = lista[0];
+  const fimMes = lista[lista.length - 1];
 
-  if (!empresa.bancoDeHoras) return { mes, dias, totais, banco: null, bancoDesde: null };
+  if (!empresa.bancoDeHoras) {
+    const dias = await apurarIntervalo(empresa, colaborador, inicioMes, fimMes);
+    return { mes, dias, totais: totalizar(dias, empresa), banco: null, bancoDesde: null };
+  }
 
   const ontem = somarDias(hojeNoFuso(empresa.timezone), -1);
-  const fimBanco = lista[lista.length - 1] < ontem ? lista[lista.length - 1] : ontem;
+  const fimBanco = fimMes < ontem ? fimMes : ontem;
   const inicioBanco = [dataIso(colaborador.admissao), inicioDoControle(empresa), `${somarMeses(mes, -12)}-01`].sort().at(-1)!;
+
+  // UMA apuração cobrindo o histórico do banco e o mês do espelho: o mês é
+  // parte do histórico, e apurar os dois separados repetia as mesmas
+  // consultas e o mesmo cálculo (o dobro de CPU na Vercel).
+  const inicio = inicioBanco < inicioMes ? inicioBanco : inicioMes;
+  const todos = await apurarIntervalo(empresa, colaborador, inicio, fimMes);
+  const dias = todos.filter((d) => d.data >= inicioMes);
+  const totais = totalizar(dias, empresa);
 
   if (fimBanco < inicioBanco) return { mes, dias, totais, banco: extratoBanco([], fimBanco, { validadeDias: 1 }), bancoDesde: inicioBanco };
 
-  const historico = await apurarIntervalo(empresa, colaborador, inicioBanco, fimBanco);
+  const historico = todos.filter((d) => d.data >= inicioBanco && d.data <= fimBanco);
   const movimento = totalizar(historico, empresa).lancamentosBanco;
   const banco = extratoBanco(movimento, fimBanco, { validadeDias: empresa.validadeBancoDias });
   return { mes, dias, totais, banco, bancoDesde: inicioBanco };

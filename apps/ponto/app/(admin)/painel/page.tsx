@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { prisma } from "@dilon-zap/ponto-db";
 import { minutoLocal } from "@dilon-zap/ponto-core";
 import { requireAdmin } from "@/lib/session";

@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { prisma, type Papel, type Plano } from "@dilon-zap/ponto-db";
@@ -22,8 +23,11 @@ export type UsuarioAtual = {
  * fora da sessão (o administrador desliga o colaborador, o plano muda), e um
  * token de 30 dias com o valor velho deixaria o desligado batendo ponto. Com
  * 10 colaboradores por empresa, a consulta extra não pesa.
+ *
+ * `cache` do React: layout, página e ações da MESMA requisição dividem uma
+ * consulta só, em vez de cada um ir ao banco.
  */
-export async function usuarioAtual(): Promise<UsuarioAtual | null> {
+export const usuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
   const session = await getServerSession(authOptions);
   const id = (session?.user as { id?: string } | undefined)?.id;
   if (!id) return null;
@@ -52,7 +56,7 @@ export async function usuarioAtual(): Promise<UsuarioAtual | null> {
       timezone: u.empresa.timezone,
     },
   };
-}
+});
 
 export async function requireUsuario(): Promise<UsuarioAtual> {
   const u = await usuarioAtual();

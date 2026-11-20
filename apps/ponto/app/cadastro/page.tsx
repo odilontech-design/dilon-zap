@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { PLANOS } from "@/lib/planos";
 import { FormularioCadastro } from "./formulario";
 

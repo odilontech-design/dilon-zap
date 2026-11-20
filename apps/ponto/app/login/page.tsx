@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { redirect } from "next/navigation";
 import { usuarioAtual } from "@/lib/session";
 import { FormularioLogin } from "./formulario-login";

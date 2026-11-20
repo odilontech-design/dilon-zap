@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { prisma } from "@dilon-zap/ponto-db";
 import { requireAdminMesmoBloqueado } from "@/lib/session";
 import { situacaoDaEmpresa, TOLERANCIA_DIAS } from "@/lib/cobranca";

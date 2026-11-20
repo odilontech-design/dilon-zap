@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
+import Link from "@/components/link";
 import { useRouter } from "next/navigation";
 import { Botao, Campo, Entrada, Selecao } from "@/components/campos";
 import { desligar, novaSenha, reativar, salvarColaborador } from "./acoes";

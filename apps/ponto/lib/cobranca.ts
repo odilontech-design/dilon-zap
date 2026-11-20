@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { prisma, type StatusFatura } from "@dilon-zap/ponto-db";
 import { acharOuCriarCliente, asaasConfigurado, criarAssinaturaBoleto, ErroAsaas, linhaDigitavel, pagamentosDaAssinatura, type PagamentoAsaas } from "@/lib/asaas";
 import { situacaoAssinatura, statusDaFatura, type SituacaoAssinatura } from "@/lib/cobranca-regras";
@@ -9,7 +10,8 @@ export const TOLERANCIA_DIAS = Number(process.env.PONTO_TOLERANCIA_DIAS || 5);
 /** Vencimento do primeiro boleto, em dias depois da contratação. */
 const DIAS_PRIMEIRO_BOLETO = Number(process.env.PONTO_DIAS_PRIMEIRO_BOLETO || 3);
 
-export async function situacaoDaEmpresa(empresaId: string): Promise<SituacaoAssinatura> {
+/** Uma consulta por requisição, mesmo chamada pelo layout, pela página e pela ação. */
+export const situacaoDaEmpresa = cache(async (empresaId: string): Promise<SituacaoAssinatura> => {
   const e = await prisma.empresa.findUniqueOrThrow({
     where: { id: empresaId },
     select: {
@@ -26,7 +28,7 @@ export async function situacaoDaEmpresa(empresaId: string): Promise<SituacaoAssi
     toleranciaDias: TOLERANCIA_DIAS,
     faturas: e.faturas.map((f) => ({ ...f, vencimento: f.vencimento.toISOString().slice(0, 10) })),
   });
-}
+});
 
 /**
  * Cria cliente e assinatura por boleto no Asaas e traz a primeira fatura.

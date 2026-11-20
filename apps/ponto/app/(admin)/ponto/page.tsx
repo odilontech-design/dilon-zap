@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { prisma } from "@dilon-zap/ponto-db";
 import { requireAdmin } from "@/lib/session";
 import { espelhoDoMes, SELECAO_EMPRESA_CALCULO } from "@/lib/calculo";

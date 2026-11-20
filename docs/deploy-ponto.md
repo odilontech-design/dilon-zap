@@ -157,6 +157,27 @@ Roteiro de 10 minutos antes de mandar o link para cliente:
 6. **Webhook:** no Asaas, cancele (ou receba em dinheiro) o boleto de teste
    e confira se a tela Assinatura atualizou sozinha.
 
+## Consumo na Vercel
+
+O plano cobra por invocação e por CPU ativa (o tempo esperando o banco não
+conta). O app já foi enxugado para isso:
+
+- **Sem pré-carregamento de links** (`components/link.tsx`). Antes, abrir
+  uma tela disparava de 7 a 27 renderizações extras no servidor. Agora é só
+  a da tela.
+- **Sessão e situação da assinatura consultadas uma vez por requisição**
+  (`cache` do React), em vez de uma vez no layout e outra na página.
+- **Espelho e banco de horas numa apuração só.** Antes, o mês era apurado
+  duas vezes.
+
+Medido no build de produção com a empresa de demonstração: CPU por tela 40%
+a 70% menor (relatório mensal de ~360 ms para ~110 ms) e de 9–29 para 2
+requisições por tela aberta.
+
+O que mais gera uso é o registro de ponto: cerca de 4 marcações por
+colaborador por dia, cada uma com o envio e uma renderização da tela.
+Conta de referência: 10 empresas × 10 colaboradores ≈ 9 mil marcações/mês.
+
 ## Atualizar depois
 
 `git push` na branch publicada e a Vercel refaz o deploy. Quando houver

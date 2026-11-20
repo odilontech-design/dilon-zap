@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { requireAdmin } from "@/lib/session";
 import { validarMes } from "@/lib/datas";
 import { gerarRelatorio, RELATORIOS, type TipoRelatorio } from "@/lib/relatorios";

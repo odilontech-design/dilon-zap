@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { maiuscula, nomeDoMes, somarMeses } from "@/lib/datas";
 
 export function NavegacaoMes({ mes, href }: { mes: string; href: (mes: string) => string }) {
