@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import useSWR from "swr";
+import { useAtrasado } from "@/lib/use-atrasado";
 import { AreaTexto, Botao, Campo, Entrada, Selecao } from "@/components/campos";
 import { Card, Tabela, TituloPagina, Vazio } from "@/components/ui";
 import { buscar, enviar } from "@/lib/fetcher";
@@ -39,7 +40,8 @@ export function PainelClientes() {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
-  const { data, mutate, isLoading } = useSWR<Cliente[]>(`/api/clientes?busca=${encodeURIComponent(busca)}`, buscar);
+  const buscaAtrasada = useAtrasado(busca);
+  const { data, mutate, isLoading } = useSWR<Cliente[]>(`/api/clientes?busca=${encodeURIComponent(buscaAtrasada)}`, buscar);
 
   async function salvar() {
     if (!form) return;

@@ -9,5 +9,8 @@ export function Providers({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => {});
   }, []);
-  return <SessionProvider>{children}</SessionProvider>;
+  // Sem consultar a sessão no servidor a cada vez que a janela volta ao foco
+  // (padrão do NextAuth): é uma execução cobrada na Vercel sem efeito nenhum,
+  // porque a sessão é relida do banco a cada página de qualquer jeito.
+  return <SessionProvider refetchOnWindowFocus={false}>{children}</SessionProvider>;
 }

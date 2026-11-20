@@ -167,6 +167,8 @@ conta). O app já foi enxugado para isso:
   a da tela.
 - **Sessão e situação da assinatura consultadas uma vez por requisição**
   (`cache` do React), em vez de uma vez no layout e outra na página.
+- **Sessão não é consultada ao voltar para a aba** (`refetchOnWindowFocus`
+  desligado no `SessionProvider`).
 - **Espelho e banco de horas numa apuração só.** Antes, o mês era apurado
   duas vezes.
 

@@ -143,6 +143,24 @@ Em produção use sempre `erp:deploy` (`prisma migrate deploy`), nunca
 `erp:push` — o push sincroniza o banco com o schema **inclusive removendo** o
 que não estiver mais nele.
 
+### Consumo na Vercel
+
+Três padrões do Next/SWR geravam execuções cobradas sem mudar nada na tela:
+
+- **Pré-carregamento de links:** cada tela disparava de 10 a 17
+  renderizações extras (o menu lateral inteiro). Os links usam
+  `components/link.tsx`, sem pré-carga.
+- **Busca ao voltar para a aba:** o SWR rebuscava todas as listas e o
+  NextAuth a sessão (no Catálogo, 30 requisições em 5 trocas de aba). Está
+  desligado em `app/providers.tsx`. Depois de salvar, o `mutate()` continua
+  atualizando a tela.
+- **Busca por tecla:** clientes e orçamentos consultavam o servidor a cada
+  letra. Agora esperam a digitação parar (`lib/use-atrasado.ts`).
+
+Ao criar tela nova: importe `Link` de `@/components/link` (não de
+`next/link`) e, se houver campo de busca, passe o texto por `useAtrasado`
+antes de montar a chave do SWR.
+
 ## O que ainda não está pronto
 
 - Cobrança automática de assinatura (a troca de plano é feita no cadastro).

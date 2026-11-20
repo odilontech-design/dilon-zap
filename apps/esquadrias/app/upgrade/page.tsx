@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { NOME_PLANO, planoMinimo, type Recurso } from "@/lib/planos";
 import { requireUsuario } from "@/lib/session";
 

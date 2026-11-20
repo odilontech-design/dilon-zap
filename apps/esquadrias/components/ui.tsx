@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 
 /**
  * Primitivas visuais. Existem pra que as ~15 telas do sistema não divirjam:

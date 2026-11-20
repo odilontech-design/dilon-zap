@@ -1,4 +1,4 @@
-import Link from "next/link";
+import Link from "@/components/link";
 import { prisma } from "@dilon-zap/erp-db";
 import { BotaoLink, Card, Etiqueta, TituloPagina, Vazio } from "@/components/ui";
 import { requireUsuario } from "@/lib/session";
