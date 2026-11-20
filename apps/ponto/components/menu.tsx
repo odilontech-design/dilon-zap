@@ -16,7 +16,20 @@ const ITENS = [
   { href: "/assinatura", rotulo: "Assinatura" },
 ];
 
-export function MenuAdmin({ nome, empresa, plano, temColaborador }: { nome: string; empresa: string; plano: string; temColaborador: boolean }) {
+export function MenuAdmin({
+  nome,
+  empresa,
+  plano,
+  temColaborador,
+  mostrarAssinatura = true,
+}: {
+  nome: string;
+  empresa: string;
+  plano: string;
+  temColaborador: boolean;
+  /** Conta isenta (demonstração, cortesia) não tem boleto: o item só confundiria. */
+  mostrarAssinatura?: boolean;
+}) {
   const caminho = usePathname();
   const [aberto, setAberto] = useState(false);
 
@@ -42,7 +55,7 @@ export function MenuAdmin({ nome, empresa, plano, temColaborador }: { nome: stri
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4">
           <ul className="space-y-0.5">
-            {ITENS.map((item) => {
+            {ITENS.filter((item) => mostrarAssinatura || item.href !== "/assinatura").map((item) => {
               const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
               return (
                 <li key={item.href}>

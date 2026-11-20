@@ -68,30 +68,30 @@ export function EditorJornada({ jornada }: { jornada?: { id: string; nome: strin
       <Campo rotulo="Nome da jornada">
         <Entrada value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Ex.: Comercial seg–sex" />
       </Campo>
-      <div className="overflow-x-auto">
-        <table className="text-sm">
-          <thead>
-            <tr className="text-xs text-neutral-500 text-left">
-              <th className="pr-3 py-1 font-medium">Dia</th>
-              <th className="pr-2 py-1 font-medium">Entrada</th>
-              <th className="pr-4 py-1 font-medium">Saída</th>
-              <th className="pr-2 py-1 font-medium">Volta</th>
-              <th className="py-1 font-medium">Saída</th>
-            </tr>
-          </thead>
-          <tbody>
-            {linhas.map((l, d) => (
-              <tr key={d}>
-                <td className="pr-3 py-1 text-neutral-700 whitespace-nowrap">{DIAS_SEMANA[d]}</td>
-                {(["a1", "b1", "a2", "b2"] as const).map((k) => (
-                  <td key={k} className={k === "b1" ? "pr-4 py-1" : "pr-2 py-1"}>
-                    <Entrada type="time" value={l[k]} onChange={(e) => muda(d, k, e.target.value)} className="w-28" />
-                  </td>
-                ))}
-              </tr>
+      {/* No celular, cada dia vira duas linhas (manhã e tarde); da tablet em
+          diante, uma linha com as quatro marcações. */}
+      <div className="space-y-3 sm:space-y-1.5">
+        <div className="hidden sm:grid sm:grid-cols-[6rem_repeat(4,7rem)] gap-2 text-xs text-neutral-500">
+          <span>Dia</span>
+          <span>Entrada</span>
+          <span>Saída</span>
+          <span>Volta</span>
+          <span>Saída</span>
+        </div>
+        {linhas.map((l, d) => (
+          <div key={d} className="grid grid-cols-2 gap-2 sm:grid-cols-[6rem_repeat(4,7rem)] sm:items-center">
+            <p className="col-span-2 sm:col-span-1 text-sm font-medium sm:font-normal text-neutral-700">{DIAS_SEMANA[d]}</p>
+            {(["a1", "b1", "a2", "b2"] as const).map((k) => (
+              <Entrada
+                key={k}
+                type="time"
+                aria-label={`${DIAS_SEMANA[d]}: ${{ a1: "entrada", b1: "saída", a2: "volta", b2: "saída final" }[k]}`}
+                value={l[k]}
+                onChange={(e) => muda(d, k, e.target.value)}
+              />
             ))}
-          </tbody>
-        </table>
+          </div>
+        ))}
       </div>
       <p className="text-xs text-neutral-500">Dia em branco é folga. Deixe a segunda parte vazia se não houver intervalo registrado.</p>
       {erro && <p className="text-sm text-red-600">{erro}</p>}

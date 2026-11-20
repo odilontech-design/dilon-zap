@@ -14,6 +14,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
         empresa={u.empresa.nomeFantasia || u.empresa.razaoSocial}
         plano={PLANOS[u.empresa.plano].nome}
         temColaborador={Boolean(u.colaboradorId)}
+        mostrarAssinatura={situacao.estado !== "ISENTA"}
       />
       <main className="flex-1 min-w-0 p-5 md:p-8">
         <AvisoAssinatura situacao={situacao} />

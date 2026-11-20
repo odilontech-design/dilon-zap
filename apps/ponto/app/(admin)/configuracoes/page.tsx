@@ -26,7 +26,7 @@ export default async function PaginaConfiguracoes() {
   return (
     <>
       <TituloPagina titulo="Configurações" descricao="Dados da empresa, regras de cálculo, feriados e plano." />
-      <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
+      <div className="grid xl:grid-cols-[1fr_340px] gap-6 items-start">
         <div className="space-y-6">
           <Card className="p-5">
             <FormularioConfiguracoes
@@ -51,13 +51,12 @@ export default async function PaginaConfiguracoes() {
           </Card>
         </div>
 
-        <div className="space-y-6">
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-1">
           <Card className="p-5 space-y-3 text-sm">
             <div className="flex items-center justify-between">
               <p className="font-semibold text-neutral-900">Plano {plano.nome}</p>
-              <Etiqueta tom="azul">ativo</Etiqueta>
+              <Etiqueta tom="azul">{empresa.formaCobranca === "ISENTA" ? "cortesia" : "ativo"}</Etiqueta>
             </div>
-            <p className="text-neutral-700">{plano.precoDescricao}</p>
             <ul className="text-neutral-600 space-y-1">
               <li>
                 Colaboradores ativos: {ativos}
@@ -68,12 +67,14 @@ export default async function PaginaConfiguracoes() {
                 {plano.maxJornadas ? ` de ${plano.maxJornadas}` : ""}
               </li>
               <li>CNPJ: {plano.maxCnpjs === 1 ? "1 (esta empresa)" : `até ${plano.maxCnpjs}`}</li>
-              <li>
-                Pagamento: boleto bancário ·{" "}
-                <a href="/assinatura" className="text-accent">
-                  ver mensalidades
-                </a>
-              </li>
+              {empresa.formaCobranca !== "ISENTA" && (
+                <li>
+                  Pagamento: boleto bancário ·{" "}
+                  <a href="/assinatura" className="text-accent">
+                    ver mensalidades
+                  </a>
+                </li>
+              )}
               <li>Suporte humano por telefone e chat, sem limite</li>
             </ul>
             {empresa.plano === "ESSENCIAL" && (

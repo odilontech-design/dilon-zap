@@ -22,14 +22,14 @@ export default async function MeuPonto({ searchParams }: { searchParams: { mes?:
     <div className="space-y-4 py-2">
       <div className="flex items-center justify-between gap-2">
         <NavegacaoMes mes={mes} href={(m) => `/meu-ponto?mes=${m}`} />
-        <Link href={`/espelho/${colaborador.id}?mes=${mes}`} className="text-sm text-accent">
-          Espelho para imprimir
+        <Link href={`/espelho/${colaborador.id}?mes=${mes}`} className="text-sm text-accent whitespace-nowrap">
+          Imprimir
         </Link>
       </div>
       <ResumoEspelho espelho={espelho} />
       <LegendaEspelho />
       <Card>
-        <TabelaEspelho espelho={espelho} colaboradorId={colaborador.id} mostrarFotos />
+        <TabelaEspelho espelho={espelho} colaboradorId={colaborador.id} mostrarFotos formato="cartoes" />
       </Card>
       <p className="text-xs text-neutral-500">
         Encontrou algo errado? Fale com o responsável pelo ponto na sua empresa: ele faz o ajuste e o motivo aparece aqui.

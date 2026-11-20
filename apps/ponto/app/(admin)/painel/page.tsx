@@ -122,22 +122,24 @@ export default async function Painel() {
         ) : (
           <ul className="divide-y divide-neutral-200">
             {situacoes.map(({ c, dia, efetivas, status }) => (
-              <li key={c.id} className="px-4 py-3 flex flex-wrap items-center gap-3">
-                <Link href={`/ponto?colaborador=${c.id}`} className="min-w-0 flex-1">
+              <li key={c.id} className="px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <Link href={`/ponto?colaborador=${c.id}`} className="min-w-0 sm:flex-1">
                   <p className="font-medium text-neutral-900">{c.nome}</p>
                   <p className="text-xs text-neutral-500">
                     {dia.feriado ? `Feriado: ${dia.feriado}` : `Previsto: ${dia.previstoTexto}`}
                     {dia.apuracao && dia.apuracao.trabalhadoMin > 0 && ` · trabalhado ${horas(dia.apuracao.trabalhadoMin)}`}
                   </p>
                 </Link>
-                <div className="flex gap-1 text-xs tabular-nums text-neutral-600">
+                <div className="flex flex-wrap items-center gap-1 text-xs tabular-nums text-neutral-600">
                   {efetivas.map((m) => (
                     <span key={m.id} className="rounded border border-neutral-200 px-1.5 py-0.5">
                       {m.hora}
                     </span>
                   ))}
+                  <span className="ml-1">
+                    <Etiqueta tom={status.tom}>{status.rotulo}</Etiqueta>
+                  </span>
                 </div>
-                <Etiqueta tom={status.tom}>{status.rotulo}</Etiqueta>
               </li>
             ))}
           </ul>

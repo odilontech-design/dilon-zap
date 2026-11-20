@@ -76,7 +76,7 @@ export default async function PaginaEspelho({
         <LegendaEspelho />
       </div>
       <div className="rounded-xl border border-neutral-200">
-        <TabelaEspelho espelho={espelho} colaboradorId={colaborador.id} />
+        <TabelaEspelho espelho={espelho} colaboradorId={colaborador.id} formato="tabela" />
       </div>
 
       <section className="mt-10 grid md:grid-cols-2 gap-10 text-sm text-neutral-700">

@@ -55,9 +55,17 @@ export default async function PaginaAssinatura() {
         empresa={u.empresa.nomeFantasia || u.empresa.razaoSocial}
         plano={plano.nome}
         temColaborador={Boolean(u.colaboradorId)}
+        mostrarAssinatura={situacao.estado !== "ISENTA"}
       />
       <main className="flex-1 min-w-0 p-5 md:p-8 max-w-4xl">
-        <TituloPagina titulo="Assinatura" descricao={`Plano ${plano.nome}: ${plano.precoDescricao}. Pagamento por boleto bancário, sem fidelidade.`} />
+        <TituloPagina
+          titulo="Assinatura"
+          descricao={
+            situacao.estado === "ISENTA"
+              ? `Plano ${plano.nome}, em cortesia: esta conta não recebe boletos.`
+              : `Plano ${plano.nome}. Pagamento por boleto bancário, sem fidelidade.`
+          }
+        />
         {!situacao.painelBloqueado && <AvisoAssinatura situacao={situacao} />}
 
         {situacao.estado === "BLOQUEADA" && (
@@ -70,7 +78,7 @@ export default async function PaginaAssinatura() {
           </Card>
         )}
 
-        <div className="grid md:grid-cols-2 gap-4 mb-6">
+        <div className={`grid gap-4 mb-6 ${situacao.estado === "ISENTA" ? "" : "md:grid-cols-2"}`}>
           <Card className="p-5 space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-sm text-neutral-500">Situação</p>
@@ -113,6 +121,7 @@ export default async function PaginaAssinatura() {
             )}
           </Card>
 
+          {situacao.estado !== "ISENTA" && (
           <Card className="p-5 text-sm text-neutral-700 space-y-1.5">
             <p className="font-medium text-neutral-900">Como funciona</p>
             <p>O boleto de cada mês é gerado automaticamente e também enviado para {empresa.emailCobranca ?? "o email de cobrança"}.</p>
@@ -126,6 +135,7 @@ export default async function PaginaAssinatura() {
               )}
             </p>
           </Card>
+          )}
         </div>
 
         {situacao.estado !== "ISENTA" && (
@@ -134,6 +144,7 @@ export default async function PaginaAssinatura() {
           </div>
         )}
 
+        {situacao.estado !== "ISENTA" && (
         <Card>
           <p className="px-4 py-3 border-b border-neutral-200 font-medium text-neutral-900">Mensalidades</p>
           {empresa.faturas.length === 0 ? (
@@ -156,6 +167,7 @@ export default async function PaginaAssinatura() {
             </ul>
           )}
         </Card>
+        )}
       </main>
     </div>
   );
