@@ -2,9 +2,13 @@
  * Regras da biblioteca de materiais dos produtos. Puro, sem banco — pra ter
  * teste. A rota de upload só chama isto e grava.
  */
+import { LIMITE_DOCUMENTO_BYTES, LIMITE_MIDIA_BYTES } from "./anexo-limite";
 
-/** Mesmo teto do WhatsApp pra mídia: acima disso o envio falharia lá na frente. */
-export const TAMANHO_MAXIMO_BYTES = 16 * 1024 * 1024;
+/** Mesmo teto do WhatsApp pra mídia (imagem e vídeo): acima disso o envio falharia lá na frente. */
+export const TAMANHO_MAXIMO_BYTES = LIMITE_MIDIA_BYTES;
+
+/** Documento (PDF etc.) vai como arquivo: teto de 50MB, o mesmo do anexo do Inbox. */
+export const TAMANHO_MAXIMO_DOCUMENTO_BYTES = LIMITE_DOCUMENTO_BYTES;
 
 /** Combinado com a Hemoderi (reunião 21/09): vídeo curto, pra mandar no chat. */
 export const DURACAO_MAXIMA_VIDEO_S = 90;
@@ -33,7 +37,11 @@ export function validarMaterial(m: {
   const tipo = classificarMaterial(m.mimeType);
   if (!tipo) return "Esse tipo de arquivo não entra na biblioteca — use PDF, documento, imagem ou vídeo.";
   if (m.tamanhoBytes <= 0) return "O arquivo está vazio.";
-  if (m.tamanhoBytes > TAMANHO_MAXIMO_BYTES) return "Arquivo maior que 16MB — o WhatsApp não aceitaria.";
+  if (tipo === "DOCUMENT") {
+    if (m.tamanhoBytes > TAMANHO_MAXIMO_DOCUMENTO_BYTES) return "Arquivo maior que 50MB — o WhatsApp não aceitaria.";
+  } else if (m.tamanhoBytes > TAMANHO_MAXIMO_BYTES) {
+    return "Arquivo maior que 16MB — o WhatsApp não aceitaria.";
+  }
   if (tipo === "VIDEO") {
     // Sem duração não dá pra garantir o combinado; o navegador sempre mede
     // antes de mandar, então ausência aqui é arquivo que ele não conseguiu ler.

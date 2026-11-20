@@ -224,6 +224,9 @@ export async function POST(req: Request) {
     });
   if (!mensagemCriada) return (await jaCriada()) ?? NextResponse.json({ error: "referência repetida" }, { status: 400 });
 
+  // O Inbox ordena por lastMessageAt: sem isto, a mensagem do sistema de fora entra na conversa mas ela não sobe
+  // na lista (Believe, 15/11). Mesmo caminho que otica.ts e veiculos.ts usam ao mandar pela fila.
+  await prisma.conversation.update({ where: { id: conversa.id }, data: { lastMessageAt: new Date() } });
   await wakeOutbox(auth.tenantId);
 
   return NextResponse.json({

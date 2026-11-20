@@ -1,3 +1,4 @@
+import { filtrosDoResumo } from "./filtros-do-resumo";
 import { prisma } from "@dilon-zap/db";
 import { validarCategoria } from "@/lib/categorias-financeiras";
 import type { FormaPagamentoConta, Prisma } from "@prisma/client";
@@ -370,8 +371,13 @@ export async function listarParcelasPagar(tenantId: string, f: FiltrosDePagar, a
   return linhas;
 }
 
-export async function resumoAPagar(tenantId: string, agora = new Date()) {
-  const abertas = await listarParcelasPagar(tenantId, { tipoData: "vencimento", status: ["PENDENTE"] }, agora);
+/** Cartões do topo do A pagar: seguem os filtros da lista, como no A receber (ver resumoDoAReceber). */
+export async function resumoAPagar(
+  tenantId: string,
+  filtros: Omit<FiltrosDePagar, "status" | "tipoData"> & { tipoData?: FiltrosDePagar["tipoData"] } = {},
+  agora = new Date()
+) {
+  const abertas = await listarParcelasPagar(tenantId, filtrosDoResumo(filtros), agora);
   const resumo = { vencido: 0, vence_hoje: 0, a_vencer: 0, sem_prazo: 0, total: 0 };
   for (const l of abertas) {
     if (!l.faixa) continue;

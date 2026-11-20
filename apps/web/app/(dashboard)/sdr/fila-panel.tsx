@@ -6,8 +6,15 @@ import { chamar, fetcher } from "../receber/formatos";
 import { FichaDaEmpresa } from "./empresas-panel";
 import { botaoPrimario, botaoSecundario, campoPequeno, COR_ETAPA, dataCurta, formatarTelefone, nomeDaEmpresa, ROTULO_CANAL, ROTULO_ETAPA, ROTULO_PRODUTO, type EtapaComercial } from "./formatos-sdr";
 
-type Canal = "WHATSAPP" | "EMAIL";
-type Campanha = { id: string; nome: string };
+type Canal = "WHATSAPP" | "EMAIL" | "LIGACAO" | "MENSAGEM";
+
+const NOME_DO_CANAL: Record<Canal, string> = { LIGACAO: "Ligação", EMAIL: "E-mail", MENSAGEM: "Direct (Instagram)", WHATSAPP: "WhatsApp" };
+const FALTA_NO_CANAL: Record<Canal, string> = { LIGACAO: "telefone", EMAIL: "e-mail", MENSAGEM: "Instagram", WHATSAPP: "telefone" };
+/** O endereço da empresa no canal, para a lista e a revisão. */
+const destinoNoCanal = (canal: string, e: { telefone: string | null; email: string | null; instagram?: string | null }) =>
+  canal === "EMAIL" ? e.email : canal === "MENSAGEM" ? (e.instagram ? e.instagram.replace("https://instagram.com/", "@") : null) : formatarTelefone(e.telefone);
+
+type Campanha = { id: string; nome: string; metaDiaria?: number | null; produto?: string | null };
 type Estado = "PRONTA" | "A_REVISAR" | "A_PREPARAR";
 
 type ItemDaFila = {
@@ -18,6 +25,7 @@ type ItemDaFila = {
   uf: string | null;
   telefone: string | null;
   email: string | null;
+  instagram: string | null;
   estado: Estado;
   comercial: { prioridade: string; decisorNome: string | null };
   prospectos: { pontuacao: number | null }[];
@@ -28,6 +36,7 @@ type Resumo = {
   aPreparar: number;
   followupsAteHoje: number;
   contatosRegistradosHoje: number;
+  meta: { alvo: number; novasHoje: number; porCanal: Record<"WHATSAPP" | "EMAIL" | "LIGACAO" | "MENSAGEM" | "OUTRO", number> };
   whatsapp: { limiteDiario: number; intervaloMinimoSegundos: number; conversasAbertasHoje: number; restantesHoje: number };
 };
 type Rascunho = {
@@ -36,7 +45,7 @@ type Rascunho = {
   produto: string;
   assunto: string | null;
   texto: string;
-  empresa: { id: string; nome: string; cidade: string | null; uf: string | null; segmento: string | null; telefone: string | null; email: string | null; decisorNome: string | null; prioridade: string; pontuacao: number | null };
+  empresa: { id: string; nome: string; cidade: string | null; uf: string | null; segmento: string | null; telefone: string | null; email: string | null; instagram: string | null; site: string | null; decisorNome: string | null; prioridade: string; pontuacao: number | null };
 };
 type LinhaDoFunil = {
   campanhaId: string | null;
@@ -64,10 +73,36 @@ const consulta = (p: Record<string, string | number | undefined>) => {
   return s ? `?${s}` : "";
 };
 
+/** Empresas novas abordadas hoje contra a meta, e por qual canal saiu o primeiro contato de cada uma. */
+function MetaDoDia({ meta }: { meta: Resumo["meta"] }) {
+  const pct = Math.min(100, Math.round((meta.novasHoje / Math.max(1, meta.alvo)) * 100));
+  const bateu = meta.novasHoje >= meta.alvo;
+  const canais = (["LIGACAO", "EMAIL", "MENSAGEM", "WHATSAPP"] as const).filter((c) => meta.porCanal[c] > 0);
+  return (
+    <div className="mt-4 rounded-md border border-neutral-200 px-3 py-2.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-sm">
+          <span className="text-lg font-semibold tabular-nums">{meta.novasHoje}</span>
+          <span className="text-neutral-500"> de {meta.alvo} empresas novas abordadas hoje</span>
+          {bateu && <span className="ml-2 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">meta batida</span>}
+        </p>
+        <p className="text-[11px] text-neutral-500">
+          {canais.length ? canais.map((c) => `${NOME_DO_CANAL[c]} ${meta.porCanal[c]}`).join(" · ") : "Nenhum primeiro contato registrado hoje."}
+          {meta.porCanal.OUTRO > 0 ? ` · Outro ${meta.porCanal.OUTRO}` : ""}
+        </p>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100" role="progressbar" aria-valuemin={0} aria-valuemax={meta.alvo} aria-valuenow={meta.novasHoje} aria-label="Meta do dia">
+        <div className={`h-full rounded-full ${bateu ? "bg-accent" : "bg-amber-500"}`} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="mt-1.5 text-[11px] text-neutral-500">Conta cada empresa uma vez, no canal do primeiro contato. Follow-up não entra na meta.</p>
+    </div>
+  );
+}
+
 /** A fila do dia: o que contatar, o que revisar, o que preparar. Nada aqui envia; quem envia é você, pelo Inbox. */
 export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; campanhas: Campanha[] }) {
   const [campanhaId, setCampanhaId] = useState("");
-  const [canal, setCanal] = useState<Canal>("WHATSAPP");
+  const [canal, setCanal] = useState<Canal>("LIGACAO");
   const [meta, setMeta] = useState(20);
   const [produto, setProduto] = useState<"DILON_ZAP" | "DILON_FACILITIES">("DILON_ZAP");
   const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
@@ -108,6 +143,42 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
   const r = resumo.data;
   const aPrepararNaFila = itens.filter((i) => i.estado === "A_PREPARAR").length;
 
+  /** A autorização do lote: aprova de uma vez os rascunhos que a revisão mostraria. Não envia nada. */
+  async function aprovarLote() {
+    const n = r?.aRevisar ?? 0;
+    const quantos = Math.min(n, meta);
+    if (!window.confirm(`Aprovar ${quantos} mensagem(ns) de ${NOME_DO_CANAL[canal]}?\n\nAprovar não envia nada: libera cada uma para você contatar, uma por clique, com o texto exatamente como está. Confira antes pela revisão se quiser.`)) return;
+    setOcupado(true);
+    setAviso(null);
+    const res = await chamar("/api/sdr/fila/aprovar-lote", "POST", { canal, limite: meta, ...(campanhaId ? { campanhaId } : {}) });
+    setOcupado(false);
+    if (!res.ok) return setAviso({ tipo: "erro", texto: res.erro ?? "não deu pra aprovar o lote" });
+    const d = res.dados as { aprovadas: number; falhas: { erro: string }[] };
+    setAviso({
+      tipo: d.falhas.length ? "erro" : "ok",
+      texto: `${d.aprovadas} mensagem(ns) aprovada(s) e prontas para contatar${d.falhas.length ? ` · ${d.falhas.length} não aprovada(s) (${d.falhas[0].erro})` : ""}. Nada foi enviado: o envio é seu, um por clique.`,
+    });
+    recarregar();
+  }
+
+  /** Descarta os rascunhos de uma vez (ex.: depois de trocar o modelo da campanha). Não envia nem toca no que já foi aprovado. */
+  async function descartarLote() {
+    const n = r?.aRevisar ?? 0;
+    const quantos = Math.min(n, 50);
+    if (!window.confirm(`Descartar ${quantos} rascunho(s) de ${NOME_DO_CANAL[canal]}?\n\nIsso serve para refazer as mensagens com o modelo atual da campanha: depois é só clicar em "Preparar mensagens". Só rascunhos são descartados; o que você já aprovou não muda e nada é enviado.`)) return;
+    setOcupado(true);
+    setAviso(null);
+    const res = await chamar("/api/sdr/fila/descartar-lote", "POST", { canal, limite: 50, ...(campanhaId ? { campanhaId } : {}) });
+    setOcupado(false);
+    if (!res.ok) return setAviso({ tipo: "erro", texto: res.erro ?? "não deu pra descartar o lote" });
+    const d = res.dados as { descartadas: number; falhas: { erro: string }[] };
+    setAviso({
+      tipo: d.falhas.length ? "erro" : "ok",
+      texto: `${d.descartadas} rascunho(s) descartado(s)${d.falhas.length ? ` · ${d.falhas.length} não descartado(s) (${d.falhas[0].erro})` : ""}. Clique em "Preparar mensagens" para gerar de novo com o modelo atual.`,
+    });
+    recarregar();
+  }
+
   async function preparar() {
     setOcupado(true);
     setAviso(null);
@@ -117,7 +188,7 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
     const d = res.dados as { criadas: number; jaTinham: number; semContato: number; falhas: { erro: string }[] };
     const partes = [`${d.criadas} mensagem(ns) preparada(s) como rascunho`];
     if (d.jaTinham) partes.push(`${d.jaTinham} já tinham`);
-    if (d.semContato) partes.push(`${d.semContato} sem ${canal === "WHATSAPP" ? "telefone" : "e-mail"}`);
+    if (d.semContato) partes.push(`${d.semContato} sem ${FALTA_NO_CANAL[canal]}`);
     if (d.falhas.length) partes.push(`${d.falhas.length} com problema (${d.falhas[0].erro})`);
     setAviso({ tipo: d.falhas.length ? "erro" : "ok", texto: `${partes.join(" · ")}. Nada foi aprovado nem enviado: revise antes.` });
     recarregar();
@@ -131,7 +202,17 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-xs text-neutral-600">
             Campanha
-            <select value={campanhaId} onChange={(e) => setCampanhaId(e.target.value)} className={`${campoPequeno} mt-1 block`}>
+            <select
+              value={campanhaId}
+              onChange={(e) => {
+                setCampanhaId(e.target.value);
+                // A campanha traz a própria meta e o produto: a fila já abre do tamanho certo.
+                const c = campanhas.find((x) => x.id === e.target.value);
+                if (c?.metaDiaria) mudarMeta(c.metaDiaria);
+                if (c?.produto === "DILON_ZAP" || c?.produto === "DILON_FACILITIES") setProduto(c.produto);
+              }}
+              className={`${campoPequeno} mt-1 block`}
+            >
               <option value="">Todas</option>
               {campanhas.map((c) => (
                 <option key={c.id} value={c.id}>
@@ -143,8 +224,11 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
           <label className="text-xs text-neutral-600">
             Canal
             <select value={canal} onChange={(e) => setCanal(e.target.value as Canal)} className={`${campoPequeno} mt-1 block`}>
-              <option value="WHATSAPP">WhatsApp</option>
-              <option value="EMAIL">E-mail</option>
+              {(["LIGACAO", "EMAIL", "MENSAGEM", "WHATSAPP"] as Canal[]).map((c) => (
+                <option key={c} value={c}>
+                  {NOME_DO_CANAL[c]}
+                </option>
+              ))}
             </select>
           </label>
           <label className="text-xs text-neutral-600">
@@ -155,10 +239,12 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
             </select>
           </label>
           <label className="text-xs text-neutral-600">
-            Meta do dia (empresas)
+            Tamanho da fila
             <input type="number" min={1} max={50} value={meta} onChange={(e) => mudarMeta(Number(e.target.value))} className={`${campoPequeno} mt-1 block w-24`} />
           </label>
         </div>
+
+        {r?.meta && <MetaDoDia meta={r.meta} />}
 
         <dl className="mt-4 grid grid-cols-2 gap-2 text-center sm:grid-cols-5">
           {[
@@ -189,7 +275,13 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
             <button onClick={() => setRevisando(true)} disabled={!r || r.aRevisar === 0} className={botaoPrimario}>
               Revisar rascunhos{r && r.aRevisar > 0 ? ` (${r.aRevisar})` : ""}
             </button>
-            <span className="text-[11px] text-neutral-500">Preparar só cria rascunhos pelo modelo; nada é aprovado nem enviado sem você.</span>
+            <button onClick={aprovarLote} disabled={ocupado || !r || r.aRevisar === 0} className={botaoSecundario}>
+              Aprovar o lote{r && r.aRevisar > 0 ? ` (${Math.min(r.aRevisar, meta)})` : ""}
+            </button>
+            <button onClick={descartarLote} disabled={ocupado || !r || r.aRevisar === 0} className={botaoSecundario}>
+              Descartar o lote{r && r.aRevisar > 0 ? ` (${Math.min(r.aRevisar, 50)})` : ""}
+            </button>
+            <span className="text-[11px] text-neutral-500">Preparar só cria rascunhos pelo modelo; nada é aprovado nem enviado sem você. Aprovar o lote libera as mensagens, e o envio continua sendo seu, um por clique. Mudou o modelo da campanha? Descarte o lote e prepare de novo.</span>
           </div>
         )}
         {aviso && <p className={`mt-3 rounded-md px-3 py-2 text-xs ${aviso.tipo === "ok" ? "bg-accent/10 text-accent" : "bg-red-50 text-red-700"}`}>{aviso.texto}</p>}
@@ -207,7 +299,7 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
         ) : !fila.data ? (
           <p className="px-4 py-4 text-sm text-neutral-400">Carregando...</p>
         ) : itens.length === 0 ? (
-          <p className="px-4 py-4 text-xs text-neutral-500">Nenhuma empresa disponível com {canal === "WHATSAPP" ? "telefone" : "e-mail"}. Importe uma lista na aba Importações ou troque o canal.</p>
+          <p className="px-4 py-4 text-xs text-neutral-500">Nenhuma empresa disponível com {FALTA_NO_CANAL[canal]}. Importe uma lista na aba Importações ou troque o canal.</p>
         ) : (
           <ul>
             {itens.map((e) => (
@@ -220,7 +312,7 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
                     {e.prospectos[0]?.pontuacao != null && <span className="text-[11px] text-neutral-500">{e.prospectos[0].pontuacao} pts</span>}
                   </span>
                   <span className="text-[11px] text-neutral-500">
-                    {[e.cidade, e.uf].filter(Boolean).join(" / ") || "sem local"} · {canal === "WHATSAPP" ? formatarTelefone(e.telefone) : e.email}
+                    {[e.cidade, e.uf].filter(Boolean).join(" / ") || "sem local"} · {destinoNoCanal(canal, e)}
                     {e.comercial.decisorNome ? ` · ${e.comercial.decisorNome}` : ""}
                   </span>
                 </button>
@@ -233,7 +325,18 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
       {podeEscrever && <ResultadosEmLote campanhaId={campanhaId} aoMudar={recarregar} abrirFicha={setAberta} />}
       <FunilDasCampanhas dados={funil.data?.itens} erro={funil.error as Error | undefined} />
 
-      {revisando && <RevisaoSequencial canal={canal} campanhaId={campanhaId} limite={meta} onFechar={() => { setRevisando(false); recarregar(); }} />}
+      {revisando && (
+        <RevisaoSequencial
+          canal={canal}
+          campanhaId={campanhaId}
+          limite={meta}
+          roteiro={(campanhas.find((c) => c.id === campanhaId) as Roteiro | undefined) ?? null}
+          onFechar={() => {
+            setRevisando(false);
+            recarregar();
+          }}
+        />
+      )}
       {aberta && <FichaDaEmpresa id={aberta} podeEscrever={podeEscrever} aoMudar={recarregar} onFechar={() => { setAberta(null); recarregar(); }} />}
     </div>
   );
@@ -241,7 +344,7 @@ export function FilaPanel({ podeEscrever, campanhas }: { podeEscrever: boolean; 
 
 /* ------------------------------------------------------ Revisão sequencial ---- */
 
-function RevisaoSequencial({ canal, campanhaId, limite, onFechar }: { canal: Canal; campanhaId: string; limite: number; onFechar: () => void }) {
+function RevisaoSequencial({ canal, campanhaId, limite, roteiro, onFechar }: { canal: Canal; campanhaId: string; limite: number; roteiro: Roteiro | null; onFechar: () => void }) {
   const { data, error, mutate } = useSWR<{ itens: Rascunho[] }>(`/api/sdr/fila/revisao${consulta({ canal, campanhaId, limite })}`, fetcher, { revalidateOnFocus: false, revalidateOnReconnect: false });
   const [feitos, setFeitos] = useState<Record<string, "aprovada" | "rejeitada">>({});
   const [pulados, setPulados] = useState<string[]>([]);
@@ -358,8 +461,23 @@ function RevisaoSequencial({ canal, campanhaId, limite, onFechar }: { canal: Can
                 {atual.empresa.pontuacao != null ? ` · ${atual.empresa.pontuacao} pts` : ""}
               </p>
               <p className="text-xs text-neutral-500">
-                {ROTULO_CANAL[atual.canal]} · {ROTULO_PRODUTO[atual.produto] ?? atual.produto} ·{" "}
-                {atual.canal === "EMAIL" ? atual.empresa.email : formatarTelefone(atual.empresa.telefone)}
+                {ROTULO_CANAL[atual.canal]} · {ROTULO_PRODUTO[atual.produto] ?? atual.produto} · {destinoNoCanal(atual.canal, atual.empresa) ?? "sem contato"}
+                {atual.empresa.site && (
+                  <>
+                    {" · "}
+                    <a href={atual.empresa.site} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      site
+                    </a>
+                  </>
+                )}
+                {atual.empresa.instagram && (
+                  <>
+                    {" · "}
+                    <a href={atual.empresa.instagram} target="_blank" rel="noopener noreferrer" className="text-accent hover:underline">
+                      Instagram
+                    </a>
+                  </>
+                )}
               </p>
             </div>
 
@@ -392,10 +510,39 @@ function RevisaoSequencial({ canal, campanhaId, limite, onFechar }: { canal: Can
               </button>
             </div>
             <p className="text-[11px] text-neutral-500">Aprovar não envia nada: só libera a mensagem para você contatar, um por clique, na ficha da empresa ou na fila.</p>
+            {roteiro && <RoteiroDaCampanha c={roteiro} />}
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+type Roteiro = { nome: string; argumento?: string | null; ofertas?: string | null; provaSocial?: string | null; objecoes?: { objecao: string; resposta: string }[] | null };
+
+/** O roteiro da campanha à mão durante a revisão e as ligações: argumento, ofertas, prova social e objeções. */
+function RoteiroDaCampanha({ c }: { c: Roteiro }) {
+  const objecoes = Array.isArray(c.objecoes) ? c.objecoes : [];
+  if (!c.argumento && !c.ofertas && !c.provaSocial && objecoes.length === 0) return null;
+  return (
+    <details className="rounded-md border border-neutral-200 px-3 py-2 text-sm">
+      <summary className="cursor-pointer text-xs font-medium text-neutral-700">Roteiro da campanha {c.nome}</summary>
+      <div className="mt-2 flex flex-col gap-2 text-[13px] text-neutral-700">
+        {c.argumento && <p className="whitespace-pre-wrap"><span className="font-medium">Argumento: </span>{c.argumento}</p>}
+        {c.ofertas && <p className="whitespace-pre-wrap"><span className="font-medium">Ofertas: </span>{c.ofertas}</p>}
+        {c.provaSocial && <p className="whitespace-pre-wrap"><span className="font-medium">Prova social: </span>{c.provaSocial}</p>}
+        {objecoes.length > 0 && (
+          <dl className="flex flex-col gap-1.5">
+            {objecoes.map((o, i) => (
+              <div key={i}>
+                <dt className="font-medium">“{o.objecao}”</dt>
+                <dd className="whitespace-pre-wrap text-neutral-600">{o.resposta}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+      </div>
+    </details>
   );
 }
 

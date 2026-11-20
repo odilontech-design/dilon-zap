@@ -83,7 +83,7 @@ export function ExcluirEmpresa({ tenantId, tenantName }: { tenantId: string; ten
       {aberto && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4" onClick={() => !excluindo && setAberto(false)}>
           <div
-            className="w-full max-w-md rounded-lg border border-neutral-700 bg-neutral-900 p-5"
+            className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-lg border border-neutral-700 bg-neutral-900 p-5"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-base font-semibold text-neutral-100">Excluir {tenantName}?</h3>

@@ -5,8 +5,7 @@ import { uploadMedia, isStorageConfigured } from "@dilon-zap/storage";
 import { requireUser } from "@/lib/session";
 import { conversationVisibilityWhere } from "@/lib/conversation-access";
 import { transcodeParaOggOpus } from "@/lib/audio-transcode";
-
-const MAX_SIZE_BYTES = 16 * 1024 * 1024; // 16MB — mesmo teto que o WhatsApp usa pra mídia
+import { limiteDoAnexo, mensagemDeTamanho } from "@/lib/anexo-limite";
 
 function classify(mimeType: string): "AUDIO" | "IMAGE" | "DOCUMENT" | "VIDEO" {
   if (mimeType.startsWith("audio/")) return "AUDIO";
@@ -39,9 +38,6 @@ export async function POST(req: Request) {
   if (!(file instanceof File) || typeof conversationId !== "string") {
     return NextResponse.json({ error: "arquivo e conversationId são obrigatórios" }, { status: 400 });
   }
-  if (file.size > MAX_SIZE_BYTES) {
-    return NextResponse.json({ error: "arquivo maior que 16MB" }, { status: 400 });
-  }
 
   const conversation = await prisma.conversation.findFirst({
     where: { id: conversationId, tenantId: user.tenantId, ...(await conversationVisibilityWhere(user)) },
@@ -50,6 +46,10 @@ export async function POST(req: Request) {
 
   const mimeTypeOriginal = file.type || "application/octet-stream";
   const mediaType = classify(mimeTypeOriginal);
+  // Mídia segue o teto de 16MB do WhatsApp; documento (PDF etc.) vai até 50MB.
+  if (file.size > limiteDoAnexo(mediaType)) {
+    return NextResponse.json({ error: mensagemDeTamanho(mediaType) }, { status: 400 });
+  }
   let buffer: Buffer = Buffer.from(await file.arrayBuffer());
   let mimeType = mimeTypeOriginal;
   let extensao = extensionFor(file.name, mimeTypeOriginal);

@@ -11,10 +11,12 @@
   },
   "dependencies": {
     "@dilon-zap/db": "*",
+    "@dilon-zap/portais": "*",
     "@dilon-zap/push": "*",
     "@dilon-zap/receivables": "*",
     "@dilon-zap/sdr-core": "*",
     "@dilon-zap/storage": "*",
+    "@dilon-zap/vendedor-ia": "*",
     "bcryptjs": "^2.4.3",
     "dotenv": "^16.4.5",
     "emoji-picker-react": "^4.12.0",
@@ -25,6 +27,7 @@
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "sharp": "^0.35.3",
     "swr": "^2.2.5",
     "web-push": "^3.6.7",
     "zod": "^3.23.8"

@@ -44,6 +44,8 @@ import {
   STATUS_COUNTS_INTERVAL,
   UNREAD_COUNT_INTERVAL,
 } from "@/lib/polling";
+import { EscolherVeiculo } from "@/components/escolher-veiculo";
+import { AgenteDaConversa } from "@/components/agente-da-conversa";
 
 type ConversationStatus = "OPEN" | "PENDING" | "RESOLVED";
 type MessageStatus = "PENDING" | "SENT" | "DELIVERED" | "READ" | "FAILED";
@@ -85,6 +87,8 @@ type ConversationSummary = {
   // pra quem recebeu a conversa e nada pros outros.
   transferidaParaMim: boolean;
   transferidaPor: string | null;
+  // Só com busca: pedaço da mensagem onde o que foi digitado aparece.
+  trechoDaBusca?: string;
   messages: { body: string; direction: "INBOUND" | "OUTBOUND"; createdAt: string }[];
 };
 
@@ -501,6 +505,16 @@ export function InboxView({ ehFinanceiro, meuId, alertaSemRespostaMin = null }: 
                       </span>
                     )}
                   </div>
+                  {/* Achada pelo texto: mostra onde a palavra aparece, pra
+                      conferir o endereço sem abrir a conversa. */}
+                  {c.trechoDaBusca && (
+                    <p
+                      title={c.trechoDaBusca}
+                      className="mt-0.5 text-[11px] leading-snug text-neutral-600 bg-amber-50 rounded px-1.5 py-0.5 line-clamp-2"
+                    >
+                      …{c.trechoDaBusca}…
+                    </p>
+                  )}
                   <div className="flex items-center gap-1 mt-1.5 flex-wrap">
                     {/* Some sozinho quando o responsável abre a conversa (ver
                         a rota /read) — não precisa de botão de "ok, vi". */}
@@ -672,7 +686,7 @@ function NewConversationModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-surface rounded-lg p-6 w-full max-w-sm shadow-lg">
+      <div className="bg-surface rounded-lg p-6 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto shadow-lg">
         <h2 className="text-base font-semibold mb-4">Nova conversa</h2>
 
         <div className="mb-4">
@@ -881,6 +895,11 @@ export function ConversationThread({
   // Produtos). Em grupo não aparece: é material pra mandar a cliente.
   const temMateriais = useRecurso("MATERIAIS");
   const [escolhendoMaterial, setEscolhendoMaterial] = useState(false);
+  // Revenda de veículos: mandar um carro do estoque na conversa.
+  const temVeiculos = useRecurso("VEICULOS");
+  // O vendedor de IA por conversa existe só onde o SDR está ligado (hoje, a Dilon Tech).
+  const temSdr = useRecurso("SDR");
+  const [escolhendoVeiculo, setEscolhendoVeiculo] = useState(false);
   const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
     temPedidos && !modoGrupo ? `/api/orders?conversationId=${conversationId}` : null,
     fetcher,
@@ -1660,6 +1679,15 @@ export function ConversationThread({
                   Material
                 </button>
               )}
+              {temVeiculos && !modoGrupo && (
+                <button
+                  onClick={() => setEscolhendoVeiculo(true)}
+                  title="Enviar um carro do estoque"
+                  className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
+                >
+                  Carro
+                </button>
+              )}
               {/* Bloquear é de pessoa: num grupo travaria a fila de envio pra
                   todo mundo dele. Pra parar de acompanhar, Gerenciar grupos. */}
               {!modoGrupo && (
@@ -1691,6 +1719,7 @@ export function ConversationThread({
           </div>
         )}
         {aviso && <AvisoDeConexao aviso={aviso} />}
+        {temSdr && !modoGrupo && <AgenteDaConversa conversationId={conversationId} />}
 
         {buscaAberta && (
           <div className="flex items-center gap-2 px-3 md:px-6 py-2 border-b border-neutral-200 bg-surface">
@@ -2397,6 +2426,17 @@ export function ConversationThread({
           }}
         />
       )}
+      {escolhendoVeiculo && (
+        <EscolherVeiculo
+          conversationId={conversationId}
+          onFechar={() => setEscolhendoVeiculo(false)}
+          onEnviado={() => mutateMessages()}
+          onUsarTexto={(texto) => {
+            setDraft((atual) => (atual.trim() ? `${atual}\n\n${texto}` : texto));
+            setEscolhendoVeiculo(false);
+          }}
+        />
+      )}
       {escolhendoMaterial && (
         <EscolherMaterial
           conversationId={conversationId}
@@ -2492,6 +2532,11 @@ function ForwardModal({
   const [selected, setSelected] = useState<string[]>([]);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Legenda do arquivo encaminhado: só com UMA mensagem de imagem, vídeo ou
+  // documento. Já vem com a legenda original; quem encaminha pode trocar ou
+  // apagar (a Believe digitava a legenda numa mensagem separada, 18/11).
+  const aceitaLegenda = messages.length === 1 && !!messages[0].mediaType && messages[0].mediaType !== "AUDIO";
+  const [legenda, setLegenda] = useState(messages[0]?.body ?? "");
 
   const filtered = (targets ?? []).filter((t) =>
     contactLabel(t.contact).toLowerCase().includes(search.trim().toLowerCase())
@@ -2511,7 +2556,7 @@ function ForwardModal({
       const res = await fetch(`/api/messages/${message.id}/forward`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationIds: selected }),
+        body: JSON.stringify({ conversationIds: selected, ...(aceitaLegenda ? { legenda } : {}) }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -2572,6 +2617,22 @@ function ForwardModal({
             </label>
           ))}
         </div>
+        {aceitaLegenda && (
+          <div className="px-4 pt-3">
+            <label className="block text-xs font-medium text-neutral-600 mb-1" htmlFor="legenda-encaminhar">
+              Legenda (opcional)
+            </label>
+            <textarea
+              id="legenda-encaminhar"
+              value={legenda}
+              onChange={(e) => setLegenda(e.target.value)}
+              maxLength={1024}
+              rows={2}
+              placeholder="Escreva a legenda que vai junto do arquivo"
+              className="w-full resize-none rounded-md border border-neutral-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent"
+            />
+          </div>
+        )}
         {error && <p className="text-sm text-red-600 px-4 pt-2">{error}</p>}
         <div className="flex justify-end gap-2 p-4 border-t border-neutral-200">
           <button onClick={onClose} className="px-3 py-2 text-sm text-neutral-500 hover:text-neutral-800">
@@ -2969,7 +3030,7 @@ function AgendarMensagem({
       <form
         onSubmit={salvar}
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-md"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">Agendar mensagem</h2>
         <p className="text-xs text-neutral-500 mb-4">
@@ -3121,7 +3182,7 @@ function ConfirmarBloqueio({
     <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">Bloquear {nome}?</h2>
         <p className="text-sm text-neutral-600 mb-4">
@@ -3177,7 +3238,7 @@ function MotivoFechamento({
     <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">Como terminou este atendimento?</h2>
         <p className="text-xs text-neutral-500 mb-4">Aparece no funil e ajuda a entender onde as vendas param.</p>
@@ -3786,7 +3847,7 @@ function MotivoTransferencia({
     <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
       <div
         onClick={(e) => e.stopPropagation()}
-        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm"
+        className="bg-surface rounded-lg border border-neutral-200 p-5 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto"
       >
         <h2 className="text-base font-semibold mb-1">
           {tipo === "pessoa" ? `Passar para ${destino}` : `Encaminhar para ${destino}`}

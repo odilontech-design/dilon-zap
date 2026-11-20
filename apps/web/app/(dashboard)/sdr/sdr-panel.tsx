@@ -5,12 +5,14 @@ import useSWR from "swr";
 import { PORTES, ROTULO_PORTE, ROTULO_STATUS_CAMPANHA, STATUS_CAMPANHA, UFS } from "@/lib/sdr/esquemas";
 import { chamar, fetcher } from "../receber/formatos";
 import { BloqueiosPanel } from "./bloqueios-panel";
+import { FormCampanha, type CampanhaCompleta } from "./campanha-form";
 import { EmpresasPanel, type FiltroInicial } from "./empresas-panel";
 import { FilaPanel } from "./fila-panel";
 import { HojePanel } from "./hoje-panel";
 import { IaPanel } from "./ia-panel";
 import { ImportacoesPanel } from "./importacoes-panel";
 import { PainelIndicadores } from "./painel-indicadores";
+import { VendedorPanel } from "./vendedor-panel";
 
 type Criterio = { nome: string; descricao?: string; peso: number; obrigatorio: boolean };
 type Perfil = {
@@ -27,7 +29,7 @@ type Perfil = {
   _count?: { campanhas: number };
 };
 type Status = (typeof STATUS_CAMPANHA)[number];
-type Campanha = { id: string; nome: string; descricao: string | null; status: Status; icp: { id: string; nome: string } };
+type Campanha = CampanhaCompleta;
 
 const campo = "w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm";
 const rotulo = "block text-xs font-medium text-neutral-700 mb-1";
@@ -40,7 +42,7 @@ const CORES_STATUS: Record<Status, string> = {
 
 const paraLista = (texto: string) => [...new Set(texto.split(/[,\n]/).map((t) => t.trim()).filter(Boolean))];
 
-type Aba = "hoje" | "fila" | "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios" | "ia";
+type Aba = "hoje" | "fila" | "campanhas" | "perfis" | "empresas" | "importacoes" | "bloqueios" | "ia" | "vendedor";
 
 export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
   const [aba, setAba] = useState<Aba>("hoje");
@@ -66,7 +68,7 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
         <p className="text-sm text-neutral-500">Sua rotina de prospecção: empresas, decisores, abordagens, contatos e follow-ups.</p>
       </div>
       <p className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-        O Dilon Zap não envia mensagens por você: você envia pelo seu e-mail ou telefone e registra aqui. As empresas vêm só do que você importa ou cadastra (nada é pesquisado na internet), e nada vai para o CRM sem a sua ação. Os dados não foram verificados por ninguém.
+        O Dilon Zap não faz o primeiro contato por você: você envia pelo seu e-mail ou telefone e registra aqui. Só o Vendedor IA, se você ligar na aba dele, responde as empresas que já responderam a você. As empresas vêm só do que você importa ou cadastra (nada é pesquisado na internet), e nada vai para o CRM sem a sua ação. Os dados não foram verificados por ninguém.
       </p>
 
       {aba === "empresas" && (
@@ -89,6 +91,7 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
         {aba_("importacoes", "Importações")}
         {aba_("bloqueios", "Bloqueios")}
         {aba_("ia", "IA")}
+        {aba_("vendedor", "Vendedor IA")}
       </div>
 
       {aba === "fila" && <FilaPanel podeEscrever={podeEscrever} campanhas={listaDeCampanhas} />}
@@ -103,6 +106,7 @@ export function SdrPanel({ podeEscrever }: { podeEscrever: boolean }) {
         />
       )}
       {aba === "ia" && <IaPanel podeEscrever={podeEscrever} />}
+      {aba === "vendedor" && <VendedorPanel podeEscrever={podeEscrever} />}
       {aba === "campanhas" && (
         <Campanhas
           lista={campanhas.data?.campanhas}
@@ -203,6 +207,11 @@ function Campanhas({
                   <td className="px-4 py-2.5">
                     <p className="font-medium">{c.nome}</p>
                     {c.descricao && <p className="text-xs text-neutral-500">{c.descricao}</p>}
+                    <p className="text-[11px] text-neutral-500">
+                      Meta de {c.metaDiaria ?? 25} empresas/dia ·{" "}
+                      {[c.modeloLigacao, c.modeloEmail, c.modeloDirect, c.modeloWhatsapp].filter((m) => m?.trim()).length} de 4 modelos ·{" "}
+                      {Array.isArray(c.objecoes) ? c.objecoes.length : 0} objeções
+                    </p>
                   </td>
                   <td className="px-4 py-2.5 text-neutral-600">{c.icp.nome}</td>
                   <td className="px-4 py-2.5">
@@ -265,63 +274,6 @@ function Rodape({ salvando, onFechar }: { salvando: boolean; onFechar: () => voi
         Salvar
       </button>
     </div>
-  );
-}
-
-function FormCampanha({ campanha, perfis, onFechar, onSalvo }: { campanha: Campanha | null; perfis: Perfil[]; onFechar: () => void; onSalvo: () => void }) {
-  const [nome, setNome] = useState(campanha?.nome ?? "");
-  const [descricao, setDescricao] = useState(campanha?.descricao ?? "");
-  const [icpId, setIcpId] = useState(campanha?.icp.id ?? perfis[0]?.id ?? "");
-  const [status, setStatus] = useState<Status>(campanha?.status ?? "RASCUNHO");
-  const [erro, setErro] = useState<string | null>(null);
-  const [salvando, setSalvando] = useState(false);
-
-  async function salvar(e: React.FormEvent) {
-    e.preventDefault();
-    setErro(null);
-    setSalvando(true);
-    const corpo = { nome, descricao: descricao.trim() || null, icpId, status };
-    const r = await chamar(campanha ? `/api/sdr/campanhas/${campanha.id}` : "/api/sdr/campanhas", campanha ? "PATCH" : "POST", corpo);
-    setSalvando(false);
-    if (!r.ok) return setErro(r.erro ?? "não deu pra salvar");
-    onSalvo();
-  }
-
-  return (
-    <Modal titulo={campanha ? "Editar campanha" : "Nova campanha"} onFechar={onFechar}>
-      <form onSubmit={salvar} className="flex flex-col gap-3">
-        <label>
-          <span className={rotulo}>Nome</span>
-          <input id="campanha-nome" value={nome} onChange={(e) => setNome(e.target.value)} required minLength={2} maxLength={80} className={campo} />
-        </label>
-        <label>
-          <span className={rotulo}>Descrição</span>
-          <textarea id="campanha-descricao" value={descricao} onChange={(e) => setDescricao(e.target.value)} maxLength={500} rows={2} className={campo} />
-        </label>
-        <label>
-          <span className={rotulo}>Perfil de cliente</span>
-          <select id="campanha-perfil" value={icpId} onChange={(e) => setIcpId(e.target.value)} required className={campo}>
-            {perfis.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          <span className={rotulo}>Status</span>
-          <select id="campanha-status" value={status} onChange={(e) => setStatus(e.target.value as Status)} className={campo}>
-            {STATUS_CAMPANHA.map((s) => (
-              <option key={s} value={s}>
-                {ROTULO_STATUS_CAMPANHA[s]}
-              </option>
-            ))}
-          </select>
-        </label>
-        {erro && <p className="text-sm text-red-600">{erro}</p>}
-        <Rodape salvando={salvando} onFechar={onFechar} />
-      </form>
-    </Modal>
   );
 }
 

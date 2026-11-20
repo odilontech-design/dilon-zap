@@ -23,9 +23,10 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
   const ordem = await prisma.ordemServico.findFirst({
     where: { id: params.id, tenantId: user.tenantId },
-    select: { id: true, etapa: true },
+    select: { id: true, etapa: true, historica: true },
   });
   if (!ordem) return NextResponse.json({ error: "OS não encontrada" }, { status: 404 });
+  if (ordem.historica) return NextResponse.json({ error: "OS antiga do papel é só registro: não muda de etapa" }, { status: 409 });
   if (!podeMover(ordem.etapa, para)) {
     return NextResponse.json(
       { error: ordem.etapa === "CANCELADA" ? "OS cancelada não volta: abra uma nova" : "a OS já está nessa etapa" },

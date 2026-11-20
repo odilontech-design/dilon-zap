@@ -25,6 +25,9 @@ import {
   type Graus,
 } from "@/lib/otica-regras";
 import { diaParaISO, erroDaResposta, fetcher, isoParaDia } from "./formatos";
+import type { LeituraOS } from "@/lib/otica-leitura";
+import { FormularioArmacao, type ArmacaoDados } from "./formulario-armacao";
+import { FormularioLaboratorio, type LaboratorioNovo } from "./formulario-laboratorio";
 
 // Opções do talão da Visuallis. Texto livre por baixo: aparecendo outro
 // material, a atendente escreve em "Lentes" sem esperar uma versão nova.
@@ -74,6 +77,8 @@ type OSCompleta = {
   sinalCents: number;
   financeiro: Financeiro | null;
   portadorAutorizado: string | null;
+  historica: boolean;
+  fotoKey: string | null;
   motivoCancelamento: string | null;
   contact: Record<string, string | null> & { id: string };
   receita: ReceitaSalva | null;
@@ -130,14 +135,29 @@ function lerGrade(g: Grade): { graus: Graus; erros: string[] } {
 const campo = "w-full rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40";
 const rotulo = "text-xs font-medium text-neutral-700";
 
-export function FormularioOS({ id }: { id?: string }) {
+/** O que a tela de escanear entrega ao formulário: a leitura da foto, o que já existe e a própria foto. */
+export type Escaneada = {
+  leitura: LeituraOS;
+  laboratorioId: string | null;
+  consultorId: string | null;
+  contato: { id: string; nome: string | null; telefone: string | null } | null;
+  avisos: string[];
+  duvidas: string[];
+  foto: File;
+  /** OS antiga digitada só para o histórico: sem Caixa, estoque nem WhatsApp. */
+  historica: boolean;
+};
+
+export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escaneada }) {
   const router = useRouter();
   const editando = !!id;
-  const { data: opcoes } = useSWR<Opcoes>("/api/otica/opcoes", fetcher);
+  const { data: opcoes, mutate: recarregarOpcoes } = useSWR<Opcoes>("/api/otica/opcoes", fetcher);
   const { data: os, mutate } = useSWR<OSCompleta>(id ? `/api/otica/os/${id}` : null, fetcher);
 
   // Cliente
   const [contato, setContato] = useState<Contato | null>(null);
+  // Nome do cliente na edição da OS (corrige a ficha do contato).
+  const [nomeEdit, setNomeEdit] = useState("");
   const [busca, setBusca] = useState("");
   const [achados, setAchados] = useState<Contato[]>([]);
   const [novoNome, setNovoNome] = useState("");
@@ -174,10 +194,21 @@ export function FormularioOS({ id }: { id?: string }) {
   const [meioSinal, setMeioSinal] = useState<"" | "DINHEIRO" | "PIX" | "CARTAO">("");
   const [armacaoSel, setArmacaoSel] = useState<ArmacaoEscolhida | null>(null);
   const [buscaArm, setBuscaArm] = useState("");
+  // Cadastrar ou editar a armação sem sair da OS.
+  const [armForm, setArmForm] = useState<null | { editar?: string; codigo?: string }>(null);
+  // Cadastrar o laboratório sem sair da OS (o nome lido da foto do talão vira o ponto de partida).
+  const [labForm, setLabForm] = useState<null | { nome?: string }>(null);
+  const [corAntes, setCorAntes] = useState<string | null>(null);
+  const [medidasAntes, setMedidasAntes] = useState<string | null>(null);
   const [achadasArm, setAchadasArm] = useState<(ArmacaoEscolhida & { cor: string | null; medidas: string | null; quantidade: number })[]>([]);
   const [tratamentos, setTratamentos] = useState<string[]>([]);
   const [servicos, setServicos] = useState<string[]>([]);
 
+  // Número escrito no talão (OS escaneada) e dia da venda no papel (OS antiga).
+  const [numeroPapel, setNumeroPapel] = useState(escaneada?.leitura.numero ? String(escaneada.leitura.numero) : "");
+  const [dataVenda, setDataVenda] = useState(escaneada?.leitura.dataVenda ?? "");
+  const [semFoto, setSemFoto] = useState<{ id: string; numero: number; motivo: string } | null>(null);
+  const historica = escaneada?.historica ?? os?.historica ?? false;
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [ok, setOk] = useState<string | null>(null);
@@ -187,6 +218,7 @@ export function FormularioOS({ id }: { id?: string }) {
     if (!os) return;
     const c = os.contact;
     setContato({ id: c.id, nome: c.name, telefone: c.phoneNumber });
+    setNomeEdit(c.name ?? "");
     setCliente({
       documento: c.documento ?? "",
       rgIe: c.rgIe ?? "",
@@ -226,6 +258,56 @@ export function FormularioOS({ id }: { id?: string }) {
     setServicos(os.servicos);
   }, [os?.id]);
 
+  // OS escaneada: preenche a tela com o que a foto trouxe. É sugestão: a atendente confere e corrige.
+  useEffect(() => {
+    if (!escaneada) return;
+    const l = escaneada.leitura;
+    if (escaneada.contato) {
+      setContato({ id: escaneada.contato.id, nome: escaneada.contato.nome, telefone: escaneada.contato.telefone });
+    } else {
+      setNovoNome(l.cliente.nome);
+      setNovoTelefone(l.cliente.telefone);
+    }
+    setCliente({
+      documento: l.cliente.documento,
+      rgIe: l.cliente.rgIe,
+      nascimento: l.cliente.nascimento,
+      email: l.cliente.email,
+      cep: l.cliente.cep,
+      logradouro: l.cliente.logradouro,
+      numeroEndereco: l.cliente.numeroEndereco,
+      bairro: l.cliente.bairro,
+      cidade: l.cliente.cidade,
+    });
+    setGrade(l.receita.grade);
+    setRx({ usuarioNome: l.receita.usuarioNome, usuarioNascimento: "", medico: l.receita.medico, crm: l.receita.crm, dataConsulta: l.receita.dataConsulta, observacoes: "" });
+    setF((x) => ({
+      ...x,
+      lentes: l.lentes,
+      materialLente: l.materialLente,
+      indiceLente: l.indiceLente,
+      tratamentoCor: l.tratamentoCor,
+      armacao: l.armacao,
+      materialArmacao: l.materialArmacao,
+      laboratorioId: escaneada.laboratorioId ?? "",
+      pedidoLaboratorio: l.pedidoLaboratorio,
+      consultorId: escaneada.consultorId ?? "",
+      previsaoDia: l.previsaoDia,
+      previsaoHora: l.previsaoHora,
+      valor: l.valor,
+      sinal: l.sinal,
+      portadorAutorizado: l.portadorAutorizado,
+      observacoes: l.observacoes,
+      ponte: l.medidas.ponte,
+      diagonal: l.medidas.diagonal,
+      horizontal: l.medidas.horizontal,
+      vertical: l.medidas.vertical,
+    }));
+    setMeioSinal(l.meioDoSinal);
+    setTratamentos(l.tratamentos);
+    setServicos(l.servicos);
+  }, []);
+
   // A previsão aparece no relógio da loja, que só se sabe depois de carregar as opções.
   useEffect(() => {
     if (!os?.previsaoEntrega || !opcoes) return;
@@ -246,8 +328,29 @@ export function FormularioOS({ id }: { id?: string }) {
     return () => clearTimeout(t);
   }, [buscaArm, armacaoSel]);
 
+  const textoDaArmacao = (a: { codigo: string; descricao: string; cor: string | null; medidas: string | null }) => [a.codigo, a.descricao, a.cor, a.medidas].filter(Boolean).join(" · ");
+
+  // Depois de cadastrar (nova) ou editar a peça dentro da OS: ela fica escolhida e o texto impresso acompanha.
+  // O texto só é reescrito se estava vazio ou ainda era o gerado da própria peça: o que a atendente digitou à mão fica.
+  function armacaoSalva(a: ArmacaoDados) {
+    const antes = armacaoSel;
+    const geradoAntes = antes && armForm?.editar ? textoDaArmacao({ codigo: antes.codigo, descricao: antes.descricao, cor: corAntes, medidas: medidasAntes }) : "";
+    setArmacaoSel({ id: a.id, codigo: a.codigo, descricao: a.descricao, precoCents: a.precoCents, material: a.material });
+    setBuscaArm("");
+    const material = MATERIAIS_ARMACAO.find((m) => m.toLowerCase() === (a.material ?? "").toLowerCase());
+    setF((x) => {
+      const reescreve = !x.armacao.trim() || (!!geradoAntes && x.armacao === geradoAntes);
+      return { ...x, armacao: reescreve ? textoDaArmacao(a) : x.armacao, materialArmacao: material ?? x.materialArmacao };
+    });
+    setCorAntes(a.cor);
+    setMedidasAntes(a.medidas);
+    setArmForm(null);
+  }
+
   function escolherArmacao(a: ArmacaoEscolhida & { cor: string | null; medidas: string | null }) {
     setArmacaoSel({ id: a.id, codigo: a.codigo, descricao: a.descricao, precoCents: a.precoCents });
+    setCorAntes(a.cor);
+    setMedidasAntes(a.medidas);
     setBuscaArm("");
     // O texto impresso na OS já sai preenchido: código, modelo, cor e medidas.
     const texto = [a.codigo, a.descricao, a.cor, a.medidas].filter(Boolean).join(" · ");
@@ -330,6 +433,17 @@ export function FormularioOS({ id }: { id?: string }) {
     });
   }
 
+  // Laboratório recém-cadastrado: entra na lista, fica escolhido e, sem previsão ainda, sugere pelo prazo dele.
+  async function laboratorioSalvo(lab: LaboratorioNovo) {
+    await recarregarOpcoes();
+    setF((x) => ({
+      ...x,
+      laboratorioId: lab.id,
+      previsaoDia: x.previsaoDia || (lab.prazoDias && opcoes ? diaHoraNoFuso(previsaoPeloPrazo(new Date(), lab.prazoDias), opcoes.timezone).dia : ""),
+    }));
+    setLabForm(null);
+  }
+
   const lida = useMemo(() => lerGrade(grade), [grade]);
   const alertas = useMemo(() => (lida.erros.length ? [] : alertasDaReceita(lida.graus)), [lida]);
   const valorCents = reaisParaCentavos(f.valor);
@@ -345,7 +459,9 @@ export function FormularioOS({ id }: { id?: string }) {
     if (lida.erros.length) return setErro(`Confira a receita: ${lida.erros.join(" · ")}`);
     if (valorCents === null || sinalCents === null) return setErro("Confira o valor e o sinal.");
     if (sinalCents > valorCents) return setErro("O sinal não pode ser maior que o valor.");
-    if (!os?.financeiro && sinalCents > 0 && !meioSinal) return setErro("Diga como o sinal foi pago: dinheiro, Pix ou cartão.");
+    if (escaneada && historica && !numeroPapel.trim()) return setErro("Informe o número da OS que está escrito no papel.");
+    if (numeroPapel.trim() && !/^\d{1,7}$/.test(numeroPapel.trim())) return setErro("O número da OS tem só dígitos.");
+    if (!historica && !os?.financeiro && sinalCents > 0 && !meioSinal) return setErro("Diga como o sinal foi pago: dinheiro, Pix ou cartão.");
     const medidas = {
       ponte: lerMilimetros(f.ponte),
       diagonal: lerMilimetros(f.diagonal),
@@ -366,8 +482,9 @@ export function FormularioOS({ id }: { id?: string }) {
     );
 
     const corpo = {
+      ...(escaneada ? { ...(numeroPapel.trim() ? { numero: Number(numeroPapel) } : {}), ...(historica ? { historica: true } : {}), dataVenda: dataVenda || null } : {}),
       ...(editando ? {} : contato ? { contactId: contato.id } : { novoCliente: { nome: novoNome.trim(), telefone: novoTelefone } }),
-      cliente: dadosCliente,
+      cliente: editando && nomeEdit.trim() ? { ...dadosCliente, nome: nomeEdit.trim() } : dadosCliente,
       ...(receitaId
         ? { receitaId }
         : receitaPreenchida
@@ -418,10 +535,29 @@ export function FormularioOS({ id }: { id?: string }) {
       mutate();
     } else {
       const criada = (await r.json()) as { id: string; numero: number };
+      if (escaneada) {
+        // A foto do talão fica guardada na OS. Se não subir, a OS já existe: avisa e deixa anexar depois.
+        const envio = new FormData();
+        envio.append("foto", escaneada.foto);
+        const f = await fetch(`/api/otica/os/${criada.id}/foto`, { method: "POST", body: envio }).catch(() => null);
+        if (!f || !f.ok) {
+          setSemFoto({ id: criada.id, numero: criada.numero, motivo: f ? await erroDaResposta(f) : "sem conexão" });
+          return;
+        }
+      }
       router.push(`/otica/os/${criada.id}`);
     }
   }
 
+  if (semFoto) {
+    return (
+      <div className="flex flex-col gap-3 max-w-xl">
+        <p role="status" className="rounded-md bg-accent/10 px-3 py-2 text-sm text-accent">OS {numeroOS(semFoto.numero)} salva.</p>
+        <p role="alert" className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-800">A foto não foi guardada: {semFoto.motivo}. Abra a OS e anexe a foto de novo.</p>
+        <Link href={`/otica/os/${semFoto.id}`} className="w-fit rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white">Abrir a OS</Link>
+      </div>
+    );
+  }
   if (editando && !os) return <p className="text-sm text-neutral-500">Carregando OS…</p>;
   const cancelada = os?.etapa === "CANCELADA";
 
@@ -430,7 +566,7 @@ export function FormularioOS({ id }: { id?: string }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <Link href="/otica" className="text-xs text-neutral-500 hover:text-accent">← Ordens de serviço</Link>
-          <h2 className="text-xl font-semibold">{os ? `OS ${numeroOS(os.numero)}` : "Nova ordem de serviço"}</h2>
+          <h2 className="text-xl font-semibold">{os ? `OS ${numeroOS(os.numero)}` : escaneada ? (historica ? "OS antiga do papel" : "OS do papel") : "Nova ordem de serviço"}</h2>
         </div>
         {os && (
           <div className="flex flex-wrap gap-2 text-sm">
@@ -441,16 +577,38 @@ export function FormularioOS({ id }: { id?: string }) {
         )}
       </div>
 
-      {os && <BarraEtapas os={os} aoMudar={() => mutate()} />}
+      {os?.historica && (
+        <p className="rounded-md border border-neutral-300 bg-neutral-50 px-3 py-2 text-sm text-neutral-700">
+          Registro histórico do talão de papel: guarda a OS, a receita e a foto. Não mexe em Caixa, estoque nem WhatsApp, e a OS não muda de etapa.
+        </p>
+      )}
+      {os && !os.historica && <BarraEtapas os={os} aoMudar={() => mutate()} />}
+      {os && <FotoDoTalao os={os} aoMudar={() => mutate()} />}
+      {escaneada && <PainelDaLeitura e={escaneada} numero={numeroPapel} mudarNumero={setNumeroPapel} dia={dataVenda} mudarDia={setDataVenda} />}
 
       <form onSubmit={salvar} className="flex flex-col gap-4">
         <fieldset disabled={cancelada} className="flex flex-col gap-4 disabled:opacity-70">
           <Secao titulo="Cliente">
             {contato ? (
               <div className="flex items-center justify-between rounded-md border border-neutral-300 px-3 py-2 text-sm">
-                <span>
-                  <b>{contato.nome || "Sem nome"}</b> <span className="text-neutral-500">{contato.telefone}</span>
-                </span>
+                {editando ? (
+                  <span className="flex flex-1 flex-wrap items-center gap-2">
+                    <input
+                      id="os-nome-cliente"
+                      aria-label="Nome do cliente"
+                      value={nomeEdit}
+                      onChange={(e) => setNomeEdit(e.target.value)}
+                      maxLength={120}
+                      placeholder="Nome do cliente"
+                      className="min-w-[12rem] flex-1 rounded-md border border-neutral-300 px-2 py-1 font-semibold"
+                    />
+                    <span className="text-neutral-500">{contato.telefone}</span>
+                  </span>
+                ) : (
+                  <span>
+                    <b>{contato.nome || "Sem nome"}</b> <span className="text-neutral-500">{contato.telefone}</span>
+                  </span>
+                )}
                 {!editando && (
                   <button type="button" onClick={() => { setContato(null); setReceitaId(null); }} className="text-xs text-accent hover:underline">Trocar</button>
                 )}
@@ -536,7 +694,10 @@ export function FormularioOS({ id }: { id?: string }) {
                     <b className="tabular-nums">{armacaoSel.codigo}</b> · {armacaoSel.descricao}
                     {armacaoSel.precoCents ? <span className="text-neutral-500"> · {centsToBRL(armacaoSel.precoCents)}</span> : null}
                   </span>
-                  <button type="button" onClick={() => setArmacaoSel(null)} className="text-xs text-accent hover:underline">Trocar</button>
+                  <span className="flex gap-3">
+                    <button type="button" onClick={() => setArmForm({ editar: armacaoSel.id, codigo: armacaoSel.codigo })} className="text-xs text-accent hover:underline">Editar</button>
+                    <button type="button" onClick={() => setArmacaoSel(null)} className="text-xs text-accent hover:underline">Trocar</button>
+                  </span>
                 </div>
               ) : (
                 <>
@@ -553,7 +714,12 @@ export function FormularioOS({ id }: { id?: string }) {
                       ))}
                     </ul>
                   )}
-                  <p className="text-[11px] text-neutral-500">Armação do cliente ou que não está na lista? Deixe em branco e escreva abaixo. Escolhida daqui, a peça sai do estoque ao abrir a OS.</p>
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-[11px] text-neutral-500">Armação do cliente? Deixe em branco e escreva abaixo. Escolhida daqui, a peça sai do estoque ao abrir a OS.</p>
+                    <button type="button" onClick={() => setArmForm({ codigo: buscaArm.trim() || undefined })} className="text-xs text-accent hover:underline whitespace-nowrap">
+                      + Cadastrar armação nova{buscaArm.trim() ? ` "${buscaArm.trim()}"` : ""}
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -566,6 +732,7 @@ export function FormularioOS({ id }: { id?: string }) {
               <Campo rotulo="Vertical B (mm)" id="os-b" valor={f.vertical} mudar={(v) => setF({ ...f, vertical: v })} />
             </div>
             <Varias rotulo="Serviços no laboratório" opcoes={SERVICOS} valores={servicos} mudar={setServicos} />
+            {armForm && <FormularioArmacao armacaoId={armForm.editar} codigoInicial={armForm.codigo} onSalvo={armacaoSalva} onFechar={() => setArmForm(null)} />}
           </Secao>
 
           <Secao titulo="Laboratório e entrega">
@@ -578,6 +745,18 @@ export function FormularioOS({ id }: { id?: string }) {
                     <option key={l.id} value={l.id}>{l.nome}{l.prazoDias ? ` (${l.prazoDias} dias)` : ""}</option>
                   ))}
                 </select>
+                {opcoes?.gestao ? (
+                  <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <button type="button" onClick={() => setLabForm({})} className="text-xs font-normal text-accent hover:underline">+ Cadastrar laboratório</button>
+                    {escaneada?.leitura.laboratorioNome && !f.laboratorioId && (
+                      <button type="button" onClick={() => setLabForm({ nome: escaneada.leitura.laboratorioNome })} className="text-xs font-normal text-accent hover:underline">
+                        Cadastrar "{escaneada.leitura.laboratorioNome}" (lido do papel)
+                      </button>
+                    )}
+                  </span>
+                ) : (
+                  <span className="mt-1 block text-[11px] font-normal text-neutral-500">Laboratório novo? Peça à gestão para cadastrar.</span>
+                )}
               </label>
               <Campo rotulo="Nº do pedido no laboratório" id="os-pedido" valor={f.pedidoLaboratorio} mudar={(v) => setF({ ...f, pedidoLaboratorio: v })} className="col-span-2" />
               <Campo rotulo="Previsão de entrega" id="os-prev-dia" tipo="date" valor={f.previsaoDia} mudar={(v) => setF({ ...f, previsaoDia: v })} />
@@ -591,8 +770,9 @@ export function FormularioOS({ id }: { id?: string }) {
               </label>
             </div>
             {opcoes && opcoes.laboratorios.length === 0 && (
-              <p className="text-xs text-neutral-500">Nenhum laboratório cadastrado. A gestão cadastra em Ótica → Laboratórios e avisos.</p>
+              <p className="text-xs text-neutral-500">Nenhum laboratório cadastrado. {opcoes.gestao ? "Use \"+ Cadastrar laboratório\" acima." : "A gestão cadastra em Ótica → Laboratórios e avisos."}</p>
             )}
+            {labForm && <FormularioLaboratorio nomeInicial={labForm.nome} onSalvo={laboratorioSalvo} onFechar={() => setLabForm(null)} />}
           </Secao>
 
           <Secao titulo="Valores">
@@ -609,7 +789,7 @@ export function FormularioOS({ id }: { id?: string }) {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
                   <Campo rotulo="Valor final (R$)" id="os-valor" valor={f.valor} mudar={(v) => setF({ ...f, valor: v })} modo="decimal" />
                   <Campo rotulo="Sinal (R$)" id="os-sinal" valor={f.sinal} mudar={(v) => setF({ ...f, sinal: v })} modo="decimal" />
-                  <label className={rotulo}>
+                  {!historica && <label className={rotulo}>
                     Sinal pago em
                     <select id="os-meio-sinal" value={meioSinal} onChange={(e) => setMeioSinal(e.target.value as typeof meioSinal)} className={`${campo} mt-1`}>
                       <option value="">—</option>
@@ -617,13 +797,13 @@ export function FormularioOS({ id }: { id?: string }) {
                       <option value="PIX">Pix</option>
                       <option value="CARTAO">Cartão</option>
                     </select>
-                  </label>
+                  </label>}
                   <div className="text-sm">
                     <span className={rotulo}>Saldo a receber</span>
                     <p className="py-2 font-semibold tabular-nums">{saldo === null ? "—" : centsToBRL(saldo)}</p>
                   </div>
                 </div>
-                <p className="text-[11px] text-neutral-500">Ao abrir a OS, o sinal entra no Caixa e o saldo fica em Financeiro → A receber, para a data da entrega.</p>
+                <p className="text-[11px] text-neutral-500">{historica ? "OS antiga: o valor e o sinal ficam só como registro. Nada entra no Caixa nem no Financeiro." : "Ao abrir a OS, o sinal entra no Caixa e o saldo fica em Financeiro → A receber, para a data da entrega."}</p>
               </>
             )}
             <Campo rotulo="Autorizado a retirar (além do cliente)" id="os-portador" valor={f.portadorAutorizado} mudar={(v) => setF({ ...f, portadorAutorizado: v })} />
@@ -639,7 +819,7 @@ export function FormularioOS({ id }: { id?: string }) {
         {!cancelada && (
           <div className="flex gap-2">
             <button disabled={salvando} className="rounded-md bg-accent px-5 py-2.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
-              {salvando ? "Salvando…" : editando ? "Salvar alterações" : "Abrir OS"}
+              {salvando ? "Salvando…" : editando ? "Salvar alterações" : historica ? "Guardar OS antiga" : "Abrir OS"}
             </button>
             <Link href="/otica" className="rounded-md border border-neutral-300 px-5 py-2.5 text-sm">Voltar</Link>
           </div>
@@ -962,5 +1142,63 @@ function Historico({ eventos }: { eventos: OSCompleta["eventos"] }) {
         ))}
       </ol>
     </section>
+  );
+}
+
+
+/** Resumo da leitura da foto: número do papel, dia da venda, o que a IA não leu bem e a própria foto. */
+function PainelDaLeitura({ e, numero, mudarNumero, dia, mudarDia }: { e: Escaneada; numero: string; mudarNumero: (v: string) => void; dia: string; mudarDia: (v: string) => void }) {
+  const url = useMemo(() => URL.createObjectURL(e.foto), [e.foto]);
+  useEffect(() => () => URL.revokeObjectURL(url), [url]);
+  return (
+    <section className="rounded-lg border border-accent/40 bg-accent/5 p-4 flex flex-col gap-3">
+      <div className="flex flex-col gap-3 md:flex-row">
+        <a href={url} target="_blank" rel="noreferrer" className="shrink-0">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt="Foto da OS escaneada" className="h-32 w-auto max-w-full rounded-md border border-neutral-300 object-cover" />
+        </a>
+        <div className="flex flex-col gap-2 text-sm">
+          <p className="font-semibold">Leitura feita. Confira tudo contra o papel antes de salvar.</p>
+          <p className="text-xs text-neutral-600">A leitura é uma sugestão e pode errar, principalmente em letra de mão. Grau e valor merecem atenção dupla.</p>
+          <div className="grid grid-cols-2 gap-3 max-w-md">
+            <Campo rotulo="Número da OS no papel" id="os-numero-papel" valor={numero} mudar={mudarNumero} modo="decimal" />
+            <Campo rotulo={e.historica ? "Dia da venda" : "Dia da venda (opcional)"} id="os-data-venda" tipo="date" valor={dia} mudar={mudarDia} />
+          </div>
+        </div>
+      </div>
+      {(e.avisos.length > 0 || e.duvidas.length > 0) && (
+        <ul className="list-disc pl-5 text-xs text-amber-800 space-y-0.5">
+          {e.avisos.map((a) => <li key={a}>{a}</li>)}
+          {e.duvidas.length > 0 && <li>Campos que a leitura marcou como duvidosos: {e.duvidas.join(", ")}.</li>}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** A foto do talão guardada na OS: ver, trocar ou anexar. */
+function FotoDoTalao({ os, aoMudar }: { os: OSCompleta; aoMudar: () => void }) {
+  const [enviando, setEnviando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  async function enviar(arquivo: File | undefined) {
+    if (!arquivo) return;
+    setErro(null);
+    setEnviando(true);
+    const envio = new FormData();
+    envio.append("foto", arquivo);
+    const r = await fetch(`/api/otica/os/${os.id}/foto`, { method: "POST", body: envio }).catch(() => null);
+    setEnviando(false);
+    if (!r || !r.ok) return setErro(r ? await erroDaResposta(r) : "sem conexão");
+    aoMudar();
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-3 text-sm">
+      {os.fotoKey && <a href={`/api/otica/os/${os.id}/foto`} target="_blank" rel="noreferrer" className="rounded-md border border-neutral-300 px-3 py-1.5 hover:border-accent">Ver foto do talão</a>}
+      <label className="cursor-pointer rounded-md border border-neutral-300 px-3 py-1.5 hover:border-accent">
+        {enviando ? "Enviando…" : os.fotoKey ? "Trocar a foto" : "Anexar foto do talão"}
+        <input id="os-foto-talao" type="file" accept="image/jpeg,image/png,image/webp" capture="environment" className="sr-only" disabled={enviando} onChange={(e) => enviar(e.target.files?.[0])} />
+      </label>
+      {erro && <span role="alert" className="text-xs text-red-600">{erro}</span>}
+    </div>
   );
 }

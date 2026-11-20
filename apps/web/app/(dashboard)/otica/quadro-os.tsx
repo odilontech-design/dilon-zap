@@ -25,6 +25,9 @@ type Cartao = {
   recebidoCents: number;
   saldoCents: number;
   pedidoLaboratorio: string | null;
+  historica?: boolean;
+  entregueEm?: string | null;
+  fotoKey?: string | null;
   contact: { id: string; name: string | null; waName: string | null; phoneNumber: string | null };
   laboratorio: { nome: string } | null;
   consultor: { name: string } | null;
@@ -38,8 +41,12 @@ type Cartao = {
 export function QuadroOS() {
   const [busca, setBusca] = useState("");
   const [buscaAtiva, setBuscaAtiva] = useState("");
+  // Quadro: o que anda e as entregues dos últimos 30 dias. Histórico: tudo que já foi entregue ou
+  // cancelado, inclusive as OS antigas escaneadas do papel, que não cabem no quadro.
+  const [visao, setVisao] = useState<"quadro" | "historico">("quadro");
+  const emLista = !!buscaAtiva || visao === "historico";
   const { data, error, mutate, isLoading } = useSWR<Cartao[]>(
-    `/api/otica/os${buscaAtiva ? `?q=${encodeURIComponent(buscaAtiva)}` : ""}`,
+    `/api/otica/os${buscaAtiva ? `?q=${encodeURIComponent(buscaAtiva)}` : visao === "historico" ? "?historico=1" : ""}`,
     fetcher,
     { refreshInterval: 30_000 }
   );
@@ -107,18 +114,33 @@ export function QuadroOS() {
           />
           <button className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:border-accent">Buscar</button>
         </form>
+        <Link href="/otica/os/escanear" className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:border-accent">
+          Escanear OS do papel
+        </Link>
         <Link href="/otica/os/nova" className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
           Nova OS
         </Link>
       </div>
 
+      <div className="flex flex-wrap gap-2 text-xs" role="group" aria-label="O que mostrar">
+        <button type="button" onClick={() => { setVisao("quadro"); setBusca(""); setBuscaAtiva(""); }} aria-pressed={!emLista} className={`rounded-full px-3 py-1 ${!emLista ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-600 hover:text-neutral-900"}`}>
+          Quadro
+        </button>
+        <button type="button" onClick={() => { setVisao("historico"); setBusca(""); setBuscaAtiva(""); }} aria-pressed={visao === "historico" && !buscaAtiva} className={`rounded-full px-3 py-1 ${visao === "historico" && !buscaAtiva ? "bg-neutral-800 text-white" : "bg-neutral-100 text-neutral-600 hover:text-neutral-900"}`}>
+          Histórico: entregues, canceladas e antigas
+        </button>
+      </div>
       <div className="flex flex-wrap gap-2 text-xs">
+        {!emLista && (
+          <>
         <span className={`rounded-full px-3 py-1 ${atrasadas.length ? "bg-red-500/10 text-red-600" : "bg-neutral-100 text-neutral-500"}`}>
           {atrasadas.length} com prazo vencido
         </span>
         <span className="rounded-full bg-accent/10 px-3 py-1 text-accent">
           {prontas.length} pronta(s) para retirada{aReceberProntas ? ` · ${centsToBRL(aReceberProntas)} a receber` : ""}
         </span>
+          </>
+        )}
         {buscaAtiva && (
           <button onClick={() => { setBusca(""); setBuscaAtiva(""); }} className="rounded-full bg-neutral-100 px-3 py-1 text-neutral-600 hover:text-neutral-900">
             Busca: “{buscaAtiva}” · limpar
@@ -136,11 +158,13 @@ export function QuadroOS() {
 
       {!isLoading && !error && ordens.length === 0 && (
         <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500">
-          {buscaAtiva ? "Nenhuma OS encontrada." : "Nenhuma OS em andamento. Clique em Nova OS para registrar a primeira venda."}
+          {buscaAtiva ? "Nenhuma OS encontrada." : visao === "historico" ? "Nenhuma OS entregue ou cancelada ainda." : "Nenhuma OS em andamento. Clique em Nova OS para registrar a primeira venda."}
         </div>
       )}
 
-      {ordens.length > 0 && (
+      {ordens.length > 0 && emLista && <ListaDeOS ordens={ordens} fuso={opcoes?.timezone} limitado={ordens.length >= (buscaAtiva ? 50 : 300)} busca={!!buscaAtiva} />}
+
+      {ordens.length > 0 && !emLista && (
         <div className="overflow-x-auto pb-2">
           <div className="grid grid-flow-col auto-cols-[minmax(190px,1fr)] gap-3 min-w-max lg:min-w-0">
             {ETAPAS_DO_QUADRO.map((etapa) => {
@@ -195,6 +219,51 @@ export function QuadroOS() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+const ROTULO_LISTA: Record<string, string> = { ENTREGUE: "Entregue", CANCELADA: "Cancelada" };
+
+/** Lista simples de OS: o resultado de uma busca e o histórico. Mostra todas as etapas, inclusive a cancelada, que não é coluna do quadro. */
+function ListaDeOS({ ordens, fuso, limitado, busca }: { ordens: Cartao[]; fuso?: string; limitado: boolean; busca: boolean }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-surface">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-neutral-500">
+              <th className="px-3 py-2 font-medium">OS</th>
+              <th className="px-3 py-2 font-medium">Cliente</th>
+              <th className="px-3 py-2 font-medium">Situação</th>
+              <th className="px-3 py-2 font-medium">Entrega</th>
+              <th className="px-3 py-2 text-right font-medium">Valor</th>
+            </tr>
+          </thead>
+          <tbody>
+            {ordens.map((o) => (
+              <tr key={o.id} className="border-t border-neutral-100 hover:bg-neutral-50">
+                <td className="px-3 py-2 font-medium tabular-nums">
+                  <Link href={`/otica/os/${o.id}`} className="hover:text-accent">{numeroOS(o.numero)}</Link>
+                </td>
+                <td className="px-3 py-2">
+                  <Link href={`/otica/os/${o.id}`} className="hover:text-accent">{o.contact.name || o.contact.waName || o.contact.phoneNumber || "Sem nome"}</Link>
+                  {(o.lentes || o.armacao) && <span className="block text-xs text-neutral-500 line-clamp-1">{[o.lentes, o.armacao].filter(Boolean).join(" · ")}</span>}
+                </td>
+                <td className="px-3 py-2 text-xs">
+                  <span className="text-neutral-700">{ROTULO_LISTA[o.etapa] ?? ROTULO_ETAPA[o.etapa]}</span>
+                  {o.historica && <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-500">do papel</span>}
+                  {o.fotoKey && <span className="ml-1.5 text-neutral-400" title="Tem foto do talão">foto</span>}
+                </td>
+                <td className="px-3 py-2 text-xs text-neutral-500">{previsaoCurta(o.entregueEm ?? o.previsaoEntrega, fuso)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{o.valorCents ? centsToBRL(o.valorCents) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {limitado && <p className="text-xs text-neutral-500">{busca ? "Mostrando as 50 primeiras. Use o número da OS ou mais letras do nome para afinar." : "Mostrando as 300 mais recentes. Use a busca para achar as outras."}</p>}
     </div>
   );
 }

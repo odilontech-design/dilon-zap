@@ -272,6 +272,11 @@ export async function cancelarPedido(input: CancelarInput) {
     });
     if (!pedido) throw new Error("pedido não encontrado");
     if (pedido.status === "CANCELADO") throw new Error("este pedido já está cancelado");
+    // Pedido que veio da loja online: o estoque dele foi baixado por outra porta (BaixaDoSite), então cancelar
+    // por aqui devolveria o estoque de um jeito e o site devolveria de outro. O cancelamento sai do site.
+    if (await tx.vendaDoSite.findUnique({ where: { orderId: pedido.id }, select: { id: true } })) {
+      throw new Error("este pedido veio da loja online: cancele ou reembolse pelo site (Admin › Pedidos), que desfaz o estoque e o valor aqui");
+    }
 
     const agora = new Date();
     const resumo = { itensDevolvidos: 0, estornadoCents: 0 };

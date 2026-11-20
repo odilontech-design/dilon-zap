@@ -1,3 +1,14 @@
+# Certificado sob demanda para os domínios próprios das vitrines de veículos
+# (www.salesautomoveis.com.br apontando para esta VPS). Antes de emitir, o
+# Caddy pergunta ao Zap se o domínio está cadastrado numa vitrine no ar; sem
+# essa pergunta, qualquer domínio apontado para cá faria o Caddy pedir
+# certificado (e esgotar o limite do Let's Encrypt).
+{
+	on_demand_tls {
+		ask http://web:3000/api/loja/dominio/permitido
+	}
+}
+
 zap.dilontech.com.br {
 	reverse_proxy web:3000
 }
@@ -9,3 +20,12 @@ zap.dilontech.com.br {
 #
 # Se um dia o produto migrar pra cá, o bloco volta JUNTO com a mudança de
 # DNS, não antes.
+
+# Domínios das lojas: tudo que não é o próprio Zap. O Next (middleware.ts)
+# descobre de qual loja é o domínio e mostra a vitrine dela.
+https:// {
+	tls {
+		on_demand
+	}
+	reverse_proxy web:3000
+}

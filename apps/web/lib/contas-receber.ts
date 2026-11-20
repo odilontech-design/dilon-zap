@@ -1,4 +1,5 @@
 import { prisma } from "@dilon-zap/db";
+import { filtrosDoResumo } from "./filtros-do-resumo";
 import { categoriaDeVendas, validarCategoria } from "@/lib/categorias-financeiras";
 import type { PaymentMethod, Prisma, TipoParcela } from "@prisma/client";
 import {
@@ -574,9 +575,22 @@ export async function listarParcelas(tenantId: string, f: FiltrosDeContas, agora
   return linhas;
 }
 
-/** Totais das parcelas em aberto, por faixa de atraso — os cartões do topo. */
-export async function resumoDoAReceber(tenantId: string, agora = new Date()) {
-  const abertas = await listarParcelas(tenantId, { tipoData: "vencimento", status: ["PENDENTE"] }, agora);
+/**
+ * Totais das parcelas em aberto, por faixa de atraso — os cartões do topo.
+ *
+ * Seguem os mesmos filtros da lista (cliente, tipo, categoria e o período de
+ * vencimento), senão o cartão mostrava o total da empresa inteira ao lado de
+ * uma lista filtrada e os dois números não conversavam. Os cartões são sempre
+ * sobre o que está EM ABERTO, então o status da lista não entra; e o período
+ * por data de pagamento também não, porque parcela em aberto não tem
+ * pagamento — com ele valendo, os cartões zerariam.
+ */
+export async function resumoDoAReceber(
+  tenantId: string,
+  filtros: Omit<FiltrosDeContas, "status" | "tipoData"> & { tipoData?: FiltrosDeContas["tipoData"] } = {},
+  agora = new Date()
+) {
+  const abertas = await listarParcelas(tenantId, filtrosDoResumo(filtros), agora);
   const resumo = { vencido: 0, vence_hoje: 0, a_vencer: 0, sem_prazo: 0, total: 0 };
   for (const l of abertas) {
     if (!l.faixa) continue;

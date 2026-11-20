@@ -20,6 +20,7 @@ export const RAMOS = [
   "Turismo",
   "Alimentação",
   "Serviços",
+  "Revenda de veículos",
   "Outro",
 ] as const;
 export type Ramo = (typeof RAMOS)[number];

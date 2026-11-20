@@ -34,6 +34,7 @@ COPY packages/db/package.json packages/db/package.json
 COPY packages/push/package.json packages/push/package.json
 COPY packages/receivables/package.json packages/receivables/package.json
 COPY packages/sdr-core/package.json packages/sdr-core/package.json
+COPY packages/vendedor-ia/package.json packages/vendedor-ia/package.json
 COPY packages/storage/package.json packages/storage/package.json
 COPY packages/erp-db/package.json packages/erp-db/package.json
 COPY packages/esquadrias-core/package.json packages/esquadrias-core/package.json

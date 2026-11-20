@@ -10,7 +10,7 @@ export type { Mapeamento } from "./mapeamento";
 export { IndiceDeEmpresas, mesclarPreenchendoVazios } from "./dedup";
 export { qualificar } from "./qualificacao";
 export type { CriterioAvaliado, ResultadoQualificacao } from "./qualificacao";
-export { podeProspectar, bloqueiosDaEmpresa, ROTULO_MOTIVO } from "./supressao";
+export { podeProspectar, bloqueiosDaEmpresa, normalizarValorDeSupressao, ROTULO_MOTIVO } from "./supressao";
 export type { TipoSupressao, MotivoSupressao } from "./supressao";
 export { enfileirar, reivindicar, renovarReserva, concluir, falhar, devolver, falharEsgotados } from "./fila";
 export { processarProximoTrabalho } from "./trabalhos";
@@ -28,7 +28,7 @@ export { configIaSchema, CONFIG_PADRAO } from "./ia/config";
 export type { ConfigIa } from "./ia/config";
 export { executarTarefaIa, extrairJson } from "./ia/executar";
 export type { PedidoDeTarefaIa, ResultadoDeTarefaIa, MotivoDaRecusa } from "./ia/executar";
-export { provedorAnthropic, provedorGemini, provedoresPadrao } from "./ia/provedores";
+export { provedorAnthropic, provedorGemini, provedoresPadrao, chaveAnthropicDoServidor, chaveGeminiDoServidor } from "./ia/provedores";
 export type { Provedor, Provedores } from "./ia/provedores";
 
 export { acompanhamentoSchema, empresaEditavelSchema, novaAbordagemSchema, edicaoDeAbordagemSchema, contatoSchema, resultadoSchema, modeloNeutro, NOME_DO_PRODUTO, TAREFA_DE_ABORDAGEM, ETAPAS, ETAPAS_DE_RESULTADO } from "./comercial";
@@ -39,3 +39,14 @@ export type { EnviadorDeEmail, MensagemDeEmail, LimitesDoWhatsapp } from "./cana
 
 export { filtroDaFilaSchema, preparoSchema, resultadoEmLoteSchema, ETAPAS_EM_LOTE, FILA_PADRAO, FILA_MAXIMA } from "./fila-diaria";
 export type { EstadoNaFila } from "./fila-diaria";
+export { META_DIARIA_PADRAO, metaDoDia, temContatoNoCanal } from "./fila-diaria";
+export type { MetaDoDia, CanalDaFila } from "./fila-diaria";
+
+export { VARIAVEIS_DO_MODELO, variaveisDesconhecidas, preencherModelo, valoresDoModelo, modeloDaCampanha, campanhaTemModelo, normalizarInstagram, arrobaDoInstagram } from "./modelos-de-campanha";
+export type { VariavelDoModelo, ValoresDoModelo, CanalDoModelo, ModelosDaCampanha } from "./modelos-de-campanha";
+
+// API pública que o vendedor de SaaS (packages/vendedor-ia/src/saas) usa. O vendedor mora fora do núcleo de propósito:
+// o SDR não toca em conversa nem mensagem do WhatsApp (guardas em test/comercial.test.ts e test/ia.test.ts).
+export { obterConfigIa, inicioDoMes } from "./ia/config";
+export type { OpcoesDeExecucao } from "./ia/executar";
+export { registrarNota, registrarResultado, DESCRICAO_DO_PRODUTO } from "./comercial";

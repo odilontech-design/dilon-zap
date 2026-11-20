@@ -80,6 +80,11 @@ export type EstadoAntesDaMensagem = {
    * ver avaliarAutomacao.
    */
   equipeFalouPorUltimo: boolean;
+  /**
+   * A última rodada de mensagens da equipe NÃO respondia a um pedido do cliente: a equipe
+   * puxou a conversa (abordagem, cumprimento, retomada de uma conversa antiga). Ver equipeIniciou.
+   */
+  equipeIniciou?: boolean;
 } | null;
 
 /**
@@ -120,6 +125,46 @@ export function equipeFalou(
   return ultima.senderUserId !== null || ultima.deCelular;
 }
 
+export type MensagemRecente = {
+  direction: "INBOUND" | "OUTBOUND";
+  senderUserId: string | null;
+  deCelular: boolean;
+  createdAt: Date;
+};
+
+/** Quanto tempo antes da resposta da equipe o pedido do cliente ainda conta como "o que ela respondeu". */
+export const JANELA_RESPOSTA_DA_EQUIPE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * A equipe PUXOU a conversa, em vez de responder ao cliente?
+ *
+ * Olha a última rodada de mensagens de pessoas (Inbox ou celular, seguidas). Se logo antes dela
+ * houve uma mensagem do CLIENTE (ignorando as do robô, que ficam no meio: menu, "encaminhando"),
+ * dentro de 24 h, a equipe estava respondendo: false. Sem mensagem do cliente antes, ou com ela
+ * muito antes, foi a equipe que abordou, cumprimentou ou retomou uma conversa antiga: true.
+ *
+ * É o que separa dois casos que pareciam iguais:
+ *  - o Financeiro cumprimenta um cliente numa conversa fechada há semanas e o cliente responde:
+ *    o robô cala (puxou);
+ *  - o cliente pede uma nota, a equipe manda, e o cliente escreve de novo dias depois: o menu
+ *    volta, é pedido novo (respondeu).
+ *
+ * `recentes` vem da mais nova para a mais antiga, sem a mensagem que está chegando.
+ */
+export function equipeIniciou(recentes: MensagemRecente[]): boolean {
+  const ehEquipe = (m: MensagemRecente) => equipeFalou(m);
+  let i = 0;
+  while (i < recentes.length && ehEquipe(recentes[i])) i++;
+  if (i === 0) return false; // a última não foi da equipe: não se aplica
+  const inicioDaRodada = recentes[i - 1].createdAt;
+  // Pula o robô (OUTBOUND sem pessoa) até achar a última mensagem do cliente antes da rodada.
+  for (let j = i; j < recentes.length; j++) {
+    const m = recentes[j];
+    if (m.direction === "INBOUND") return inicioDaRodada.getTime() - m.createdAt.getTime() > JANELA_RESPOSTA_DA_EQUIPE_MS;
+  }
+  return true; // não há mensagem do cliente antes: a equipe abriu a conversa
+}
+
 export type DecisaoDeRoteamento = {
   /** O robô pode responder esta mensagem. */
   podeFalar: boolean;
@@ -151,6 +196,26 @@ export type DecisaoDeRoteamento = {
  *
  * Vive aqui, e não solto no meio do session-manager, pra ter nome e teste.
  */
+/**
+ * Quanto tempo a equipe "segura" a conversa depois de falar por último. Vale só quando a equipe
+ * PUXOU a conversa (equipeIniciou). Quando a equipe apenas respondeu ao cliente (mandou a guia,
+ * tirou a dúvida), vale a inatividade da empresa, como sempre: o cliente que volta depois disso
+ * é um pedido novo e precisa da triagem de novo. Com os 7 dias valendo para os dois casos, o menu
+ * deixou de sair para quem voltava dias depois de ser atendido (Guttierres, 13/11: "só vai uma vez").
+ *
+ * Histórico:
+ *
+ * O reinício por inatividade da empresa (uraReinicioAposMinutos — 60 min na
+ * Guttierres) é pensado para o cliente que some e volta com outro assunto. Ele
+ * não serve para a conversa que a EQUIPE puxou: o atendente manda uma pergunta,
+ * o cliente responde horas ou dias depois, e é a resposta àquela pergunta. Com
+ * 60 min valendo para os dois casos, 103 de 117 menus mandados pela Guttierres
+ * entre 20/10 e 11/11 saíram logo depois de uma mensagem da equipe. Quando a
+ * equipe falou por último, a triagem só volta depois desta janela (ou da
+ * inatividade configurada, se for maior).
+ */
+export const JANELA_EQUIPE_FALOU_MS = 7 * 24 * 60 * 60 * 1000;
+
 export function avaliarAutomacao(
   conversa: { assignedToId: string | null; setorId: string | null },
   antes: EstadoAntesDaMensagem,
@@ -175,9 +240,12 @@ export function avaliarAutomacao(
   //
   // A inatividade longa continua valendo: cliente que some por semanas e volta
   // com outro assunto precisa da triagem de novo, tenha quem tiver falado por
-  // último antes de ele sumir.
-  if (antes?.equipeFalouPorUltimo && !semInteracaoHaMuito) {
-    return { podeFalar: false, reiniciarRoteamento: false };
+  // último antes de ele sumir. Quando foi a equipe, a janela é a de
+  // JANELA_EQUIPE_FALOU_MS (7 dias), e não a inatividade curta da empresa.
+  if (antes?.equipeFalouPorUltimo) {
+    const janela = antes.equipeIniciou ? Math.max(reinicioAposInatividadeMs, JANELA_EQUIPE_FALOU_MS) : reinicioAposInatividadeMs;
+    const equipeAindaSegura = agora.getTime() - antes.lastMessageAt.getTime() < janela;
+    if (equipeAindaSegura) return { podeFalar: false, reiniciarRoteamento: false };
   }
 
   const semDono = !conversa.assignedToId && !conversa.setorId;

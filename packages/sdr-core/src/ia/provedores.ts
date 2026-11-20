@@ -35,7 +35,15 @@ export function provedorAnthropic({ chave, fetchFn = fetch }: Opcoes): Provedor 
         method: "POST",
         signal: p.signal,
         headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: p.modelo, max_tokens: p.maxTokensSaida, system: p.sistema, messages: [{ role: "user", content: p.usuario }] }),
+        body: JSON.stringify({
+          model: p.modelo,
+          max_tokens: p.maxTokensSaida,
+          system: p.sistema,
+          messages: [{ role: "user", content: p.usuario }],
+          // Os modelos 5.x pensam por padrão, e o raciocínio conta no limite de saída: esforço baixo
+          // evita a resposta (um JSON curto) sair cortada. Só nesses modelos: os antigos recusam o campo.
+          ...(/^claude-(haiku|sonnet|opus|fable|mythos)-5/.test(p.modelo) ? { output_config: { effort: "low" } } : {}),
+        }),
       });
       if (!r.ok) return falhaHttp("anthropic", r);
       const j = (await r.json()) as { content?: { type?: string; text?: string }[]; usage?: { input_tokens?: number; output_tokens?: number } };
@@ -73,15 +81,37 @@ export type Provedores = Record<NomeProvedor, Provedor>;
 /** As chaves são lidas a cada chamada, no momento do uso, e só aqui. */
 export function provedoresPadrao(fetchFn?: typeof fetch): Provedores {
   return {
-    anthropic: provedorAnthropic({ chave: () => process.env.ANTHROPIC_API_KEY, fetchFn }),
+    // O SDR prefere a SUA chave (SDR_ANTHROPIC_API_KEY). A ANTHROPIC_API_KEY, quando existe, liga o
+    // Vendedor IA dos carros no worker; por isso a chave do Claude do SDR tem nome próprio.
+    anthropic: provedorAnthropic({ chave: () => process.env.SDR_ANTHROPIC_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY, fetchFn }),
     gemini: provedorGemini({ chave: () => process.env.GEMINI_API_KEY, fetchFn }),
   };
+}
+
+/**
+ * A chave da Anthropic para quem usa o SDK oficial (o Vendedor IA), que não passa pelo fetch daqui.
+ * Existe para a leitura da chave continuar num lugar só: o worker do Vendedor IA pede por aqui em
+ * vez de ler o ambiente por conta própria.
+ */
+export function chaveAnthropicDoServidor(): string | undefined {
+  return process.env.ANTHROPIC_API_KEY?.trim() || undefined;
+}
+
+/**
+ * A chave do Gemini para quem fala com ele por fora do SDR (a leitura da foto da OS da Ótica). Existe pelo
+ * mesmo motivo da anterior: a leitura da chave fica num lugar só, e o chamador a pede por aqui.
+ *
+ * Prefere OTICA_GEMINI_API_KEY (um projeto do Google só da Ótica, com cota gratuita própria, para a
+ * leitura das OS não brigar com o SDR pelo mesmo limite) e cai na GEMINI_API_KEY quando não existe.
+ */
+export function chaveGeminiDoServidor(): string | undefined {
+  return process.env.OTICA_GEMINI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim() || undefined;
 }
 
 /** Tira do texto de erro qualquer valor de chave que tenha escapado. */
 export function semSegredos(texto: string): string {
   let limpo = texto;
-  for (const segredo of [process.env.ANTHROPIC_API_KEY, process.env.GEMINI_API_KEY]) {
+  for (const segredo of [process.env.ANTHROPIC_API_KEY, process.env.SDR_ANTHROPIC_API_KEY, process.env.GEMINI_API_KEY, process.env.OTICA_GEMINI_API_KEY]) {
     if (segredo && segredo.length >= 8) limpo = limpo.split(segredo).join("[oculto]");
   }
   return limpo;

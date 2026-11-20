@@ -57,7 +57,7 @@ export function analisarArquivo(conteudo: string, mapeamentoInformado?: Partial<
 /* ----------------------------------------------------- Empresas conhecidas ---- */
 
 const CAMPOS_CONHECIDA = {
-  id: true, cnpj: true, razaoSocial: true, nomeFantasia: true, telefone: true, email: true, site: true, dominio: true,
+  id: true, cnpj: true, razaoSocial: true, nomeFantasia: true, telefone: true, email: true, site: true, instagram: true, dominio: true,
   emailDominio: true, uf: true, cidade: true, segmento: true, porte: true, cnae: true, chaveNome: true, importacaoOrigemId: true,
 } as const;
 

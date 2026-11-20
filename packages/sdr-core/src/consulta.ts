@@ -34,6 +34,8 @@ export type FiltroDeEmpresas = {
   /** "sim" = só com telefone; "nao" = só sem. */
   telefone?: "sim" | "nao";
   email?: "sim" | "nao";
+  /** "sim" = só com Instagram; "nao" = só sem. */
+  instagram?: "sim" | "nao";
   ordem?: OrdemDaLista;
   etapa?: EtapaComercial;
   produto?: Produto;
@@ -85,6 +87,7 @@ export function origemDaConsulta(tenantId: string, f: FiltroDeEmpresas, listas: 
   if (f.segmento) onde.push(Prisma.sql`lower(e.segmento) = lower(${f.segmento})`);
   if (f.telefone) onde.push(f.telefone === "sim" ? Prisma.sql`e.telefone IS NOT NULL` : Prisma.sql`e.telefone IS NULL`);
   if (f.email) onde.push(f.email === "sim" ? Prisma.sql`e.email IS NOT NULL` : Prisma.sql`e.email IS NULL`);
+  if (f.instagram) onde.push(f.instagram === "sim" ? Prisma.sql`e.instagram IS NOT NULL` : Prisma.sql`e.instagram IS NULL`);
 
   if (f.suprimida) {
     // COALESCE: com colunas nulas o IN vira NULL, e "NOT NULL" não pode esconder a empresa.

@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   if (!acesso.ok) return recusa(acesso);
 
   const parsed = criarCampanhaSchema.safeParse(await req.json().catch(() => null));
-  if (!parsed.success) return dadosInvalidos();
+  if (!parsed.success) return dadosInvalidos(parsed.error);
   try {
     const campanha = await acesso.repo.criarCampanha(parsed.data, acesso.user);
     await logAudit({ actor: acesso.user, action: "sdr.campanha.criada", metadata: { campanhaId: campanha?.id } });

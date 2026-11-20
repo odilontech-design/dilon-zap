@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
-import { filtroDoInbox } from "@/lib/filtro-inbox";
+import { filtroDoInbox, trechosDaBusca } from "@/lib/filtro-inbox";
 
 const VALID_STATUS = ["OPEN", "PENDING", "RESOLVED"] as const;
 
@@ -60,9 +60,13 @@ export async function GET(req: Request) {
   // inteira (algumas passam de 400 caracteres) é byte jogado fora numa rota
   // consultada em loop. 120 caracteres cobrem qualquer largura de tela.
   const PREVIEW_MAX = 120;
+  // Com busca, a conversa achada pelo texto mostra o pedaço da mensagem onde a
+  // palavra aparece (o endereço, por exemplo) em vez de só a última mensagem.
+  const trechos = await trechosDaBusca(user, params);
   const withUnread = conversations.map(
     ({ _count, messages, assignedToId, assignedAt, assignmentSeenAt, assignedBy, ...c }) => ({
       ...c,
+      ...(trechos.has(c.id) ? { trechoDaBusca: trechos.get(c.id) } : {}),
       messages: messages.map((m) => ({ ...m, body: m.body.slice(0, PREVIEW_MAX) })),
       unreadCount: _count.messages,
       // "Passaram esta conversa pra mim e eu ainda não abri". Calculado aqui

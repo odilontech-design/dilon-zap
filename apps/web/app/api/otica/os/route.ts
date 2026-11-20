@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { requireUser } from "@/lib/session";
+import { casaComBusca } from "@/lib/busca";
 import { exigirRecurso } from "@/lib/plano";
 import { upsertContactByPhone } from "@/lib/contact-server";
 import { configDaOtica, consultorValido, dadosDoCliente, previsaoDaTela, reservarNumeroOS } from "@/lib/otica";
-import { criarContaDaOS, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
+import { criarContaDaOS, criarContaDaOSHistorica, parcelasParaTela, prepararFinanceiro, resumoDasParcelas, SELECT_PARCELAS } from "@/lib/otica-financeiro";
 import { ErroDeConta } from "@/lib/contas-receber";
 import { baixarParaOS } from "@/lib/otica-estoque";
-import { validadeDaReceita } from "@/lib/otica-regras";
+import { numeroOS, validadeDaReceita } from "@/lib/otica-regras";
 import { criarOSSchema, paraData, telefoneParaWhatsApp } from "@/lib/otica-schemas";
 
 /**
@@ -22,9 +23,25 @@ export async function GET(req: Request) {
   const bloqueio = await exigirRecurso(user, "OTICA");
   if (bloqueio) return bloqueio;
 
-  const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
+  const params = new URL(req.url).searchParams;
+  const q = (params.get("q") ?? "").trim();
+  // O quadro só mostra o que anda e as entregues dos últimos 30 dias. O histórico é a lista de
+  // tudo que já foi entregue ou cancelado, inclusive as OS antigas escaneadas do papel.
+  const historico = params.get("historico") === "1";
   const digitos = q.replace(/\D/g, "");
   const ha30dias = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  // Nome do cliente e pedido do laboratório: o banco não ignora acento ("caua" não acha "Cauã"), então
+  // o casamento é feito aqui, ignorando acento e maiúscula, e só os ids achados voltam para a consulta.
+  let idsPorTexto: string[] = [];
+  if (q && /\p{L}/u.test(q)) {
+    const todas = await prisma.ordemServico.findMany({
+      where: { tenantId: user.tenantId },
+      select: { id: true, pedidoLaboratorio: true, contact: { select: { name: true, waName: true } } },
+      take: 20_000,
+    });
+    idsPorTexto = todas.filter((o) => casaComBusca([o.contact.name, o.contact.waName, o.pedidoLaboratorio].filter(Boolean).join(" "), q)).map((o) => o.id);
+  }
 
   const where: Prisma.OrdemServicoWhereInput = q
     ? {
@@ -32,20 +49,22 @@ export async function GET(req: Request) {
         OR: [
           // Número de OS tem no máximo 7 dígitos; um CPF inteiro estouraria o inteiro do banco.
           ...(digitos && digitos.length <= 7 ? [{ numero: Number(digitos) }] : []),
-          { contact: { name: { contains: q, mode: "insensitive" } } },
+          ...(idsPorTexto.length ? [{ id: { in: idsPorTexto } }] : []),
           ...(digitos.length >= 4 ? [{ contact: { phoneNumber: { contains: digitos } } }, { contact: { documento: { contains: digitos } } }] : []),
           { pedidoLaboratorio: { contains: q, mode: "insensitive" } },
         ],
       }
-    : {
-        tenantId: user.tenantId,
-        OR: [{ etapa: { notIn: ["ENTREGUE", "CANCELADA"] } }, { etapa: "ENTREGUE", entregueEm: { gte: ha30dias } }],
-      };
+    : historico
+      ? { tenantId: user.tenantId, etapa: { in: ["ENTREGUE", "CANCELADA"] } }
+      : {
+          tenantId: user.tenantId,
+          OR: [{ etapa: { notIn: ["ENTREGUE", "CANCELADA"] } }, { etapa: "ENTREGUE", entregueEm: { gte: ha30dias } }],
+        };
 
   const ordens = await prisma.ordemServico.findMany({
     where,
-    orderBy: [{ previsaoEntrega: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
-    take: q ? 50 : 500,
+    orderBy: historico && !q ? [{ numero: "desc" }] : [{ previsaoEntrega: { sort: "asc", nulls: "last" } }, { numero: "asc" }],
+    take: q ? 50 : historico ? 300 : 500,
     select: {
       id: true,
       numero: true,
@@ -57,6 +76,9 @@ export async function GET(req: Request) {
       valorCents: true,
       sinalCents: true,
       pedidoLaboratorio: true,
+      historica: true,
+      entregueEm: true,
+      fotoKey: true,
       // O dinheiro vem das parcelas da conta a receber.
       conta: { select: { parcelas: { select: SELECT_PARCELAS } } },
       contact: { select: { id: true, name: true, waName: true, phoneNumber: true } },
@@ -74,6 +96,13 @@ export async function GET(req: Request) {
   );
 }
 
+/** O número do papel já existe no sistema: a OS não é criada. */
+class NumeroEmUso extends Error {
+  constructor(public numero: number) {
+    super("número em uso");
+  }
+}
+
 export async function POST(req: Request) {
   const user = await requireUser();
   const bloqueio = await exigirRecurso(user, "OTICA");
@@ -82,6 +111,8 @@ export async function POST(req: Request) {
   const parsed = criarOSSchema.safeParse(await req.json());
   if (!parsed.success) return NextResponse.json({ error: parsed.error.flatten() }, { status: 400 });
   const d = parsed.data;
+  // OS antiga do talão de papel, só para o histórico: não mexe em Caixa, estoque nem WhatsApp.
+  const historica = d.historica === true;
 
   // Cliente: o escolhido na busca ou um novo pelo telefone. O novo é criado
   // fora da transação porque resolver o número no WhatsApp é uma chamada ao
@@ -139,11 +170,27 @@ export async function POST(req: Request) {
       receitaId = receita.id;
     }
 
-    const numero = await reservarNumeroOS(tx, user.tenantId);
+    // O número vem do papel quando a OS foi escaneada; senão, é o próximo da numeração.
+    let numero: number;
+    if (d.numero !== undefined) {
+      numero = d.numero;
+      const ja = await tx.ordemServico.findUnique({ where: { tenantId_numero: { tenantId: user.tenantId, numero } }, select: { id: true } });
+      if (ja) throw new NumeroEmUso(numero);
+      // A numeração automática nunca pode alcançar um número já usado no papel.
+      await tx.oticaConfig.updateMany({ where: { tenantId: user.tenantId, proximoNumeroOS: { lte: numero } }, data: { proximoNumeroOS: numero + 1 } });
+    } else {
+      numero = await reservarNumeroOS(tx, user.tenantId);
+    }
+    // OS antiga: criada no dia do talão e já entregue, longe da coluna "Entregue" do quadro.
+    const dia = d.dataVenda ? new Date(`${d.dataVenda}T12:00:00Z`) : null;
+    const passado = (x: Date | null | undefined) => (x && x.getTime() <= Date.now() ? x : null);
+    const entregue = historica ? (passado(previsao) ?? passado(dia) ?? new Date(Date.now() - 40 * 24 * 60 * 60 * 1000)) : null;
     const criada = await tx.ordemServico.create({
       data: {
         tenantId: user.tenantId,
         numero,
+        historica,
+        ...(historica ? { etapa: "ENTREGUE" as const, entregueEm: entregue, etapaDesde: entregue!, ...(dia ? { createdAt: dia } : {}) } : {}),
         contactId: contactId!,
         receitaId,
         laboratorioId: d.laboratorioId || null,
@@ -156,7 +203,7 @@ export async function POST(req: Request) {
         tratamentos: d.tratamentos ?? [],
         tratamentoCor: d.tratamentoCor || null,
         armacao: d.armacao || null,
-        armacaoEstoqueId: d.armacaoEstoqueId || null,
+        armacaoEstoqueId: historica ? null : d.armacaoEstoqueId || null,
         materialArmacao: d.materialArmacao || null,
         servicos: d.servicos ?? [],
         medidas: d.medidas ?? undefined,
@@ -167,7 +214,29 @@ export async function POST(req: Request) {
       },
       select: { id: true, numero: true },
     });
-    await tx.eventoOS.create({ data: { ordemId: criada.id, para: "ABERTA", porId: user.id } });
+    await tx.eventoOS.create({
+      data: historica
+        ? { ordemId: criada.id, para: "ENTREGUE", porId: user.id, aviso: "registro histórico do talão de papel: cliente não avisado" }
+        : { ordemId: criada.id, para: "ABERTA", porId: user.id },
+    });
+    // OS histórica: nada de estoque nem de WhatsApp. O dinheiro entra já quitado,
+    // no dia do talão, para constar no Financeiro do mês de referência.
+    if (historica) {
+      if (d.dataVenda && (d.valorCents ?? 0) > 0) {
+        const c = await tx.contact.findUniqueOrThrow({ where: { id: contactId! }, select: { name: true, waName: true } });
+        await criarContaDaOSHistorica(tx, {
+          tenantId: user.tenantId,
+          ordemId: criada.id,
+          numero,
+          contactId: contactId!,
+          nomeCliente: c.name ?? c.waName,
+          valorCents: d.valorCents!,
+          diaDoTalao: d.dataVenda,
+          userId: user.id,
+        });
+      }
+      return criada;
+    }
 
     // A armação escolhida do estoque é vendida: sai da lista de disponíveis.
     // Falha (peça já vendida) derruba a OS inteira, e o número reservado volta.
@@ -193,6 +262,7 @@ export async function POST(req: Request) {
   });
   } catch (e) {
     if (e instanceof ErroDeConta) return NextResponse.json({ error: e.message }, { status: e.status });
+    if (e instanceof NumeroEmUso) return NextResponse.json({ error: `Já existe a OS ${numeroOS(e.numero)} no sistema. Confira o número no papel.` }, { status: 409 });
     throw e;
   }
 

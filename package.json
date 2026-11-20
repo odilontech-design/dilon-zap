@@ -1,6 +1,6 @@
 {
   "name": "dilon-zap",
-  "version": "1.42.2",
+  "version": "1.92.1",
   "private": true,
   "workspaces": [
     "apps/*",
@@ -33,7 +33,11 @@
     "ponto:migrate": "npm run db:migrate -w packages/ponto-db",
     "ponto:deploy": "npm run db:deploy -w packages/ponto-db",
     "ponto:seed": "npm run db:seed -w packages/ponto-db",
-    "ponto:studio": "npm run db:studio -w packages/ponto-db"
+    "ponto:studio": "npm run db:studio -w packages/ponto-db",
+    "dev:vendedor-ia": "npm run start -w apps/vendedor-ia-worker",
+    "test:vendedor-ia": "npm run test -w packages/vendedor-ia",
+    "dev:portais": "npm run start -w apps/portais-worker",
+    "test:portais": "npm run test -w packages/portais"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,

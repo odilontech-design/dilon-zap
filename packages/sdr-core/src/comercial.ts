@@ -7,6 +7,7 @@ import { dominioDoEmail, normalizarCidade, normalizarEmail, normalizarSegmento, 
 import { bloqueiosDaEmpresa, carregarListas, normalizarValorDeSupressao, type TipoSupressao } from "./supressao";
 import type { EtapaComercial, FiltroDeEmpresas, Produto } from "./consulta";
 import { listarEmpresas } from "./empresas";
+import { campanhaTemModelo, modeloDaCampanha, normalizarInstagram, valoresDoModelo, type CanalDoModelo } from "./modelos-de-campanha";
 
 /**
  * A rotina comercial do SDR: decisor, abordagem, aprovação, registro do contato, resposta e follow-up.
@@ -136,6 +137,7 @@ export const empresaEditavelSchema = z
     razaoSocial: opcional(200),
     nomeFantasia: opcional(200),
     site: opcional(300),
+    instagram: opcional(300),
     email: opcional(254),
     telefone: opcional(40),
     cidade: opcional(100),
@@ -166,6 +168,13 @@ export async function editarEmpresa(tenantId: string, empresaId: string, bruto: 
       dados.site = null;
       dados.dominio = null;
     }
+  }
+  if (d.instagram !== undefined) {
+    if (d.instagram) {
+      const ig = normalizarInstagram(d.instagram);
+      if (!ig) throw invalido("o Instagram");
+      dados.instagram = ig;
+    } else dados.instagram = null;
   }
   if (d.email !== undefined) {
     if (d.email) {
@@ -221,15 +230,17 @@ export const novaAbordagemSchema = z
     finalidade: z.enum(["PRIMEIRO_CONTATO", "FOLLOW_UP", "ROTEIRO"]).default("PRIMEIRO_CONTATO"),
     assunto: texto(200).nullable().optional(),
     texto: texto(6000).min(1),
-    /** Em vez de escrever, parte de um modelo neutro com os dados que já existem. */
+    /** Em vez de escrever, parte do modelo da campanha (ou do neutro, se ela não tem) com os dados que já existem. */
     modelo: z.boolean().optional(),
+    /** A campanha cujo modelo usar. Sem ela, vale a campanha mais recente da empresa que tenha modelo para o canal. */
+    campanhaId: z.string().trim().min(1).max(60).optional(),
   })
   .strict();
 
 export const edicaoDeAbordagemSchema = z.object({ assunto: texto(200).nullable().optional(), texto: texto(6000).min(1) }).strict();
 
 export const NOME_DO_PRODUTO: Record<Produto, string> = { DILON_ZAP: "Dilon Zap", DILON_FACILITIES: "Dilon Facilities" };
-const DESCRICAO_DO_PRODUTO: Record<Produto, string> = {
+export const DESCRICAO_DO_PRODUTO: Record<Produto, string> = {
   DILON_ZAP: "Dilon Zap é uma plataforma de atendimento e CRM que reúne as conversas de WhatsApp da empresa em uma caixa de entrada compartilhada, com funil de negociações, tarefas e relatórios.",
   DILON_FACILITIES: "Dilon Facilities é uma solução para empresas de serviços terceirizados, como limpeza e conservação, que ajuda a comprovar a execução dos serviços, acompanhar a produtividade operacional e centralizar as ocorrências.",
 };
@@ -266,16 +277,47 @@ export function modeloNeutro(p: { produto: Produto; canal: "EMAIL" | "LIGACAO" |
   return { assunto: p.canal === "EMAIL" ? `${nome} — uma conversa rápida com a ${p.empresa}?` : null, texto: corpo };
 }
 
+const SELECAO_DE_MODELOS = { id: true, nome: true, linkAgenda: true, modeloWhatsapp: true, modeloEmailAssunto: true, modeloEmail: true, modeloLigacao: true, modeloDirect: true } as const;
+
+/**
+ * A campanha cujo modelo vale para a empresa no canal: a pedida (tem de ser deste tenant e ter a empresa), ou, sem
+ * pedido, a mais recente da empresa que tenha modelo para o canal. Null = modelo neutro.
+ */
+async function campanhaDoModelo(tenantId: string, empresaId: string, canal: CanalDoModelo, campanhaId?: string) {
+  if (campanhaId) {
+    const c = await prisma.sdrCampanha.findFirst({ where: { id: campanhaId, tenantId }, select: SELECAO_DE_MODELOS });
+    if (!c) throw new ErroSdrCore("campanha não encontrada", 404);
+    return campanhaTemModelo(c, canal) ? c : null;
+  }
+  const prospectos = await prisma.sdrProspecto.findMany({
+    where: { tenantId, empresaId, campanha: { status: { not: "ENCERRADA" } } },
+    orderBy: { createdAt: "desc" },
+    select: { campanha: { select: SELECAO_DE_MODELOS } },
+  });
+  return prospectos.map((p) => p.campanha).find((c) => campanhaTemModelo(c, canal)) ?? null;
+}
+
 export async function criarAbordagem(tenantId: string, empresaId: string, bruto: unknown, autor: Autor) {
   const empresa = await exigirEmpresa(tenantId, empresaId);
   const d = novaAbordagemSchema.parse(bruto);
-  const base = d.modelo
-    ? modeloNeutro({ produto: d.produto, canal: d.canal, empresa: empresa.nomeFantasia ?? empresa.razaoSocial ?? "sua empresa", decisor: (await prisma.sdrAcompanhamento.findUnique({ where: { tenantId_empresaId: { tenantId, empresaId } } }))?.decisorNome, autor: autor.name })
-    : { assunto: d.assunto ?? null, texto: d.texto };
+  let base: { assunto: string | null; texto: string } = { assunto: d.assunto ?? null, texto: d.texto };
+  let origemDoTexto = "escrita manual";
+  if (d.modelo) {
+    const nomeDaEmpresa = empresa.nomeFantasia ?? empresa.razaoSocial ?? "sua empresa";
+    const decisor = (await prisma.sdrAcompanhamento.findUnique({ where: { tenantId_empresaId: { tenantId, empresaId } } }))?.decisorNome;
+    const campanha = d.canal === "OUTRO" ? null : await campanhaDoModelo(tenantId, empresaId, d.canal, d.campanhaId);
+    const daCampanha = campanha
+      ? modeloDaCampanha(campanha, d.canal as CanalDoModelo, valoresDoModelo({ empresa: nomeDaEmpresa, decisor, autor: autor.name, cidade: empresa.cidade, uf: empresa.uf, linkAgenda: campanha.linkAgenda, site: empresa.site, instagram: empresa.instagram }))
+      : null;
+    const neutro = modeloNeutro({ produto: d.produto, canal: d.canal, empresa: nomeDaEmpresa, decisor, autor: autor.name });
+    // E-mail da campanha sem assunto próprio usa o assunto do modelo neutro.
+    base = daCampanha ? { assunto: d.canal === "EMAIL" ? daCampanha.assunto ?? neutro.assunto : null, texto: daCampanha.texto } : neutro;
+    origemDoTexto = daCampanha && campanha ? `modelo da campanha ${campanha.nome}` : "modelo neutro";
+  }
   const criada = await prisma.sdrAbordagem.create({
     data: { tenantId, empresaId, produto: d.produto, canal: d.canal, finalidade: d.finalidade, assunto: base.assunto, texto: base.texto, origem: "MANUAL", criadoPorNome: autor.name },
   });
-  await registrar(prisma, tenantId, empresaId, autor, { tipo: "ABORDAGEM", canal: d.canal, abordagemId: criada.id, resultado: "rascunho criado", texto: d.modelo ? "modelo neutro" : "escrita manual" });
+  await registrar(prisma, tenantId, empresaId, autor, { tipo: "ABORDAGEM", canal: d.canal, abordagemId: criada.id, resultado: "rascunho criado", texto: origemDoTexto });
   return criada;
 }
 

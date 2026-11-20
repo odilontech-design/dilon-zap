@@ -6,7 +6,9 @@
  * nunca "corrigido" por palpite.
  */
 
-export const CAMPOS = ["cnpj", "razaoSocial", "nomeFantasia", "telefone", "email", "site", "uf", "cidade", "segmento", "porte", "cnae"] as const;
+import { normalizarInstagram } from "./modelos-de-campanha";
+
+export const CAMPOS = ["cnpj", "razaoSocial", "nomeFantasia", "telefone", "email", "site", "instagram", "uf", "cidade", "segmento", "porte", "cnae"] as const;
 export type Campo = (typeof CAMPOS)[number];
 export type Bruto = Partial<Record<Campo, string>>;
 
@@ -17,6 +19,7 @@ export const ROTULO_CAMPO: Record<Campo, string> = {
   telefone: "Telefone",
   email: "E-mail",
   site: "Site",
+  instagram: "Instagram",
   uf: "Estado (UF)",
   cidade: "Cidade",
   segmento: "Segmento",
@@ -38,6 +41,7 @@ export type EmpresaNormalizada = {
   telefone: string | null;
   email: string | null;
   site: string | null;
+  instagram: string | null;
   dominio: string | null;
   emailDominio: string | null;
   uf: string | null;
@@ -331,6 +335,14 @@ export function normalizarLinha(bruto: Bruto): LinhaNormalizada {
     dominio = r.valor?.dominio ?? null;
     guardarAviso(r);
   }
+  let instagram: string | null = null;
+  if (!vazio(bruto.instagram)) {
+    instagram = normalizarInstagram(bruto.instagram);
+    if (!instagram) avisos.push(`Instagram inválido ignorado: ${colapsar(bruto.instagram).slice(0, 40)}`);
+  } else if (site && /^https:\/\/(www\.)?instagram\.com\//.test(site)) {
+    // Muita revenda só tem o Instagram, e a lista traz o perfil na coluna do site.
+    instagram = normalizarInstagram(site);
+  }
   let uf: string | null = null;
   if (!vazio(bruto.uf)) {
     const r = normalizarUf(bruto.uf);
@@ -373,6 +385,7 @@ export function normalizarLinha(bruto: Bruto): LinhaNormalizada {
       telefone,
       email,
       site,
+      instagram,
       dominio,
       emailDominio: email ? dominioDoEmail(email) : null,
       uf,

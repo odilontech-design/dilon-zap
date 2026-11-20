@@ -48,6 +48,8 @@ const medidasSchema = z
 /** Dados do cliente que o talão pede e que ficam na ficha do contato. */
 export const dadosClienteSchema = z
   .object({
+    // Só na edição da OS: corrige o nome na ficha do contato. Vazio = não mexe.
+    nome: texto(120),
     documento: texto(20),
     rgIe: texto(30),
     nascimento: data,
@@ -91,6 +93,12 @@ export const camposOS = {
 
 export const criarOSSchema = z
   .object({
+    // Número escrito no talão de papel. Sem ele, o sistema usa o próximo da numeração.
+    numero: z.number().int().min(1).max(9_999_999).optional(),
+    // OS antiga digitada só para o histórico (exige o número do papel): sem Caixa, estoque nem aviso.
+    historica: z.boolean().optional(),
+    // Dia da venda no talão (AAAA-MM-DD). Na OS histórica vira a data de criação.
+    dataVenda: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
     contactId: z.string().optional(),
     novoCliente: z.object({ nome: z.string().trim().min(1).max(120), telefone: z.string().min(8).max(20) }).optional(),
     cliente: dadosClienteSchema,
@@ -98,7 +106,8 @@ export const criarOSSchema = z
     receita: receitaSchema.nullable().optional(),
     ...camposOS,
   })
-  .refine((d) => d.contactId || d.novoCliente, { message: "escolha o cliente ou cadastre pelo telefone" });
+  .refine((d) => d.contactId || d.novoCliente, { message: "escolha o cliente ou cadastre pelo telefone" })
+  .refine((d) => !d.historica || d.numero !== undefined, { message: "OS antiga precisa do número do papel" });
 
 export const editarOSSchema = z.object({
   cliente: dadosClienteSchema,

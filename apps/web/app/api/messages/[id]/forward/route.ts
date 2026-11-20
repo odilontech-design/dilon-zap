@@ -7,6 +7,9 @@ import { wakeOutbox } from "@/lib/worker-client";
 
 const bodySchema = z.object({
   conversationIds: z.array(z.string()).min(1).max(20),
+  // Legenda nova para o arquivo encaminhado (imagem, vídeo, documento). Ausente
+  // mantém a original; vazia manda sem legenda.
+  legenda: z.string().max(1024).optional(),
 });
 
 // Encaminha o texto/mídia de uma mensagem existente pra uma ou mais outras
@@ -33,6 +36,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   });
   if (targets.length === 0) return NextResponse.json({ error: "nenhuma conversa válida selecionada" }, { status: 400 });
 
+  // Só arquivo com legenda editável troca o texto; mensagem de texto e áudio
+  // seguem com o corpo original.
+  const legendaEditavel = !!source.mediaType && source.mediaType !== "AUDIO";
+  const corpo = legendaEditavel && parsed.data.legenda !== undefined ? parsed.data.legenda.trim() : source.body;
+
   const created = await prisma.$transaction(
     targets.map((conversation) =>
       prisma.message.create({
@@ -41,7 +49,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
           sessionId: conversation.sessionId,
           direction: "OUTBOUND",
           status: "PENDING",
-          body: source.body,
+          body: corpo,
           senderUserId: user.id,
           mediaType: source.mediaType,
           mediaKey: source.mediaKey,

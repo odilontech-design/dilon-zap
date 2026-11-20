@@ -478,7 +478,7 @@ export function EmpresasPanel({
 
 /** Cadastro manual: monta um CSV de uma linha e usa a mesma importação (deduplicação e bloqueios inclusos). */
 function AdicionarEmpresa({ onFechar, aoAdicionar }: { onFechar: () => void; aoAdicionar: () => void }) {
-  const [f, setF] = useState({ nome: "", telefone: "", email: "", site: "", cidade: "", uf: "", segmento: "" });
+  const [f, setF] = useState({ nome: "", telefone: "", email: "", site: "", instagram: "", cidade: "", uf: "", segmento: "" });
   const [erro, setErro] = useState<string | null>(null);
   const [salvando, setSalvando] = useState(false);
   const troca = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
@@ -489,7 +489,7 @@ function AdicionarEmpresa({ onFechar, aoAdicionar }: { onFechar: () => void; aoA
     setErro(null);
     if (!f.nome.trim()) return setErro("informe o nome da empresa");
     setSalvando(true);
-    const conteudo = ["Nome Fantasia;Telefone;E-mail;Site;UF;Cidade;Segmento", [f.nome, f.telefone, f.email, f.site, f.uf, f.cidade, f.segmento].map(celula).join(";")].join("\n") + "\n";
+    const conteudo = ["Nome Fantasia;Telefone;E-mail;Site;Instagram;UF;Cidade;Segmento", [f.nome, f.telefone, f.email, f.site, f.instagram, f.uf, f.cidade, f.segmento].map(celula).join(";")].join("\n") + "\n";
     const r = await chamar("/api/sdr/importacoes", "POST", { nomeArquivo: "cadastro-manual.csv", conteudo, chave: `manual-${crypto.randomUUID()}` });
     setSalvando(false);
     if (!r.ok) return setErro(r.erro ?? "não deu pra cadastrar");
@@ -498,7 +498,7 @@ function AdicionarEmpresa({ onFechar, aoAdicionar }: { onFechar: () => void; aoA
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onFechar}>
-      <form onSubmit={salvar} className="bg-surface rounded-lg shadow-lg w-full max-w-lg p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
+      <form onSubmit={salvar} className="bg-surface rounded-lg shadow-lg w-full max-w-lg max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-base font-semibold">Adicionar empresa</h2>
           <button type="button" onClick={onFechar} className="text-neutral-400 hover:text-neutral-700 text-lg leading-none" aria-label="Fechar">
@@ -512,6 +512,7 @@ function AdicionarEmpresa({ onFechar, aoAdicionar }: { onFechar: () => void; aoA
             ["cidade", "Cidade"],
             ["uf", "UF"],
             ["site", "Site"],
+            ["instagram", "Instagram"],
             ["email", "E-mail da empresa"],
             ["telefone", "Telefone da empresa"],
           ] as const
@@ -539,6 +540,7 @@ type Ficha = Omit<EmpresaLinha, "prospectos"> & {
   telefone: string | null;
   email: string | null;
   site: string | null;
+  instagram: string | null;
   cnae: string | null;
   origem: string;
   informadoNoCsv: { arquivo: string; linha: number; importadaEm: string } | null;
@@ -582,7 +584,7 @@ export function FichaDaEmpresa({ id, onFechar, podeEscrever, aoMudar }: { id: st
               </div>
             )}
             <FichaComercial
-              empresa={{ id: data.id, nome: nomeDaEmpresa(data), razaoSocial: data.razaoSocial, nomeFantasia: data.nomeFantasia, email: data.email, telefone: data.telefone, site: data.site, cidade: data.cidade, uf: data.uf, segmento: data.segmento }}
+              empresa={{ id: data.id, nome: nomeDaEmpresa(data), razaoSocial: data.razaoSocial, nomeFantasia: data.nomeFantasia, email: data.email, telefone: data.telefone, site: data.site, instagram: data.instagram, cidade: data.cidade, uf: data.uf, segmento: data.segmento }}
               podeEscrever={podeEscrever}
               aoMudar={() => {
                 recarregar();
@@ -596,6 +598,7 @@ export function FichaDaEmpresa({ id, onFechar, podeEscrever, aoMudar }: { id: st
               {linha("Telefone", formatarTelefone(data.telefone))}
               {linha("E-mail", data.email)}
               {linha("Site", data.site)}
+              {linha("Instagram", data.instagram ? data.instagram.replace("https://instagram.com/", "@") : null)}
               {linha("Local", [data.cidade, data.uf].filter(Boolean).join(" / "))}
               {linha("Segmento", data.segmento)}
               {linha("Porte", data.porte ? (ROTULO_PORTE[data.porte] ?? data.porte) : null)}

@@ -34,7 +34,7 @@ export async function GET() {
       // um caso específico.
       hasWhatsapp: true,
       conversations: {
-        select: { id: true, tags: true, assignedToId: true, status: true, closeReason: true },
+        select: { id: true, tags: true, assignedToId: true, status: true, closeReason: true, lastMessageAt: true },
         orderBy: { lastMessageAt: "desc" },
         take: 1,
       },
@@ -49,8 +49,24 @@ export async function GET() {
   // Quanto cada um deve: selo na lista e filtro "com pagamento pendente".
   const pendencias = (await podeVerPendencia(user)) ? await pendenciasPorContato(user.tenantId) : new Map();
 
+  // Quanto cada um já comprou (pedidos fechados) e quando foi a última vez: é o que separa, na limpeza da
+  // base (Believe, 06/11), o contato que nunca comprou do cliente. Uma consulta agrupada, não uma por contato.
+  const comprasPorContato = new Map(
+    (
+      await prisma.order.groupBy({
+        by: ["contactId"],
+        where: { tenantId: user.tenantId, status: "FECHADO" },
+        _count: { _all: true },
+        _max: { fechadoEm: true },
+      })
+    ).map((g) => [g.contactId, { n: g._count._all, ultima: g._max.fechadoEm }])
+  );
+
   const withTags = contacts.map(({ conversations, negociacoes, ...contact }) => ({
     pendencia: pendencias.get(contact.id) ?? null,
+    compras: comprasPorContato.get(contact.id)?.n ?? 0,
+    ultimaCompraEm: comprasPorContato.get(contact.id)?.ultima ?? null,
+    ultimaMensagemEm: conversations[0]?.lastMessageAt ?? null,
     ...contact,
     ...camposDoContato(negociacoes),
     tags: conversations[0]?.tags ?? [],

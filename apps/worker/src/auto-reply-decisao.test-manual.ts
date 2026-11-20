@@ -3,6 +3,7 @@
 import {
   avaliarAutomacao,
   equipeFalou,
+  equipeIniciou,
   numeroTemRobo,
   decidirAutoResposta,
   type EntradaDecisao,
@@ -537,11 +538,13 @@ const donoQualquer = { assignedToId: "user-fiscal", setorId: null };
 const estado = (
   status: "OPEN" | "PENDING" | "RESOLVED",
   minutosAtras: number,
-  equipeFalouPorUltimo = false
+  equipeFalouPorUltimo = false,
+  equipeIniciou = false
 ): EstadoAntesDaMensagem => ({
   status,
   lastMessageAt: new Date(AGORA.getTime() - minutosAtras * 60_000),
   equipeFalouPorUltimo,
+  equipeIniciou,
 });
 
 checa(
@@ -645,14 +648,32 @@ checa(
 // O reinicio por inatividade continua existindo: quem some por semanas e volta
 // com outro assunto precisa da triagem de novo, tenha quem tiver falado antes.
 checa(
-  "atendente falou por ultimo, mas faz tempo demais — reinicia do mesmo jeito",
-  avaliarAutomacao(donoQualquer, estado("OPEN", 999, true), AGORA, UMA_HORA_MS, true),
+  "a equipe PUXOU a conversa e o cliente respondeu 16h depois — e resposta a ela, o robo cala (Guttierres, 11/11)",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 999, true, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "a equipe PUXOU a conversa, cliente voltou 6 dias depois — ainda cala",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 6 * 24 * 60, true, true), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "atendente falou por ultimo, mas o cliente so voltou depois de 8 dias — reinicia",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 8 * 24 * 60, true, true), AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: true }
 );
 
 checa(
-  "conversa sem dono, inativa ha muito, atendente falou por ultimo — volta a falar",
-  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 999, true), AGORA, UMA_HORA_MS, true),
+  "inatividade configurada maior que 7 dias vale quando a equipe falou",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 8 * 24 * 60, true, true), AGORA, 10 * 24 * 60 * 60_000, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "conversa sem dono, atendente falou por ultimo ha mais de 7 dias — volta a falar",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 8 * 24 * 60, true, true), AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: false }
 );
 
@@ -710,6 +731,12 @@ checa(
   false
 );
 
+checa(
+  "conversa aberta pelo celular, cliente respondeu no dia seguinte: o robô cala",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, { status: "RESOLVED", lastMessageAt: new Date(AGORA.getTime() - 20 * 60 * 60_000), equipeFalouPorUltimo: true, equipeIniciou: true }, AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
 // O cenário completo, ponta a ponta na decisão: a pessoa escreveu pelo celular
 // e o cliente respondeu logo depois, numa conversa ainda sem dono.
 const semDono = { assignedToId: null, setorId: null };
@@ -730,10 +757,57 @@ checa(
 );
 // Quem escreveu pelo celular e o cliente só voltou dias depois: é outro assunto.
 checa(
-  "celular falou, mas o cliente só voltou muito depois: triagem de novo",
-  avaliarAutomacao(semDono, veioDoCelular(999), AGORA, UMA_HORA_MS, true),
+  "celular falou, mas o cliente só voltou depois de 8 dias: triagem de novo",
+  avaliarAutomacao(semDono, veioDoCelular(8 * 24 * 60), AGORA, UMA_HORA_MS, true),
   { podeFalar: true, reiniciarRoteamento: false }
 );
+
+
+// ---------------------------------------------------------------------------
+// A equipe RESPONDEU ao cliente (mandou a guia, tirou a dúvida) e o cliente volta depois: é pedido
+// novo e o menu volta. Guttierres, 13/11: "as mensagens da URA só vão uma única vez".
+// ---------------------------------------------------------------------------
+
+checa(
+  "equipe so respondeu e o cliente voltou 4 dias depois — o menu volta (reinicia)",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 4 * 24 * 60, true, false), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "equipe so respondeu e o cliente escreveu 2 horas depois — o menu volta (passou da inatividade da empresa)",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 120, true, false), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: true }
+);
+
+checa(
+  "equipe so respondeu e o cliente escreveu 20 minutos depois ('obrigado') — cala, ainda e a mesma conversa",
+  avaliarAutomacao(donoQualquer, estado("OPEN", 20, true, false), AGORA, UMA_HORA_MS, true),
+  { podeFalar: false, reiniciarRoteamento: false }
+);
+
+checa(
+  "equipe so respondeu, conversa sem dono, cliente voltou depois de 1 dia — o robo fala",
+  avaliarAutomacao({ assignedToId: null, setorId: null }, estado("OPEN", 24 * 60, true, false), AGORA, UMA_HORA_MS, true),
+  { podeFalar: true, reiniciarRoteamento: false }
+);
+
+// --- equipeIniciou: quem puxou a conversa e quem so respondeu ---
+const min = (m: number) => new Date(AGORA.getTime() - m * 60_000);
+const cliente = (m: number) => ({ direction: "INBOUND" as const, senderUserId: null, deCelular: false, createdAt: min(m) });
+const robo = (m: number) => ({ direction: "OUTBOUND" as const, senderUserId: null, deCelular: false, createdAt: min(m) });
+const pessoa = (m: number) => ({ direction: "OUTBOUND" as const, senderUserId: "u1", deCelular: false, createdAt: min(m) });
+const celular = (m: number) => ({ direction: "OUTBOUND" as const, senderUserId: null, deCelular: true, createdAt: min(m) });
+
+checa("cliente pediu, o robo respondeu, a pessoa respondeu: so respondeu (nao puxou)", equipeIniciou([pessoa(60), robo(100), cliente(110)]), false);
+checa("rodada de varias mensagens da pessoa depois do pedido: so respondeu", equipeIniciou([pessoa(50), pessoa(52), pessoa(55), cliente(70)]), false);
+checa("o robo no meio (menu e encaminhando) nao atrapalha: pedido, menu, '3', encaminhando, pessoa", equipeIniciou([pessoa(10), robo(20), cliente(21), robo(30), cliente(31)]), false);
+checa("a pessoa escreve pelo celular depois do pedido: so respondeu", equipeIniciou([celular(60), cliente(100)]), false);
+checa("a pessoa abriu a conversa (nao ha mensagem do cliente antes): puxou", equipeIniciou([pessoa(10)]), true);
+checa("a pessoa cumprimenta um cliente cujo ultimo pedido foi ha 3 dias: puxou", equipeIniciou([pessoa(10), cliente(3 * 24 * 60)]), true);
+checa("o pedido do cliente foi ha 23 horas: ainda conta como resposta", equipeIniciou([pessoa(10), cliente(23 * 60 + 10)]), false);
+checa("a ultima mensagem nao e da equipe: nao se aplica", equipeIniciou([cliente(5), pessoa(60)]), false);
+checa("sem mensagens: nao se aplica", equipeIniciou([]), false);
 
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);

@@ -154,7 +154,7 @@ describe("normalização dos campos", () => {
     if (!r.ok) return;
     assert.deepEqual(r.empresa, {
       cnpj: "11222333000181", razaoSocial: "Clínica Sao José LTDA", nomeFantasia: null, telefone: "551133334444", email: "contato@clinica.com.br",
-      site: "https://clinica.com.br", dominio: "clinica.com.br", emailDominio: "clinica.com.br", uf: "SP", cidade: "Sao Paulo",
+      site: "https://clinica.com.br", instagram: null, dominio: "clinica.com.br", emailDominio: "clinica.com.br", uf: "SP", cidade: "Sao Paulo",
       segmento: "Clínicas", porte: "ME", cnae: "8630501", chaveNome: "clinica sao jose",
     });
   });
@@ -187,7 +187,7 @@ describe("mapeamento de colunas", () => {
   test("reconhece os nomes comuns, com e sem acento", () => {
     const m = sugerirMapeamento(["CNPJ", "Razão Social", "Nome Fantasia", "Telefone", "E-mail", "Site", "Estado", "Município", "Ramo", "Porte", "CNAE"]);
     assert.deepEqual(m, {
-      cnpj: "CNPJ", razaoSocial: "Razão Social", nomeFantasia: "Nome Fantasia", telefone: "Telefone", email: "E-mail", site: "Site",
+      cnpj: "CNPJ", razaoSocial: "Razão Social", nomeFantasia: "Nome Fantasia", telefone: "Telefone", email: "E-mail", site: "Site", instagram: null,
       uf: "Estado", cidade: "Município", segmento: "Ramo", porte: "Porte", cnae: "CNAE",
     });
   });

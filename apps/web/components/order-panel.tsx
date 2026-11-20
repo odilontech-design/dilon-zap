@@ -4,8 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
 import { gerarParcelas } from "@dilon-zap/receivables";
 import { SeloPendencia, type PendenciaResumo } from "@/components/selo-pendencia";
+import { excedenteDoCredito, valorQueUsaCredito, type ResumoDoCredito } from "@/lib/credito";
 import { useTermoPedido } from "@/components/recursos-context";
 import { DividirEntrada, entradasDoPlano, type ParteDaEntrada } from "@/components/dividir-entrada";
+import { simulacaoParaBusca, type SimulacaoDoParcelamento } from "@/lib/simulacao-parcelas";
 
 /**
  * Painel do pedido — o mesmo dos dois lados.
@@ -176,7 +178,7 @@ export function OrderPanel({
 
   // Quanto o cliente já deve em outras compras. A consultora vê ao montar; o
   // financeiro vê ao fechar — venda a prazo para quem deve fica bloqueada.
-  const { data: pendencia } = useSWR<PendenciaResumo>(
+  const { data: pendencia } = useSWR<PendenciaResumo & { credito?: ResumoDoCredito }>(
     pedido.status === "FECHADO" || pedido.status === "CANCELADO" ? null : `/api/contacts/${pedido.contact.id}/pendencias?excluirPedido=${pedido.id}`,
     fetcher
   );
@@ -217,6 +219,50 @@ export function OrderPanel({
   const aPrazo = A_PRAZO.includes(pagamento);
   const entradaCents = parseValor(entrada) ?? 0;
   const entradaDividida = entradasDoPlano(partesEntrada, entradaCents);
+
+  // Linha de crédito do cliente (Believe, 20/11). Só avisa: o pedido fecha do mesmo jeito.
+  // A entrada recebida na hora não usa crédito; a que ainda vai entrar usa.
+  const credito = pendencia?.credito && pendencia.credito.limiteCents !== null ? pendencia.credito : null;
+  const usoDoCredito = valorQueUsaCredito(total, aPrazo && parcelar && entradaPaga ? entradaCents : 0);
+  const excedeCredito =
+    credito && credito.disponivelCents !== null ? excedenteDoCredito({ ...credito, limiteCents: credito.limiteCents!, disponivelCents: credito.disponivelCents }, usoDoCredito) : 0;
+
+  // Simulação de parcelamento do ORÇAMENTO (Believe, 19/11): a consultora escolhe entrada e parcelas e a cliente
+  // recebe o orçamento já com cada parcela. Estados próprios, separados do plano do fechamento acima.
+  const [simular, setSimular] = useState(true);
+  const [simEntrada, setSimEntrada] = useState(
+    pedido.planoEntradaCents ? (pedido.planoEntradaCents / 100).toFixed(2).replace(".", ",") : ""
+  );
+  const [simParcelas, setSimParcelas] = useState(String(pedido.planoNumParcelas ?? 3));
+  const [simPeriodicidade, setSimPeriodicidade] = useState<"SEMANAL" | "QUINZENAL" | "MENSAL">(
+    pedido.planoPeriodicidade === "SEMANAL" || pedido.planoPeriodicidade === "QUINZENAL" ? pedido.planoPeriodicidade : "MENSAL"
+  );
+  const [simVencimento, setSimVencimento] = useState(
+    pedido.planoPrimeiroVencimento && pedido.planoPrimeiroVencimento.slice(0, 10) >= diaDaquiA(0)
+      ? pedido.planoPrimeiroVencimento.slice(0, 10)
+      : diaDaquiA(30)
+  );
+  const simulacao = useMemo(() => {
+    const vazio = { valor: null as SimulacaoDoParcelamento | null, erro: null as string | null };
+    if (!simular) return vazio;
+    const entradaSim = parseValor(simEntrada);
+    if (entradaSim === null) return { ...vazio, erro: "entrada inválida" };
+    const n = Number(simParcelas);
+    if (!Number.isInteger(n) || n < 1) return { ...vazio, erro: "informe o número de parcelas" };
+    if (!simVencimento) return { ...vazio, erro: "informe a data da 1ª parcela" };
+    try {
+      gerarParcelas({
+        totalCents: total,
+        entradaCents: entradaSim,
+        numParcelas: n,
+        periodicidade: simPeriodicidade,
+        primeiroVencimento: new Date(`${simVencimento}T12:00:00Z`),
+      });
+      return { valor: { entradaCents: entradaSim, numParcelas: n, periodicidade: simPeriodicidade, primeiroVencimento: simVencimento }, erro: null };
+    } catch (e) {
+      return { ...vazio, erro: (e as Error).message };
+    }
+  }, [simular, simEntrada, simParcelas, simPeriodicidade, simVencimento, total]);
 
   const previaParcelas = useMemo(() => {
     if (!aPrazo || !parcelar || total <= 0) return { erro: null as string | null, linhas: [] as ReturnType<typeof gerarParcelas> };
@@ -301,7 +347,7 @@ export function OrderPanel({
           documento: documento.trim() || null,
           nomeNoRecibo: nomeNoRecibo.trim() || null,
           mesReferencia: mesReferencia.trim() || null,
-          ...(envioDeOrcamento ? { orcamento: true } : {}),
+          ...(envioDeOrcamento ? { orcamento: true, ...(simulacao.valor ? { simulacao: simulacao.valor } : {}) } : {}),
         }),
       });
       const b = await res.json().catch(() => ({}));
@@ -382,7 +428,7 @@ export function OrderPanel({
       <div className="fixed inset-0 bg-black/40 grid place-items-center z-50 p-4" onClick={onFechar}>
         <div
           onClick={(e) => e.stopPropagation()}
-          className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm p-6 text-center"
+          className="bg-surface rounded-lg border border-neutral-200 w-full max-w-sm max-h-[calc(100dvh-2rem)] overflow-y-auto p-6 text-center"
         >
           <p className="text-sm text-neutral-500">{termo.singular} #{pedido.numero} fechado</p>
           <p className="text-2xl font-semibold tabular-nums mt-1">{centsToBRL(fechadoAgora)}</p>
@@ -483,7 +529,30 @@ export function OrderPanel({
             </div>
           )}
 
-          {pendencia && pendencia.saldoCents > 0 && editavel && (
+          {credito && editavel && (
+            <div
+              className={`rounded-md border px-3 py-2 text-sm flex flex-col gap-1 ${
+                excedeCredito > 0 ? "border-red-300 bg-red-50 text-red-900" : "border-neutral-200 bg-neutral-50 text-neutral-800"
+              }`}
+            >
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span className="font-medium">Linha de crédito</span>
+                <span className="tabular-nums">
+                  disponível {centsToBRL(credito.disponivelCents ?? 0)} de {centsToBRL(credito.limiteCents ?? 0)}
+                </span>
+                {pendencia && pendencia.saldoCents > 0 && <SeloPendencia pendencia={pendencia} />}
+              </div>
+              {excedeCredito > 0 && (
+                <p>
+                  {aPrazo
+                    ? `Este pedido a prazo (${centsToBRL(usoDoCredito)}) passa do limite disponível em ${centsToBRL(excedeCredito)}. Dá para fechar, mas fica registrado.`
+                    : `Se for vendido a prazo, passa do limite disponível em ${centsToBRL(excedeCredito)}. Pago na hora não usa o limite.`}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!credito && pendencia && pendencia.saldoCents > 0 && editavel && (
             <div className="rounded-md border border-amber-300 bg-amber-50 text-amber-900 px-3 py-2 text-sm flex flex-wrap items-center gap-2">
               <SeloPendencia pendencia={pendencia} />
               <span>Cliente com parcelas em aberto: venda a prazo (recorrente, boleto, PIX a pagar) fica bloqueada. Pago na hora pode.</span>
@@ -935,6 +1004,20 @@ export function OrderPanel({
           onEnviar={enviarReciboWhatsApp}
           onCancelar={() => setConfirmandoRecibo(false)}
           orcamento={envioDeOrcamento}
+          sim={{
+            ativa: simular,
+            setAtiva: setSimular,
+            entrada: simEntrada,
+            setEntrada: setSimEntrada,
+            parcelas: simParcelas,
+            setParcelas: setSimParcelas,
+            periodicidade: simPeriodicidade,
+            setPeriodicidade: setSimPeriodicidade,
+            vencimento: simVencimento,
+            setVencimento: setSimVencimento,
+            erro: simulacao.erro,
+            valor: simulacao.valor,
+          }}
         />
       )}
     </div>
@@ -963,8 +1046,24 @@ function ConfirmarEnvioDoRecibo({
   onEnviar,
   onCancelar,
   orcamento = false,
+  sim,
 }: {
   orcamento?: boolean;
+  /** Simulação de parcelamento (só no orçamento). */
+  sim?: {
+    ativa: boolean;
+    setAtiva: (v: boolean) => void;
+    entrada: string;
+    setEntrada: (v: string) => void;
+    parcelas: string;
+    setParcelas: (v: string) => void;
+    periodicidade: "SEMANAL" | "QUINZENAL" | "MENSAL";
+    setPeriodicidade: (v: "SEMANAL" | "QUINZENAL" | "MENSAL") => void;
+    vencimento: string;
+    setVencimento: (v: string) => void;
+    erro: string | null;
+    valor: SimulacaoDoParcelamento | null;
+  };
   pedidoId: string;
   nomeCliente: string;
   documento: string;
@@ -985,12 +1084,18 @@ function ConfirmarEnvioDoRecibo({
 
   useEffect(() => {
     const t = setTimeout(() => {
-      const p = new URLSearchParams({ documento, nomeNoRecibo, mesReferencia, ...(orcamento ? { orcamento: "1" } : {}) });
+      const p = new URLSearchParams({
+        documento,
+        nomeNoRecibo,
+        mesReferencia,
+        ...(orcamento ? { orcamento: "1" } : {}),
+        ...(orcamento && sim?.valor ? simulacaoParaBusca(sim.valor) : {}),
+      });
       setConsultaPrevia(p.toString());
       setCarregandoPrevia(true);
     }, 500);
     return () => clearTimeout(t);
-  }, [documento, nomeNoRecibo, mesReferencia, orcamento]);
+  }, [documento, nomeNoRecibo, mesReferencia, orcamento, sim?.valor]);
 
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onCancelar}>
@@ -1023,6 +1128,66 @@ function ConfirmarEnvioDoRecibo({
               />
             )}
           </div>
+
+        {orcamento && sim && (
+          <div className="mt-4 rounded-md border border-neutral-200 p-3 text-sm">
+            <label className="flex items-center gap-2 font-medium">
+              <input type="checkbox" checked={sim.ativa} onChange={(e) => sim.setAtiva(e.target.checked)} />
+              Mostrar simulação de parcelamento
+            </label>
+            {sim.ativa && (
+              <>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">Entrada (R$)</span>
+                    <input
+                      value={sim.entrada}
+                      onChange={(e) => sim.setEntrada(e.target.value)}
+                      inputMode="decimal"
+                      placeholder="0,00"
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">Nº de parcelas</span>
+                    <input
+                      value={sim.parcelas}
+                      onChange={(e) => sim.setParcelas(e.target.value)}
+                      inputMode="numeric"
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">Periodicidade</span>
+                    <select
+                      value={sim.periodicidade}
+                      onChange={(e) => sim.setPeriodicidade(e.target.value as "SEMANAL" | "QUINZENAL" | "MENSAL")}
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    >
+                      <option value="MENSAL">Mensal</option>
+                      <option value="QUINZENAL">Quinzenal</option>
+                      <option value="SEMANAL">Semanal</option>
+                    </select>
+                  </label>
+                  <label className="block">
+                    <span className="text-xs font-medium text-neutral-700">1ª parcela em</span>
+                    <input
+                      type="date"
+                      value={sim.vencimento}
+                      onChange={(e) => sim.setVencimento(e.target.value)}
+                      className="mt-1 w-full rounded-md border border-neutral-300 bg-surface px-2 py-1.5"
+                    />
+                  </label>
+                </div>
+                {sim.erro ? (
+                  <p className="mt-2 text-xs text-red-600">{sim.erro}</p>
+                ) : (
+                  <p className="mt-2 text-xs text-neutral-500">A prévia acima mostra cada parcela com data e valor.</p>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         <label className="block text-sm mt-4">
           <span className="text-xs font-medium text-neutral-700">Nome no recibo</span>
@@ -1081,7 +1246,7 @@ function ConfirmarEnvioDoRecibo({
           </button>
           <button
             onClick={onEnviar}
-            disabled={enviando}
+            disabled={enviando || (orcamento && !!sim?.ativa && !!sim.erro)}
             className="rounded-md bg-accent text-white px-4 py-2 font-medium disabled:opacity-50"
           >
             {enviando ? "Enviando..." : orcamento ? "Enviar orçamento" : "Enviar ao cliente"}
@@ -1118,7 +1283,7 @@ function CancelarPedido({
 
   return (
     <div className="fixed inset-0 bg-black/50 grid place-items-center z-[60] p-4" onClick={onVoltar}>
-      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md p-5 flex flex-col gap-3">
+      <div onClick={(e) => e.stopPropagation()} className="bg-surface rounded-lg border border-neutral-200 w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 flex flex-col gap-3">
         <h3 className="font-semibold">
           {refazer ? `Editar ${termo.minusculo} #${numero}` : fechado ? `Cancelar ${termo.minusculo} #${numero}` : `Cancelar orçamento #${numero}`}
         </h3>

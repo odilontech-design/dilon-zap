@@ -125,5 +125,17 @@ checa(
   false
 );
 
+// Revenda de veículos: mesma regra da ótica
+checa(
+  "Essencial com Veículos ligado ganha Contas a receber",
+  lista(recursosEfetivos({ plano: "ESSENCIAL", plataformaCompleta: false }, [{ recurso: "VEICULOS", ativo: true }])),
+  lista(new Set<Recurso>(["VEICULOS", "CONTAS_RECEBER"]))
+);
+checa(
+  "Veículos não vem na plataforma completa (é sob demanda)",
+  lista(recursosEfetivos({ plano: "ESCALA", plataformaCompleta: true }, [])).includes("VEICULOS"),
+  false
+);
+
 console.log(falhas === 0 ? "\ntudo certo" : `\n${falhas} falha(s)`);
 process.exit(falhas === 0 ? 0 : 1);

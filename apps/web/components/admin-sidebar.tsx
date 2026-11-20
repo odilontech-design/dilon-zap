@@ -53,6 +53,12 @@ const NAV_ITEMS = [
     icon: icon(<><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M19 8v6M22 11h-6" /></>),
   },
   {
+    // Quanto do que as lojas enviam sairia grátis ou pago na API oficial da Meta (janela de 24 horas).
+    href: "/admin/janela-whatsapp",
+    label: "Janela do WhatsApp",
+    icon: icon(<><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></>),
+  },
+  {
     href: "/admin/auditoria",
     label: "Auditoria",
     icon: icon(<><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6M9 13h6M9 17h4" /></>),

@@ -752,9 +752,43 @@ if (falhas > 0) process.exit(1);
     orcamento: { plano: { entradaCents: 10000, numParcelas: 4, periodicidade: "SEMANAL", primeiroVencimento: new Date("2026-10-23T12:00:00Z") } },
   });
   checa("orçamento: título, selo e sem PIX", [r.titulo, r.situacao, r.pixCopiaECola], ["Orçamento nº 42", "ORCAMENTO", null]);
-  checa("orçamento: forma e condição combinada", r.pagamento.map((l) => [l.rotulo, n(l.valor)]), [
+  checa("orçamento: forma, condição e cada parcela da simulação", r.pagamento.map((l) => [l.rotulo, n(l.valor)]), [
     ["Forma de pagamento", "Recorrente"],
     ["Condição", "Entrada R$ 100,00 + 4x de R$ 150,00 semanais"],
-    ["1ª parcela", "23/10/2026"],
+    ["Entrada · na confirmação", "R$ 100,00"],
+    ["Parcela 1/4 · 23/10/2026", "R$ 150,00"],
+    ["Parcela 2/4 · 30/10/2026", "R$ 150,00"],
+    ["Parcela 3/4 · 06/11/2026", "R$ 150,00"],
+    ["Parcela 4/4 · 13/11/2026", "R$ 150,00"],
   ]);
+
+  // Centavos que sobram da divisão vão para as primeiras parcelas, como no fechamento do pedido: 70000 / 3 = 233,33 + 1 centavo.
+  const resto = montarRecibo({
+    ...base,
+    orcamento: { plano: { entradaCents: 0, numParcelas: 3, periodicidade: "MENSAL", primeiroVencimento: new Date("2026-12-10T12:00:00Z") } },
+  });
+  checa("orçamento: sem entrada e com sobra de centavos", resto.pagamento.map((l) => [l.rotulo, n(l.valor)]), [
+    ["Forma de pagamento", "Recorrente"],
+    ["Condição", "3 parcelas de R$ 233,33 a R$ 233,34 mensais"],
+    ["Parcela 1/3 · 10/12/2026", "R$ 233,34"],
+    ["Parcela 2/3 · 10/01/2027", "R$ 233,33"],
+    ["Parcela 3/3 · 10/02/2027", "R$ 233,33"],
+  ]);
+
+  // Sem a data da 1ª parcela (condição vinda só da negociação): fica o resumo, sem tabela.
+  const semData = montarRecibo({
+    ...base,
+    orcamento: { plano: { entradaCents: 10000, numParcelas: 4, periodicidade: "MENSAL", primeiroVencimento: null } },
+  });
+  checa("orçamento: sem data da 1ª parcela só resume", semData.pagamento.map((l) => [l.rotulo, n(l.valor)]), [
+    ["Forma de pagamento", "Recorrente"],
+    ["Condição", "Entrada R$ 100,00 + 4x de R$ 150,00 mensais"],
+  ]);
+
+  // Entrada que não cabe no total: a simulação não explode o orçamento, vira o resumo.
+  const entradaGrande = montarRecibo({
+    ...base,
+    orcamento: { plano: { entradaCents: 80000, numParcelas: 2, periodicidade: "MENSAL", primeiroVencimento: new Date("2026-12-10T12:00:00Z") } },
+  });
+  checa("orçamento: entrada maior que o total não gera tabela", entradaGrande.pagamento.some((l) => l.rotulo.startsWith("Parcela ")), false);
 }
