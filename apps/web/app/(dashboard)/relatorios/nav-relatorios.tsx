@@ -1,15 +1,16 @@
 import Link from "next/link";
 
-type Aba = "atendimento" | "crm" | "comissao";
+type Aba = "atendimento" | "crm" | "comissao" | "gerencial";
 
 /**
  * Abas dos relatórios. Atendimento e Comissão são de todos (a comissão mostra
  * só a linha de quem olha); o CRM mostra o desempenho de cada pessoa e fica
- * com a gestão.
+ * com a gestão, assim como o Gerencial (números da empresa inteira).
  */
 export function NavRelatorios({ ativa, gestao }: { ativa: Aba; gestao: boolean }) {
   const abas: { id: Aba; href: string; rotulo: string }[] = [
     { id: "atendimento", href: "/relatorios", rotulo: "Atendimento" },
+    ...(gestao ? [{ id: "gerencial" as const, href: "/relatorios/gerencial", rotulo: "Gerencial" }] : []),
     ...(gestao ? [{ id: "crm" as const, href: "/relatorios/crm", rotulo: "CRM" }] : []),
     { id: "comissao", href: "/relatorios/comissao", rotulo: "Comissão" },
   ];
