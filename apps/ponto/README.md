@@ -114,9 +114,9 @@ que torna a marcação imutável.
 - **Recuperação de senha por email.** Hoje o administrador gera uma nova senha
   para o colaborador. O administrador que esquecer a própria senha precisa do
   suporte.
-- **Termos de uso e política de privacidade** de verdade, revisados por
-  advogado (a foto e a localização são dados pessoais).
-- **AFD e AEJ** no layout da Portaria 671. O relatório "Marcações (registro
-  original)" já traz NSR, data e hora, localização e código de integridade,
-  mas não é o arquivo oficial.
+- **Revisão por advogado** dos termos de uso (`/termos`) e da política de
+  privacidade (`/privacidade`).
+- **REP-P formal:** e-CNPJ A1, registro no INPI e Atestado Técnico por
+  cliente. O sistema já gera AFD, AEJ, comprovante e ATRT; o passo a passo
+  está em [`docs/ponto-rh/rep-p.md`](../../docs/ponto-rh/rep-p.md).
 - **Fechamento do mês com trava e assinatura do espelho:** são do plano Ponto.

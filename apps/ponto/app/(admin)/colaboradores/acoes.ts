@@ -4,7 +4,8 @@ import { randomInt } from "node:crypto";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { prisma } from "@dilon-zap/ponto-db";
+import { prisma, registrarOperacaoRep } from "@dilon-zap/ponto-db";
+import { cpfDoResponsavel } from "@/lib/rep";
 import { acaoDeAdmin, ErroDeAcao, type Resultado } from "@/lib/acoes";
 import { auditar } from "@/lib/auditoria";
 import { cpfValido, soDigitos } from "@/lib/documentos";
@@ -41,6 +42,7 @@ async function conferirLimite(u: UsuarioAtual) {
 export async function salvarColaborador(entrada: z.input<typeof schema>): Promise<Resultado<{ login: string; senha: string } | null>> {
   return acaoDeAdmin(async (u) => {
     const p = schema.parse(entrada);
+    const responsavel = cpfDoResponsavel(u);
     const cpf = soDigitos(p.cpf);
     if (!cpfValido(cpf)) throw new ErroDeAcao("CPF inválido. Confira os números.");
     const jornada = await prisma.jornada.findFirst({ where: { id: p.jornadaId, empresaId: u.empresaId } });
@@ -62,6 +64,9 @@ export async function salvarColaborador(entrada: z.input<typeof schema>): Promis
       if (!atual) throw new ErroDeAcao("Colaborador não encontrado.");
       await prisma.$transaction(async (tx) => {
         await tx.colaborador.update({ where: { id: p.id }, data: dados });
+        if (atual.nome !== dados.nome || atual.cpf !== dados.cpf) {
+          await registrarOperacaoRep(tx, u.empresaId, { tipo: 5, operacao: "A", cpf, nome: dados.nome, cpfResponsavel: responsavel });
+        }
         // O login do colaborador é o CPF: se o CPF foi corrigido, o login acompanha.
         if (atual.usuario && atual.usuario.papel === "COLABORADOR") {
           await tx.usuario.update({ where: { id: atual.usuario.id }, data: { login: cpf, nome: p.nome } });
@@ -80,6 +85,7 @@ export async function salvarColaborador(entrada: z.input<typeof schema>): Promis
     const senhaHash = await bcrypt.hash(senha, 10);
     const c = await prisma.$transaction(async (tx) => {
       const novo = await tx.colaborador.create({ data: { ...dados, empresaId: u.empresaId } });
+      await registrarOperacaoRep(tx, u.empresaId, { tipo: 5, operacao: "I", cpf, nome: p.nome, cpfResponsavel: responsavel });
       await tx.usuario.create({
         data: { empresaId: u.empresaId, nome: p.nome, login: cpf, senhaHash, papel: "COLABORADOR", trocarSenha: true, colaboradorId: novo.id },
       });
@@ -108,8 +114,13 @@ export async function desligar(colaboradorId: string, data: string): Promise<Res
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) throw new ErroDeAcao("Informe a data do desligamento.");
     const c = await prisma.colaborador.findFirst({ where: { id: colaboradorId, empresaId: u.empresaId } });
     if (!c) throw new ErroDeAcao("Colaborador não encontrado.");
+    const responsavel = cpfDoResponsavel(u);
     // Desligar não apaga nada: as marcações ficam guardadas (prazo legal de 5 anos).
-    await prisma.colaborador.update({ where: { id: c.id }, data: { ativo: false, desligadoEm: new Date(`${data}T00:00:00Z`) } });
+    // No REP é a "exclusão" do empregado (registro tipo 5, operação "E").
+    await prisma.$transaction(async (tx) => {
+      await tx.colaborador.update({ where: { id: c.id }, data: { ativo: false, desligadoEm: new Date(`${data}T00:00:00Z`) } });
+      await registrarOperacaoRep(tx, u.empresaId, { tipo: 5, operacao: "E", cpf: c.cpf, nome: c.nome, cpfResponsavel: responsavel });
+    });
     await auditar(u, "desligar_colaborador", "Colaborador", c.id, { data });
     revalidatePath("/colaboradores");
   });
@@ -120,7 +131,11 @@ export async function reativar(colaboradorId: string): Promise<Resultado> {
     const c = await prisma.colaborador.findFirst({ where: { id: colaboradorId, empresaId: u.empresaId } });
     if (!c) throw new ErroDeAcao("Colaborador não encontrado.");
     await conferirLimite(u);
-    await prisma.colaborador.update({ where: { id: c.id }, data: { ativo: true, desligadoEm: null } });
+    const responsavel = cpfDoResponsavel(u);
+    await prisma.$transaction(async (tx) => {
+      await tx.colaborador.update({ where: { id: c.id }, data: { ativo: true, desligadoEm: null } });
+      await registrarOperacaoRep(tx, u.empresaId, { tipo: 5, operacao: "I", cpf: c.cpf, nome: c.nome, cpfResponsavel: responsavel });
+    });
     await auditar(u, "reativar_colaborador", "Colaborador", c.id);
     revalidatePath("/colaboradores");
   });

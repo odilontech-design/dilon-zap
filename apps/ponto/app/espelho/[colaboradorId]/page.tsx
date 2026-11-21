@@ -5,7 +5,7 @@ import { requireUsuario } from "@/lib/session";
 import { espelhoDoMes, SELECAO_EMPRESA_CALCULO } from "@/lib/calculo";
 import { dataBr, dataHoraNoFuso, nomeDoMes, validarMes } from "@/lib/datas";
 import { formatarCnpj, formatarCpf } from "@/lib/documentos";
-import { cargaSemanalMin } from "@/lib/jornada";
+import { cargaSemanalMin, resumoSemana } from "@/lib/jornada";
 import type { Semana } from "@/lib/jornada";
 import { BotaoImprimir } from "@/components/botao-imprimir";
 import { ResumoEspelho, TabelaEspelho, LegendaEspelho } from "@/components/espelho";
@@ -32,7 +32,7 @@ export default async function PaginaEspelho({
 
   const empresa = await prisma.empresa.findUniqueOrThrow({
     where: { id: u.empresaId },
-    select: { ...SELECAO_EMPRESA_CALCULO, razaoSocial: true, cnpj: true },
+    select: { ...SELECAO_EMPRESA_CALCULO, razaoSocial: true, cnpj: true, cnoOuCaepf: true },
   });
   const mes = validarMes(searchParams.mes, empresa.timezone);
   const espelho = await espelhoDoMes(empresa, colaborador, mes);
@@ -68,6 +68,14 @@ export default async function PaginaEspelho({
             <span className="text-neutral-500">Jornada:</span> {colaborador.jornada.nome} (
             {formatarMinutos(cargaSemanalMin(colaborador.jornada.semana as unknown as Semana))} semanais)
           </p>
+          <p className="md:col-span-2">
+            <span className="text-neutral-500">Horário contratual:</span> {resumoSemana(colaborador.jornada.semana as unknown as Semana)}
+          </p>
+          {empresa.cnoOuCaepf && (
+            <p>
+              <span className="text-neutral-500">CEI/CAEPF/CNO:</span> {empresa.cnoOuCaepf}
+            </p>
+          )}
         </div>
       </header>
 

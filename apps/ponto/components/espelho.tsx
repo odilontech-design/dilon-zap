@@ -47,7 +47,7 @@ function CartoesDias({ espelho, colaboradorId, editavel = false, mostrarFotos = 
         const a = d.apuracao;
         const numeros = a
           ? [
-              ["Trabalhado", a.trabalhadoMin ? horas(a.trabalhadoMin) : "", ""],
+              ["Trabalhado", a.trabalhadoComputadoMin ? horas(a.trabalhadoComputadoMin) : "", ""],
               ["Extra", a.extraMin ? horas(a.extraMin) : "", "text-emerald-700"],
               ["Noturno", a.noturnoReduzidoMin ? horas(a.noturnoReduzidoMin) : "", ""],
               ["Débito", d.situacao === "NORMAL" && a.debitoMin ? horas(a.debitoMin) : "", "text-red-600"],
@@ -147,7 +147,7 @@ function LinhaDia({
       <td className="px-3 py-2 min-w-[15rem]">
         <Marcacoes dia={d} mostrarFotos={mostrarFotos} />
       </td>
-      <td className="px-3 py-2 text-right tabular-nums">{a ? horas(a.trabalhadoMin) : ""}</td>
+      <td className="px-3 py-2 text-right tabular-nums">{a ? horas(a.trabalhadoComputadoMin) : ""}</td>
       <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{a ? horas(a.extraMin) : ""}</td>
       <td className="px-3 py-2 text-right tabular-nums">{a ? horas(a.noturnoReduzidoMin) : ""}</td>
       <td className="px-3 py-2 text-right tabular-nums text-red-600">{a && d.situacao === "NORMAL" ? horas(a.debitoMin) : ""}</td>
@@ -178,10 +178,12 @@ function LinhaDia({
 
 export function ResumoEspelho({ espelho }: { espelho: Espelho }) {
   const t = espelho.totais;
+  // Duração das jornadas com a hora noturna reduzida (Portaria 671, art. 84, VI).
+  const trabalhado = espelho.dias.reduce((s, d) => s + (d.situacao === "NORMAL" && d.apuracao ? d.apuracao.trabalhadoComputadoMin : 0), 0);
   const saldoDoMes = t.lancamentosBanco.reduce((s, l) => s + l.minutos, 0);
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-      <Indicador rotulo="Trabalhado" valor={horas(t.trabalhadoMin, false)} detalhe={`previsto ${horas(t.previstoMin, false)}`} />
+      <Indicador rotulo="Trabalhado" valor={horas(trabalhado, false)} detalhe={`previsto ${horas(t.previstoMin, false)}`} />
       {espelho.banco ? (
         <Indicador
           rotulo="Banco de horas"
@@ -226,7 +228,7 @@ export function LegendaEspelho() {
       <span>
         <sup>+1</sup> dia seguinte
       </span>
-      <span>Noturno em horas reduzidas (52min30s = 1h). Hoje entra no total quando o dia terminar.</span>
+      <span>Trabalhado e noturno já com a hora noturna reduzida (52min30s = 1h). Hoje entra no total quando o dia terminar.</span>
     </Card>
   );
 }

@@ -8,9 +8,11 @@
  */
 import bcrypt from "bcryptjs";
 import { feriadosNacionais } from "@dilon-zap/ponto-core";
-import { prisma, registrarMarcacao } from "../src/index";
+import { identificacaoEmpresaRep, prisma, registrarMarcacao, registrarOperacaoRep } from "../src/index";
 
 const CNPJ = "11222333000181";
+/** CPF fictício (dígitos válidos) da administradora da demonstração. */
+const CPF_ADMIN = "39053344705";
 const FUSO_OFFSET_H = 3; // America/Sao_Paulo, sem horário de verão desde 2019
 
 function cpfValido(base9: string): string {
@@ -57,6 +59,7 @@ async function main() {
       bancoDeHoras: true,
       // Empresa de demonstração não gera boleto nem é bloqueada.
       formaCobranca: "ISENTA",
+      endereco: "Rua da Demonstração, 100 - Centro - Duque de Caxias/RJ",
       // A demonstração tem duas semanas de histórico: o controle começa com elas.
       criadoEm: local(somarDias(hojeSaoPaulo(), -14), "00:00"),
     },
@@ -72,8 +75,10 @@ async function main() {
   });
 
   await prisma.usuario.create({
-    data: { empresaId: empresa.id, nome: "Marta Oliveira", login: "admin@paodeouro.com.br", senhaHash, papel: "ADMIN" },
+    data: { empresaId: empresa.id, nome: "Marta Oliveira", login: "admin@paodeouro.com.br", senhaHash, papel: "ADMIN", cpf: CPF_ADMIN },
   });
+  // Primeira operação do REP (NSR 1): identificação da empresa.
+  await registrarOperacaoRep(prisma, empresa.id, identificacaoEmpresaRep(empresa, CPF_ADMIN));
 
   const comercial = await prisma.jornada.create({
     data: {
@@ -130,6 +135,7 @@ async function main() {
     await prisma.usuario.create({
       data: { empresaId: empresa.id, nome: p.nome, login: p.cpf, senhaHash, papel: "COLABORADOR", colaboradorId: colaborador.id },
     });
+    await registrarOperacaoRep(prisma, empresa.id, { tipo: 5, operacao: "I", cpf: p.cpf, nome: p.nome, cpfResponsavel: CPF_ADMIN });
 
     for (let d = 0; d < 14; d++) {
       const data = somarDias(inicio, d);

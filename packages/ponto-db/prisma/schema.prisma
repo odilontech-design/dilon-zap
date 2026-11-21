@@ -71,10 +71,19 @@ model Empresa {
   plano        Plano   @default(ESSENCIAL)
   ativa        Boolean @default(true)
 
-  /// Número sequencial de registro (NSR) da última marcação. Incrementado
-  /// dentro da transação que grava a marcação (UPDATE ... RETURNING trava a
-  /// linha), então não há dois registros com o mesmo número nem buraco.
+  /// Número sequencial de registro (NSR) da última operação do REP: marcação
+  /// (tipo 7 do AFD) ou evento (tipos 2, 5 e 6, em RegistroRep). É UMA
+  /// sequência só por estabelecimento (Portaria 671, Anexo IX, item 6),
+  /// incrementada dentro da transação que grava (UPDATE ... RETURNING trava a
+  /// linha), então não há número repetido nem buraco.
   nsrAtual Int @default(0)
+
+  // ── Identificação no REP (Portaria 671, art. 79 e Anexo IX, item 6.1) ─────
+  /// CNO (Cadastro Nacional de Obras) ou CAEPF, quando existir. Só dígitos.
+  cnoOuCaepf String?
+  /// Local da prestação do serviço ou endereço do estabelecimento. Sai no
+  /// comprovante e no registro de identificação da empresa no AFD.
+  endereco   String?
 
   // ── Regras de cálculo ─────────────────────────────────────────────────────
   // Padrões da CLT. Convenção coletiva muda vários deles.
@@ -113,6 +122,7 @@ model Empresa {
   tratamentos   Tratamento[]
   abonos        Abono[]
   auditoria     LogAuditoria[]
+  registrosRep  RegistroRep[]
 }
 
 model Usuario {
@@ -127,6 +137,9 @@ model Usuario {
   papel       Papel
   /// Obriga trocar a senha no primeiro acesso (senha provisória).
   trocarSenha Boolean @default(false)
+  /// CPF de quem administra (só dígitos). O AFD grava o CPF do responsável por
+  /// cada inclusão ou alteração de empresa e de colaborador.
+  cpf         String?
 
   colaboradorId String?      @unique
   colaborador   Colaborador? @relation(fields: [colaboradorId], references: [id], onDelete: SetNull)
@@ -210,6 +223,12 @@ model Marcacao {
   idempotencia        String        @unique
   hashAnterior        String
   hash                String
+  /// Código hash SHA-256 oficial (campo 8 do registro tipo "7" do AFD),
+  /// calculado na gravação pela fórmula do leiaute (ponto-core/rep.ts).
+  /// Nulo nas marcações gravadas antes do REP-P: o AFD recalcula essas pela
+  /// mesma fórmula, que só depende de dados que não mudam.
+  hashRep             String?
+  /// Data e hora da gravação do registro (campo 5 do tipo "7").
   criadoEm            DateTime      @default(now())
 
   foto        MarcacaoFoto?
@@ -317,4 +336,21 @@ model Fatura {
   criadoEm       DateTime     @default(now())
 
   @@index([empresaId, vencimento])
+}
+
+/// Operações do REP que não são marcação, na mesma sequência de NSR:
+/// tipo 2 (identificação da empresa), 5 (inclusão, alteração ou exclusão de
+/// colaborador) e 6 (eventos sensíveis). IMUTÁVEL como a Marcacao (gatilho na
+/// migração). `dados` guarda os campos do registro no momento da operação.
+model RegistroRep {
+  id        String   @id @default(cuid())
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  nsr       Int
+  tipo      Int
+  dados     Json
+  gravadoEm DateTime @default(now())
+
+  @@unique([empresaId, nsr])
+  @@index([empresaId, tipo])
 }

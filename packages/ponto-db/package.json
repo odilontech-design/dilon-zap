@@ -16,7 +16,8 @@
   },
   "dependencies": {
     "@prisma/client": "^5.20.0",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "@dilon-zap/ponto-core": "*"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

@@ -37,7 +37,9 @@
     "dev:vendedor-ia": "npm run start -w apps/vendedor-ia-worker",
     "test:vendedor-ia": "npm run test -w packages/vendedor-ia",
     "dev:portais": "npm run start -w apps/portais-worker",
-    "test:portais": "npm run test -w packages/portais"
+    "test:portais": "npm run test -w packages/portais",
+    "ponto:atrt": "npm run atrt -w apps/ponto --",
+    "ponto:hash-inpi": "bash apps/ponto/scripts/hash-inpi.sh"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,

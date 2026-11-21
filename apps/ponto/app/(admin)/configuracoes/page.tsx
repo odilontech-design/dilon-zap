@@ -5,6 +5,10 @@ import { hojeNoFuso } from "@/lib/datas";
 import { PLANOS } from "@/lib/planos";
 import { Card, Etiqueta, TituloPagina } from "@/components/ui";
 import { FormularioConfiguracoes, Feriados } from "./formularios";
+import { ArquivosFiscalizacao, IdentificacaoRep } from "./registro-ponto";
+import { certificadoConfigurado } from "@/lib/assinatura";
+import { conferirRelogio } from "@/lib/relogio";
+import { formatarCpf } from "@/lib/documentos";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +25,12 @@ export default async function PaginaConfiguracoes() {
     prisma.jornada.count({ where: { empresaId: u.empresaId } }),
     verificarCadeia(u.empresaId),
   ]);
+  const [registrada, relogio] = await Promise.all([
+    prisma.registroRep.findFirst({ where: { empresaId: u.empresaId, tipo: 2 }, select: { nsr: true } }),
+    conferirRelogio(),
+  ]);
+  const assinado = Boolean(certificadoConfigurado());
+  const hoje = hojeNoFuso(u.empresa.timezone);
   const plano = PLANOS[empresa.plano];
 
   return (
@@ -28,6 +38,26 @@ export default async function PaginaConfiguracoes() {
       <TituloPagina titulo="Configurações" descricao="Dados da empresa, regras de cálculo, feriados e plano." />
       <div className="grid xl:grid-cols-[1fr_340px] gap-6 items-start">
         <div className="space-y-6">
+          <Card className="p-5 space-y-4">
+            <div>
+              <p className="font-semibold text-neutral-900">Registro de ponto</p>
+              <p className="text-xs text-neutral-500">
+                Identificação da empresa no registro eletrônico de ponto e os arquivos para a fiscalização do trabalho.
+              </p>
+            </div>
+            {!registrada && (
+              <p className="rounded-lg border border-accent/30 bg-accent/10 px-3 py-2 text-sm text-neutral-800">
+                Preencha a identificação abaixo para concluir o cadastro do registro de ponto da empresa.
+              </p>
+            )}
+            <IdentificacaoRep
+              inicial={{ cpf: u.cpf ? formatarCpf(u.cpf) : "", endereco: empresa.endereco ?? "", cnoOuCaepf: empresa.cnoOuCaepf ?? "" }}
+            />
+            <div className="border-t border-neutral-200 pt-4">
+              <p className="text-sm font-medium text-neutral-900 mb-2">Arquivos para a fiscalização</p>
+              <ArquivosFiscalizacao inicioPadrao={`${hoje.slice(0, 7)}-01`} fimPadrao={hoje} assinado={assinado} />
+            </div>
+          </Card>
           <Card className="p-5">
             <FormularioConfiguracoes
               inicial={{
@@ -87,6 +117,12 @@ export default async function PaginaConfiguracoes() {
 
           <Card className="p-5 text-sm space-y-2">
             <p className="font-semibold text-neutral-900">Integridade dos registros</p>
+            <p className="text-neutral-600">
+              Relógio do sistema:{" "}
+              {relogio.diferencaS == null
+                ? "conferência indisponível no momento"
+                : `${Math.abs(relogio.diferencaS)} s de diferença da hora de referência (limite: 30 s)`}
+            </p>
             <p className="text-neutral-600">
               {cadeia.total} marcações registradas. Cada uma guarda o código da anterior, e o banco de dados recusa alteração ou exclusão.
             </p>

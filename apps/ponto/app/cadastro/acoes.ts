@@ -2,9 +2,9 @@
 
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { prisma } from "@dilon-zap/ponto-db";
+import { identificacaoEmpresaRep, prisma, registrarOperacaoRep } from "@dilon-zap/ponto-db";
 import { feriadosNacionais } from "@dilon-zap/ponto-core";
-import { cnpjValido, soDigitos } from "@/lib/documentos";
+import { cnpjValido, cpfValido, soDigitos } from "@/lib/documentos";
 import { hojeNoFuso } from "@/lib/datas";
 import type { Resultado } from "@/lib/acoes";
 import { iniciarCobranca } from "@/lib/cobranca";
@@ -13,6 +13,7 @@ const schema = z.object({
   razaoSocial: z.string().trim().min(3, "Informe a razão social"),
   cnpj: z.string(),
   nome: z.string().trim().min(3, "Informe o seu nome"),
+  cpf: z.string(),
   email: z.string().trim().toLowerCase().email("Email inválido"),
   senha: z.string().min(6, "A senha precisa ter pelo menos 6 caracteres"),
   aceite: z.literal(true, { errorMap: () => ({ message: "É preciso aceitar os termos" }) }),
@@ -31,6 +32,8 @@ export async function criarConta(dados: z.input<typeof schema>): Promise<Resulta
   if (!p.success) return { ok: false, erro: p.error.errors[0]?.message ?? "Dados inválidos" };
   const cnpj = soDigitos(p.data.cnpj);
   if (!cnpjValido(cnpj)) return { ok: false, erro: "CNPJ inválido. Confira os números." };
+  const cpf = soDigitos(p.data.cpf);
+  if (!cpfValido(cpf)) return { ok: false, erro: "CPF inválido. Confira os números." };
 
   if (await prisma.empresa.findUnique({ where: { cnpj } })) {
     return { ok: false, erro: "Este CNPJ já tem conta. Entre com o email do administrador." };
@@ -47,7 +50,7 @@ export async function criarConta(dados: z.input<typeof schema>): Promise<Resulta
       data: { razaoSocial: p.data.razaoSocial, cnpj, plano: "ESSENCIAL", emailCobranca: p.data.email },
     });
     await tx.usuario.create({
-      data: { empresaId: empresa.id, nome: p.data.nome, login: p.data.email, senhaHash, papel: "ADMIN" },
+      data: { empresaId: empresa.id, nome: p.data.nome, login: p.data.email, senhaHash, papel: "ADMIN", cpf },
     });
     await tx.feriado.createMany({
       data: [...feriadosNacionais(ano), ...feriadosNacionais(ano + 1)].map((f) => ({
@@ -56,6 +59,8 @@ export async function criarConta(dados: z.input<typeof schema>): Promise<Resulta
         nome: f.nome,
       })),
     });
+    // Primeira operação do REP: a identificação da empresa (registro tipo 2, NSR 1).
+    await registrarOperacaoRep(tx, empresa.id, identificacaoEmpresaRep(empresa, cpf));
     return empresa;
   });
 

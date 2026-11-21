@@ -105,6 +105,13 @@ Opcionais: `PONTO_TOLERANCIA_DIAS` (padrão 5), `PONTO_DIAS_PRIMEIRO_BOLETO`
 (padrão 3), `PONTO_CADASTRO_FECHADO=1` para esconder a contratação pelo site.
 **Não** defina `PONTO_ASAAS_URL` em produção: ela só serve para os testes.
 
+REP-P: `PONTO_DESENVOLVEDOR_CNPJ`, `PONTO_DESENVOLVEDOR_RAZAO`,
+`PONTO_DESENVOLVEDOR_EMAIL`, `PONTO_REGISTRO_INPI`, `PONTO_VERSAO_PROGRAMA`,
+`PONTO_CERT_PFX_BASE64` e `PONTO_CERT_SENHA` (todos em Production). O que
+são e de onde vêm está em [`ponto-rh/rep-p.md`](./ponto-rh/rep-p.md). Sem
+eles o sistema funciona, mas os arquivos saem sem assinatura e sem o número
+do INPI; a tela de Configurações e o `/api/saude` mostram o que falta.
+
 Para os ambientes Preview, use a chave do **sandbox** do Asaas com
 `ASAAS_ENV=sandbox`, ou deixe sem: sem chave, a contratação funciona e a
 tela de assinatura mostra "boleto não gerado".

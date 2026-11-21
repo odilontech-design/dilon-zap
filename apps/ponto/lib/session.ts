@@ -11,6 +11,8 @@ export type UsuarioAtual = {
   nome: string;
   papel: Papel;
   trocarSenha: boolean;
+  /** CPF de quem administra: o AFD registra quem fez cada alteração. */
+  cpf: string | null;
   empresaId: string;
   colaboradorId: string | null;
   empresa: { razaoSocial: string; nomeFantasia: string | null; cnpj: string; plano: Plano; timezone: string };
@@ -46,6 +48,7 @@ export const usuarioAtual = cache(async (): Promise<UsuarioAtual | null> => {
     nome: u.nome,
     papel: u.papel,
     trocarSenha: u.trocarSenha,
+    cpf: u.cpf,
     empresaId: u.empresaId,
     colaboradorId: u.colaboradorId,
     empresa: {
