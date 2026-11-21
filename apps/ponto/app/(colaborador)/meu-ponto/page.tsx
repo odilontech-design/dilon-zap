@@ -1,6 +1,7 @@
 import Link from "@/components/link";
 import { prisma } from "@dilon-zap/ponto-db";
 import { requireColaborador } from "@/lib/session";
+import { temRecurso } from "@/lib/planos";
 import { espelhoDoMes, SELECAO_EMPRESA_CALCULO } from "@/lib/calculo";
 import { dataHoraNoFuso, validarMes } from "@/lib/datas";
 import { NavegacaoMes } from "@/components/navegacao-mes";
@@ -56,9 +57,19 @@ export default async function MeuPonto({ searchParams }: { searchParams: { mes?:
           </ul>
         )}
       </Card>
-      <p className="text-xs text-neutral-500">
-        Encontrou algo errado? Fale com o responsável pelo ponto na sua empresa: ele faz o ajuste e o motivo aparece aqui.
-      </p>
+      {temRecurso(u.empresa.plano, "SOLICITACOES") ? (
+        <p className="text-xs text-neutral-500">
+          Encontrou algo errado?{" "}
+          <Link href="/minhas-solicitacoes" className="text-accent">
+            Peça o ajuste
+          </Link>
+          : a empresa aprova e o motivo aparece aqui.
+        </p>
+      ) : (
+        <p className="text-xs text-neutral-500">
+          Encontrou algo errado? Fale com o responsável pelo ponto na sua empresa: ele faz o ajuste e o motivo aparece aqui.
+        </p>
+      )}
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { AlternarTema } from "./alternar-tema";
 const ITENS = [
   { href: "/painel", rotulo: "Início" },
   { href: "/ponto", rotulo: "Controle de ponto" },
+  { href: "/solicitacoes", rotulo: "Solicitações" },
   { href: "/colaboradores", rotulo: "Colaboradores" },
   { href: "/jornadas", rotulo: "Jornadas" },
   { href: "/relatorios", rotulo: "Relatórios" },
@@ -22,6 +23,7 @@ export function MenuAdmin({
   plano,
   temColaborador,
   mostrarAssinatura = true,
+  pendentes = null,
 }: {
   nome: string;
   empresa: string;
@@ -29,6 +31,8 @@ export function MenuAdmin({
   temColaborador: boolean;
   /** Conta isenta (demonstração, cortesia) não tem boleto: o item só confundiria. */
   mostrarAssinatura?: boolean;
+  /** Solicitações aguardando decisão; null = o plano não tem solicitações. */
+  pendentes?: number | null;
 }) {
   const caminho = usePathname();
   const [aberto, setAberto] = useState(false);
@@ -55,7 +59,7 @@ export function MenuAdmin({
 
         <nav className="flex-1 overflow-y-auto px-3 pb-4">
           <ul className="space-y-0.5">
-            {ITENS.filter((item) => mostrarAssinatura || item.href !== "/assinatura").map((item) => {
+            {ITENS.filter((item) => (mostrarAssinatura || item.href !== "/assinatura") && (pendentes != null || item.href !== "/solicitacoes")).map((item) => {
               const ativo = caminho === item.href || caminho.startsWith(`${item.href}/`);
               return (
                 <li key={item.href}>
@@ -65,6 +69,9 @@ export function MenuAdmin({
                     className={`block rounded-lg px-3 py-2 text-sm ${ativo ? "bg-accent/10 text-accent font-medium" : "text-neutral-700 hover:bg-neutral-100"}`}
                   >
                     {item.rotulo}
+                    {item.href === "/solicitacoes" && pendentes ? (
+                      <span className="ml-2 rounded-full bg-accent px-1.5 py-0.5 text-[10px] font-semibold text-white">{pendentes}</span>
+                    ) : null}
                   </Link>
                 </li>
               );
@@ -98,7 +105,17 @@ export function MenuAdmin({
   );
 }
 
-export function BarraColaborador({ nome, empresa, admin }: { nome: string; empresa: string; admin: boolean }) {
+export function BarraColaborador({
+  nome,
+  empresa,
+  admin,
+  solicitacoes = false,
+}: {
+  nome: string;
+  empresa: string;
+  admin: boolean;
+  solicitacoes?: boolean;
+}) {
   const caminho = usePathname();
   const aba = (href: string, rotulo: string) => (
     <Link
@@ -125,6 +142,7 @@ export function BarraColaborador({ nome, empresa, admin }: { nome: string; empre
       <nav className="mx-auto max-w-2xl px-4 pb-2 flex gap-1">
         {aba("/bater", "Bater ponto")}
         {aba("/meu-ponto", "Meu ponto")}
+        {solicitacoes && aba("/minhas-solicitacoes", "Solicitações")}
         {admin && aba("/painel", "Administração")}
       </nav>
     </header>

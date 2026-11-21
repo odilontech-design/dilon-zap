@@ -5,12 +5,15 @@ import { PLANOS } from "@/lib/planos";
 import { requireAdmin } from "@/lib/session";
 import { situacaoDaEmpresa } from "@/lib/cobranca";
 import { AvisoAssinatura } from "@/components/aviso-assinatura";
+import { temRecurso } from "@/lib/planos";
+import { contarPendentes } from "@/lib/solicitacoes-dados";
 
 export default async function LayoutAdmin({ children }: { children: React.ReactNode }) {
   const u = await requireAdmin();
-  const [situacao, identificada] = await Promise.all([
+  const [situacao, identificada, pendentes] = await Promise.all([
     situacaoDaEmpresa(u.empresaId),
     prisma.registroRep.findFirst({ where: { empresaId: u.empresaId, tipo: 2 }, select: { id: true } }),
+    temRecurso(u.empresa.plano, "SOLICITACOES") ? contarPendentes(u.empresaId) : Promise.resolve(null),
   ]);
   return (
     <div className="min-h-screen flex flex-col md:flex-row">
@@ -20,6 +23,7 @@ export default async function LayoutAdmin({ children }: { children: React.ReactN
         plano={PLANOS[u.empresa.plano].nome}
         temColaborador={Boolean(u.colaboradorId)}
         mostrarAssinatura={situacao.estado !== "ISENTA"}
+        pendentes={pendentes}
       />
       <main className="flex-1 min-w-0 p-5 md:p-8">
         <AvisoAssinatura situacao={situacao} />

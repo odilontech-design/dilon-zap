@@ -60,6 +60,21 @@ enum TipoTratamento {
   DESCONSIDERACAO // marcação que não vale (bateu duas vezes, bateu errado)
 }
 
+/// O que o colaborador pede à empresa (plano Ponto em diante).
+enum TipoSolicitacao {
+  INCLUSAO // esqueceu de bater: pede para incluir um horário
+  DESCONSIDERACAO // bateu errado ou duas vezes: pede para desconsiderar uma marcação
+  ABONO // consulta, reunião externa: pede para abonar horas de um dia
+  ATESTADO // atestado médico: abona os dias, com o documento anexo
+}
+
+enum StatusSolicitacao {
+  PENDENTE
+  APROVADA
+  RECUSADA
+  CANCELADA // o próprio colaborador desistiu antes da decisão
+}
+
 /// Uma Empresa = um CNPJ assinante. É o tenant.
 model Empresa {
   id           String  @id @default(cuid())
@@ -121,6 +136,7 @@ model Empresa {
   marcacoes     Marcacao[]
   tratamentos   Tratamento[]
   abonos        Abono[]
+  solicitacoes  Solicitacao[]
   auditoria     LogAuditoria[]
   registrosRep  RegistroRep[]
 }
@@ -186,10 +202,11 @@ model Colaborador {
   desligadoEm  DateTime?    @db.Date
   criadoEm     DateTime     @default(now())
 
-  usuario     Usuario?
-  marcacoes   Marcacao[]
-  tratamentos Tratamento[]
-  abonos      Abono[]
+  usuario      Usuario?
+  marcacoes    Marcacao[]
+  tratamentos  Tratamento[]
+  abonos       Abono[]
+  solicitacoes Solicitacao[]
 
   @@unique([empresaId, cpf])
   @@index([empresaId, ativo])
@@ -267,6 +284,9 @@ model Tratamento {
   /// Desfazer um ajuste também deixa rastro: preenche aqui em vez de apagar.
   revogadoEm    DateTime?
   revogadoPor   String?
+  /// Quando o ajuste nasceu de uma solicitação aprovada.
+  solicitacaoId String?
+  solicitacao   Solicitacao?   @relation(fields: [solicitacaoId], references: [id], onDelete: SetNull)
   criadoEm      DateTime       @default(now())
 
   @@index([colaboradorId, instante])
@@ -275,20 +295,73 @@ model Tratamento {
 
 /// Abono (atestado, consulta, folga concedida): cobre débito do dia.
 model Abono {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   empresaId     String
-  empresa       Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   colaboradorId String
-  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
-  data          DateTime    @db.Date
+  colaborador   Colaborador  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  data          DateTime     @db.Date
   minutos       Int
   motivo        String
   autorId       String
   autorNome     String
   revogadoEm    DateTime?
-  criadoEm      DateTime    @default(now())
+  /// Quando o abono nasceu de uma solicitação aprovada.
+  solicitacaoId String?
+  solicitacao   Solicitacao? @relation(fields: [solicitacaoId], references: [id], onDelete: SetNull)
+  criadoEm      DateTime     @default(now())
 
   @@index([colaboradorId, data])
+}
+
+/// Pedido do colaborador (ajuste, abono, atestado) que a empresa aprova ou
+/// recusa. A aprovação cria o Tratamento ou os Abonos ligados a ela; a
+/// solicitação nunca altera o ponto sozinha.
+model Solicitacao {
+  id            String            @id @default(cuid())
+  empresaId     String
+  empresa       Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaboradorId String
+  colaborador   Colaborador       @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoSolicitacao
+  status        StatusSolicitacao @default(PENDENTE)
+  /// Dia a que se refere (ATESTADO: primeiro dia).
+  data          DateTime          @db.Date
+  /// ATESTADO: último dia (igual a `data` se for um dia só).
+  dataFim       DateTime?         @db.Date
+  /// INCLUSAO: "HH:MM" e se é do dia seguinte (turno que passa da meia-noite).
+  hora          String?
+  diaSeguinte   Boolean           @default(false)
+  /// DESCONSIDERACAO: a marcação.
+  marcacaoId    String?
+  /// ABONO: minutos a abonar.
+  minutos       Int?
+  justificativa String
+  /// Anexo (atestado, declaração): chave no R2 ou "db:<id>".
+  anexoChave    String?
+  anexoNome     String?
+  anexoMime     String?
+  anexo         SolicitacaoAnexo?
+  autorId       String
+  autorNome     String
+  decididoEm    DateTime?
+  decididoPor   String?
+  /// Motivo da recusa, ou observação na aprovação.
+  resposta      String?
+  criadoEm      DateTime          @default(now())
+
+  tratamentos Tratamento[]
+  abonos      Abono[]
+
+  @@index([empresaId, status, criadoEm])
+  @@index([colaboradorId, criadoEm])
+}
+
+/// Anexo guardado no banco quando o R2 não está configurado.
+model SolicitacaoAnexo {
+  solicitacaoId String      @id
+  solicitacao   Solicitacao @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+  bytes         Bytes
 }
 
 model Feriado {

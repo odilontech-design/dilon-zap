@@ -20,6 +20,12 @@ especificação e roadmap: [`docs/ponto-rh/`](../../docs/ponto-rh/README.md).
 | Pagamento via boleto bancário | Assinatura mensal por boleto no Asaas, criada na contratação (ver "Cobrança" abaixo) |
 | Passo a passo para incluir os colaboradores | Checklist no `/painel` e, ao cadastrar cada colaborador, o texto pronto para enviar (copiar ou WhatsApp) com o CPF e a senha provisória |
 
+## Plano Ponto em diante
+
+| Recurso | Onde |
+| --- | --- |
+| Solicitações (incluir ou desconsiderar marcação, abono, atestado com anexo) | O colaborador pede em `/minhas-solicitacoes`; o administrador aprova ou recusa em `/solicitacoes` (`lib/solicitacoes.ts`). A aprovação cria o tratamento ou os abonos ligados ao pedido (`solicitacaoId`), com o nome de quem decidiu. O atestado abona o previsto de cada dia e pula folga e feriado |
+
 ## Garantias que não dependem do código das telas
 
 - **Marcação imutável.** Um gatilho no Postgres recusa `UPDATE` e `DELETE` em
