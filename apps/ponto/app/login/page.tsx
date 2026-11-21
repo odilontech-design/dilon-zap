@@ -24,6 +24,9 @@ export default async function PaginaLogin() {
             Contratar o plano Essencial
           </Link>
         </p>
+        <p className="text-xs text-neutral-400 mt-4 text-center">
+          <Link href="/termos">Termos de uso</Link> · <Link href="/privacidade">Privacidade</Link>
+        </p>
       </div>
     </main>
   );

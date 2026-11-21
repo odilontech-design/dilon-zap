@@ -35,7 +35,8 @@ const nextConfig = {
     // caminho em runtime, e o rastreio precisa partir da raiz do monorepo.
     serverComponentsExternalPackages: ["@prisma-ponto/client"],
     outputFileTracingRoot: path.resolve(__dirname, "../../"),
-    serverActions: { bodySizeLimit: "2mb" },
+    // Anexo de solicitação (atestado em PDF ou foto) vai até 4 MB.
+    serverActions: { bodySizeLimit: "6mb" },
   },
   env: {
     NEXT_PUBLIC_APP_VERSION: version,

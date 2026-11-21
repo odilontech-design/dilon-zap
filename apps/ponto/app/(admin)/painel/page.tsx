@@ -2,6 +2,8 @@ import Link from "@/components/link";
 import { prisma } from "@dilon-zap/ponto-db";
 import { minutoLocal } from "@dilon-zap/ponto-core";
 import { requireAdmin } from "@/lib/session";
+import { temRecurso } from "@/lib/planos";
+import { contarPendentes } from "@/lib/solicitacoes-dados";
 import { apurarIntervalo, SELECAO_EMPRESA_CALCULO } from "@/lib/calculo";
 import { hojeNoFuso, somarDias } from "@/lib/datas";
 import { previstoDoDia, type Semana } from "@/lib/jornada";
@@ -15,6 +17,7 @@ type Status = { rotulo: string; tom: Tom; ordem: number };
 
 export default async function Painel() {
   const u = await requireAdmin();
+  const pendentes = temRecurso(u.empresa.plano, "SOLICITACOES") ? await contarPendentes(u.empresaId) : 0;
   const fuso = u.empresa.timezone;
   const hoje = hojeNoFuso(fuso);
   const agora = minutoLocal(new Date(), hoje, fuso);
@@ -99,6 +102,15 @@ export default async function Painel() {
         </Card>
       )}
 
+      {pendentes ? (
+        <Card className="p-4 mb-6 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-neutral-800">
+            <span className="font-semibold">{pendentes}</span> {pendentes === 1 ? "solicitação aguardando" : "solicitações aguardando"} a sua decisão.
+          </p>
+          <BotaoLink href="/solicitacoes">Ver solicitações</BotaoLink>
+        </Card>
+      ) : null}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         <Indicador rotulo="Trabalhando agora" valor={String(trabalhando)} tom={trabalhando ? "verde" : "neutro"} />
         <Indicador rotulo="Sem entrada hoje" valor={String(semEntrada)} detalhe="já passou do horário" tom={semEntrada ? "vermelho" : "neutro"} />
@@ -122,22 +134,24 @@ export default async function Painel() {
         ) : (
           <ul className="divide-y divide-neutral-200">
             {situacoes.map(({ c, dia, efetivas, status }) => (
-              <li key={c.id} className="px-4 py-3 flex flex-wrap items-center gap-3">
-                <Link href={`/ponto?colaborador=${c.id}`} className="min-w-0 flex-1">
+              <li key={c.id} className="px-4 py-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+                <Link href={`/ponto?colaborador=${c.id}`} className="min-w-0 sm:flex-1">
                   <p className="font-medium text-neutral-900">{c.nome}</p>
                   <p className="text-xs text-neutral-500">
                     {dia.feriado ? `Feriado: ${dia.feriado}` : `Previsto: ${dia.previstoTexto}`}
                     {dia.apuracao && dia.apuracao.trabalhadoMin > 0 && ` · trabalhado ${horas(dia.apuracao.trabalhadoMin)}`}
                   </p>
                 </Link>
-                <div className="flex gap-1 text-xs tabular-nums text-neutral-600">
+                <div className="flex flex-wrap items-center gap-1 text-xs tabular-nums text-neutral-600">
                   {efetivas.map((m) => (
                     <span key={m.id} className="rounded border border-neutral-200 px-1.5 py-0.5">
                       {m.hora}
                     </span>
                   ))}
+                  <span className="ml-1">
+                    <Etiqueta tom={status.tom}>{status.rotulo}</Etiqueta>
+                  </span>
                 </div>
-                <Etiqueta tom={status.tom}>{status.rotulo}</Etiqueta>
               </li>
             ))}
           </ul>

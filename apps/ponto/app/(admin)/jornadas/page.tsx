@@ -41,11 +41,11 @@ export default async function PaginaJornadas() {
                 </div>
                 <EditorJornada jornada={{ id: j.id, nome: j.nome, semana }} />
               </div>
-              <div className="grid grid-cols-7 gap-1 mt-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-4 lg:grid-cols-7 gap-1 mt-4 text-xs">
                 {DIAS_CURTOS.map((d, i) => (
-                  <div key={d} className="rounded-lg bg-neutral-50 p-2">
+                  <div key={d} className="flex items-baseline justify-between gap-3 rounded-lg bg-neutral-50 px-3 py-2 sm:block sm:p-2">
                     <p className="font-medium text-neutral-700">{d}</p>
-                    <p className="text-neutral-500 mt-0.5">{resumoDia(semana, i)}</p>
+                    <p className="text-neutral-500 sm:mt-0.5 text-right sm:text-left">{resumoDia(semana, i)}</p>
                   </div>
                 ))}
               </div>

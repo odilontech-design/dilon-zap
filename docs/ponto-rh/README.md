@@ -23,6 +23,8 @@ como modelo de marca, de telas ou de texto. O que nos diferencia está em
 | [`especificacao-produto.md`](./especificacao-produto.md) | O que o sistema faz, módulo por módulo, para cada perfil de acesso, e as regras legais que o motor precisa respeitar |
 | [`arquitetura-e-roadmap.md`](./arquitetura-e-roadmap.md) | Como o produto entra no monorepo, o modelo de dados, o motor de jornada e as fases de construção |
 | [`landing-page-brief.md`](./landing-page-brief.md) | Briefing da página de vendas, no mesmo formato do de esquadrias |
+| [`rep-p.md`](./rep-p.md) | Portaria 671 (REP-P): o que o sistema já cumpre, INPI, certificado digital e Atestado Técnico para cada cliente |
+| [`terceirizacao.md`](./terceirizacao.md) | Vertical para terceirizadas (limpeza, segurança, facilities): postos, requisição do ponto focal com aprovação da mesa de operação, escalas, integração com o sistema de DP |
 
 ## Resumo em uma página
 

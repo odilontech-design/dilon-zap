@@ -243,6 +243,8 @@ Escalas rotativas, painel de risco de jornada e API pública.
 - **`packages/ponto-core`:** motor com testes (`npm run test:ponto`).
 - **`packages/ponto-db`:** schema, migração com gatilho de imutabilidade,
   NSR, cadeia de hash e seed de demonstração.
+- **REP-P:** AFD, AEJ, comprovante e ATRT prontos ([`rep-p.md`](./rep-p.md)).
+- **Solicitações** (plano Ponto): ajuste, abono e atestado com aprovação.
 - **`apps/ponto`:** plano Essencial completo, com a cobrança mensal por
   boleto (Asaas) e o bloqueio do painel por falta de pagamento. O que ainda falta para vender
   está em [`apps/ponto/README.md`](../../apps/ponto/README.md#o-que-ainda-falta-para-vender).

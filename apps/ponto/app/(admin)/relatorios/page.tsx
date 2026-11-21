@@ -20,19 +20,19 @@ export default async function PaginaRelatorios({ searchParams }: { searchParams:
         descricao={RELATORIOS[tipo].descricao}
         acao={<BotaoLink href={`/api/relatorios/${tipo}?mes=${mes}`} variante="secundario">Baixar planilha (CSV)</BotaoLink>}
       />
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="-mx-5 px-5 flex gap-1.5 overflow-x-auto pb-1 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible sm:pb-0">
           {(Object.keys(RELATORIOS) as TipoRelatorio[]).map((t) => (
             <Link
               key={t}
               href={`/relatorios?tipo=${t}&mes=${mes}`}
-              className={`rounded-full border px-3 py-1 text-sm ${t === tipo ? "border-accent bg-accent/10 text-accent font-medium" : "border-neutral-300 text-neutral-700 hover:bg-neutral-100"}`}
+              className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-sm ${t === tipo ? "border-accent bg-accent/10 text-accent font-medium" : "border-neutral-300 text-neutral-700 hover:bg-neutral-100"}`}
             >
               {RELATORIOS[t].titulo}
             </Link>
           ))}
         </div>
-        <div className="ml-auto">
+        <div className="sm:ml-auto">
           <NavegacaoMes mes={mes} href={(m) => `/relatorios?tipo=${tipo}&mes=${m}`} />
         </div>
       </div>

@@ -63,3 +63,18 @@ export function resumoDia(semana: Semana, d: number): string {
   const p = semana[String(d)] ?? [];
   return p.length ? p.map(([a, b]) => `${a}–${b}`).join(", ") : "folga";
 }
+
+/** "seg a sex 08:00–12:00, 13:00–17:00 · sáb 08:00–12:00 · dom folga": o horário contratual do espelho (art. 84, IV). */
+export function resumoSemana(semana: Semana): string {
+  const ordem = [1, 2, 3, 4, 5, 6, 0];
+  const grupos: Array<{ dias: number[]; texto: string }> = [];
+  for (const d of ordem) {
+    const texto = resumoDia(semana, d);
+    const ultimo = grupos[grupos.length - 1];
+    if (ultimo && ultimo.texto === texto) ultimo.dias.push(d);
+    else grupos.push({ dias: [d], texto });
+  }
+  return grupos
+    .map((g) => `${g.dias.length > 1 ? `${DIAS_CURTOS[g.dias[0]]} a ${DIAS_CURTOS[g.dias[g.dias.length - 1]]}` : DIAS_CURTOS[g.dias[0]]} ${g.texto}`)
+    .join(" · ");
+}

@@ -6,6 +6,16 @@ import { useRouter } from "next/navigation";
 import { Botao, Campo, Entrada, Selecao } from "@/components/campos";
 import { desligar, novaSenha, reativar, salvarColaborador } from "./acoes";
 
+/**
+ * Data de hoje no relógio do aparelho. `toISOString()` daria a data em UTC: às
+ * 22h de Brasília já é o dia seguinte, e o colaborador sairia admitido
+ * "amanhã", com a marcação de hoje fora do contrato.
+ */
+function hojeLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 type Dados = {
   id?: string;
   nome: string;
@@ -91,7 +101,7 @@ export function FormularioColaborador({
     pis: "",
     matricula: "",
     cargo: "",
-    admissao: new Date().toISOString().slice(0, 10),
+    admissao: hojeLocal(),
     jornadaId: jornadas[0]?.id ?? "",
     modoRegistro: "SIMPLES",
   };
@@ -177,7 +187,7 @@ export function AcoesColaborador({ id, ativo, endereco }: { id: string; ativo: b
   const [erro, setErro] = useState<string | null>(null);
   const [acesso, setAcesso] = useState<{ login: string; senha: string } | null>(null);
   const [desligando, setDesligando] = useState(false);
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
+  const [data, setData] = useState(hojeLocal);
 
   if (acesso) {
     return (

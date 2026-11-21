@@ -30,3 +30,24 @@ export async function acaoDeAdmin<T>(fn: (u: UsuarioAtual) => Promise<T>): Promi
     return { ok: false, erro: "Não foi possível salvar. Tente de novo." };
   }
 }
+
+/**
+ * Server action do colaborador (ele mesmo, com acesso ativo). Não depende da
+ * mensalidade: o que o colaborador faz pelo próprio ponto não para por causa
+ * da cobrança da empresa.
+ */
+export async function acaoDeColaborador<T>(
+  fn: (u: UsuarioAtual & { colaboradorId: string }) => Promise<T>,
+): Promise<Resultado<T>> {
+  const u = await usuarioAtual();
+  if (!u || !u.colaboradorId) return { ok: false, erro: "Sem permissão. Entre de novo." };
+  try {
+    const dados = await fn(u as UsuarioAtual & { colaboradorId: string });
+    return { ok: true, dados };
+  } catch (err) {
+    if (err instanceof ErroDeAcao) return { ok: false, erro: err.message };
+    if (err instanceof z.ZodError) return { ok: false, erro: err.errors[0]?.message ?? "Dados inválidos." };
+    console.error("[acao]", err);
+    return { ok: false, erro: "Não foi possível salvar. Tente de novo." };
+  }
+}

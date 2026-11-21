@@ -41,7 +41,7 @@ export function FormularioConfiguracoes({ inicial, cnpj }: { inicial: Config; cn
     <form onSubmit={salvar} className="space-y-5">
       <div>
         <p className="font-semibold text-neutral-900 mb-3">Empresa</p>
-        <div className="grid md:grid-cols-2 gap-3">
+        <div className="grid sm:grid-cols-2 gap-3 items-start">
           <Campo rotulo="Razão social">
             <Entrada value={f.razaoSocial} onChange={(e) => setF({ ...f, razaoSocial: e.target.value })} />
           </Campo>
@@ -70,17 +70,17 @@ export function FormularioConfiguracoes({ inicial, cnpj }: { inicial: Config; cn
       <div>
         <p className="font-semibold text-neutral-900 mb-1">Regras de cálculo</p>
         <p className="text-xs text-neutral-500 mb-3">Já vêm com o padrão da CLT. Ajuste se a convenção coletiva da sua categoria disser diferente.</p>
-        <div className="grid md:grid-cols-3 gap-3">
-          <Campo rotulo="Tolerância por marcação (min)" ajuda="CLT: 5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 items-start">
+          <Campo rotulo="Tolerância por marcação" ajuda="Em minutos. CLT: 5">
             <Entrada type="number" min={0} max={10} value={f.toleranciaPorMarcacaoMin} onChange={num("toleranciaPorMarcacaoMin")} />
           </Campo>
-          <Campo rotulo="Tolerância no dia (min)" ajuda="CLT: 10">
+          <Campo rotulo="Tolerância no dia" ajuda="Em minutos. CLT: 10">
             <Entrada type="number" min={0} max={20} value={f.toleranciaDiariaMin} onChange={num("toleranciaDiariaMin")} />
           </Campo>
           <Campo rotulo="Hora extra (%)" ajuda="Mínimo legal: 50%">
             <Entrada type="number" min={50} value={f.percentualExtraBp / 100} onChange={num("percentualExtraBp", 100)} />
           </Campo>
-          <Campo rotulo="Domingo/feriado/folga (%)" ajuda="Usual: 100%">
+          <Campo rotulo="Domingo e feriado (%)" ajuda="Também folga. Usual: 100%">
             <Entrada type="number" min={50} value={f.percentualDescansoBp / 100} onChange={num("percentualDescansoBp", 100)} />
           </Campo>
           <Campo rotulo="Adicional noturno (%)" ajuda="Urbano: 20%">

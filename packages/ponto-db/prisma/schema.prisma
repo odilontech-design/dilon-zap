@@ -60,6 +60,21 @@ enum TipoTratamento {
   DESCONSIDERACAO // marcação que não vale (bateu duas vezes, bateu errado)
 }
 
+/// O que o colaborador pede à empresa (plano Ponto em diante).
+enum TipoSolicitacao {
+  INCLUSAO // esqueceu de bater: pede para incluir um horário
+  DESCONSIDERACAO // bateu errado ou duas vezes: pede para desconsiderar uma marcação
+  ABONO // consulta, reunião externa: pede para abonar horas de um dia
+  ATESTADO // atestado médico: abona os dias, com o documento anexo
+}
+
+enum StatusSolicitacao {
+  PENDENTE
+  APROVADA
+  RECUSADA
+  CANCELADA // o próprio colaborador desistiu antes da decisão
+}
+
 /// Uma Empresa = um CNPJ assinante. É o tenant.
 model Empresa {
   id           String  @id @default(cuid())
@@ -71,10 +86,19 @@ model Empresa {
   plano        Plano   @default(ESSENCIAL)
   ativa        Boolean @default(true)
 
-  /// Número sequencial de registro (NSR) da última marcação. Incrementado
-  /// dentro da transação que grava a marcação (UPDATE ... RETURNING trava a
-  /// linha), então não há dois registros com o mesmo número nem buraco.
+  /// Número sequencial de registro (NSR) da última operação do REP: marcação
+  /// (tipo 7 do AFD) ou evento (tipos 2, 5 e 6, em RegistroRep). É UMA
+  /// sequência só por estabelecimento (Portaria 671, Anexo IX, item 6),
+  /// incrementada dentro da transação que grava (UPDATE ... RETURNING trava a
+  /// linha), então não há número repetido nem buraco.
   nsrAtual Int @default(0)
+
+  // ── Identificação no REP (Portaria 671, art. 79 e Anexo IX, item 6.1) ─────
+  /// CNO (Cadastro Nacional de Obras) ou CAEPF, quando existir. Só dígitos.
+  cnoOuCaepf String?
+  /// Local da prestação do serviço ou endereço do estabelecimento. Sai no
+  /// comprovante e no registro de identificação da empresa no AFD.
+  endereco   String?
 
   // ── Regras de cálculo ─────────────────────────────────────────────────────
   // Padrões da CLT. Convenção coletiva muda vários deles.
@@ -112,7 +136,9 @@ model Empresa {
   marcacoes     Marcacao[]
   tratamentos   Tratamento[]
   abonos        Abono[]
+  solicitacoes  Solicitacao[]
   auditoria     LogAuditoria[]
+  registrosRep  RegistroRep[]
 }
 
 model Usuario {
@@ -127,6 +153,9 @@ model Usuario {
   papel       Papel
   /// Obriga trocar a senha no primeiro acesso (senha provisória).
   trocarSenha Boolean @default(false)
+  /// CPF de quem administra (só dígitos). O AFD grava o CPF do responsável por
+  /// cada inclusão ou alteração de empresa e de colaborador.
+  cpf         String?
 
   colaboradorId String?      @unique
   colaborador   Colaborador? @relation(fields: [colaboradorId], references: [id], onDelete: SetNull)
@@ -173,10 +202,11 @@ model Colaborador {
   desligadoEm  DateTime?    @db.Date
   criadoEm     DateTime     @default(now())
 
-  usuario     Usuario?
-  marcacoes   Marcacao[]
-  tratamentos Tratamento[]
-  abonos      Abono[]
+  usuario      Usuario?
+  marcacoes    Marcacao[]
+  tratamentos  Tratamento[]
+  abonos       Abono[]
+  solicitacoes Solicitacao[]
 
   @@unique([empresaId, cpf])
   @@index([empresaId, ativo])
@@ -210,6 +240,12 @@ model Marcacao {
   idempotencia        String        @unique
   hashAnterior        String
   hash                String
+  /// Código hash SHA-256 oficial (campo 8 do registro tipo "7" do AFD),
+  /// calculado na gravação pela fórmula do leiaute (ponto-core/rep.ts).
+  /// Nulo nas marcações gravadas antes do REP-P: o AFD recalcula essas pela
+  /// mesma fórmula, que só depende de dados que não mudam.
+  hashRep             String?
+  /// Data e hora da gravação do registro (campo 5 do tipo "7").
   criadoEm            DateTime      @default(now())
 
   foto        MarcacaoFoto?
@@ -248,6 +284,9 @@ model Tratamento {
   /// Desfazer um ajuste também deixa rastro: preenche aqui em vez de apagar.
   revogadoEm    DateTime?
   revogadoPor   String?
+  /// Quando o ajuste nasceu de uma solicitação aprovada.
+  solicitacaoId String?
+  solicitacao   Solicitacao?   @relation(fields: [solicitacaoId], references: [id], onDelete: SetNull)
   criadoEm      DateTime       @default(now())
 
   @@index([colaboradorId, instante])
@@ -256,20 +295,73 @@ model Tratamento {
 
 /// Abono (atestado, consulta, folga concedida): cobre débito do dia.
 model Abono {
-  id            String      @id @default(cuid())
+  id            String       @id @default(cuid())
   empresaId     String
-  empresa       Empresa     @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  empresa       Empresa      @relation(fields: [empresaId], references: [id], onDelete: Cascade)
   colaboradorId String
-  colaborador   Colaborador @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
-  data          DateTime    @db.Date
+  colaborador   Colaborador  @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  data          DateTime     @db.Date
   minutos       Int
   motivo        String
   autorId       String
   autorNome     String
   revogadoEm    DateTime?
-  criadoEm      DateTime    @default(now())
+  /// Quando o abono nasceu de uma solicitação aprovada.
+  solicitacaoId String?
+  solicitacao   Solicitacao? @relation(fields: [solicitacaoId], references: [id], onDelete: SetNull)
+  criadoEm      DateTime     @default(now())
 
   @@index([colaboradorId, data])
+}
+
+/// Pedido do colaborador (ajuste, abono, atestado) que a empresa aprova ou
+/// recusa. A aprovação cria o Tratamento ou os Abonos ligados a ela; a
+/// solicitação nunca altera o ponto sozinha.
+model Solicitacao {
+  id            String            @id @default(cuid())
+  empresaId     String
+  empresa       Empresa           @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  colaboradorId String
+  colaborador   Colaborador       @relation(fields: [colaboradorId], references: [id], onDelete: Cascade)
+  tipo          TipoSolicitacao
+  status        StatusSolicitacao @default(PENDENTE)
+  /// Dia a que se refere (ATESTADO: primeiro dia).
+  data          DateTime          @db.Date
+  /// ATESTADO: último dia (igual a `data` se for um dia só).
+  dataFim       DateTime?         @db.Date
+  /// INCLUSAO: "HH:MM" e se é do dia seguinte (turno que passa da meia-noite).
+  hora          String?
+  diaSeguinte   Boolean           @default(false)
+  /// DESCONSIDERACAO: a marcação.
+  marcacaoId    String?
+  /// ABONO: minutos a abonar.
+  minutos       Int?
+  justificativa String
+  /// Anexo (atestado, declaração): chave no R2 ou "db:<id>".
+  anexoChave    String?
+  anexoNome     String?
+  anexoMime     String?
+  anexo         SolicitacaoAnexo?
+  autorId       String
+  autorNome     String
+  decididoEm    DateTime?
+  decididoPor   String?
+  /// Motivo da recusa, ou observação na aprovação.
+  resposta      String?
+  criadoEm      DateTime          @default(now())
+
+  tratamentos Tratamento[]
+  abonos      Abono[]
+
+  @@index([empresaId, status, criadoEm])
+  @@index([colaboradorId, criadoEm])
+}
+
+/// Anexo guardado no banco quando o R2 não está configurado.
+model SolicitacaoAnexo {
+  solicitacaoId String      @id
+  solicitacao   Solicitacao @relation(fields: [solicitacaoId], references: [id], onDelete: Cascade)
+  bytes         Bytes
 }
 
 model Feriado {
@@ -317,4 +409,21 @@ model Fatura {
   criadoEm       DateTime     @default(now())
 
   @@index([empresaId, vencimento])
+}
+
+/// Operações do REP que não são marcação, na mesma sequência de NSR:
+/// tipo 2 (identificação da empresa), 5 (inclusão, alteração ou exclusão de
+/// colaborador) e 6 (eventos sensíveis). IMUTÁVEL como a Marcacao (gatilho na
+/// migração). `dados` guarda os campos do registro no momento da operação.
+model RegistroRep {
+  id        String   @id @default(cuid())
+  empresaId String
+  empresa   Empresa  @relation(fields: [empresaId], references: [id], onDelete: Restrict)
+  nsr       Int
+  tipo      Int
+  dados     Json
+  gravadoEm DateTime @default(now())
+
+  @@unique([empresaId, nsr])
+  @@index([empresaId, tipo])
 }

@@ -47,15 +47,15 @@ export default async function PaginaColaboradores({ searchParams }: { searchPara
         descricao={`${ativos}${plano.maxColaboradores ? ` de ${plano.maxColaboradores}` : ""} colaboradores ativos no plano ${plano.nome}. O colaborador entra com o CPF e uma senha provisória, que ele troca no primeiro acesso.`}
       />
 
-      <div className="grid lg:grid-cols-[1fr_380px] gap-6 items-start">
+      <div className="grid xl:grid-cols-[1fr_380px] gap-6 items-start">
         <Card>
           {colaboradores.length === 0 ? (
             <Vazio titulo="Nenhum colaborador ainda" descricao="Use o formulário ao lado para cadastrar o primeiro." />
           ) : (
             <ul className="divide-y divide-neutral-200">
               {colaboradores.map((c) => (
-                <li key={c.id} className={`px-4 py-3 flex flex-wrap items-center gap-3 ${c.ativo ? "" : "opacity-60"}`}>
-                  <div className="min-w-0 flex-1">
+                <li key={c.id} className={`px-4 py-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3 ${c.ativo ? "" : "opacity-60"}`}>
+                  <div className="min-w-0 sm:flex-1">
                     <p className="font-medium text-neutral-900">{c.nome}</p>
                     <p className="text-xs text-neutral-500">
                       CPF {formatarCpf(c.cpf)} · {c.cargo || "sem cargo"} · {c.jornada.nome}
@@ -102,7 +102,7 @@ export default async function PaginaColaboradores({ searchParams }: { searchPara
               limite={
                 podeCadastrar
                   ? null
-                  : `Você chegou ao limite de ${plano.maxColaboradores} colaboradores do plano ${plano.nome}. Para cadastrar mais, o próximo passo é o plano Ponto (${PLANOS.PONTO.precoDescricao}), que também traz reconhecimento facial, quiosque e ponto pelo WhatsApp. Fale com a gente pelo suporte.`
+                  : `Você chegou ao limite de ${plano.maxColaboradores} colaboradores do plano ${plano.nome}. Para cadastrar mais, fale com o suporte sobre o plano Ponto, que também traz reconhecimento facial, quiosque e ponto pelo WhatsApp.`
               }
             />
           )}

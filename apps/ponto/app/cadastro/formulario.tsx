@@ -8,7 +8,7 @@ import { criarConta } from "./acoes";
 
 export function FormularioCadastro() {
   const router = useRouter();
-  const [f, setF] = useState({ razaoSocial: "", cnpj: "", nome: "", email: "", senha: "", aceite: false });
+  const [f, setF] = useState({ razaoSocial: "", cnpj: "", nome: "", cpf: "", email: "", senha: "", aceite: false });
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const muda = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -42,6 +42,9 @@ export function FormularioCadastro() {
       <Campo rotulo="Seu nome">
         <Entrada required value={f.nome} onChange={muda("nome")} />
       </Campo>
+      <Campo rotulo="Seu CPF" ajuda="O registro de ponto guarda quem faz cada alteração.">
+        <Entrada required inputMode="numeric" value={f.cpf} onChange={muda("cpf")} />
+      </Campo>
       <Campo rotulo="Email">
         <Entrada type="email" required autoComplete="username" value={f.email} onChange={muda("email")} />
       </Campo>
@@ -50,7 +53,17 @@ export function FormularioCadastro() {
       </Campo>
       <label className="flex gap-2 text-sm text-neutral-700">
         <input type="checkbox" checked={f.aceite} onChange={muda("aceite")} className="mt-0.5" />
-        <span>Li e aceito os termos de uso e a política de privacidade.</span>
+        <span>
+          Li e aceito os{" "}
+          <a href="/termos" target="_blank" className="text-accent underline">
+            termos de uso
+          </a>{" "}
+          e a{" "}
+          <a href="/privacidade" target="_blank" className="text-accent underline">
+            política de privacidade
+          </a>
+          .
+        </span>
       </label>
       {erro && <p className="text-sm text-red-600 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{erro}</p>}
       <Botao type="submit" disabled={enviando} className="w-full py-2.5">

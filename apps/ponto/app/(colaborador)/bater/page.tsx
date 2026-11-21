@@ -28,6 +28,7 @@ export default async function PaginaBater() {
   return (
     <RegistrarPonto
       fuso={fuso}
+      agoraServidor={Date.now()}
       comFoto={colaborador.modoRegistro === "COM_FOTO"}
       pedirLocalizacao={colaborador.empresa.exigirLocalizacao}
       recentes={marcacoes.map((m) => ({ id: m.id, nsr: m.nsr, hora: horaNoFuso(m.instante, fuso), deHoje: deHoje.includes(m) }))}

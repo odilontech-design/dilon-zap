@@ -50,13 +50,13 @@ export default async function ControlePonto({ searchParams }: { searchParams: { 
         acao={<BotaoLink href={`/espelho/${atual.id}?mes=${mes}`} variante="secundario">Imprimir espelho</BotaoLink>}
       />
 
-      <div className="flex flex-wrap items-center gap-3 mb-5">
-        <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-col gap-3 mb-5 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="-mx-5 px-5 flex gap-1.5 overflow-x-auto pb-1 sm:mx-0 sm:px-0 sm:flex-wrap sm:overflow-visible sm:pb-0">
           {colaboradores.map((c) => (
             <Link
               key={c.id}
               href={link(mes, c.id)}
-              className={`rounded-full border px-3 py-1 text-sm ${
+              className={`shrink-0 whitespace-nowrap rounded-full border px-3 py-1 text-sm ${
                 c.id === atual.id ? "border-accent bg-accent/10 text-accent font-medium" : "border-neutral-300 text-neutral-700 hover:bg-neutral-100"
               } ${c.ativo ? "" : "opacity-60"}`}
             >
@@ -65,7 +65,7 @@ export default async function ControlePonto({ searchParams }: { searchParams: { 
             </Link>
           ))}
         </div>
-        <div className="ml-auto">
+        <div className="sm:ml-auto">
           <NavegacaoMes mes={mes} href={(m) => link(m)} />
         </div>
       </div>

@@ -51,12 +51,15 @@ function obterLocalizacao(): Promise<GeolocationPosition | null> {
 
 export function RegistrarPonto({
   fuso,
+  agoraServidor,
   comFoto,
   pedirLocalizacao,
   recentes,
   proxima,
 }: {
   fuso: string;
+  /** Hora do servidor (ms) quando a página foi gerada: o relógio mostra a hora do REP, não a do aparelho. */
+  agoraServidor: number;
   comFoto: boolean;
   pedirLocalizacao: boolean;
   recentes: Array<{ id: string; nsr: number; hora: string; deHoje: boolean }>;
@@ -73,11 +76,17 @@ export function RegistrarPonto({
   const stream = useRef<MediaStream | null>(null);
   const sincronizando = useRef(false);
 
+  // Portaria 671, Anexo IX, item 3: o coletor exibe relógio com horas,
+  // minutos e segundos. O relógio segue a hora do servidor (sincronizada com
+  // a Hora Legal Brasileira), corrigindo a diferença do relógio do aparelho.
+  const diferenca = useRef<number | null>(null);
   useEffect(() => {
-    setAgora(new Date());
-    const t = setInterval(() => setAgora(new Date()), 1000);
+    if (diferenca.current === null) diferenca.current = agoraServidor - Date.now();
+    const tique = () => setAgora(new Date(Date.now() + (diferenca.current ?? 0)));
+    tique();
+    const t = setInterval(tique, 1000);
     return () => clearInterval(t);
-  }, []);
+  }, [agoraServidor]);
 
   const canal: "APP" | "WEB" =
     typeof window !== "undefined" && (window.matchMedia("(display-mode: standalone)").matches || /Android|iPhone|iPad/i.test(navigator.userAgent))
@@ -282,9 +291,18 @@ export function RegistrarPonto({
               {comprovante.localizacao ? " · com localização" : ""}
               {comprovante.offline ? " · feita sem internet" : ""}
             </dd>
-            <dt className="text-neutral-500">Código</dt>
-            <dd className="font-mono text-xs break-all">{comprovante.hash}</dd>
+            {comprovante.registroInpi && (
+              <>
+                <dt className="text-neutral-500">Registro INPI</dt>
+                <dd className="tabular-nums">{comprovante.registroInpi}</dd>
+              </>
+            )}
+            <dt className="text-neutral-500">Hash SHA-256</dt>
+            <dd className="font-mono text-[11px] break-all">{comprovante.hash}</dd>
           </dl>
+          <a href={`/api/marcacoes/${comprovante.id}/comprovante`} target="_blank" rel="noreferrer" className="mt-3 inline-block text-sm font-medium text-accent">
+            Baixar comprovante (PDF)
+          </a>
         </div>
       )}
 
