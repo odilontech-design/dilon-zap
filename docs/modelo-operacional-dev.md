@@ -108,10 +108,18 @@ Cliente afetado / urgência: <quem usa e se é para hoje>
 O Claude responde sempre com: **veredito**, **o que mudei e por quê**, **riscos
 que sobram**, **o que testar à mão** e **o que fazer em produção, em ordem**.
 
-## 7. Combinados que não mudam
+## 7. Ambiente de desenvolvimento seguro
+
+- **Banco de desenvolvimento: Postgres local e vazio, com dados de teste** (`docker-compose.yml` e `npm run db:seed`). **Não** copie o banco de produção (por exemplo, uma branch do Neon com dados) para desenvolver: ele traz telefones e conversas de clientes (LGPD) e as **credenciais de conexão do WhatsApp** (o worker as guarda no Postgres, em `apps/worker/src/postgres-auth-state.ts`). Subir o worker contra essa cópia conecta como o WhatsApp real do cliente, pode derrubar a sessão em produção e disparar mensagens de verdade. Se um dia precisar de uma branch do Neon, só com o schema, sem dados, e sem rodar o worker nela.
+- **Comandos do Prisma só contra o banco local.** Confira o `DATABASE_URL` do `.env` antes de rodar `db push`. Nunca use `migrate reset`, `db push --force-reset` nem `--accept-data-loss`. O Zap não usa migrations em produção.
+- **Nenhuma URL ou chave de produção no `.env` do computador de desenvolvimento.** Segredos de produção ficam só no servidor.
+- **Chave de API do Gemini:** projeto próprio de desenvolvimento, **com cobrança ativada** (na camada gratuita o conteúdo enviado pode ser usado pelo Google para melhorar produtos; confira os termos atuais), com alerta de gasto. Entrar sempre com a **conta da empresa** (`@dilontech.com.br`), não com conta pessoal. Plano gratuito de qualquer IA (Gemini, OpenRouter) só com código sem segredo e sem dado de cliente.
+- **Ferramentas no editor:** abrir só a pasta `dilon-zap`, nunca a pasta pai com vários projetos. Modo "planejar" antes de "agir" e **sem aprovação automática** de edição ou de comando no terminal.
+
+## 8. Combinados que não mudam
 
 - Nenhuma alteração em produção sem o fundador saber, e nada que comprometa cliente em produção.
-- O Gemini não recebe credenciais de produção (banco, Asaas, chaves de API). Trabalha em banco local.
+- O Gemini não recebe credenciais de produção (banco, Asaas, chaves de API). Trabalha em banco local (item 7).
 - Ninguém envia direto para a `main`: tudo passa por branch e revisão.
 - Autenticação só muda com justificativa escrita.
 - Simplicidade operacional e custo de infraestrutura entram em toda decisão; as explicações ao fundador são em linguagem simples, com o risco dito claramente.
