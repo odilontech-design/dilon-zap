@@ -1,0 +1,3606 @@
+{
+  "versao": 1,
+  "itens": {
+    "apps/web/app/api/admin/solicitacoes/route.ts::R1::SolicitacaoDeAcesso.findMany::d02e060ef7": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/admin/solicitacoes/route.ts",
+      "modelo": "SolicitacaoDeAcesso",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/autoreplies/[id]/route.ts::R2::AutoReply.delete::6145a86b27": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/autoreplies/[id]/route.ts",
+      "modelo": "AutoReply",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/blocks/[id]/route.ts::R2::ContactBlock.delete::430e1d4458": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/blocks/[id]/route.ts",
+      "modelo": "ContactBlock",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/cadastro/route.ts::R1::SolicitacaoDeAcesso.findFirst::3d15225cf7": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/cadastro/route.ts",
+      "modelo": "SolicitacaoDeAcesso",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/cadastro/route.ts::R1::User.findMany::8623b80883": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/cadastro/route.ts",
+      "modelo": "User",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/cadastro/route.ts::R1::User.findUnique::5bc5eb2eb3": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/cadastro/route.ts",
+      "modelo": "User",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/cadastro/route.ts::R3::SolicitacaoDeAcesso.create::31097f68a1": {
+      "regra": "R3",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/cadastro/route.ts",
+      "modelo": "SolicitacaoDeAcesso",
+      "operacao": "create"
+    },
+    "apps/web/app/api/cadastro/route.ts::R6::.::2b9ffa404c": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/cadastro/route.ts"
+    },
+    "apps/web/app/api/contacts/[id]/funis/route.ts::R1::Negociacao.findMany::0b2c8d99d7": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/funis/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/contacts/[id]/route.ts::R1::Negociacao.count::ef4b534c6c": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "count"
+    },
+    "apps/web/app/api/contacts/[id]/route.ts::R1::Negociacao.findMany::79af88a16c": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/contacts/[id]/route.ts::R2::Contact.delete::64bb5a0c01": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/route.ts",
+      "modelo": "Contact",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/contacts/[id]/route.ts::R2::Contact.update::84b1fb7a11": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/contacts/[id]/route.ts::R2::Contact.update::ba8a6f93f0": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R1::Conversation.findFirst::41088ae229": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Conversation",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R1::Conversation.findFirst::8d21058326": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Conversation",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R1::Conversation.findUnique::b3fe913a2e": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R1::Conversation.findUniqueOrThrow::6d074b8a24": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Conversation",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R1::Setor.findUnique::62534fc84b": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Setor",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R2::Conversation.update::172f9d22e5": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R2::Conversation.update::446a079268": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/contacts/[id]/start-conversation/route.ts::R2::Conversation.upsert::61b38a3daa": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/[id]/start-conversation/route.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/web/app/api/contacts/check-whatsapp/route.ts::R2::Contact.update::9b20215136": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/contacts/check-whatsapp/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/conversations/[id]/materiais/route.ts::R2::Conversation.update::8cd2dcafba": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/conversations/[id]/materiais/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/conversations/[id]/read/route.ts::R2::Conversation.update::51499d1932": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/conversations/[id]/read/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/conversations/[id]/route.ts::R1::Setor.findMany::ab7ed7ab5b": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/conversations/[id]/route.ts",
+      "modelo": "Setor",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/conversations/[id]/route.ts::R2::Conversation.update::0ab94cefcb": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/conversations/[id]/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/conversations/route.ts::R1::Conversation.findMany::cdd7d68c06": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/conversations/route.ts",
+      "modelo": "Conversation",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/conversations/status-counts/route.ts::R1::Conversation.groupBy::6608adeb8b": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/conversations/status-counts/route.ts",
+      "modelo": "Conversation",
+      "operacao": "groupBy"
+    },
+    "apps/web/app/api/crm-relatorios/origens/route.ts::R1::Stage.findMany::933fd203c6": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/crm-relatorios/origens/route.ts",
+      "modelo": "Stage",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/fornecedores/[id]/route.ts::R2::Fornecedor.update::e4a48961f9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/fornecedores/[id]/route.ts",
+      "modelo": "Fornecedor",
+      "operacao": "update"
+    },
+    "apps/web/app/api/fornecedores/route.ts::R2::Fornecedor.update::d508d6459b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/fornecedores/route.ts",
+      "modelo": "Fornecedor",
+      "operacao": "update"
+    },
+    "apps/web/app/api/funis/[id]/route.ts::R1::Negociacao.count::749e5b39ac": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/funis/[id]/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "count"
+    },
+    "apps/web/app/api/funis/[id]/route.ts::R2::Funil.update::345b954f51": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/funis/[id]/route.ts",
+      "modelo": "Funil",
+      "operacao": "update"
+    },
+    "apps/web/app/api/funis/[id]/route.ts::R2::Funil.update::9f5628475a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/funis/[id]/route.ts",
+      "modelo": "Funil",
+      "operacao": "update"
+    },
+    "apps/web/app/api/grupos/[id]/route.ts::R2::Contact.update::0179cb3a4d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/grupos/[id]/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/grupos/[id]/route.ts::R2::Contact.update::923fad348b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/grupos/[id]/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/grupos/[id]/route.ts::R2::Conversation.upsert::0b92840035": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/grupos/[id]/route.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/web/app/api/instagram/conversas/[id]/route.ts::R1::InstagramMensagem.findMany::0052dedd3a": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/instagram/conversas/[id]/route.ts",
+      "modelo": "InstagramMensagem",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/instagram/conversas/[id]/route.ts::R2::InstagramConversa.update::c4d63e3194": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/instagram/conversas/[id]/route.ts",
+      "modelo": "InstagramConversa",
+      "operacao": "update"
+    },
+    "apps/web/app/api/instagram/conversas/[id]/route.ts::R6::.::5e7c3fe94b": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/instagram/conversas/[id]/route.ts"
+    },
+    "apps/web/app/api/integracao/mensagens/route.ts::R2::Conversation.update::d9439a6280": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/integracao/mensagens/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/integracao/mensagens/route.ts::R2::Conversation.upsert::6fa7ad3f65": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/integracao/mensagens/route.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/web/app/api/integracao/mensagens/route.ts::R6::.::98e8ddb4df": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/integracao/mensagens/route.ts"
+    },
+    "apps/web/app/api/integracao/mensagens/route.ts::R9::Message.update::7598cf7296": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/integracao/mensagens/route.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/web/app/api/me/senha/route.ts::R7::.::821428d1c3": {
+      "regra": "R7",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/me/senha/route.ts"
+    },
+    "apps/web/app/api/messages/[id]/forward/route.ts::R2::Conversation.updateMany::24bdd766c0": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/messages/[id]/forward/route.ts",
+      "modelo": "Conversation",
+      "operacao": "updateMany"
+    },
+    "apps/web/app/api/messages/[id]/route.ts::R9::Message.update::58d37ed237": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/messages/[id]/route.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/web/app/api/messages/[id]/route.ts::R9::Message.update::c9be4f0c75": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/messages/[id]/route.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/web/app/api/messages/send/route.ts::R2::Conversation.update::e5ae05e2a1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/messages/send/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/motivos-perda/[id]/route.ts::R2::MotivoDePerda.update::5a401fcadc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/motivos-perda/[id]/route.ts",
+      "modelo": "MotivoDePerda",
+      "operacao": "update"
+    },
+    "apps/web/app/api/motivos-perda/route.ts::R2::MotivoDePerda.update::18ab07858c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/motivos-perda/route.ts",
+      "modelo": "MotivoDePerda",
+      "operacao": "update"
+    },
+    "apps/web/app/api/negociacoes/[id]/anexos/route.ts::R2::Negociacao.update::765dd3791e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/anexos/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/app/api/negociacoes/[id]/anexos/route.ts::R2::NegociacaoAnexo.delete::a3b41b30dc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/anexos/route.ts",
+      "modelo": "NegociacaoAnexo",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/negociacoes/[id]/notas/route.ts::R2::Negociacao.update::765dd3791e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/notas/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/app/api/negociacoes/[id]/notas/route.ts::R2::NegociacaoNota.delete::fb0e1b5567": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/notas/route.ts",
+      "modelo": "NegociacaoNota",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/negociacoes/[id]/route.ts::R1::NegociacaoAnexo.findMany::0ba41ab601": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/route.ts",
+      "modelo": "NegociacaoAnexo",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/negociacoes/[id]/route.ts::R1::Stage.findMany::754846eacd": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/route.ts",
+      "modelo": "Stage",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/negociacoes/[id]/route.ts::R2::Negociacao.delete::2ecef76ac1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/negociacoes/[id]/route.ts::R2::Negociacao.update::478eeeaeac": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/[id]/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/app/api/negociacoes/route.ts::R1::Stage.findFirst::77fc179931": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/route.ts",
+      "modelo": "Stage",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/negociacoes/route.ts::R1::Stage.findMany::4778c8c906": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/negociacoes/route.ts",
+      "modelo": "Stage",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts::R1::Conversation.findUniqueOrThrow::40d7c7ac48": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts",
+      "modelo": "Conversation",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts::R2::Contact.update::6c4fb0be6f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts::R2::Conversation.update::322e65ddfe": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts::R2::Conversation.upsert::aa0103070d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts::R2::Order.update::73a06fadfd": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts::R2::Order.update::c2503d47b3": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/recibo-whatsapp/route.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/[id]/route.ts::R1::Contact.findUnique::72cb14c07d": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/route.ts",
+      "modelo": "Contact",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/orders/[id]/route.ts::R1::Order.findUnique::f4c5461556": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/route.ts",
+      "modelo": "Order",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/orders/[id]/route.ts::R1::Order.findUniqueOrThrow::43a2f3a428": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/route.ts",
+      "modelo": "Order",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/app/api/orders/[id]/route.ts::R2::Order.update::12d8e9ddd3": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/route.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/[id]/route.ts::R2::Order.update::66b947ac03": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/route.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/[id]/route.ts::R2::Order.update::a1c2c6190d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/route.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/[id]/route.ts::R2::Order.update::cd796c68f8": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/[id]/route.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/app/api/orders/route.ts::R1::Order.findFirst::3ef654d43a": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/orders/route.ts",
+      "modelo": "Order",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/otica/laboratorios/[id]/route.ts::R2::Laboratorio.update::2f9719531d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/laboratorios/[id]/route.ts",
+      "modelo": "Laboratorio",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/[id]/foto/route.ts::R2::OrdemServico.update::d29876656c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/foto/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R1::OrdemServico.count::8cadddfa06": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "count"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R1::OrdemServico.findUniqueOrThrow::2754a8ade5": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R2::Contact.update::18a1f49160": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R2::OrdemServico.update::12399edd04": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R2::OrdemServico.update::55bd29dd79": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R2::OrdemServico.update::8dd467e53a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R2::OrdemServico.update::ab6809e13b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/[id]/route.ts::R2::ReceitaOtica.update::f51f6706fd": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/[id]/route.ts",
+      "modelo": "ReceitaOtica",
+      "operacao": "update"
+    },
+    "apps/web/app/api/otica/os/route.ts::R1::Contact.findUniqueOrThrow::cc2335b62f": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/otica/os/route.ts",
+      "modelo": "Contact",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/app/api/otica/os/route.ts::R1::Contact.findUniqueOrThrow::cc2335b62f#2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/otica/os/route.ts",
+      "modelo": "Contact",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/app/api/otica/os/route.ts::R1::OrdemServico.findMany::0e1c129aa6": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/otica/os/route.ts",
+      "modelo": "OrdemServico",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/otica/os/route.ts::R2::Contact.update::67e9650d01": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/otica/os/route.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/app/api/parcelas-pagar/[id]/route.ts::R1::SaidaPagamento.aggregate::3ae8f4a0ec": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/parcelas-pagar/[id]/route.ts",
+      "modelo": "SaidaPagamento",
+      "operacao": "aggregate"
+    },
+    "apps/web/app/api/portais/foto/[fotoId]/[assinatura]/route.ts::R1::FotoVeiculo.findFirst::4f3d92f97d": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/portais/foto/[fotoId]/[assinatura]/route.ts",
+      "modelo": "FotoVeiculo",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/portais/mobiauto/anunciar/route.ts::R6::.::c1e5a7e0a3": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/portais/mobiauto/anunciar/route.ts"
+    },
+    "apps/web/app/api/portais/napista/anunciar/route.ts::R6::.::4e726a7d10": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/portais/napista/anunciar/route.ts"
+    },
+    "apps/web/app/api/portais/olx/lead/[token]/route.ts::R1::PortalConta.findUnique::252e733fec": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/portais/olx/lead/[token]/route.ts",
+      "modelo": "PortalConta",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/products/[id]/foto/route.ts::R2::Product.update::0a8438e8b7": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/products/[id]/foto/route.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/app/api/products/[id]/foto/route.ts::R2::Product.update::4dedeebe2f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/products/[id]/foto/route.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/app/api/products/[id]/materiais/route.ts::R1::ProdutoMaterial.findMany::2a585dcc0a": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/products/[id]/materiais/route.ts",
+      "modelo": "ProdutoMaterial",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/products/[id]/route.ts::R2::Product.delete::a9796810fc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/products/[id]/route.ts",
+      "modelo": "Product",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/products/[id]/route.ts::R2::Product.update::434a896c88": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/products/[id]/route.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/app/api/products/[id]/stock/route.ts::R1::StockMovement.findMany::3003bef547": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/products/[id]/stock/route.ts",
+      "modelo": "StockMovement",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/products/import/route.ts::R2::Product.update::5ef11bc2ac": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/products/import/route.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/app/api/saas/route.ts::R1::Stage.findMany::a343bd0baa": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/saas/route.ts",
+      "modelo": "Stage",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/saved-texts/[id]/route.ts::R2::SavedText.delete::eeabed1a61": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/saved-texts/[id]/route.ts",
+      "modelo": "SavedText",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/saved-texts/[id]/route.ts::R2::SavedText.update::bd250511f8": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/saved-texts/[id]/route.ts",
+      "modelo": "SavedText",
+      "operacao": "update"
+    },
+    "apps/web/app/api/scheduled-messages/[id]/route.ts::R2::ScheduledMessage.update::89526c4306": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/scheduled-messages/[id]/route.ts",
+      "modelo": "ScheduledMessage",
+      "operacao": "update"
+    },
+    "apps/web/app/api/scheduled-messages/[id]/route.ts::R2::ScheduledMessage.update::93800224ef": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/scheduled-messages/[id]/route.ts",
+      "modelo": "ScheduledMessage",
+      "operacao": "update"
+    },
+    "apps/web/app/api/scheduled-messages/route.ts::R1::ScheduledMessage.findMany::95159bf72c": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/scheduled-messages/route.ts",
+      "modelo": "ScheduledMessage",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/sdr/abordagens/[id]/contato/route.ts::R6::.::0e2e2827d8": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/sdr/abordagens/[id]/contato/route.ts"
+    },
+    "apps/web/app/api/sdr/abordagens/[id]/enviar-email/route.ts::R6::.::e7c188592a": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/sdr/abordagens/[id]/enviar-email/route.ts"
+    },
+    "apps/web/app/api/sdr/empresas/[id]/converter/route.ts::R6::.::80fb133356": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/sdr/empresas/[id]/converter/route.ts"
+    },
+    "apps/web/app/api/sdr/empresas/[id]/resultado/route.ts::R6::.::4428916b44": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/sdr/empresas/[id]/resultado/route.ts"
+    },
+    "apps/web/app/api/sdr/fila/resultados/route.ts::R6::.::029f3a0a51": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/sdr/fila/resultados/route.ts"
+    },
+    "apps/web/app/api/setores/[id]/route.ts::R2::Setor.delete::ed10d0d311": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/setores/[id]/route.ts",
+      "modelo": "Setor",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/setores/[id]/route.ts::R2::Setor.update::43d03550ab": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/setores/[id]/route.ts",
+      "modelo": "Setor",
+      "operacao": "update"
+    },
+    "apps/web/app/api/stages/[id]/route.ts::R1::Negociacao.count::09fe5af369": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/stages/[id]/route.ts",
+      "modelo": "Negociacao",
+      "operacao": "count"
+    },
+    "apps/web/app/api/stages/[id]/route.ts::R1::Stage.findUnique::6f34604f92": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/stages/[id]/route.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/stages/[id]/route.ts::R2::Stage.delete::40df51cb5b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/stages/[id]/route.ts",
+      "modelo": "Stage",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/stages/[id]/route.ts::R2::Stage.update::55fc54a2d1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/stages/[id]/route.ts",
+      "modelo": "Stage",
+      "operacao": "update"
+    },
+    "apps/web/app/api/stages/[id]/route.ts::R2::Stage.update::6af8b901f6": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/stages/[id]/route.ts",
+      "modelo": "Stage",
+      "operacao": "update"
+    },
+    "apps/web/app/api/stages/[id]/route.ts::R2::Stage.update::ec856c222a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/stages/[id]/route.ts",
+      "modelo": "Stage",
+      "operacao": "update"
+    },
+    "apps/web/app/api/stages/route.ts::R1::Stage.findFirst::e69c550a45": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/stages/route.ts",
+      "modelo": "Stage",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/stages/route.ts::R1::Stage.findUnique::8e858c4e68": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/stages/route.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/tags/[id]/route.ts::R2::Tag.delete::d0f7fe241f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/tags/[id]/route.ts",
+      "modelo": "Tag",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/tags/[id]/route.ts::R2::Tag.update::8514cfcac0": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/tags/[id]/route.ts",
+      "modelo": "Tag",
+      "operacao": "update"
+    },
+    "apps/web/app/api/tarefas/[id]/route.ts::R2::TarefaNegociacao.delete::c8546bc195": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/tarefas/[id]/route.ts",
+      "modelo": "TarefaNegociacao",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/tarefas/[id]/route.ts::R2::TarefaNegociacao.update::a60980a67b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/tarefas/[id]/route.ts",
+      "modelo": "TarefaNegociacao",
+      "operacao": "update"
+    },
+    "apps/web/app/api/tarefas/route.ts::R1::TarefaNegociacao.count::51264ebd91": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/tarefas/route.ts",
+      "modelo": "TarefaNegociacao",
+      "operacao": "count"
+    },
+    "apps/web/app/api/tarefas/route.ts::R1::TarefaNegociacao.count::b3996a1951": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/tarefas/route.ts",
+      "modelo": "TarefaNegociacao",
+      "operacao": "count"
+    },
+    "apps/web/app/api/tarefas/route.ts::R1::TarefaNegociacao.count::cb81033df4": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/tarefas/route.ts",
+      "modelo": "TarefaNegociacao",
+      "operacao": "count"
+    },
+    "apps/web/app/api/team-chat/messages/[id]/media/route.ts::R1::TeamMessage.findFirst::d2e7bb9331": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/team-chat/messages/[id]/media/route.ts",
+      "modelo": "TeamMessage",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/team-chat/messages/[id]/route.ts::R1::TeamMessage.findFirst::b1cfdcaf49": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/team-chat/messages/[id]/route.ts",
+      "modelo": "TeamMessage",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/team-chat/messages/[id]/route.ts::R2::TeamMessage.update::da43565f31": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/team-chat/messages/[id]/route.ts",
+      "modelo": "TeamMessage",
+      "operacao": "update"
+    },
+    "apps/web/app/api/team-chat/messages/route.ts::R1::Setor.findUnique::d95e255774": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/team-chat/messages/route.ts",
+      "modelo": "Setor",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/team-chat/messages/route.ts::R1::TeamMessage.findMany::594efa7658": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/team-chat/messages/route.ts",
+      "modelo": "TeamMessage",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/team-chat/messages/route.ts::R1::User.findMany::bec7e5b53d": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/team-chat/messages/route.ts",
+      "modelo": "User",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/ura/route.ts::R3::UraOpcao.createMany::aac10c6709": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/ura/route.ts",
+      "modelo": "UraOpcao",
+      "operacao": "createMany"
+    },
+    "apps/web/app/api/users/[id]/route.ts::R1::User.findUnique::5bc5eb2eb3": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/users/[id]/route.ts",
+      "modelo": "User",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/users/[id]/route.ts::R2::User.update::5345c4d046": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/users/[id]/route.ts",
+      "modelo": "User",
+      "operacao": "update"
+    },
+    "apps/web/app/api/users/route.ts::R1::User.findUnique::60d060b2af": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/users/route.ts",
+      "modelo": "User",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/veiculos/[id]/custos/[custoId]/route.ts::R2::CustoVeiculo.delete::308ad8e25c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/custos/[custoId]/route.ts",
+      "modelo": "CustoVeiculo",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/veiculos/[id]/fotos/route.ts::R2::FotoVeiculo.update::25e8f4cdfb": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/fotos/route.ts",
+      "modelo": "FotoVeiculo",
+      "operacao": "update"
+    },
+    "apps/web/app/api/veiculos/[id]/portais/route.ts::R1::PublicacaoPortal.findUnique::6355a80743": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/portais/route.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/veiculos/[id]/portais/route.ts::R1::PublicacaoPortal.findUnique::7c7c2f4d8f": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/portais/route.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/veiculos/[id]/portais/route.ts::R1::PublicacaoPortal.findUnique::906f4f3971": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/portais/route.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/veiculos/[id]/portais/route.ts::R1::PublicacaoPortal.findUnique::a2e3de327b": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/portais/route.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/veiculos/[id]/portais/route.ts::R2::PublicacaoPortal.upsert::b444a7b872": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/portais/route.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "upsert"
+    },
+    "apps/web/app/api/veiculos/[id]/route.ts::R2::Veiculo.update::14b7663c66": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/[id]/route.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/app/api/veiculos/config/route.ts::R1::VeiculosConfig.findFirst::b20571a5cd": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/veiculos/config/route.ts",
+      "modelo": "VeiculosConfig",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/veiculos/fotos/[fotoId]/route.ts::R2::FotoVeiculo.delete::2ce8657b98": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/fotos/[fotoId]/route.ts",
+      "modelo": "FotoVeiculo",
+      "operacao": "delete"
+    },
+    "apps/web/app/api/veiculos/route.ts::R1::Veiculo.findMany::9156b661ce": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/route.ts",
+      "modelo": "Veiculo",
+      "operacao": "findMany"
+    },
+    "apps/web/app/api/veiculos/site/ficha/route.ts::R6::.::7c90774c88": {
+      "regra": "R6",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/veiculos/site/ficha/route.ts"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R1::Invoice.findFirst::243103fa7f": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Invoice",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R1::Invoice.findUnique::0652d2fff6": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Invoice",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R1::Invoice.findUnique::0652d2fff6#2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Invoice",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R1::Subscription.findFirst::8b1b36926c": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Subscription",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R1::Subscription.findFirst::9a8c755c1a": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Subscription",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R1::Subscription.findFirst::af64adfefb": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Subscription",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R2::Invoice.update::95e4b25563": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Invoice",
+      "operacao": "update"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R2::Subscription.update::49f7d8c17b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Subscription",
+      "operacao": "update"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R2::Subscription.update::b4f8728fd1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Subscription",
+      "operacao": "update"
+    },
+    "apps/web/app/api/webhooks/asaas/route.ts::R2::Subscription.updateMany::8314e0c96e": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/asaas/route.ts",
+      "modelo": "Subscription",
+      "operacao": "updateMany"
+    },
+    "apps/web/app/api/webhooks/mercadopago/route.ts::R1::Invoice.findUnique::fd6660ad0d": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/mercadopago/route.ts",
+      "modelo": "Invoice",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/webhooks/mercadopago/route.ts::R1::Subscription.findFirst::18acd814c2": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/webhooks/mercadopago/route.ts",
+      "modelo": "Subscription",
+      "operacao": "findFirst"
+    },
+    "apps/web/app/api/webhooks/mercadopago/route.ts::R1::Subscription.findUnique::df4fcabbf7": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/mercadopago/route.ts",
+      "modelo": "Subscription",
+      "operacao": "findUnique"
+    },
+    "apps/web/app/api/webhooks/mercadopago/route.ts::R2::Subscription.update::12318574cb": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/app/api/webhooks/mercadopago/route.ts",
+      "modelo": "Subscription",
+      "operacao": "update"
+    },
+    "apps/web/app/api/whatsapp/connect/route.ts::R2::WhatsAppSession.update::397d9c7175": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/whatsapp/connect/route.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "update"
+    },
+    "apps/web/app/api/whatsapp/numero/[id]/route.ts::R2::WhatsAppSession.update::888f79dff5": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/app/api/whatsapp/numero/[id]/route.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "update"
+    },
+    "apps/web/lib/api-key.ts::R1::ApiKey.findUnique::fae21def69": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/api-key.ts",
+      "modelo": "ApiKey",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/api-key.ts::R2::ApiKey.update::ca2c095f5a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/api-key.ts",
+      "modelo": "ApiKey",
+      "operacao": "update"
+    },
+    "apps/web/lib/auth.ts::R1::User.findUnique::da8493a4b8": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/auth.ts",
+      "modelo": "User",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/caixa.ts::R1::MovimentoCaixa.findMany::6325aced4d": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/caixa.ts",
+      "modelo": "MovimentoCaixa",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/caixa.ts::R1::MovimentoCaixa.findMany::f7c10808fe": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/caixa.ts",
+      "modelo": "MovimentoCaixa",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/caixa.ts::R2::Caixa.update::5831aa184d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/caixa.ts",
+      "modelo": "Caixa",
+      "operacao": "update"
+    },
+    "apps/web/lib/caixa.ts::R2::MovimentoCaixa.delete::5f57be2ca0": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/caixa.ts",
+      "modelo": "MovimentoCaixa",
+      "operacao": "delete"
+    },
+    "apps/web/lib/categorias-financeiras.ts::R2::CategoriaFinanceira.delete::e5915d46b6": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/categorias-financeiras.ts",
+      "modelo": "CategoriaFinanceira",
+      "operacao": "delete"
+    },
+    "apps/web/lib/categorias-financeiras.ts::R2::CategoriaFinanceira.update::04a4cacc60": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/categorias-financeiras.ts",
+      "modelo": "CategoriaFinanceira",
+      "operacao": "update"
+    },
+    "apps/web/lib/categorias-financeiras.ts::R2::CategoriaFinanceira.update::95f353fae7": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/categorias-financeiras.ts",
+      "modelo": "CategoriaFinanceira",
+      "operacao": "update"
+    },
+    "apps/web/lib/categorias-financeiras.ts::R2::CategoriaFinanceira.update::f375043fa8": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/categorias-financeiras.ts",
+      "modelo": "CategoriaFinanceira",
+      "operacao": "update"
+    },
+    "apps/web/lib/categorias-financeiras.ts::R3::CategoriaFinanceira.createMany::1c3aaab098": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/categorias-financeiras.ts",
+      "modelo": "CategoriaFinanceira",
+      "operacao": "createMany"
+    },
+    "apps/web/lib/contact-server.ts::R2::Contact.update::02f0a784dc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contact-server.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/lib/contact-server.ts::R2::Contact.update::07dce2605b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contact-server.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-pagar.ts::R2::ContaPagar.update::001c24a9ea": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-pagar.ts",
+      "modelo": "ContaPagar",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-pagar.ts::R2::ParcelaPagar.deleteMany::5637933438": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/contas-pagar.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "deleteMany"
+    },
+    "apps/web/lib/contas-pagar.ts::R2::ParcelaPagar.update::8b852f768a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-pagar.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-pagar.ts::R2::ParcelaPagar.update::b4fd113e27": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-pagar.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-pagar.ts::R2::ParcelaPagar.update::bdd8a9fe4e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-pagar.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-pagar.ts::R2::ParcelaPagar.updateMany::f2c8e77cb6": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-pagar.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "updateMany"
+    },
+    "apps/web/lib/contas-pagar.ts::R3::ParcelaPagar.createMany::ca4ebafac1": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-pagar.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "createMany"
+    },
+    "apps/web/lib/contas-receber.ts::R1::ContaReceber.findUnique::8d2c8012d9": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "ContaReceber",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/contas-receber.ts::R1::ContaReceber.findUniqueOrThrow::b67154edb7": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "ContaReceber",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/lib/contas-receber.ts::R1::Order.findUniqueOrThrow::26de65e1af": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Order",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/lib/contas-receber.ts::R1::Order.findUniqueOrThrow::7804d12d2b": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Order",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/web/lib/contas-receber.ts::R2::ContaReceber.update::52e489d916": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "ContaReceber",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-receber.ts::R2::Order.update::7c82e9058d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-receber.ts::R2::Parcela.deleteMany::3aede6dd12": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Parcela",
+      "operacao": "deleteMany"
+    },
+    "apps/web/lib/contas-receber.ts::R2::Parcela.update::14a2d728bb": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Parcela",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-receber.ts::R2::Parcela.update::535ae38c40": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Parcela",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-receber.ts::R2::Parcela.update::ac3f958628": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Parcela",
+      "operacao": "update"
+    },
+    "apps/web/lib/contas-receber.ts::R2::Parcela.updateMany::e04f0e823c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Parcela",
+      "operacao": "updateMany"
+    },
+    "apps/web/lib/contas-receber.ts::R3::Parcela.createMany::1e38d43e77": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/contas-receber.ts",
+      "modelo": "Parcela",
+      "operacao": "createMany"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R1::ContratacaoErp.findFirst::88d5e1e936": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R1::ContratacaoErp.findFirst::d8b99d3411": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R1::ContratacaoErp.findUnique::b16184b826": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R2::ContratacaoErp.delete::af8c073132": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "delete"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R2::ContratacaoErp.update::4ec3bad294": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "update"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R2::ContratacaoErp.update::b050f237ca": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "update"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R2::ContratacaoErp.update::beab866023": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "update"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R2::ContratacaoErp.update::ef9738a70e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "update"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R2::ContratacaoErp.updateMany::cffc27a497": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "updateMany"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R2::Subscription.update::714e8ed120": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "Subscription",
+      "operacao": "update"
+    },
+    "apps/web/lib/erp-contratacao-servico.ts::R3::ContratacaoErp.create::2b1cfa778c": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/erp-contratacao-servico.ts",
+      "modelo": "ContratacaoErp",
+      "operacao": "create"
+    },
+    "apps/web/lib/erp-sync.ts::R1::TenantErpContabilidade.findMany::80aee3f1f9": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/erp-sync.ts",
+      "modelo": "TenantErpContabilidade",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/espelho-do-site.ts::R1::VeiculosConfig.findMany::1267d1148b": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/espelho-do-site.ts",
+      "modelo": "VeiculosConfig",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/espelho-do-site.ts::R2::Veiculo.update::26839ee54e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/espelho-do-site.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/espelho-do-site.ts::R2::Veiculo.update::a11d14e9dd": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/espelho-do-site.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/espelho-do-site.ts::R2::Veiculo.update::f22783462a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/espelho-do-site.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/estoque-do-site.ts::R2::BaixaDoSite.update::06b29b2ff3": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/estoque-do-site.ts",
+      "modelo": "BaixaDoSite",
+      "operacao": "update"
+    },
+    "apps/web/lib/estoque-do-site.ts::R2::BaixaDoSite.update::2de5442676": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/estoque-do-site.ts",
+      "modelo": "BaixaDoSite",
+      "operacao": "update"
+    },
+    "apps/web/lib/estoque-do-site.ts::R2::Product.update::a88db2de46": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/estoque-do-site.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/lib/ficha-financiamento.ts::R2::FichaFinanciamento.deleteMany::782b9ca9a6": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/ficha-financiamento.ts",
+      "modelo": "FichaFinanciamento",
+      "operacao": "deleteMany"
+    },
+    "apps/web/lib/funis.ts::R3::MotivoDePerda.createMany::cd15b1b8f3": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/funis.ts",
+      "modelo": "MotivoDePerda",
+      "operacao": "createMany"
+    },
+    "apps/web/lib/importar-autocerto-estoque.ts::R2::Veiculo.update::ac043e8f0e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/importar-autocerto-estoque.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/instagram.ts::R1::InstagramConta.findMany::73d9c38261": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConta",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/instagram.ts::R1::InstagramConta.findUnique::311b9b3de0": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConta",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/instagram.ts::R1::InstagramConta.findUnique::966463b0e2": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConta",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/instagram.ts::R1::InstagramConversa.findUnique::d1b235cecf": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConversa",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/instagram.ts::R1::InstagramMensagem.findFirst::f90f7da627": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramMensagem",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/instagram.ts::R2::InstagramConta.update::47991845d7": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/instagram.ts::R2::InstagramConta.update::7aa852a4f3": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/instagram.ts::R2::InstagramConta.update::f4bfd8c60f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/instagram.ts::R2::InstagramConversa.update::5fc1dcff4d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConversa",
+      "operacao": "update"
+    },
+    "apps/web/lib/instagram.ts::R2::InstagramConversa.update::c11d1e30d9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConversa",
+      "operacao": "update"
+    },
+    "apps/web/lib/instagram.ts::R2::InstagramConversa.update::e809286d22": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/instagram.ts",
+      "modelo": "InstagramConversa",
+      "operacao": "update"
+    },
+    "apps/web/lib/janela-whatsapp.ts::R1::WhatsAppSession.groupBy::13c2a65715": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/janela-whatsapp.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "groupBy"
+    },
+    "apps/web/lib/lead-email.ts::R1::VeiculosConfig.findUnique::19750b8b82": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/lead-email.ts",
+      "modelo": "VeiculosConfig",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/lead-email.ts::R2::EmailDeLead.delete::c19582ef2d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-email.ts",
+      "modelo": "EmailDeLead",
+      "operacao": "delete"
+    },
+    "apps/web/lib/lead-email.ts::R3::EmailDeLead.create::4bd7579b0a": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-email.ts",
+      "modelo": "EmailDeLead",
+      "operacao": "create"
+    },
+    "apps/web/lib/lead-email.ts::R3::EmailDeLead.create::7757e85492": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-email.ts",
+      "modelo": "EmailDeLead",
+      "operacao": "create"
+    },
+    "apps/web/lib/lead-email.ts::R3::EmailDeLead.create::d5c21f4cdd": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-email.ts",
+      "modelo": "EmailDeLead",
+      "operacao": "create"
+    },
+    "apps/web/lib/lead-portal.ts::R1::Stage.findFirst::77fc179931": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-portal.ts",
+      "modelo": "Stage",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/lead-portal.ts::R2::Contact.update::d768c91ddf": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-portal.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/web/lib/lead-site.ts::R1::Stage.findFirst::77fc179931": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-site.ts",
+      "modelo": "Stage",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/lead-site.ts::R1::Stage.findFirst::77fc179931#2": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/lead-site.ts",
+      "modelo": "Stage",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/ler-conversa.ts::R9::Message.updateMany::b5c64901b6": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/ler-conversa.ts",
+      "modelo": "Message",
+      "operacao": "updateMany"
+    },
+    "apps/web/lib/meu-site.ts::R2::BannerVitrine.delete::ad6be62ff4": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/meu-site.ts",
+      "modelo": "BannerVitrine",
+      "operacao": "delete"
+    },
+    "apps/web/lib/meu-site.ts::R2::BannerVitrine.update::1910deeba1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/meu-site.ts",
+      "modelo": "BannerVitrine",
+      "operacao": "update"
+    },
+    "apps/web/lib/meu-site.ts::R2::BannerVitrine.update::41ea390a12": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/meu-site.ts",
+      "modelo": "BannerVitrine",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Funil.findUnique::dde05d376d": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Funil",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Negociacao.findFirst::7ad8d8f439": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Negociacao.findFirst::ba080c423d": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Negociacao.findUnique::7d36a51d56": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Negociacao.findUnique::9fd8517fc2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Negociacao.findUnique::d1482cfd64": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Negociacao.findUnique::ec7dc15f8f": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Order.findFirst::c5fdc9f61d": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Order",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Order.findMany::3195ceff0c": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Order",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Order.findUnique::b63827412e": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Order",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Stage.findFirst::a3e0594dd7": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Stage",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Stage.findUnique::333792c84d": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Stage.findUnique::d2df4bb457": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Stage.findUnique::d2df4bb457#2": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Stage.findUnique::d2df4bb457#3": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R1::Stage.findUnique::d2df4bb457#4": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::14cab6d1bc": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::4b356fd1ee": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::898d86864b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::9447445e82": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::a18497cf89": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::a18497cf89#2": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::add58d9ef2": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::bfbce7476e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::c14bb4168e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::e2bcfad9d4": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::ee77986dd8": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Negociacao.update::f046a02684": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Negociacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/negociacoes.ts::R2::Order.update::7c4037bf8b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/negociacoes.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/lib/nfe-importar.ts::R2::Product.update::6c1d389be1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/nfe-importar.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/lib/orders.ts::R1::Parcela.findFirst::ccf7b23d70": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Parcela",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/orders.ts::R1::Product.findUnique::92f2a9af85": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Product",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/orders.ts::R1::Product.findUnique::ac0d551e23": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Product",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/orders.ts::R1::StockMovement.findFirst::7b74976a06": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "StockMovement",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/orders.ts::R1::VendaDoSite.findUnique::65b46e0949": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "VendaDoSite",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/orders.ts::R2::ContaReceber.update::242dcf871d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "ContaReceber",
+      "operacao": "update"
+    },
+    "apps/web/lib/orders.ts::R2::Order.update::97707ffc8d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/lib/orders.ts::R2::Order.update::ee48b33b1c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/lib/orders.ts::R2::Parcela.updateMany::f7d6ddadf9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Parcela",
+      "operacao": "updateMany"
+    },
+    "apps/web/lib/orders.ts::R2::Product.update::12f3aad93f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/lib/orders.ts::R2::Product.update::682ea7ef8a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/orders.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/lib/origens.ts::R1::Stage.findMany::009a3c3fb0": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/origens.ts",
+      "modelo": "Stage",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/origens.ts::R1::Stage.findUnique::9224a8147e": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/origens.ts",
+      "modelo": "Stage",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/otica-estoque.ts::R1::Armacao.findMany::4bd99a7afe": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-estoque.ts",
+      "modelo": "Armacao",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/otica-estoque.ts::R2::Armacao.update::07d03c65c1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-estoque.ts",
+      "modelo": "Armacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica-estoque.ts::R2::Armacao.update::8ef716b534": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-estoque.ts",
+      "modelo": "Armacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica-estoque.ts::R2::Armacao.update::921f6cc088": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-estoque.ts",
+      "modelo": "Armacao",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica-estoque.ts::R3::Armacao.createMany::7ed1592c29": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-estoque.ts",
+      "modelo": "Armacao",
+      "operacao": "createMany"
+    },
+    "apps/web/lib/otica-estoque.ts::R3::MovimentoArmacao.createMany::8b0056fd9a": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-estoque.ts",
+      "modelo": "MovimentoArmacao",
+      "operacao": "createMany"
+    },
+    "apps/web/lib/otica-financeiro.ts::R1::Parcela.findMany::040e5f33f3": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/otica-financeiro.ts",
+      "modelo": "Parcela",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/otica-financeiro.ts::R1::Parcela.findMany::3f4da4728a": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-financeiro.ts",
+      "modelo": "Parcela",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/otica-financeiro.ts::R2::OrdemServico.update::63430ce850": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-financeiro.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica-financeiro.ts::R2::OrdemServico.update::63430ce850#2": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-financeiro.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica-financeiro.ts::R2::OrdemServico.update::8268881fed": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica-financeiro.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica.ts::R1::OrdemServico.findUnique::14f063c16b": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/otica.ts",
+      "modelo": "OrdemServico",
+      "operacao": "findUnique"
+    },
+    "apps/web/lib/otica.ts::R2::Conversation.update::d9439a6280": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica.ts::R2::Conversation.upsert::8524836534": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/web/lib/otica.ts::R2::OrdemServico.update::aaeffed248": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica.ts",
+      "modelo": "OrdemServico",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica.ts::R9::EventoOS.update::1c7ebb4595": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica.ts",
+      "modelo": "EventoOS",
+      "operacao": "update"
+    },
+    "apps/web/lib/otica.ts::R9::EventoOS.update::6815cdbbd0": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/otica.ts",
+      "modelo": "EventoOS",
+      "operacao": "update"
+    },
+    "apps/web/lib/pedidos-lista.ts::R1::Order.findMany::02bff0c45b": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/pedidos-lista.ts",
+      "modelo": "Order",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/pedidos-lista.ts::R1::Order.findMany::3eded84ad1": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/pedidos-lista.ts",
+      "modelo": "Order",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/portais-mobiauto.ts::R2::PortalConta.update::0d016ae028": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais-mobiauto.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/portais-mobiauto.ts::R2::PortalConta.update::a12a3d95ba": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais-mobiauto.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/portais-mobiauto.ts::R2::PublicacaoPortal.upsert::e4e80f150d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "upsert"
+    },
+    "apps/web/lib/portais-napista.ts::R1::PortalConta.findMany::dfa66d73e1": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/portais-napista.ts",
+      "modelo": "PortalConta",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/portais-napista.ts::R2::PortalConta.update::74e79962e1": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais-napista.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/portais-napista.ts::R2::PortalConta.update::d58e1df78c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais-napista.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/portais-napista.ts::R2::PublicacaoPortal.upsert::cee33410ae": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "upsert"
+    },
+    "apps/web/lib/portais-webmotors.ts::R2::PublicacaoPortal.upsert::4f6158be4e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "upsert"
+    },
+    "apps/web/lib/portais.ts::R2::PortalConta.update::6f80e76d9d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/portais.ts::R2::PortalConta.update::ae5b83ee8e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/portais.ts::R2::PortalConta.update::ef469ef0bf": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "apps/web/lib/portais.ts::R2::PublicacaoPortal.upsert::15086a2605": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/portais.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "upsert"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Negociacao.aggregate::5923a6f41c": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Negociacao",
+      "operacao": "aggregate"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Negociacao.aggregate::7e2d8c43cb": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Negociacao",
+      "operacao": "aggregate"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Negociacao.aggregate::f6eb1ddbd7": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Negociacao",
+      "operacao": "aggregate"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Negociacao.groupBy::9c5f99f642": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Negociacao",
+      "operacao": "groupBy"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Order.aggregate::132a76f04c": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Order",
+      "operacao": "aggregate"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Order.aggregate::62ccc0fdcd": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Order",
+      "operacao": "aggregate"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Order.aggregate::8bc72a0933": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Order",
+      "operacao": "aggregate"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Order.groupBy::bbd8592dfe": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Order",
+      "operacao": "groupBy"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Product.count::65ea787a45": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Product",
+      "operacao": "count"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Product.count::d2f1b31221": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Product",
+      "operacao": "count"
+    },
+    "apps/web/lib/relatorio-gerencial.ts::R1::Product.findMany::dc068ed6bd": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/relatorio-gerencial.ts",
+      "modelo": "Product",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/stock.ts::R2::Product.update::4c1433b72b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/stock.ts",
+      "modelo": "Product",
+      "operacao": "update"
+    },
+    "apps/web/lib/suporte-chat.ts::R1::User.findFirst::237dce95d1": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/suporte-chat.ts",
+      "modelo": "User",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/suporte-chat.ts::R1::User.findFirst::499f6e816c": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/suporte-chat.ts",
+      "modelo": "User",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/team-chat-leitura.ts::R1::TeamMessage.findMany::17817ba32b": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/team-chat-leitura.ts",
+      "modelo": "TeamMessage",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/veiculos-completar.ts::R2::Veiculo.update::f886dca3c6": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos-completar.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R1::Parcela.findFirst::d64f968938": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Parcela",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/veiculos.ts::R1::Parcela.findMany::040e5f33f3": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Parcela",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/veiculos.ts::R1::VendaVeiculo.findFirst::d36acb76bb": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "VendaVeiculo",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/veiculos.ts::R2::Conversation.update::d9439a6280": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R2::Conversation.upsert::c2a5365e0b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/web/lib/veiculos.ts::R2::Veiculo.update::43698eb950": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R2::Veiculo.update::78c67f299b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R2::Veiculo.update::c67d2c4851": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R2::Veiculo.update::ef5df0354e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Veiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R2::VendaVeiculo.update::4580dd7c6f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "VendaVeiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R2::VendaVeiculo.update::a297cbd691": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "VendaVeiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R2::VendaVeiculo.update::f24f7a65c8": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "VendaVeiculo",
+      "operacao": "update"
+    },
+    "apps/web/lib/veiculos.ts::R3::Parcela.createMany::bae7965bd6": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/veiculos.ts",
+      "modelo": "Parcela",
+      "operacao": "createMany"
+    },
+    "apps/web/lib/venda-do-site.ts::R2::Order.update::d96805968e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/venda-do-site.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/web/lib/venda-do-site.ts::R2::VendaDoSite.update::f4fd61f503": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/venda-do-site.ts",
+      "modelo": "VendaDoSite",
+      "operacao": "update"
+    },
+    "apps/web/lib/vendedor-ia.ts::R1::Conversation.findMany::94e46935b0": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/vendedor-ia.ts",
+      "modelo": "Conversation",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/vendedor-ia.ts::R1::VendedorIaUso.groupBy::174c28a6dd": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/vendedor-ia.ts",
+      "modelo": "VendedorIaUso",
+      "operacao": "groupBy"
+    },
+    "apps/web/lib/vitrine.ts::R1::Veiculo.findFirst::03f56b3a6c": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/vitrine.ts",
+      "modelo": "Veiculo",
+      "operacao": "findFirst"
+    },
+    "apps/web/lib/vitrine.ts::R1::Veiculo.findMany::898e48dc23": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/web/lib/vitrine.ts",
+      "modelo": "Veiculo",
+      "operacao": "findMany"
+    },
+    "apps/web/lib/vitrine.ts::R1::VeiculosConfig.findFirst::e8e48693e2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/web/lib/vitrine.ts",
+      "modelo": "VeiculosConfig",
+      "operacao": "findFirst"
+    },
+    "apps/worker/src/aviso-mensagem.ts::R1::Conversation.findUnique::17a039f651": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/aviso-mensagem.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "apps/worker/src/postgres-auth-state.ts::R1::WhatsAppSession.findUniqueOrThrow::76e78692b3": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/postgres-auth-state.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/worker/src/postgres-auth-state.ts::R2::WhatsAppSession.update::877498df19": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/postgres-auth-state.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "update"
+    },
+    "apps/worker/src/receivables-followup.ts::R1::Order.findMany::2bd5f20cab": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/receivables-followup.ts",
+      "modelo": "Order",
+      "operacao": "findMany"
+    },
+    "apps/worker/src/receivables-followup.ts::R1::Parcela.findMany::5b92df5038": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/receivables-followup.ts",
+      "modelo": "Parcela",
+      "operacao": "findMany"
+    },
+    "apps/worker/src/receivables-followup.ts::R1::ParcelaPagar.findMany::71044ef437": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/receivables-followup.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "findMany"
+    },
+    "apps/worker/src/receivables-followup.ts::R2::Order.update::d9fa3cbd93": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/receivables-followup.ts",
+      "modelo": "Order",
+      "operacao": "update"
+    },
+    "apps/worker/src/receivables-followup.ts::R2::Parcela.update::abf7f1f22b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/receivables-followup.ts",
+      "modelo": "Parcela",
+      "operacao": "update"
+    },
+    "apps/worker/src/receivables-followup.ts::R2::ParcelaPagar.update::88bc15c89b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/receivables-followup.ts",
+      "modelo": "ParcelaPagar",
+      "operacao": "update"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R1::Contact.findMany::929735b397": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Contact",
+      "operacao": "findMany"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R1::Conversation.findMany::c9ffa37807": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Conversation",
+      "operacao": "findMany"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::Contact.delete::b88c9107ea": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Contact",
+      "operacao": "delete"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::Contact.update::035c138046": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::ContaReceber.updateMany::007f9af2e9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "ContaReceber",
+      "operacao": "updateMany"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::Conversation.delete::3458438e4f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Conversation",
+      "operacao": "delete"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::Conversation.update::80f32a6dfe": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::Negociacao.updateMany::3910006f6c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Negociacao",
+      "operacao": "updateMany"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::OrdemServico.updateMany::b969cd6fa4": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "OrdemServico",
+      "operacao": "updateMany"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::Order.updateMany::44736bd65c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Order",
+      "operacao": "updateMany"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R2::ReceitaOtica.updateMany::248ffbb4d9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "ReceitaOtica",
+      "operacao": "updateMany"
+    },
+    "apps/worker/src/reconcile-contacts.ts::R9::Message.deleteMany::956a581189": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/reconcile-contacts.ts",
+      "modelo": "Message",
+      "operacao": "deleteMany"
+    },
+    "apps/worker/src/scheduled-messages.ts::R1::ScheduledMessage.findMany::ae2a11b69d": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/scheduled-messages.ts",
+      "modelo": "ScheduledMessage",
+      "operacao": "findMany"
+    },
+    "apps/worker/src/scheduled-messages.ts::R2::ScheduledMessage.update::b3b8e3e850": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/scheduled-messages.ts",
+      "modelo": "ScheduledMessage",
+      "operacao": "update"
+    },
+    "apps/worker/src/scheduled-messages.ts::R2::ScheduledMessage.update::bab1020634": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/scheduled-messages.ts",
+      "modelo": "ScheduledMessage",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R1::Contact.findUnique::61810b101f": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "findUnique"
+    },
+    "apps/worker/src/session-manager.ts::R1::Conversation.findFirst::c9b7cfc376": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "findFirst"
+    },
+    "apps/worker/src/session-manager.ts::R1::Conversation.findUnique::497393818e": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "apps/worker/src/session-manager.ts::R1::Conversation.findUnique::5598e84ef1": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "apps/worker/src/session-manager.ts::R1::WhatsAppSession.findMany::603e03a65c": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "findMany"
+    },
+    "apps/worker/src/session-manager.ts::R1::WhatsAppSession.findUnique::e2a58ba241": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "findUnique"
+    },
+    "apps/worker/src/session-manager.ts::R1::WhatsAppSession.findUniqueOrThrow::70e3d38757": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/worker/src/session-manager.ts::R1::WhatsAppSession.findUniqueOrThrow::70e3d38757#2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/worker/src/session-manager.ts::R1::WhatsAppSession.findUniqueOrThrow::d37dde651e": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "findUniqueOrThrow"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::0718c07c27": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::1358e89d68": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::2169afb5cd": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::2e080a96c5": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::7ef1f21db5": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::8533de47b6": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::c5e397c613": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::d20ae51842": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::ee63d2e09b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Contact.update::f2202eb682": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Contact",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Conversation.update::4a0f4e5a22": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Conversation.update::6ac8fcc37e": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Conversation.update::a466b5c9c9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::Conversation.updateMany::659e9388ce": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "updateMany"
+    },
+    "apps/worker/src/session-manager.ts::R2::Conversation.upsert::345ce6e687": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/worker/src/session-manager.ts::R2::Conversation.upsert::46f592ecee": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Conversation",
+      "operacao": "upsert"
+    },
+    "apps/worker/src/session-manager.ts::R2::WhatsAppSession.update::3c5f17db15": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::WhatsAppSession.update::6b4dfd6efe": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R2::WhatsAppSession.update::e17db54604": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "WhatsAppSession",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R9::Message.update::0d8c4186f3": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R9::Message.update::249513dda3": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R9::Message.update::4ae5c821aa": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R9::Message.update::c236722d2b": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R9::Message.update::e65ba8922f": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R9::Message.update::f5663ce754": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "apps/worker/src/session-manager.ts::R9::Message.update::f5b4cf6d14": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "apps/worker/src/session-manager.ts",
+      "modelo": "Message",
+      "operacao": "update"
+    },
+    "packages/ambiente-teste/src/semente.ts::R5::.$queryRawUnsafe::7454fca66f": {
+      "regra": "R5",
+      "gravidade": "ERRO",
+      "arquivo": "packages/ambiente-teste/src/semente.ts",
+      "operacao": "$queryRawUnsafe"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R1::PortalConta.findMany::17ba7a3066": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PortalConta",
+      "operacao": "findMany"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PortalConta.update::1f758af4a3": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PortalConta.update::5cfaf2e727": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PortalConta.update::657ef14d1c": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::1aed69c8f9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::4d9629210c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::51d03a54fc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::7951efb3b5": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::9c0d8277ff": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::baf261a043": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::f88844671d": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::f88844671d#2": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-mobiauto.ts::R2::PublicacaoPortal.update::f97016fb65": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-mobiauto.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R1::PortalConta.findMany::fcc0bc8b1b": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PortalConta",
+      "operacao": "findMany"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PortalConta.update::5cfaf2e727": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PortalConta.update::657ef14d1c": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PortalConta.update::d36249b7ac": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::227041bd5b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::425fac9371": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::4d9629210c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::51d03a54fc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::a2293f6ab9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::a2293f6ab9#2": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::b16767c587": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::baf261a043": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::e517de27c3": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-napista.ts::R2::PublicacaoPortal.update::f97016fb65": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-napista.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R1::PortalConta.findMany::9ec63ceb56": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PortalConta",
+      "operacao": "findMany"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PortalConta.update::5cfaf2e727": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PortalConta.update::657ef14d1c": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::2478c079d8": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::26b68af71b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::4d9629210c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::51d03a54fc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::a2b828e222": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::a2b828e222#2": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::baf261a043": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar-webmotors.ts::R2::PublicacaoPortal.update::f97016fb65": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar-webmotors.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar.ts::R1::PortalConta.findMany::4ff1c8425d": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PortalConta",
+      "operacao": "findMany"
+    },
+    "packages/portais/src/sincronizar.ts::R2::PortalConta.update::3de0c62326": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar.ts::R2::PortalConta.update::4bfd2025e5": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PortalConta",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar.ts::R2::PublicacaoPortal.update::85a5a6b3f2": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar.ts::R2::PublicacaoPortal.update::ac17467f0b": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar.ts::R2::PublicacaoPortal.update::c9e842602a": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar.ts::R2::PublicacaoPortal.update::e1dfb6a013": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/portais/src/sincronizar.ts::R2::PublicacaoPortal.update::f97016fb65": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/portais/src/sincronizar.ts",
+      "modelo": "PublicacaoPortal",
+      "operacao": "update"
+    },
+    "packages/push/src/index.ts::R9::PushSubscription.delete::f39aa47c0c": {
+      "regra": "R9",
+      "gravidade": "AVISO",
+      "arquivo": "packages/push/src/index.ts",
+      "modelo": "PushSubscription",
+      "operacao": "delete"
+    },
+    "packages/sdr-core/src/canais.ts::R2::SdrEnvioEmail.update::c7a26a6940": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/canais.ts",
+      "modelo": "SdrEnvioEmail",
+      "operacao": "update"
+    },
+    "packages/sdr-core/src/canais.ts::R2::SdrEnvioEmail.update::ea32d889e4": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/canais.ts",
+      "modelo": "SdrEnvioEmail",
+      "operacao": "update"
+    },
+    "packages/sdr-core/src/canais.ts::R2::SdrEnvioEmail.updateMany::700dc2f130": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/canais.ts",
+      "modelo": "SdrEnvioEmail",
+      "operacao": "updateMany"
+    },
+    "packages/sdr-core/src/comercial.ts::R2::SdrAbordagem.update::0822a55ff7": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrAbordagem",
+      "operacao": "update"
+    },
+    "packages/sdr-core/src/comercial.ts::R2::SdrAbordagem.update::0a64a38517": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrAbordagem",
+      "operacao": "update"
+    },
+    "packages/sdr-core/src/comercial.ts::R2::SdrAbordagem.update::84e43fca8f": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrAbordagem",
+      "operacao": "update"
+    },
+    "packages/sdr-core/src/comercial.ts::R2::SdrEmpresa.update::2ff5a07cc5": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrEmpresa",
+      "operacao": "update"
+    },
+    "packages/sdr-core/src/comercial.ts::R3::SdrAbordagem.create::1bd867ccf1": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrAbordagem",
+      "operacao": "create"
+    },
+    "packages/sdr-core/src/comercial.ts::R3::SdrAbordagem.create::1e28434bb3": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrAbordagem",
+      "operacao": "create"
+    },
+    "packages/sdr-core/src/comercial.ts::R3::SdrAbordagem.create::4b10941e01": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrAbordagem",
+      "operacao": "create"
+    },
+    "packages/sdr-core/src/comercial.ts::R3::SdrAbordagem.create::71a0595207": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/comercial.ts",
+      "modelo": "SdrAbordagem",
+      "operacao": "create"
+    },
+    "packages/sdr-core/src/empresas.ts::R5::.$queryRaw::833891381b": {
+      "regra": "R5",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/empresas.ts",
+      "operacao": "$queryRaw"
+    },
+    "packages/sdr-core/src/empresas.ts::R5::.$queryRaw::a1941045b3": {
+      "regra": "R5",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/empresas.ts",
+      "operacao": "$queryRaw"
+    },
+    "packages/sdr-core/src/fila.ts::R5::.$executeRaw::3dfcfe792a": {
+      "regra": "R5",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/fila.ts",
+      "operacao": "$executeRaw"
+    },
+    "packages/sdr-core/src/fila.ts::R5::.$executeRaw::899b30a47c": {
+      "regra": "R5",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/fila.ts",
+      "operacao": "$executeRaw"
+    },
+    "packages/sdr-core/src/fila.ts::R5::.$executeRaw::e1e2adc5ba": {
+      "regra": "R5",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/fila.ts",
+      "operacao": "$executeRaw"
+    },
+    "packages/sdr-core/src/fila.ts::R5::.$queryRaw::ee1d659f39": {
+      "regra": "R5",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/fila.ts",
+      "operacao": "$queryRaw"
+    },
+    "packages/sdr-core/src/ia/executar.ts::R2::SdrIaCache.delete::b70f05274f": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/ia/executar.ts",
+      "modelo": "SdrIaCache",
+      "operacao": "delete"
+    },
+    "packages/sdr-core/src/ia/executar.ts::R2::SdrIaUso.update::50741ec3fd": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/ia/executar.ts",
+      "modelo": "SdrIaUso",
+      "operacao": "update"
+    },
+    "packages/sdr-core/src/importacao.ts::R1::SdrImportacaoLinha.count::a5d68e8fb8": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/importacao.ts",
+      "modelo": "SdrImportacaoLinha",
+      "operacao": "count"
+    },
+    "packages/sdr-core/src/importacao.ts::R1::SdrImportacaoLinha.findMany::02915a1fe9": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/importacao.ts",
+      "modelo": "SdrImportacaoLinha",
+      "operacao": "findMany"
+    },
+    "packages/sdr-core/src/importacao.ts::R3::SdrImportacaoLinha.createMany::c9bf135348": {
+      "regra": "R3",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/importacao.ts",
+      "modelo": "SdrImportacaoLinha",
+      "operacao": "createMany"
+    },
+    "packages/sdr-core/src/painel.ts::R5::.$queryRaw::76023d168a": {
+      "regra": "R5",
+      "gravidade": "AVISO",
+      "arquivo": "packages/sdr-core/src/painel.ts",
+      "operacao": "$queryRaw"
+    },
+    "packages/vendedor-ia/src/executar.ts::R1::Conversation.findUnique::082d5da2e0": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/executar.ts::R1::TenantRecurso.findMany::d22e3a14cf": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "TenantRecurso",
+      "operacao": "findMany"
+    },
+    "packages/vendedor-ia/src/executar.ts::R1::Veiculo.findMany::78408790ca": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "Veiculo",
+      "operacao": "findMany"
+    },
+    "packages/vendedor-ia/src/executar.ts::R1::VendedorIaConversa.findUnique::047f9e3d23": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "VendedorIaConversa",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/executar.ts::R2::Conversation.update::87460db2d2": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "packages/vendedor-ia/src/executar.ts::R2::Conversation.update::d9439a6280": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "packages/vendedor-ia/src/executar.ts::R2::VendedorIaConversa.update::2c164a6387": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "VendedorIaConversa",
+      "operacao": "update"
+    },
+    "packages/vendedor-ia/src/executar.ts::R2::VendedorIaConversa.upsert::16f00d867c": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "VendedorIaConversa",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/executar.ts::R2::VendedorIaConversa.upsert::9e9161ec11": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/executar.ts",
+      "modelo": "VendedorIaConversa",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::ConversaAgente.findUnique::69ea9661c4": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "ConversaAgente",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::ConversaAgente.findUnique::69ea9661c4#2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "ConversaAgente",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::Conversation.findUnique::26669a9627": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::Conversation.findUnique::26669a9627#2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::Conversation.findUnique::6b970f1bb9": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::Conversation.findUnique::c780f4fef4": {
+      "regra": "R1",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "Conversation",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::SdrVendedorConversa.findUnique::86c3dd2311": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::SdrVendedorConversa.findUnique::86c3dd2311#2": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::SdrVendedorConversa.findUnique::86c3dd2311#3": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "findUnique"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R1::TenantRecurso.findMany::ec50a3d6f9": {
+      "regra": "R1",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "TenantRecurso",
+      "operacao": "findMany"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::ConversaAgente.upsert::401e1eca98": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "ConversaAgente",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::ConversaAgente.upsert::5719507108": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "ConversaAgente",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::ConversaAgente.upsert::d7afacb426": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "ConversaAgente",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::Conversation.update::2752aee739": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::Conversation.update::33f33236fc": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "Conversation",
+      "operacao": "update"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::SdrVendedorConversa.update::7b43c47c87": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "update"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::SdrVendedorConversa.upsert::2f0f47f700": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::SdrVendedorConversa.upsert::8c9c817aee": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::SdrVendedorConversa.upsert::b4fa2ce0aa": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::SdrVendedorConversa.upsert::b746d7ea60": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::SdrVendedorConversa.upsert::b7a262c2f9": {
+      "regra": "R2",
+      "gravidade": "AVISO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "upsert"
+    },
+    "packages/vendedor-ia/src/saas/vendedor.ts::R2::SdrVendedorConversa.upsert::dfeca9b1f2": {
+      "regra": "R2",
+      "gravidade": "ERRO",
+      "arquivo": "packages/vendedor-ia/src/saas/vendedor.ts",
+      "modelo": "SdrVendedorConversa",
+      "operacao": "upsert"
+    }
+  }
+}

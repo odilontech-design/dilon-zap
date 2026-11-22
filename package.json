@@ -39,7 +39,11 @@
     "dev:portais": "npm run start -w apps/portais-worker",
     "test:portais": "npm run test -w packages/portais",
     "ponto:atrt": "npm run atrt -w apps/ponto --",
-    "ponto:hash-inpi": "bash apps/ponto/scripts/hash-inpi.sh"
+    "ponto:hash-inpi": "bash apps/ponto/scripts/hash-inpi.sh",
+    "verificar:tenant": "tsx scripts/verificar-tenant/cli.ts",
+    "test:verificar": "tsx --test scripts/verificar-tenant/verificar-tenant.test.ts",
+    "verificar:tipos": "npm run typecheck -w apps/web && npm run typecheck -w apps/worker",
+    "verificar": "npm run verificar:tenant && npm run test:verificar && npm run verificar:tipos"
   },
   "allowScripts": {
     "@prisma/client@5.22.0": true,

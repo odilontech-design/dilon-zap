@@ -54,6 +54,8 @@ presume correto**. A revisão procura falha, não confirmação.
 >
 > **Dados e segurança.** Nunca coloque segredo, telefone ou nome de cliente real no código, em log ou em teste. Não registre o conteúdo de mensagens em `console.log`.
 >
+> **Antes de entregar, rode `npm run verificar`** e não entregue com erro novo (`docs/verificacao-tenant.md`). Nunca rode `--atualizar-baseline` nem edite o `baseline.json`.
+>
 > **Ao terminar, entregue este relatório:** (1) lista de arquivos criados e alterados; (2) diff do schema, se houver; (3) para **cada** consulta ao banco, onde está o filtro de `tenantId`; (4) o que você **não** soube resolver ou supôs; (5) como testar à mão; (6) o que roda a cada minuto ou a cada requisição.
 
 ## 4. Checklist de revisão do Claude
@@ -84,6 +86,7 @@ presume correto**. A revisão procura falha, não confirmação.
 - [ ] Custo mensal estimado (banco, chamadas de IA/OCR, armazenamento). Teto por empresa quando houver API paga.
 
 **Qualidade**
+- [ ] `npm run verificar` aprovado (e, se houver achado novo isento com `verificar-tenant: ok`, o motivo faz sentido).
 - [ ] `tsc` sem erros, build ok, testes de regra pura passando.
 - [ ] Teste do que importa: caso de dois tenants (o A não enxerga o B), sem permissão, entrada inválida.
 - [ ] Simplicidade operacional: dá para o fundador operar e o suporte explicar?
