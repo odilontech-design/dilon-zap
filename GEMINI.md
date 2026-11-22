@@ -10,4 +10,6 @@ As cinco regras que nunca falham:
 4. **Não toque** em `lib/auth.ts`, `lib/session.ts`, `middleware.ts`, cobrança, conexão do WhatsApp, `docker-compose*` nem `.env`.
 5. **Valide com `zod`, use `select` explícito** e nunca devolva `passwordHash`, token ou dado interno.
 
+Antes de entregar, rode **`npm run verificar`** (verificação de `tenantId`, testes e tipos; explicação em `docs/verificacao-tenant.md`). Não passe com "erro novo". **Nunca** rode `--atualizar-baseline` nem edite `scripts/verificar-tenant/baseline.json`: só o Tech Lead aceita risco conhecido.
+
 Trabalhe em branch `gemini/<assunto>`, nunca na `main`. Ao terminar, entregue o relatório descrito no item 3 do documento (arquivos, diff do schema, onde está o filtro de tenant de cada consulta, o que supôs, como testar).
