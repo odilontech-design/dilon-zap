@@ -71,7 +71,7 @@ O Zap já está em produção com clientes e tem código antigo que a ferramenta
 ### Situação em 22/11/2026 (primeira execução)
 
 - 292 arquivos analisados; **19 achados de prioridade ALTA** na linha de base.
-- Revisados à mão nesta etapa: **9 dos 19**. **Nenhum era um vazamento**: o código confere a empresa por outro caminho (ex.: helper `funilDaEmpresa`, lista de ids validada antes, token público por desenho). Os outros 10 e os erros de prioridade média ainda **não foram revisados um a um**.
+- Lidos no código nesta etapa: **7 dos 19** (mídia do chat da equipe, ordem das fotos de veículo, OS da ótica, transferência de setor, relatório de origens do CRM e as duas rotas de etapas). **Nenhum era um vazamento**: o código confere a empresa por outro caminho (helper `funilDaEmpresa`, lista de ids validada antes, conferência depois da busca). Os outros 12 e os erros de prioridade média **não foram revisados um a um**.
 
 ## Quando reprovar: o que fazer
 
