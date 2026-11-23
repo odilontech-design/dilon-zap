@@ -35,6 +35,7 @@ const ABAS = [
   { id: "banners", rotulo: "Banners" },
   { id: "destaques", rotulo: "Destaques e ofertas" },
   { id: "paginas", rotulo: "Páginas" },
+  { id: "exibicao", rotulo: "Preço e km no site" },
   { id: "dados", rotulo: "Dados da loja" },
   { id: "whatsapp", rotulo: "WhatsApp" },
   { id: "avancado", rotulo: "Avançado" },
@@ -78,7 +79,7 @@ export function MeuSite() {
       {aba === "destaques" && <Destaques d={data} recarregar={mutate} />}
       {aba === "paginas" && <Paginas d={data} recarregar={mutate} />}
       {aba === "paginas" && <ConfigDaFicha />}
-      {(aba === "dados" || aba === "whatsapp" || aba === "avancado") && <AbasDaLoja aba={aba} recarregar={mutate} />}
+      {(aba === "dados" || aba === "whatsapp" || aba === "avancado" || aba === "exibicao") && <AbasDaLoja aba={aba} recarregar={mutate} />}
     </div>
   );
 }
@@ -367,6 +368,7 @@ type DadosLoja = {
   horarioSemana: string; horarioSabado: string; horarioDomingo: string; horarioAntigo: string;
   whatsapp: string; whatsappMensagem: string;
   metaPixelId: string; ga4Id: string; googleAdsId: string; gtmId: string; dominio: string | null;
+  ocultarPrecoNoSite: boolean; ocultarKmNoSite: boolean;
 };
 const UFS = ["AC", "AL", "AP", "AM", "BA", "CE", "DF", "ES", "GO", "MA", "MT", "MS", "MG", "PA", "PB", "PR", "PE", "PI", "RJ", "RN", "RS", "RO", "RR", "SC", "SP", "SE", "TO"];
 
@@ -385,11 +387,12 @@ function useSalvar(recarregar: () => void) {
   return { salvar, salvando, Aviso };
 }
 
-function AbasDaLoja({ aba, recarregar }: { aba: "dados" | "whatsapp" | "avancado"; recarregar: () => void }) {
+function AbasDaLoja({ aba, recarregar }: { aba: "dados" | "whatsapp" | "avancado" | "exibicao"; recarregar: () => void }) {
   const { data, mutate } = useSWR<DadosLoja>("/api/veiculos/site/loja", fetcher);
   if (!data) return <p className="text-sm text-neutral-500">Carregando…</p>;
   const tudo = () => { mutate(); recarregar(); };
   if (aba === "dados") return <DadosDaLoja d={data} recarregar={tudo} />;
+  if (aba === "exibicao") return <PrecoEKmNoSite d={data} recarregar={tudo} />;
   if (aba === "whatsapp") return <WhatsappDoSite d={data} recarregar={tudo} />;
   return <Avancado d={data} recarregar={tudo} />;
 }
@@ -604,5 +607,41 @@ function ConfigDaFicha() {
         {aviso && <span className={`text-sm ${aviso.erro ? "text-red-600" : "text-accent"}`}>{aviso.texto}</span>}
       </div>
     </section>
+  );
+}
+
+/** Preço e km no site: "Sob consulta" e "Km n/a" para todos os carros (ou só alguns, na ficha de cada carro). */
+function PrecoEKmNoSite({ d, recarregar }: { d: DadosLoja; recarregar: () => void }) {
+  const [preco, setPreco] = useState(d.ocultarPrecoNoSite);
+  const [km, setKm] = useState(d.ocultarKmNoSite);
+  const { salvar, salvando, Aviso } = useSalvar(recarregar);
+  const cartao = (marcado: boolean, aoMudar: (v: boolean) => void, titulo: string, texto: string) => (
+    <label className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 ${marcado ? "border-accent/60 bg-accent/5" : "border-neutral-200"}`}>
+      <input type="checkbox" className="mt-1 h-4 w-4" checked={marcado} onChange={(e) => aoMudar(e.target.checked)} />
+      <span><span className="block text-sm font-semibold">{titulo}</span><span className="text-xs text-neutral-500">{texto}</span></span>
+    </label>
+  );
+  return (
+    <div className="flex flex-col gap-4" data-testid="site-exibicao">
+      <section className={secao}>
+        <h3 className="text-sm font-semibold">Preço e quilometragem no site</h3>
+        <p className="text-xs text-neutral-500">Para lojas que preferem negociar o valor e a km no atendimento. Vale para <strong>todos os carros</strong> do site. O que muda é só o que o visitante vê: no site, nos feeds públicos e no que o Google mostra.</p>
+        <div className="grid gap-3 md:grid-cols-2">
+          {cartao(preco, setPreco, "Mostrar “Sob consulta” no lugar do preço", "O cartão e a página do carro mostram “Sob consulta”, e o botão do WhatsApp chama a loja sem citar valor.")}
+          {cartao(km, setKm, "Mostrar “Km n/a” no lugar da quilometragem", "A km some do cartão, da página do carro e do Google. Aparece “Km n/a”.")}
+        </div>
+        <div className="rounded-md bg-sky-500/10 px-3 py-2 text-xs text-sky-900">
+          <strong>Continuam com o valor e a km reais:</strong> os portais (Webmotors, MobiAuto, NaPista e OLX exigem preço e km), o CRM, os relatórios e a ficha interna do carro. O catálogo do Facebook e Instagram não aceita carro sem preço, então carro “sob consulta” fica de fora dele.
+        </div>
+        <div className="flex items-center gap-3">
+          <button className={botaoPrimario} disabled={salvando} onClick={() => salvar({ secao: "exibicao", ocultarPrecoNoSite: preco, ocultarKmNoSite: km }, "Salvo. Já vale no site.")}>{salvando ? "Salvando…" : "Salvar"}</button>
+          <Aviso />
+        </div>
+      </section>
+      <section className={secao}>
+        <h3 className="text-sm font-semibold">Só em alguns carros</h3>
+        <p className="text-xs text-neutral-500">Em vez da loja inteira, abra a ficha do carro (Veículos &gt; Estoque &gt; o carro &gt; editar dados) e marque “Sob consulta no site” ao lado do preço e/ou “Km n/a no site” ao lado da quilometragem. As duas regras se somam: se a loja esconde, todos ficam escondidos.</p>
+      </section>
+    </div>
   );
 }

@@ -138,6 +138,16 @@ export async function salvarDadosDaLoja(tenantId: string, d: EntradaDadosDaLoja)
   return { ok: true };
 }
 
+/** "Sob consulta" e "Km n/a" para a loja inteira (Meu site > Preço e km no site). Só muda o que o visitante vê no site público. */
+export async function salvarExibicaoDoSite(tenantId: string, d: { ocultarPrecoNoSite?: boolean; ocultarKmNoSite?: boolean }): Promise<{ ok: true } | { ok: false; erro: string }> {
+  const data = {
+    ...(d.ocultarPrecoNoSite !== undefined ? { ocultarPrecoNoSite: d.ocultarPrecoNoSite } : {}),
+    ...(d.ocultarKmNoSite !== undefined ? { ocultarKmNoSite: d.ocultarKmNoSite } : {}),
+  };
+  await prisma.veiculosConfig.upsert({ where: { tenantId }, create: { tenantId, ...data }, update: data });
+  return { ok: true };
+}
+
 export async function salvarWhatsappDoSite(tenantId: string, d: { numero?: string | null; mensagem?: string | null }): Promise<{ ok: true } | { ok: false; erro: string }> {
   const whatsapp = normalizarWhatsapp(d.numero);
   if (d.numero?.trim() && (!whatsapp || !/^55\d{10,11}$/.test(whatsapp))) return { ok: false, erro: "WhatsApp inválido: use DDD + número" };
@@ -198,5 +208,7 @@ export async function dadosDaLoja(tenantId: string) {
     googleAdsId: c?.googleAdsId ?? "",
     gtmId: c?.gtmId ?? "",
     dominio: c?.dominio ?? null,
+    ocultarPrecoNoSite: c?.ocultarPrecoNoSite ?? false,
+    ocultarKmNoSite: c?.ocultarKmNoSite ?? false,
   };
 }

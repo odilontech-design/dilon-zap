@@ -1,7 +1,7 @@
 // Meu site > Dados da loja, WhatsApp e Avançado. Rodar de apps/web com:
 //   DATABASE_URL=postgresql://... npx tsx lib/dados-da-loja.test-manual.ts
 import { prisma } from "@dilon-zap/db";
-import { dadosDaLoja, idDeMedicao, lerPontoDoMapa, mapaDaLoja, mensagemDoWhatsapp, montarEndereco, montarHorario, salvarAvancado, salvarDadosDaLoja, salvarWhatsappDoSite, telefonesDaLoja } from "./dados-da-loja";
+import { dadosDaLoja, idDeMedicao, salvarExibicaoDoSite, lerPontoDoMapa, mapaDaLoja, mensagemDoWhatsapp, montarEndereco, montarHorario, salvarAvancado, salvarDadosDaLoja, salvarWhatsappDoSite, telefonesDaLoja } from "./dados-da-loja";
 import { cidadeDaLoja } from "./vitrine-seo";
 import { lojaPublica } from "./vitrine";
 
@@ -61,6 +61,14 @@ async function main() {
   checa("Avançado salvo (normalizado; vazio apaga)", await prisma.veiculosConfig.findUniqueOrThrow({ where: { tenantId: t.id } }).then((x) => [x.metaPixelId, x.ga4Id, x.googleAdsId, x.gtmId]), ["123456789", "G-ABC1234", "AW-1234567", null]);
   await salvarAvancado(t.id, { gtmId: "GTM-ABCD12" });
   checa("Avançado: campo não enviado fica como está", await prisma.veiculosConfig.findUniqueOrThrow({ where: { tenantId: t.id } }).then((x) => [x.metaPixelId, x.gtmId]), ["123456789", "GTM-ABCD12"]);
+
+  // preço e km no site
+  checa("exibição nasce desligada", await dadosDaLoja(t.id).then((x) => [x.ocultarPrecoNoSite, x.ocultarKmNoSite]), [false, false]);
+  await salvarExibicaoDoSite(t.id, { ocultarPrecoNoSite: true });
+  checa("liga só o preço; a km não muda", await dadosDaLoja(t.id).then((x) => [x.ocultarPrecoNoSite, x.ocultarKmNoSite]), [true, false]);
+  await salvarExibicaoDoSite(t.id, { ocultarPrecoNoSite: false, ocultarKmNoSite: true });
+  checa("troca: km n/a ligado, preço desligado", await dadosDaLoja(t.id).then((x) => [x.ocultarPrecoNoSite, x.ocultarKmNoSite]), [false, true]);
+  await salvarExibicaoDoSite(t.id, { ocultarKmNoSite: false });
 
   // no site público (se o recurso VEICULOS estiver liberado nesta base de teste)
   await prisma.veiculosConfig.update({ where: { tenantId: t.id }, data: { vitrineAtiva: true } });

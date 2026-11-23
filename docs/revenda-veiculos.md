@@ -801,3 +801,7 @@ Para lojas que preferem negociar o valor e a km no atendimento (pedido da Sales)
 **Vendedor IA e WhatsApp:** a ficha que a IA envia diz "Valor sob consulta" e "Km n/a", e a ferramenta de estoque avisa a IA para não informar nem estimar o valor (o filtro de preço da IA também não lista carro sob consulta, para não revelar o valor por eliminação). O botão "Enviar carro" do Inbox continua mandando a ficha completa, porque é uma decisão da pessoa da equipe.
 
 A regra é aplicada na origem de todo dado público (`aplicarPrivacidade`, em `lib/vitrine.ts`): o preço sai do objeto (vira 0), então um lugar esquecido não vaza o número. Campos novos (só acréscimo): `Veiculo.ocultarPreco`, `VeiculosConfig.ocultarPrecoNoSite`, `VeiculosConfig.ocultarKmNoSite`. Teste: `apps/web/lib/vitrine-privacidade.test-manual.ts`.
+
+### Onde mudar (v1.94.1)
+
+A opção da loja inteira ganhou uma aba própria: **Veículos > Meu site > Preço e km no site** (salva na hora, sem passar pela tela de configurações). A seção da tela "Aparência e domínio" continua existindo e grava os mesmos campos. Para esconder só alguns carros: ficha do carro > editar dados > "Sob consulta no site" ao lado do preço e/ou "Km n/a no site" ao lado da quilometragem.
