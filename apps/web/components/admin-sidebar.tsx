@@ -31,6 +31,11 @@ const NAV_ITEMS = [
     icon: icon(<><path d="M3 21h18M5 21V7l7-4 7 4v14" /><path d="M9 21v-5h6v5" /></>),
   },
   {
+    href: "/admin/implantacao",
+    label: "Implantação de revendas",
+    icon: icon(<><path d="M9 11l3 3 8-8" /><path d="M20 12v7a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h9" /></>),
+  },
+  {
     href: "/admin/erp",
     label: "ERP Contabilidade",
     icon: icon(<><rect x="4" y="3" width="16" height="18" rx="2" /><path d="M8 7h8M8 11h8M8 15h4" /></>),

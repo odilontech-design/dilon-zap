@@ -4,6 +4,7 @@ import { recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { AbasVeiculos } from "./comum";
 import { Estoque } from "./estoque";
+import { CartaoPrimeirosPassos } from "./primeiros-passos/lista-de-passos";
 
 export default async function VeiculosPage({ searchParams }: { searchParams: { status?: string } }) {
   const user = await requireUser();
@@ -12,6 +13,7 @@ export default async function VeiculosPage({ searchParams }: { searchParams: { s
   return (
     <div className="p-4 md:p-8">
       <AbasVeiculos atual={vendidos ? "vendidos" : "estoque"} gerencia={ehGerencia(user.role)} />
+      {ehGerencia(user.role) && !vendidos && <CartaoPrimeirosPassos />}
       <Estoque vendidos={vendidos} />
     </div>
   );
