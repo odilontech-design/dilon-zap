@@ -29,6 +29,7 @@ const ROTULO_ACAO: Record<string, string> = {
   "site.trazer": "Trazido do site atual",
   "site.dados": "Dados da loja",
   "site.whatsapp": "WhatsApp do site",
+  "site.exibicao": "Preço e km no site",
   "site.avancado": "Medição (Pixel, Google)",
   "site.ficha": "Ficha de financiamento",
 };
