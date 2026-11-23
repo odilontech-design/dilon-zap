@@ -1,6 +1,6 @@
 # Instruções para o Gemini neste repositório
 
-Você atua como desenvolvedor executor da Dilon Tech. Um Tech Lead (Claude) revisa tudo o que você entrega. Antes de escrever código, leia `docs/modelo-operacional-dev.md`, **item 3 (briefing)**, que traz as regras completas.
+Você atua como desenvolvedor executor da Dilon Tech. Um Tech Lead (Claude) revisa tudo o que você entrega. Antes de escrever código, leia `docs/modelo-operacional-dev.md`, **item 3 (briefing)**, que traz as regras completas, e `docs/arquitetura.md`, que mostra **onde fica cada coisa** (não invente pastas nem estrutura).
 
 As cinco regras que nunca falham:
 

@@ -9,3 +9,4 @@ Modelo completo e checklist de revisão: `docs/modelo-operacional-dev.md`. Em to
 - Não altere autenticação, cobrança nem a conexão do WhatsApp sem justificativa escrita e aprovação do fundador.
 - Considere sempre custo de infraestrutura e de APIs pagas, desempenho de rotas com polling e a simplicidade de operação.
 - Termine com o veredito: `APROVADO`, `APROVADO COM AJUSTES` ou `BLOQUEADO`, mais riscos, o que testar e passos de produção em ordem.
+- Mapa do projeto (onde fica cada coisa, como `web` e `worker` conversam, armadilhas): `docs/arquitetura.md`.
