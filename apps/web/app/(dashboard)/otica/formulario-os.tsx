@@ -26,6 +26,7 @@ import {
 } from "@/lib/otica-regras";
 import { diaParaISO, erroDaResposta, fetcher, isoParaDia } from "./formatos";
 import type { LeituraOS } from "@/lib/otica-leitura";
+import { avisoDeDataNaLeitura } from "@/lib/otica-datas";
 import { FormularioArmacao, type ArmacaoDados } from "./formulario-armacao";
 import { FormularioLaboratorio, type LaboratorioNovo } from "./formulario-laboratorio";
 
@@ -584,7 +585,7 @@ export function FormularioOS({ id, escaneada }: { id?: string; escaneada?: Escan
       )}
       {os && !os.historica && <BarraEtapas os={os} aoMudar={() => mutate()} />}
       {os && <FotoDoTalao os={os} aoMudar={() => mutate()} />}
-      {escaneada && <PainelDaLeitura e={escaneada} numero={numeroPapel} mudarNumero={setNumeroPapel} dia={dataVenda} mudarDia={setDataVenda} />}
+      {escaneada && <PainelDaLeitura e={escaneada} numero={numeroPapel} mudarNumero={setNumeroPapel} dia={dataVenda} mudarDia={setDataVenda} previsao={f.previsaoDia} />}
 
       <form onSubmit={salvar} className="flex flex-col gap-4">
         <fieldset disabled={cancelada} className="flex flex-col gap-4 disabled:opacity-70">
@@ -1147,7 +1148,12 @@ function Historico({ eventos }: { eventos: OSCompleta["eventos"] }) {
 
 
 /** Resumo da leitura da foto: número do papel, dia da venda, o que a IA não leu bem e a própria foto. */
-function PainelDaLeitura({ e, numero, mudarNumero, dia, mudarDia }: { e: Escaneada; numero: string; mudarNumero: (v: string) => void; dia: string; mudarDia: (v: string) => void }) {
+function PainelDaLeitura({ e, numero, mudarNumero, dia, mudarDia, previsao }: { e: Escaneada; numero: string; mudarNumero: (v: string) => void; dia: string; mudarDia: (v: string) => void; previsao: string }) {
+  // A leitura erra o ano e o mês do talão; data no futuro ou de muitos anos atrás quase sempre é isso.
+  const avisosDeData = [
+    { campo: "Dia da venda", aviso: avisoDeDataNaLeitura(dia) },
+    { campo: "Previsão de entrega", aviso: e.historica ? avisoDeDataNaLeitura(previsao) : null },
+  ].filter((x) => x.aviso);
   const url = useMemo(() => URL.createObjectURL(e.foto), [e.foto]);
   useEffect(() => () => URL.revokeObjectURL(url), [url]);
   return (
@@ -1164,6 +1170,15 @@ function PainelDaLeitura({ e, numero, mudarNumero, dia, mudarDia }: { e: Escanea
             <Campo rotulo="Número da OS no papel" id="os-numero-papel" valor={numero} mudar={mudarNumero} modo="decimal" />
             <Campo rotulo={e.historica ? "Dia da venda" : "Dia da venda (opcional)"} id="os-data-venda" tipo="date" valor={dia} mudar={mudarDia} />
           </div>
+          {avisosDeData.length > 0 && (
+            <ul role="status" className="max-w-md rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-800 space-y-0.5">
+              {avisosDeData.map((x) => (
+                <li key={x.campo}>
+                  <b>{x.campo}:</b> {x.aviso}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
       {(e.avisos.length > 0 || e.duvidas.length > 0) && (
