@@ -101,6 +101,10 @@ export async function atenderConversa(conversationId: string, loja: Loja, deps: 
   });
   if (!conversa || conversa.tenantId !== loja.tenantId) return false;
 
+  // O freio do Inbox ("Assumir"): a IA não responde mais nesta conversa até alguém devolver.
+  const controle = await prisma.conversaAgente.findUnique({ where: { conversationId }, select: { estado: true, tenantId: true } });
+  if (controle?.estado === "DESLIGADO" && controle.tenantId === loja.tenantId) return false;
+
   const recentes = await prisma.message.findMany({
     where: { conversationId },
     orderBy: { createdAt: "desc" },

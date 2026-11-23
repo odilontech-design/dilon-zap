@@ -29,6 +29,19 @@ por até 1.000 leads, preço de novembro de 2026).
   - **Transfere** depois de 20 respostas na mesma conversa.
   - **Não responde** mensagem com mais de 15 min, por exemplo depois de o
     processo ficar fora do ar.
+- **Faixa no Inbox** (v1.97.0, `components/agente-de-carros.tsx`): no topo de cada
+  conversa mostra quem atende (IA atendendo com N respostas, IA parada por fulano,
+  ou "Com a equipe" com o motivo e o resumo que a IA deixou). Botões:
+  **Assumir** (para a IA na hora e cancela as respostas dela que ainda estavam na
+  fila), **Devolver à IA** (recomeça a conversa para a IA, zera as respostas e
+  respeita o limite de leads/custo do mês para conversa nova) e **Voltar ao
+  automático** (tira o controle manual). Usa a mesma tabela `ConversaAgente` do
+  vendedor do SDR; o worker confere `DESLIGADO` antes de qualquer chamada à API.
+  Código: `packages/vendedor-ia/src/controle.ts`, rota
+  `/api/vendedor-ia/conversas/[id]/controle`, teste `controle.test-manual.ts`
+  (isolamento entre empresas, cancelamento da fila, limite do mês, worker parado).
+  Detalhe: ao devolver, se a última mensagem do cliente tem mais de 15 min a IA
+  não responde a ela (regra de mensagem velha) e atende a próxima.
 - **Ferramentas** (`prompt.ts`), em modo estrito:
   - `buscar_estoque`: só carros disponíveis ou reservados, e só o que pode ir
     ao cliente. Nunca custo, piso, placa ou observação interna.
@@ -143,8 +156,6 @@ Local: `npm run dev:vendedor-ia` (lê o `.env` da raiz). Testes:
 ## Ainda não faz
 
 - Atender só fora do horário comercial (hoje atende sempre que ligada).
-- Selo "IA atendendo" e botão "assumir" no Inbox. Hoje, responder na conversa já
-  tira a IA dela.
 - Transcrever áudio do cliente.
 - Agendar visita direto na agenda. Hoje coleta o dia e transfere.
 - Avisar o cliente quando entrar um carro que ele procurou e não havia.

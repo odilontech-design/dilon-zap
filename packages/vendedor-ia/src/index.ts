@@ -8,3 +8,6 @@ export { cicloDoVendedor, obterConfigDoVendedor, salvarConfigDoVendedor, listarC
 export type { ConfigDoVendedor, DependenciasDoVendedor, ResultadoDoCicloDoVendedor } from "./saas/vendedor";
 export { TAREFA_DO_VENDEDOR, ACOES_DO_VENDEDOR } from "./saas/prompt";
 export { obterControleDaConversa, definirControleDaConversa, controleDaConversaSchema } from "./saas/vendedor";
+
+// Controle do Vendedor IA de carros conversa a conversa (faixa do Inbox).
+export { obterControleDeCarros, definirControleDeCarros, controleDeCarrosSchema, ErroDoControle } from "./controle";
