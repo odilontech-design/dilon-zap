@@ -25,5 +25,5 @@ export async function GET(req: Request) {
     financeiro: escolha(p.get("financeiro"), ["todas", "quitadas", "com-saldo", "sem-lancamento"], "todas"),
   };
 
-  return NextResponse.json(await montarHistoricoDeOS(user.tenantId, filtros), { headers: { "Cache-Control": "no-store" } });
+  return NextResponse.json(await montarHistoricoDeOS(user.tenantId, filtros, p.get("datas") === "suspeitas"), { headers: { "Cache-Control": "no-store" } });
 }

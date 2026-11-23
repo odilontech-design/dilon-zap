@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
 import { numeroOS } from "@/lib/otica-regras";
 import type { LinhaDeRanking, PontoDoPeriodo, ResumoDoHistorico } from "@/lib/otica-historico";
-import { fetcher } from "./formatos";
+import { erroDaResposta, fetcher } from "./formatos";
 
 /**
  * Histórico das OS com filtros e indicadores (Visuallis, 23/11): o lugar para
@@ -31,6 +31,7 @@ type Linha = {
   recebidoCents: number;
   saldoCents: number;
   semLancamento: boolean;
+  dataSuspeita: { vizinhasPor: string; sugestoes: string[] } | null;
 };
 
 type Resposta = {
@@ -42,6 +43,7 @@ type Resposta = {
   opcoes: { laboratorios: { id: string; nome: string }[]; consultores: { id: string; nome: string }[] };
   ordens: Linha[];
   totalDeOrdens: number;
+  totalDatasSuspeitas: number;
   limitado: boolean;
 };
 
@@ -53,9 +55,10 @@ type Filtros = {
   consultorId: string;
   origem: "todas" | "papel" | "sistema";
   financeiro: "todas" | "quitadas" | "com-saldo" | "sem-lancamento";
+  datas: "todas" | "suspeitas";
 };
 
-const LIMPOS: Filtros = { de: "", ate: "", situacao: "todas", laboratorioId: "", consultorId: "", origem: "todas", financeiro: "todas" };
+const LIMPOS: Filtros = { de: "", ate: "", situacao: "todas", laboratorioId: "", consultorId: "", origem: "todas", financeiro: "todas", datas: "todas" };
 
 const dia = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
@@ -138,6 +141,108 @@ function Serie({ pontos, granularidade }: { pontos: PontoDoPeriodo[]; granularid
   );
 }
 
+const DIA_BR = (iso: string) => iso.split("-").reverse().join("/");
+
+/**
+ * A data de uma OS, com o editor para corrigi-la. Só as OS do papel se corrigem aqui: a leitura por IA
+ * erra ano e mês, e a OS feita no sistema nasce com a data certa. Quando a data foge da sequência do
+ * talão, o sistema avisa e oferece a data provável a um clique (nunca troca sozinho).
+ */
+function CelulaDeData({ o, fuso, onSalvou }: { o: Linha; fuso?: string; onSalvou: () => void }) {
+  const atual = new Date(o.data).toLocaleDateString("en-CA", { timeZone: fuso });
+  const [aberto, setAberto] = useState(false);
+  const [dia, setDia] = useState(atual);
+  const [salvando, setSalvando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+
+  async function salvar(valor: string) {
+    if (!valor || valor === atual) return setAberto(false);
+    setSalvando(true);
+    setErro(null);
+    const r = await fetch(`/api/otica/os/${o.id}/data`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dia: valor }),
+    });
+    setSalvando(false);
+    if (!r.ok) return setErro(await erroDaResposta(r));
+    setAberto(false);
+    onSalvou();
+  }
+
+  const suspeita = o.dataSuspeita;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="tabular-nums">{new Date(o.data).toLocaleDateString("pt-BR", { timeZone: fuso })}</span>
+        {suspeita && (
+          <span
+            className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-medium text-amber-800"
+            title={`As OS de número vizinho são de ${DIA_BR(suspeita.vizinhasPor)}. Essa data pode ter sido lida errado do talão.`}
+          >
+            conferir
+          </span>
+        )}
+        {o.historica && !aberto && (
+          <button
+            type="button"
+            onClick={() => {
+              setDia(atual);
+              setErro(null);
+              setAberto(true);
+            }}
+            className="text-[11px] text-accent hover:underline"
+            aria-label={`Corrigir a data da OS ${numeroOS(o.numero)}`}
+          >
+            corrigir
+          </button>
+        )}
+      </div>
+      {aberto && (
+        <div className="flex flex-col items-start gap-1.5 rounded-md border border-neutral-200 bg-surface p-2 shadow-sm">
+          {suspeita && suspeita.sugestoes.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {suspeita.sugestoes.map((sug) => (
+                <button
+                  key={sug}
+                  type="button"
+                  disabled={salvando}
+                  onClick={() => salvar(sug)}
+                  className="rounded-full bg-accent/10 px-2.5 py-1 text-[11px] font-medium text-accent hover:bg-accent hover:text-white disabled:opacity-50"
+                >
+                  Usar {DIA_BR(sug)}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5">
+            <input
+              type="date"
+              value={dia}
+              onChange={(e) => setDia(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") salvar(dia);
+                if (e.key === "Escape") setAberto(false);
+              }}
+              aria-label={`Nova data da OS ${numeroOS(o.numero)}`}
+              className="rounded-md border border-neutral-300 bg-surface px-2 py-1 text-xs"
+              autoFocus
+            />
+            <button type="button" disabled={salvando || !dia} onClick={() => salvar(dia)} className="rounded-md bg-accent px-2.5 py-1 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50">
+              {salvando ? "Salvando…" : "Salvar"}
+            </button>
+            <button type="button" onClick={() => setAberto(false)} className="text-xs text-neutral-500 hover:text-neutral-800">
+              Cancelar
+            </button>
+          </div>
+          {o.dataSuspeita === null && o.historica && <p className="max-w-[240px] text-[10px] text-neutral-500">Corrige a OS e também o vencimento e o pagamento dela no Financeiro.</p>}
+          {erro && <p role="alert" className="max-w-[240px] text-[11px] text-red-700">{erro}</p>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function HistoricoDeOS({ fuso }: { fuso?: string }) {
   const [f, setF] = useState<Filtros>(LIMPOS);
   const [atalho, setAtalho] = useState<string>("tudo");
@@ -150,8 +255,9 @@ export function HistoricoDeOS({ fuso }: { fuso?: string }) {
   if (f.consultorId) q.set("consultorId", f.consultorId);
   if (f.origem !== "todas") q.set("origem", f.origem);
   if (f.financeiro !== "todas") q.set("financeiro", f.financeiro);
+  if (f.datas === "suspeitas") q.set("datas", "suspeitas");
 
-  const { data, error, isLoading } = useSWR<Resposta>(`/api/otica/os/historico?${q.toString()}`, fetcher, { keepPreviousData: true });
+  const { data, error, isLoading, mutate } = useSWR<Resposta>(`/api/otica/os/historico?${q.toString()}`, fetcher, { keepPreviousData: true });
 
   const filtrando = JSON.stringify(f) !== JSON.stringify(LIMPOS);
   const mudar = (parcial: Partial<Filtros>) => setF((a) => ({ ...a, ...parcial }));
@@ -251,6 +357,22 @@ export function HistoricoDeOS({ fuso }: { fuso?: string }) {
 
       {data && data.resumo.total > 0 && (
         <>
+          {(data.totalDatasSuspeitas > 0 || f.datas === "suspeitas") && (
+            <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-800">
+              <span>
+                {data.totalDatasSuspeitas} OS do papel com data fora da sequência do talão, provavelmente lida errado pela IA. Confira o ano e o mês e corrija na coluna Data.
+              </span>
+              <button
+                type="button"
+                aria-pressed={f.datas === "suspeitas"}
+                onClick={() => mudar({ datas: f.datas === "suspeitas" ? "todas" : "suspeitas" })}
+                className="rounded-full bg-amber-600 px-3 py-1 font-medium text-white hover:bg-amber-700"
+              >
+                {f.datas === "suspeitas" ? "Ver todas as OS" : "Ver só as suspeitas"}
+              </button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-6">
             <Cartao
               rotulo="OS no filtro"
@@ -317,7 +439,7 @@ export function HistoricoDeOS({ fuso }: { fuso?: string }) {
                       {o.historica && <span className="ml-1.5 rounded-full bg-neutral-100 px-2 py-0.5 text-neutral-500">do papel</span>}
                       {o.fotoKey && <span className="ml-1.5 text-neutral-400" title="Tem foto do talão">foto</span>}
                     </td>
-                    <td className="px-3 py-2 text-xs text-neutral-500 tabular-nums">{new Date(o.data).toLocaleDateString("pt-BR", { timeZone: fuso })}</td>
+                    <td className="px-3 py-2 text-xs text-neutral-500 align-top"><CelulaDeData o={o} fuso={fuso} onSalvou={() => mutate()} /></td>
                     <td className="px-3 py-2 text-right tabular-nums">{o.valorCents ? centsToBRL(o.valorCents) : "—"}</td>
                     <td className="px-3 py-2 text-right tabular-nums text-xs">
                       {o.etapa === "CANCELADA" ? "—" : o.semLancamento ? <span className="text-amber-700">sem lançamento</span> : centsToBRL(o.recebidoCents)}

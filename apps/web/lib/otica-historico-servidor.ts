@@ -10,6 +10,7 @@ import {
   type FiltrosDoHistorico,
   type OSDoHistorico,
 } from "@/lib/otica-historico";
+import { detectarDatasSuspeitas } from "@/lib/otica-datas";
 
 /** Quantas OS a lista mostra. Os indicadores contam TODAS as do filtro, mesmo as que a lista não comporta. */
 const LIMITE_DA_LISTA = 500;
@@ -20,7 +21,7 @@ const LIMITE_DE_LEITURA = 20_000;
  * Lê as OS entregues e canceladas da empresa e monta o histórico com
  * indicadores. A lista e os números saem do MESMO conjunto filtrado.
  */
-export async function montarHistoricoDeOS(tenantId: string, filtros: FiltrosDoHistorico) {
+export async function montarHistoricoDeOS(tenantId: string, filtros: FiltrosDoHistorico, soDatasSuspeitas = false) {
   const lidas = await prisma.ordemServico.findMany({
     where: { tenantId: tenantId, etapa: { in: ["ENTREGUE", "CANCELADA"] } },
     take: LIMITE_DE_LEITURA,
@@ -68,7 +69,13 @@ export async function montarHistoricoDeOS(tenantId: string, filtros: FiltrosDoHi
     return { base, cartao: { lentes: o.lentes, armacao: o.armacao, fotoKey: o.fotoKey, contact: o.contact } };
   });
 
-  const filtradas = todas.filter((x) => passaNoFiltro(x.base, filtros));
+  // Datas fora da sequência do talão (a leitura por IA erra ano e mês). Calculado sobre TODAS as OS do papel,
+  // não só as filtradas: a vizinhança de número é a referência, e o filtro não pode mudá-la.
+  const suspeitas = detectarDatasSuspeitas(
+    todas.filter((x) => x.base.historica && x.base.etapa === "ENTREGUE").map((x) => ({ id: x.base.id, numero: x.base.numero, data: dataDaOS(x.base) }))
+  );
+
+  const filtradas = todas.filter((x) => passaNoFiltro(x.base, filtros) && (!soDatasSuspeitas || suspeitas.has(x.base.id)));
   const ordens = filtradas.map((x) => x.base);
 
   const granularidade = escolherGranularidade(ordens);
@@ -89,6 +96,7 @@ export async function montarHistoricoDeOS(tenantId: string, filtros: FiltrosDoHi
       recebidoCents: base.recebidoCents,
       saldoCents: base.saldoCents,
       semLancamento: base.semLancamento,
+      dataSuspeita: suspeitas.get(base.id) ?? null,
     }));
 
   // As opções dos filtros saem de TODAS as OS do histórico (e não só das filtradas), senão escolher um
@@ -113,6 +121,7 @@ export async function montarHistoricoDeOS(tenantId: string, filtros: FiltrosDoHi
       },
       ordens: lista,
       totalDeOrdens: filtradas.length,
+      totalDatasSuspeitas: suspeitas.size,
       limitado: filtradas.length > LIMITE_DA_LISTA,
   };
 }
