@@ -775,3 +775,14 @@ Campos novos em `Veiculo`: `caracteristicas`, `carroceria`, `zeroKm`, `ocultarKm
 - **Desempenho por veículo**: carros à venda com visitas, WhatsApp, formulários e leads dos portais no período, ordenados por contatos, com alerta para "muitas visitas e nenhum contato" e "parado sem contato".
 
 **Contagem do site** (nova, começa a valer com esta versão): `EstatisticaVitrine` guarda só números por dia e por carro (visitas, cliques em qualquer link de WhatsApp do site, formulários). A visita conta uma vez por página por sessão do navegador; robôs e pré-visualizações (Google, WhatsApp, navegadores automatizados) não contam; nada do visitante é guardado. Rotas: `POST /api/loja/[slug]/evento` (público) e `GET /api/veiculos/relatorios?tipo=…`. Teste: `apps/web/lib/relatorios-veiculos.test-manual.ts`.
+
+## Primeiros passos e implantação (v1.93.0)
+
+Padroniza a implantação de uma revenda nova (Sprint 1 do plano de evolução do Motors).
+
+- **Primeiros passos** (`lib/primeiros-passos.ts`): checklist **calculado na hora** a partir dos dados da loja, sem nada guardado e sem marcar à mão. Sete passos obrigatórios: dados da loja, estoque no sistema, carros prontos para anunciar (preço, km e foto), WhatsApp conectado, equipe com login, site no ar e equipe atendendo pelo Inbox (mensagens de gente da equipe nos últimos 14 dias). Dois opcionais, que não entram na porcentagem: portais conectados (com anúncios no ar) e Vendedor IA (só aparece se a empresa o contratou). Cada passo tem o que o sistema viu, **por que importa** e **como fazer**, e serve também como material de capacitação de quem implanta.
+- **Para a gestão da loja:** aba **Veículos > Primeiros passos** e um cartão no topo do Estoque ("Implantação 43% · próximo: …"), que some quando a implantação termina. Rota `GET /api/veiculos/primeiros-passos` (tenant sempre da sessão).
+- **Para a Dilon Tech (Super Admin):** painel "Implantação da revenda" na ficha da empresa e a página **Implantação de revendas** (`/admin/implantacao`), com todas as revendas, porcentagem, dias desde a entrada, carros sem km e o que falta; quem entrou há mais tempo e não terminou aparece primeiro. Rotas `GET /api/admin/tenants/[id]/implantacao` e `GET /api/admin/implantacao`.
+- **`GET /api/health`** (público, sem dado de empresa): versão e se o banco responde (503 se não). Serve para monitor de disponibilidade e para conferir o deploy.
+
+Sem mudança de banco. Teste: `apps/web/lib/primeiros-passos.test-manual.ts` (19 checagens, incluindo isolamento entre empresas e o recurso de Vendedor IA).
