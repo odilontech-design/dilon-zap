@@ -16,8 +16,19 @@ export function fotoSrcSet(slug: string, fotoId: string, larguras: (240 | 480 | 
   return larguras.map((l) => `${fotoUrl(slug, fotoId, l)} ${l}w`).join(", ");
 }
 
-export function resumo(c: Pick<CarroPublico, "km" | "kmInformado" | "cambio" | "combustivel">) {
-  return [c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel].filter(Boolean).join(" · ");
+/** O preço como o site mostra: "Sob consulta" quando a loja escolheu não mostrar. */
+export function precoTexto(c: Pick<CarroPublico, "precoCents" | "ocultarPreco">) {
+  return c.ocultarPreco ? "Sob consulta" : brl(c.precoCents);
+}
+
+/** A km como o site mostra: "Km n/a" quando a loja escolheu não mostrar; nulo se nunca foi informada. */
+export function kmTexto(c: Pick<CarroPublico, "km" | "kmInformado" | "ocultarKm">): string | null {
+  if (c.ocultarKm) return "Km n/a";
+  return c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null;
+}
+
+export function resumo(c: Pick<CarroPublico, "km" | "kmInformado" | "cambio" | "combustivel"> & { ocultarKm?: boolean }) {
+  return [kmTexto({ ocultarKm: false, ...c }), c.cambio, c.combustivel].filter(Boolean).join(" · ");
 }
 
 export function titulo(c: CarroPublico) {

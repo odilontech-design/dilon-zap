@@ -105,6 +105,7 @@ export function dadosParaBanco(d: Partial<DadosVeiculo>): Prisma.VeiculoUnchecke
   if (d.carroceria !== undefined) out.carroceria = d.carroceria || null;
   if (d.zeroKm !== undefined) out.zeroKm = d.zeroKm;
   if (d.ocultarKm !== undefined) out.ocultarKm = d.ocultarKm;
+  if (d.ocultarPreco !== undefined) out.ocultarPreco = d.ocultarPreco;
   if (d.videoUrl !== undefined) {
     if (d.videoUrl && !idDoYoutube(d.videoUrl)) throw new ErroDeVeiculo("vídeo: use um link do YouTube");
     out.videoUrl = d.videoUrl || null;

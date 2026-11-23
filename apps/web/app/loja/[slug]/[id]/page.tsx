@@ -11,7 +11,7 @@ import {
   lojaPublica,
   mensagemDeInteresse,
 } from "@/lib/vitrine";
-import { brl, fotoUrl, resumo, titulo } from "../comum";
+import { brl, fotoUrl, kmTexto, precoTexto, resumo, titulo } from "../comum";
 import { BotaoWhatsapp } from "../rastreio";
 import { carroParaJsonLd, JsonLd } from "../dados-estruturados";
 import { CascaDaLoja } from "../casca";
@@ -56,6 +56,14 @@ export async function generateMetadata({
   };
 }
 
+/** Preço próximo (até 25%) para a lista de parecidos; sem preço à mostra de um dos lados, não conta. */
+function precoProximo(a: { precoCents: number; ocultarPreco: boolean }, b: { precoCents: number; ocultarPreco: boolean }) {
+  return !a.ocultarPreco && !b.ocultarPreco && Math.abs(a.precoCents - b.precoCents) <= b.precoCents * 0.25;
+}
+function distanciaDePreco(a: { precoCents: number; ocultarPreco: boolean }, b: { precoCents: number; ocultarPreco: boolean }) {
+  return a.ocultarPreco || b.ocultarPreco ? Number.MAX_SAFE_INTEGER : Math.abs(a.precoCents - b.precoCents);
+}
+
 export default async function CarroPage({
   params,
 }: {
@@ -78,7 +86,7 @@ export default async function CarroPage({
     ["Modelo", carro.modelo],
     ["Versão", carro.versao],
     ["Ano", `${carro.anoFabricacao}/${carro.anoModelo}`],
-    ["Quilometragem", carro.kmInformado ? `${carro.km.toLocaleString("pt-BR")} km` : null],
+    ["Quilometragem", kmTexto(carro) === "Km n/a" ? "n/a" : carro.kmInformado ? `${carro.km.toLocaleString("pt-BR")} km` : null],
     ["Câmbio", carro.cambio],
     ["Combustível", carro.combustivel],
     ["Cor", carro.cor],
@@ -89,9 +97,9 @@ export default async function CarroPage({
   const todos = await carrosDaVitrine(loja);
   const parecidos = todos
     .filter((c) => c.id !== carro.id)
-    .map((c) => ({ c, nota: (c.modelo === carro.modelo ? 3 : 0) + (c.marca === carro.marca ? 2 : 0) + (Math.abs(c.precoCents - carro.precoCents) <= carro.precoCents * 0.25 ? 1 : 0) }))
+    .map((c) => ({ c, nota: (c.modelo === carro.modelo ? 3 : 0) + (c.marca === carro.marca ? 2 : 0) + (precoProximo(c, carro) ? 1 : 0) }))
     .filter((x) => x.nota > 0)
-    .sort((a, b) => b.nota - a.nota || Math.abs(a.c.precoCents - carro.precoCents) - Math.abs(b.c.precoCents - carro.precoCents))
+    .sort((a, b) => b.nota - a.nota || distanciaDePreco(a.c, carro) - distanciaDePreco(b.c, carro))
     .slice(0, 3)
     .map((x) => x.c);
 
@@ -186,8 +194,8 @@ export default async function CarroPage({
               <p className="mt-1 text-sm text-neutral-500">
                 {carro.anoFabricacao}/{carro.anoModelo} · {resumo(carro)}
               </p>
-              <p className="mt-4 text-4xl font-extrabold tracking-tight">{brl(carro.precoCents)}</p>
-              <p className="mt-1 text-xs text-neutral-500">Preço sujeito a alteração. Confirme pelo WhatsApp.</p>
+              <p className={`mt-4 font-extrabold tracking-tight ${carro.ocultarPreco ? "text-3xl" : "text-4xl"}`}>{precoTexto(carro)}</p>
+              <p className="mt-1 text-xs text-neutral-500">{carro.ocultarPreco ? "Fale com a loja para saber o valor e as condições." : "Preço sujeito a alteração. Confirme pelo WhatsApp."}</p>
 
               {whatsapp && (
                 <BotaoWhatsapp
@@ -250,7 +258,7 @@ export default async function CarroPage({
               valorCents={carro.precoCents}
               className="flex items-center justify-center gap-2 rounded-xl bg-[#25D366] px-4 py-3.5 font-bold text-white"
             >
-              Tenho interesse · {brl(carro.precoCents)}
+              Tenho interesse{carro.ocultarPreco ? "" : ` · ${brl(carro.precoCents)}`}
             </BotaoWhatsapp>
           </div>
         )}

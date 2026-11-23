@@ -28,15 +28,20 @@ export function carroParaJsonLd(c: Omit<CarroPublico, "fotos" | "entradaEm"> & {
     ...(c.portas ? { numberOfDoors: c.portas } : {}),
     ...(c.descricao ? { description: c.descricao } : {}),
     ...(fotos.length ? { image: fotos } : {}),
-    offers: {
-      "@type": "Offer",
-      price: (c.precoCents / 100).toFixed(2),
-      priceCurrency: "BRL",
-      priceValidUntil: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
-      availability: c.status === "RESERVADO" ? "https://schema.org/LimitedAvailability" : "https://schema.org/InStock",
-      url,
-      ...(loja ? { seller: { "@type": "AutoDealer", name: loja } } : {}),
-    },
+    // Sob consulta: sem preço, não há oferta a declarar (o Google exige o preço na oferta).
+    ...(c.ocultarPreco
+      ? {}
+      : {
+          offers: {
+            "@type": "Offer",
+            price: (c.precoCents / 100).toFixed(2),
+            priceCurrency: "BRL",
+            priceValidUntil: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
+            availability: c.status === "RESERVADO" ? "https://schema.org/LimitedAvailability" : "https://schema.org/InStock",
+            url,
+            ...(loja ? { seller: { "@type": "AutoDealer", name: loja } } : {}),
+          },
+        }),
   };
 }
 

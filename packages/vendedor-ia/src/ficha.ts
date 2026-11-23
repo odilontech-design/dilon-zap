@@ -18,6 +18,10 @@ export type CarroParaFicha = {
   cambio?: string | null;
   opcionais?: string[];
   precoCents: number;
+  /** A loja escolheu "sob consulta" para este carro: a ficha não diz o valor. */
+  precoOculto?: boolean;
+  /** A loja escolheu "km n/a": a ficha não diz a quilometragem. */
+  kmOculto?: boolean;
   descricao?: string | null;
   placa?: string | null;
 };
@@ -39,8 +43,8 @@ export function reais(cents: number): string {
 export function fichaParaCliente(v: CarroParaFicha): string {
   const linhas = [
     `*${nomeDoVeiculo(v)}*`,
-    `💰 ${reais(v.precoCents)}`,
-    v.kmInformado === false ? "" : `📍 ${v.km.toLocaleString("pt-BR")} km`,
+    v.precoOculto ? "💰 Valor sob consulta" : `💰 ${reais(v.precoCents)}`,
+    v.kmOculto ? "📍 Km n/a" : v.kmInformado === false ? "" : `📍 ${v.km.toLocaleString("pt-BR")} km`,
     [v.cambio, v.combustivel, v.cor].filter(Boolean).join(" · "),
     v.opcionais?.length ? `✅ ${v.opcionais.join(", ")}` : "",
     v.placa ? `Final de placa ${v.placa.slice(-1)}` : "",

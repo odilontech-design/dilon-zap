@@ -3705,6 +3705,9 @@ model Veiculo {
   carroceria              String?
   zeroKm                  Boolean  @default(false)
   ocultarKm               Boolean  @default(false)
+  // "Sob consulta": o site público (e os feeds públicos) não mostram o preço deste carro. Portais,
+  // CRM, relatórios e o resto do sistema seguem com o valor real (os portais exigem preço e km).
+  ocultarPreco            Boolean  @default(false)
   videoUrl                String?
   precoClassificadosCents Int?
   descricaoClassificados  String?
@@ -3989,6 +3992,10 @@ model VeiculosConfig {
   // Meu site > Páginas > Financiamento: ficha completa (como a do AutoCerto) ou o formulário
   // curto de sempre, e as seções que o cliente preenche. Ver lib/ficha-financiamento.ts.
   fichaFinanciamento Json?
+  // Vale para TODOS os carros da loja, somado ao "sob consulta" de cada carro: o site mostra
+  // "Sob consulta" no lugar do preço e "Km n/a" no lugar da quilometragem.
+  ocultarPrecoNoSite Boolean @default(false)
+  ocultarKmNoSite    Boolean @default(false)
 
   updatedAt DateTime @updatedAt
 }

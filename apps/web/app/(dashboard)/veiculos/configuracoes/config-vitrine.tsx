@@ -20,6 +20,8 @@ type Config = {
   cabecalhoClaro: boolean;
   estiloSite: string;
   observacaoPadrao: string | null;
+  ocultarPrecoNoSite: boolean;
+  ocultarKmNoSite: boolean;
   corSecundaria: string | null;
   corPrimaria: string | null;
   horario: string | null;
@@ -40,7 +42,7 @@ type Config = {
 /** Liga a vitrine pública e define o que ela mostra sobre a loja. */
 export function ConfigVitrine() {
   const { data, error, mutate } = useSWR<Config>("/api/veiculos/config", fetcher);
-  const [f, setF] = useState({ vitrineAtiva: false, nomeLoja: "", sobre: "", mostrarReservados: true, dominio: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, estiloSite: "moderno", observacaoPadrao: "", corSecundaria: "", corPrimaria: "", instagram: "", facebook: "", politicaPrivacidade: "" });
+  const [f, setF] = useState({ vitrineAtiva: false, nomeLoja: "", sobre: "", mostrarReservados: true, dominio: "", formularioAtivo: true, exigirKm: true, cabecalhoClaro: false, estiloSite: "moderno", observacaoPadrao: "", ocultarPrecoNoSite: false, ocultarKmNoSite: false, corSecundaria: "", corPrimaria: "", instagram: "", facebook: "", politicaPrivacidade: "" });
   const [versaoImagens, setVersaoImagens] = useState(0);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
   const [salvando, setSalvando] = useState(false);
@@ -57,6 +59,8 @@ export function ConfigVitrine() {
         cabecalhoClaro: data.cabecalhoClaro ?? false,
         estiloSite: data.estiloSite ?? "moderno",
         observacaoPadrao: data.observacaoPadrao ?? "",
+        ocultarPrecoNoSite: data.ocultarPrecoNoSite ?? false,
+        ocultarKmNoSite: data.ocultarKmNoSite ?? false,
         corSecundaria: data.corSecundaria ?? "",
         corPrimaria: data.corPrimaria ?? "",
         instagram: data.instagram ?? "",
@@ -214,6 +218,26 @@ export function ConfigVitrine() {
           ))}
           <span className="text-neutral-500">No Gerenciador de Comércio da Meta: Catálogos → Veículos → Fonte de dados → Feed programado, colando o link do CSV.</span>
         </div>
+      </section>
+
+      <section className={secao} id="preco-e-km">
+        <h2 className="text-sm font-semibold">Preço e quilometragem no site</h2>
+        <p className="text-xs text-neutral-500">
+          Para lojas que preferem negociar o valor e a km no atendimento. Vale para <strong>todos os carros</strong> (e dá para esconder só alguns, na ficha de cada carro). O que muda é só o que o
+          visitante vê no site, nos feeds públicos, no Google e nas páginas de busca.
+        </p>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={f.ocultarPrecoNoSite} onChange={(e) => setF({ ...f, ocultarPrecoNoSite: e.target.checked })} />
+          <span><strong>Mostrar “Sob consulta”</strong> no lugar do preço, em todos os carros</span>
+        </label>
+        <label className="flex items-start gap-2 text-sm">
+          <input type="checkbox" className="mt-1" checked={f.ocultarKmNoSite} onChange={(e) => setF({ ...f, ocultarKmNoSite: e.target.checked })} />
+          <span><strong>Mostrar “Km n/a”</strong> no lugar da quilometragem, em todos os carros</span>
+        </label>
+        <p className="rounded-md bg-sky-500/10 px-3 py-2 text-xs text-sky-900">
+          Continuam com o valor e a km reais: os <strong>portais</strong> (Webmotors, MobiAuto, NaPista e OLX exigem preço e km), o CRM, os relatórios e a ficha interna do carro. O catálogo do Facebook e Instagram não aceita carro sem preço, então
+          carro “sob consulta” fica de fora dele.
+        </p>
       </section>
 
       <section className={secao} id="observacao-padrao">

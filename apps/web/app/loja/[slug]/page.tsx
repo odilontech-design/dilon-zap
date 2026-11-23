@@ -45,6 +45,9 @@ export default async function LojaPage({ params }: { params: { slug: string } })
   const aVenda = carros.filter((c) => c.status === "DISPONIVEL");
   const destaques = completarDestaques(carrosEmDestaque(loja.destaques, aVenda), [...aVenda].sort((a, b) => +new Date(b.entradaEm) - +new Date(a.entradaEm)));
   const oferta = loja.ofertaVeiculoId ? carros.find((c) => c.id === loja.ofertaVeiculoId && c.status === "DISPONIVEL") ?? null : null;
+  // Preço à mostra: carro "sob consulta" não entra no menor preço nem nos filtros de valor.
+  const precosVisiveis = carros.filter((c) => !c.ocultarPreco && c.precoCents > 0).map((c) => c.precoCents);
+  const todosSemPreco = carros.length > 0 && precosVisiveis.length === 0;
   const baseDosCarros = `${baseDaLoja(loja.dominio)}/loja/${loja.slug}`;
 
   const urlDaLoja = linkDaLoja(loja.slug, loja.dominio);
@@ -65,14 +68,14 @@ export default async function LojaPage({ params }: { params: { slug: string } })
           ...(loja.temLogo ? { image: `${baseDaLoja(loja.dominio)}/api/loja/${loja.slug}/marca/logo` } : {}),
           ...(loja.horario.length ? { openingHours: loja.horario } : {}),
           ...(loja.instagram || loja.facebook ? { sameAs: [loja.instagram, loja.facebook].filter(Boolean) } : {}),
-          makesOffer: carros.slice(0, 50).map((c) => ({ "@type": "Offer", price: (c.precoCents / 100).toFixed(2), priceCurrency: "BRL", itemOffered: carroParaJsonLd(c, linkDoCarro(loja.slug, c.id, loja.dominio), []) })),
+          makesOffer: carros.slice(0, 50).filter((c) => !c.ocultarPreco).map((c) => ({ "@type": "Offer", price: (c.precoCents / 100).toFixed(2), priceCurrency: "BRL", itemOffered: carroParaJsonLd(c, linkDoCarro(loja.slug, c.id, loja.dominio), []) })),
         }}
       />
       <CarrosselDeBanners slug={loja.slug} banners={banners.map((b) => ({ id: b.id, titulo: b.titulo, link: b.link, temCelular: !!b.chaveCelular }))} />
       {loja.estiloSite === "classico" ? (
-        <BuscaClassica caminho={caminhoDaLoja(loja.slug, loja.dominio)} carros={carros.map((c) => ({ marca: c.marca, modelo: c.modelo, anoModelo: c.anoModelo, precoCents: c.precoCents }))} />
+        <BuscaClassica semPreco={todosSemPreco} caminho={caminhoDaLoja(loja.slug, loja.dominio)} carros={carros.map((c) => ({ marca: c.marca, modelo: c.modelo, anoModelo: c.anoModelo, precoCents: c.precoCents }))} />
       ) : (
-      <Hero compacto={banners.length > 0} loja={loja} menorPreco={carros.length ? Math.min(...carros.map((c) => c.precoCents)) : 0} cambios={[...new Set(carros.map((c) => c.cambio).filter(Boolean) as string[])].sort()} total={carros.length} />
+      <Hero compacto={banners.length > 0} loja={loja} menorPreco={precosVisiveis.length ? Math.min(...precosVisiveis) : 0} semPreco={todosSemPreco} cambios={[...new Set(carros.map((c) => c.cambio).filter(Boolean) as string[])].sort()} total={carros.length} />
       )}
       {destaques.length > 0 && (
         <section aria-label="Últimas ofertas" className="mx-auto w-full max-w-6xl px-4 pt-10">
@@ -112,7 +115,7 @@ export default async function LojaPage({ params }: { params: { slug: string } })
       {oferta && (
         <OfertaAoEntrar
           slug={loja.slug}
-          carro={{ id: oferta.id, nome: nomeDoVeiculo(oferta), precoCents: oferta.precoCents, fotoId: oferta.fotos[0]?.id ?? null }}
+          carro={{ id: oferta.id, nome: nomeDoVeiculo(oferta), precoCents: oferta.precoCents, precoOculto: oferta.ocultarPreco, fotoId: oferta.fotos[0]?.id ?? null }}
           whatsapp={loja.whatsapp ? `https://wa.me/${loja.whatsapp}?text=${encodeURIComponent(`Olá! Vi a oferta do ${nomeDoVeiculo(oferta)} no site: ${baseDosCarros}/${oferta.id}`)}` : null}
         />
       )}

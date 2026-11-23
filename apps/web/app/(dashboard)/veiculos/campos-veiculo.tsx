@@ -30,6 +30,8 @@ export type FormVeiculo = {
   carroceria: string;
   zeroKm: boolean;
   ocultarKm: boolean;
+  /** "Sob consulta": o site não mostra o preço deste carro (os portais seguem com o valor). */
+  ocultarPreco: boolean;
   videoUrl: string;
   precoClassificadosCents: number | null;
   /** Desligado = os classificados usam outro texto (descricaoClassificados). */
@@ -66,6 +68,7 @@ export const FORM_VAZIO: FormVeiculo = {
   carroceria: "",
   zeroKm: false,
   ocultarKm: false,
+  ocultarPreco: false,
   videoUrl: "",
   precoClassificadosCents: null,
   mesmaObservacao: true,
@@ -104,6 +107,7 @@ export function paraForm(v: Record<string, unknown>): FormVeiculo {
     carroceria: t("carroceria"),
     zeroKm: v.zeroKm === true,
     ocultarKm: v.ocultarKm === true,
+    ocultarPreco: v.ocultarPreco === true,
     videoUrl: t("videoUrl"),
     precoClassificadosCents: (v.precoClassificadosCents as number | null) ?? null,
     mesmaObservacao: !v.descricaoClassificados,
@@ -152,6 +156,7 @@ export function paraRota(f: FormVeiculo, opts: { exigirPreco: boolean; gerencia:
     carroceria: f.carroceria || null,
     zeroKm: f.zeroKm,
     ocultarKm: f.ocultarKm,
+    ocultarPreco: f.ocultarPreco,
     videoUrl: f.videoUrl.trim() || null,
     precoClassificadosCents: f.precoClassificadosCents && f.precoClassificadosCents !== f.precoCents ? f.precoClassificadosCents : null,
     descricaoClassificados: f.mesmaObservacao ? null : f.descricaoClassificados.trim() || null,
@@ -345,7 +350,7 @@ export function CamposVeiculo({
           {comPreco && (
             <div className="flex flex-wrap gap-x-3 text-xs text-neutral-600">
               <label className="flex items-center gap-1"><input type="checkbox" checked={f.zeroKm} onChange={(e) => set({ zeroKm: e.target.checked, ...(e.target.checked ? { km: "0" } : {}) })} /> Veículo 0 km</label>
-              <label className="flex items-center gap-1"><input type="checkbox" checked={f.ocultarKm} onChange={(e) => set({ ocultarKm: e.target.checked })} /> Não mostrar no site</label>
+              <label className="flex items-center gap-1"><input type="checkbox" checked={f.ocultarKm} onChange={(e) => set({ ocultarKm: e.target.checked })} /> Km n/a no site</label>
             </div>
           )}
         </div>
@@ -410,6 +415,10 @@ export function CamposVeiculo({
           <label className="flex flex-col gap-1">
             <span className={rotulo}>Preço no site</span>
             <CampoDinheiro id={`${prefixo}-preco`} valor={f.precoCents} onChange={(c) => set({ precoCents: c })} />
+            <label className="flex items-start gap-1.5 text-xs text-neutral-600">
+              <input type="checkbox" className="mt-0.5" checked={f.ocultarPreco} onChange={(e) => set({ ocultarPreco: e.target.checked })} />
+              <span>Sob consulta no site (não mostrar o valor). Os portais continuam recebendo este preço.</span>
+            </label>
           </label>
           <label className="flex flex-col gap-1">
             <span className={`${rotulo} flex items-center justify-between gap-2`}>

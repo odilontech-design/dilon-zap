@@ -120,6 +120,7 @@ export const SELECT_PUBLICO = {
   carroceria: true,
   videoUrl: true,
   ocultarKm: true,
+  ocultarPreco: true,
   precoCents: true,
   descricao: true,
   status: true,
@@ -153,6 +154,9 @@ export type LojaPublica = {
   cabecalhoClaro: boolean;
   /** "classico": o jeito dos sites AutoCerto (faixa da cor da loja com endereço e telefones, menu na segunda cor). */
   estiloSite: "moderno" | "classico";
+  /** A loja esconde o preço e/ou a km de todos os carros no site ("Sob consulta" / "Km n/a"). */
+  ocultarPrecoNoSite: boolean;
+  ocultarKmNoSite: boolean;
   /** Segunda cor da marca; sem ela, os destaques usam a cor da loja. */
   corSecundaria: string;
   instagram: string | null;
@@ -207,6 +211,8 @@ export async function lojaPublica(slug: string): Promise<LojaPublica | null> {
     horario: horarioEmLinhas(cfg.horario),
     cabecalhoClaro: cfg.cabecalhoClaro,
     estiloSite: cfg.estiloSite === "classico" ? "classico" : "moderno",
+    ocultarPrecoNoSite: cfg.ocultarPrecoNoSite,
+    ocultarKmNoSite: cfg.ocultarKmNoSite,
     corSecundaria: corValida(cfg.corSecundaria) ?? clarear(corValida(cfg.corPrimaria) ?? COR_PADRAO, 0.62),
     instagram: linkInstagram(cfg.instagram),
     facebook: linkFacebook(cfg.facebook),
@@ -240,9 +246,21 @@ function ondePublico(loja: LojaPublica): Prisma.VeiculoWhereInput {
   };
 }
 
-/** Km escondida pela loja ("Não mostrar no site"): sai do site como se não tivesse sido informada. */
-export function semKmEscondida<T extends { ocultarKm: boolean; kmInformado: boolean; km: number }>(c: T): T {
-  return c.ocultarKm ? { ...c, kmInformado: false, km: 0 } : c;
+/**
+ * O que a loja escolheu não mostrar no site, aplicado na origem de todo dado público (páginas, SEO,
+ * llms.txt e feeds): "Sob consulta" (preço) e "Km n/a" (quilometragem). Vale a regra da loja OU a do carro.
+ *
+ * O valor real sai do objeto de propósito (preço 0, km não informada), para que um lugar esquecido
+ * nunca vaze o número: quem formata precisa olhar `ocultarPreco` e `ocultarKm`. Portais, CRM e
+ * relatórios não passam por aqui e seguem com o valor real.
+ */
+export function aplicarPrivacidade<T extends { ocultarKm: boolean; ocultarPreco: boolean; kmInformado: boolean; km: number; precoCents: number }>(
+  c: T,
+  loja: Pick<LojaPublica, "ocultarPrecoNoSite" | "ocultarKmNoSite">
+): T {
+  const km = loja.ocultarKmNoSite || c.ocultarKm;
+  const preco = loja.ocultarPrecoNoSite || c.ocultarPreco;
+  return { ...c, ...(km ? { ocultarKm: true, kmInformado: false, km: 0 } : {}), ...(preco ? { ocultarPreco: true, precoCents: 0 } : {}) };
 }
 
 export async function carrosDaVitrine(loja: LojaPublica): Promise<CarroPublico[]> {
@@ -253,12 +271,12 @@ export async function carrosDaVitrine(loja: LojaPublica): Promise<CarroPublico[]
     take: 500,
     select: SELECT_PUBLICO,
   });
-  return carros.map(semKmEscondida);
+  return carros.map((c) => aplicarPrivacidade(c, loja));
 }
 
 export async function carroDaVitrine(loja: LojaPublica, id: string): Promise<CarroPublico | null> {
   const c = await prisma.veiculo.findFirst({ where: { ...ondePublico(loja), id }, select: SELECT_PUBLICO });
-  return c ? semKmEscondida(c) : null;
+  return c ? aplicarPrivacidade(c, loja) : null;
 }
 
 /** A foto, se ela é de um carro que a vitrine mostra. */

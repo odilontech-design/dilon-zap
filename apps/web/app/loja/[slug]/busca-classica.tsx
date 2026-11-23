@@ -12,7 +12,7 @@ const FAIXAS = [10_000, 20_000, 30_000, 40_000, 50_000, 60_000, 70_000, 80_000, 
  * com marca, modelo, preço de/até e ano de/até numa linha e o botão "Localizar". Leva à lista
  * (#estoque) já filtrada.
  */
-export function BuscaClassica({ caminho, carros }: { caminho: string; carros: Carro[] }) {
+export function BuscaClassica({ caminho, carros, semPreco = false }: { caminho: string; carros: Carro[]; /** Todos os carros "sob consulta": sem os campos de valor. */ semPreco?: boolean }) {
   const router = useRouter();
   const [f, setF] = useState({ marca: "", modelo: "", min: "", max: "", ano: "", anoAte: "" });
   const marcas = useMemo(() => [...new Set(carros.map((c) => c.marca))].sort((a, b) => a.localeCompare(b, "pt-BR")), [carros]);
@@ -39,7 +39,7 @@ export function BuscaClassica({ caminho, carros }: { caminho: string; carros: Ca
         }}
       >
         <h2 className="mb-3 text-xl font-bold uppercase tracking-wide text-white">Encontre seu veículo</h2>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr_auto]">
+        <div className={`grid grid-cols-2 gap-3 ${semPreco ? "md:grid-cols-[1.4fr_1.4fr_1fr_1fr_auto]" : "md:grid-cols-[1.4fr_1.4fr_1fr_1fr_1fr_1fr_auto]"}`}>
           <select aria-label="Marca" value={f.marca} onChange={set("marca")} className={campo}>
             <option value="">TODOS</option>
             {marcas.map((m) => <option key={m}>{m}</option>)}
@@ -48,14 +48,18 @@ export function BuscaClassica({ caminho, carros }: { caminho: string; carros: Ca
             <option value="">Modelo</option>
             {modelos.map((m) => <option key={m}>{m}</option>)}
           </select>
-          <select aria-label="Preço de" value={f.min} onChange={set("min")} className={campo}>
-            <option value="">Preço de</option>
-            {FAIXAS.map((v) => <option key={v} value={v}>{reais(v)}</option>)}
-          </select>
-          <select aria-label="Preço até" value={f.max} onChange={set("max")} className={campo}>
-            <option value="">Preço até</option>
-            {FAIXAS.map((v) => <option key={v} value={v}>{reais(v)}</option>)}
-          </select>
+          {!semPreco && (
+            <>
+              <select aria-label="Preço de" value={f.min} onChange={set("min")} className={campo}>
+                <option value="">Preço de</option>
+                {FAIXAS.map((v) => <option key={v} value={v}>{reais(v)}</option>)}
+              </select>
+              <select aria-label="Preço até" value={f.max} onChange={set("max")} className={campo}>
+                <option value="">Preço até</option>
+                {FAIXAS.map((v) => <option key={v} value={v}>{reais(v)}</option>)}
+              </select>
+            </>
+          )}
           <select aria-label="Ano de" value={f.ano} onChange={set("ano")} className={campo}>
             <option value="">Ano de</option>
             {anos.map((a) => <option key={a}>{a}</option>)}

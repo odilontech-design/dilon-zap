@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: { slug: string; f
     cambio: c.cambio,
     portas: c.portas,
     opcionais: c.opcionais,
-    precoCents: c.precoCents,
+    precoCents: c.ocultarPreco ? null : c.precoCents,
     descricao: c.descricao,
     status: c.status,
     diasEmEstoque: Math.max(0, Math.floor((agora.getTime() - c.entradaEm.getTime()) / 86_400_000)),

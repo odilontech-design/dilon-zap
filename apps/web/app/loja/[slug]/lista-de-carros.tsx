@@ -67,19 +67,24 @@ export function ListaDeCarros({ slug, carros, whatsapp = null, baseUrl, titulo }
         (!marca || c.marca === marca) &&
         (!modelo || c.modelo === modelo) &&
         (!anoMin || c.anoModelo >= Number(anoMin)) &&
-        (!max || c.precoCents <= max) &&
-        (!min || c.precoCents >= min) &&
+        // Carro "sob consulta" continua aparecendo com filtro de valor (o visitante não vê o preço, mas pode chamar).
+        (!max || c.ocultarPreco || c.precoCents <= max) &&
+        (!min || c.ocultarPreco || c.precoCents >= min) &&
         (!anoMax || c.anoModelo <= Number(anoMax)) &&
         (!cambio || c.cambio === cambio) &&
         (!comb || c.combustivel === comb) &&
         (!termo || semAcento(`${c.marca} ${c.modelo} ${c.versao ?? ""} ${c.anoModelo} ${c.cor ?? ""}`).includes(termo)),
     );
-    if (ordem === "menor") f.sort((a, b) => a.precoCents - b.precoCents);
-    if (ordem === "maior") f.sort((a, b) => b.precoCents - a.precoCents);
+    // "Sob consulta" vai sempre para o fim quando a ordem é por preço.
+    const preco = (c: { ocultarPreco: boolean; precoCents: number }, vazio: number) => (c.ocultarPreco ? vazio : c.precoCents);
+    if (ordem === "menor") f.sort((a, b) => preco(a, Infinity) - preco(b, Infinity) || 0);
+    if (ordem === "maior") f.sort((a, b) => preco(b, -Infinity) - preco(a, -Infinity) || 0);
     if (ordem === "km") f.sort((a, b) => (a.kmInformado ? a.km : Infinity) - (b.kmInformado ? b.km : Infinity)); // sem km informada vai para o fim
     return f;
   }, [carros, busca, marca, modelo, anoMin, precoMax, precoMin, anoMax, cambio, comb, ordem]);
 
+  const todosSemPreco = carros.length > 0 && carros.every((c) => c.ocultarPreco);
+  const todosSemKm = carros.length > 0 && carros.every((c) => c.ocultarKm || !c.kmInformado);
   const filtrando = !!(busca || marca || modelo || anoMin || precoMax || precoMin || anoMax || cambio || comb);
   const limpar = () => {
     setBusca(""); setMarca(""); setModelo(""); setAnoMin(""); setPrecoMax(""); setPrecoMin(""); setAnoMax(""); setCambio(""); setComb("");
@@ -111,17 +116,19 @@ export function ListaDeCarros({ slug, carros, whatsapp = null, baseUrl, titulo }
               {marcas.map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </label>
+          {!todosSemPreco && (
           <label>
-            <span className={rotulo}>Preço até</span>
-            <input aria-label="Preço máximo" value={precoMax} onChange={(e) => setPrecoMax(e.target.value)} placeholder="R$" inputMode="numeric" className={campo} />
-          </label>
+              <span className={rotulo}>Preço até</span>
+              <input aria-label="Preço máximo" value={precoMax} onChange={(e) => setPrecoMax(e.target.value)} placeholder="R$" inputMode="numeric" className={campo} />
+            </label>
+          )}
           <label>
             <span className={rotulo}>Ordenar por</span>
             <select aria-label="Ordenar" value={ordem} onChange={(e) => setOrdem(e.target.value as Ordem)} className={campo}>
               <option value="recentes">Mais recentes</option>
-              <option value="menor">Menor preço</option>
-              <option value="maior">Maior preço</option>
-              <option value="km">Menor km</option>
+              {!todosSemPreco && <option value="menor">Menor preço</option>}
+              {!todosSemPreco && <option value="maior">Maior preço</option>}
+              {!todosSemKm && <option value="km">Menor km</option>}
             </select>
           </label>
           <label className={maisFiltros ? "" : "hidden"}>
