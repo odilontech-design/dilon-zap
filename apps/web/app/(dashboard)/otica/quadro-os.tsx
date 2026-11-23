@@ -13,6 +13,7 @@ import {
   type Etapa,
 } from "@/lib/otica-regras";
 import { erroDaResposta, fetcher, previsaoCurta } from "./formatos";
+import { HistoricoDeOS } from "./historico-os";
 
 type Cartao = {
   id: string;
@@ -45,8 +46,10 @@ export function QuadroOS() {
   // cancelado, inclusive as OS antigas escaneadas do papel, que não cabem no quadro.
   const [visao, setVisao] = useState<"quadro" | "historico">("quadro");
   const emLista = !!buscaAtiva || visao === "historico";
+  // O histórico sem busca tem tela própria (filtros e indicadores) e carrega os próprios dados.
+  const analise = visao === "historico" && !buscaAtiva;
   const { data, error, mutate, isLoading } = useSWR<Cartao[]>(
-    `/api/otica/os${buscaAtiva ? `?q=${encodeURIComponent(buscaAtiva)}` : visao === "historico" ? "?historico=1" : ""}`,
+    analise ? null : `/api/otica/os${buscaAtiva ? `?q=${encodeURIComponent(buscaAtiva)}` : ""}`,
     fetcher,
     { refreshInterval: 30_000 }
   );
@@ -156,13 +159,15 @@ export function QuadroOS() {
       {error && <p className="text-sm text-red-600">{(error as Error).message}</p>}
       {isLoading && <p className="text-sm text-neutral-500">Carregando…</p>}
 
-      {!isLoading && !error && ordens.length === 0 && (
+      {!analise && !isLoading && !error && ordens.length === 0 && (
         <div className="rounded-lg border border-dashed border-neutral-300 p-8 text-center text-sm text-neutral-500">
           {buscaAtiva ? "Nenhuma OS encontrada." : visao === "historico" ? "Nenhuma OS entregue ou cancelada ainda." : "Nenhuma OS em andamento. Clique em Nova OS para registrar a primeira venda."}
         </div>
       )}
 
-      {ordens.length > 0 && emLista && <ListaDeOS ordens={ordens} fuso={opcoes?.timezone} limitado={ordens.length >= (buscaAtiva ? 50 : 300)} busca={!!buscaAtiva} />}
+      {analise && <HistoricoDeOS fuso={opcoes?.timezone} />}
+
+      {!analise && ordens.length > 0 && emLista && <ListaDeOS ordens={ordens} fuso={opcoes?.timezone} limitado={ordens.length >= (buscaAtiva ? 50 : 300)} busca={!!buscaAtiva} />}
 
       {ordens.length > 0 && !emLista && (
         <div className="overflow-x-auto pb-2">
