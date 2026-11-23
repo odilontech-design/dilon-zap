@@ -20,7 +20,7 @@ function Icone({ nome }: { nome: "financiamento" | "troca" | "fotos" }) {
  * comum de quem chega) e três atalhos para o que mais gera contato. Fundo escuro
  * da marca (ou o banner da loja), com um brilho na cor principal.
  */
-export function Hero({ loja, menorPreco, cambios, total, compacto = false }: { loja: LojaPublica; menorPreco: number; cambios: string[]; total: number; /** Com banners no topo: abertura mais baixa, só a busca e os atalhos. */ compacto?: boolean }) {
+export function Hero({ loja, menorPreco, cambios, total, compacto = false, semPreco = false }: { loja: LojaPublica; menorPreco: number; cambios: string[]; total: number; /** Todos os carros "sob consulta": a busca não oferece filtro de valor. */ semPreco?: boolean; /** Com banners no topo: abertura mais baixa, só a busca e os atalhos. */ compacto?: boolean }) {
   const cidade = cidadeDaLoja(loja.endereco);
   const faixas = FAIXAS.filter((f) => f * 100 >= menorPreco).slice(0, 7);
   const atalhos = [
@@ -53,7 +53,7 @@ export function Hero({ loja, menorPreco, cambios, total, compacto = false }: { l
           </h1>
           {loja.sobre && !compacto && <p className="mt-4 max-w-2xl whitespace-pre-line text-sm text-neutral-200 md:text-base">{loja.sobre}</p>}
         </div>
-        <BuscaRapida caminho={caminhoDaLoja(loja.slug, loja.dominio)} faixas={faixas} cambios={cambios} />
+        <BuscaRapida caminho={caminhoDaLoja(loja.slug, loja.dominio)} faixas={semPreco ? [] : faixas} cambios={cambios} />
         <ul className="grid gap-3 md:grid-cols-3">
           {atalhos.map((a) => (
             <li key={a.titulo}>

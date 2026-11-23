@@ -41,7 +41,7 @@ async function lojasAtivas() {
   if (!liberadas.length) return [];
   return prisma.vendedorIaConfig.findMany({
     where: { tenantId: { in: liberadas.map((l) => l.tenantId) }, ativo: true, ativadoEm: { not: null } },
-    include: { tenant: { select: { name: true, slug: true, timezone: true, veiculosConfig: { select: { nomeLoja: true, vitrineAtiva: true, dominio: true } } } } },
+    include: { tenant: { select: { name: true, slug: true, timezone: true, veiculosConfig: { select: { nomeLoja: true, vitrineAtiva: true, dominio: true, ocultarPrecoNoSite: true, ocultarKmNoSite: true } } } } },
   });
 }
 
@@ -265,7 +265,10 @@ async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise
     }
   }
   if (typeof e.marca === "string" && e.marca.trim()) filtros.push({ marca: { contains: e.marca.trim(), mode: "insensitive" } });
-  if (typeof e.preco_max_reais === "number" && e.preco_max_reais > 0) filtros.push({ precoCents: { lte: Math.round(e.preco_max_reais * 100) } });
+  // Carro "sob consulta" não entra no filtro de preço (listar só os que cabem em X revelaria o valor).
+  const lojaSemPreco = ctx.loja.tenant.veiculosConfig?.ocultarPrecoNoSite === true;
+  const lojaSemKm = ctx.loja.tenant.veiculosConfig?.ocultarKmNoSite === true;
+  if (typeof e.preco_max_reais === "number" && e.preco_max_reais > 0 && !lojaSemPreco) filtros.push({ OR: [{ ocultarPreco: true }, { precoCents: { lte: Math.round(e.preco_max_reais * 100) } }] });
   if (typeof e.ano_min === "number") filtros.push({ anoModelo: { gte: e.ano_min } });
   if (e.cambio === "manual") filtros.push({ cambio: { contains: "manual", mode: "insensitive" } });
   if (e.cambio === "automatico") filtros.push({ NOT: { cambio: { contains: "manual", mode: "insensitive" } }, cambio: { not: null } });
@@ -278,14 +281,15 @@ async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise
     take: limite,
     // Só o que pode ir para o cliente: nada de custo, piso, placa ou observação interna.
     select: {
-      id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, km: true, kmInformado: true,
+      id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, km: true, kmInformado: true, ocultarKm: true, ocultarPreco: true,
       precoCents: true, cambio: true, combustivel: true, cor: true, opcionais: true, status: true, _count: { select: { fotos: true } },
     },
   });
   if (!carros.length) return { texto: "Nenhum carro no estoque com esses filtros. Tente uma busca mais ampla ou diga ao cliente que no momento não tem e ofereça avisar quando chegar." };
   const linhas = carros.map(
     (c) =>
-      `- id ${c.id}: ${nomeDoVeiculo(c)}, ${c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : "km não informada"}, ${reais(c.precoCents)}` +
+      `- id ${c.id}: ${nomeDoVeiculo(c)}, ${lojaSemKm || c.ocultarKm ? "km n/a" : c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : "km não informada"}, ` +
+      `${lojaSemPreco || c.ocultarPreco ? "VALOR SOB CONSULTA (não informe nem estime o valor: diga que o vendedor passa o valor e as condições)" : reais(c.precoCents)}` +
       `${c.cambio ? `, ${c.cambio}` : ""}${c.combustivel ? `, ${c.combustivel}` : ""}${c.cor ? `, ${c.cor}` : ""}` +
       `${c.opcionais.length ? `; opcionais: ${c.opcionais.slice(0, 8).join(", ")}` : ""}; ${c._count.fotos} foto(s)` +
       `${c.status === "RESERVADO" ? "; RESERVADO para outro cliente" : ""}`
@@ -308,7 +312,7 @@ async function enviarCarro(e: Record<string, unknown>, ctx: Contexto): Promise<R
   const dominio = ctx.loja.tenant.veiculosConfig?.dominio;
   const site = dominio ? `https://${dominio}` : ctx.deps.urlDoSite?.replace(/\/+$/, "");
   const link = site && ctx.loja.tenant.veiculosConfig?.vitrineAtiva && v.naVitrine ? `${site}/loja/${ctx.loja.tenant.slug}/${v.id}` : null;
-  const ficha = fichaParaCliente(v) + (link ? `\n\n${link}` : "");
+  const ficha = fichaParaCliente({ ...v, precoOculto: ctx.loja.tenant.veiculosConfig?.ocultarPrecoNoSite === true || v.ocultarPreco, kmOculto: ctx.loja.tenant.veiculosConfig?.ocultarKmNoSite === true || v.ocultarKm }) + (link ? `\n\n${link}` : "");
   const fotos = qtd > 0 ? v.fotos.slice(0, qtd) : [];
   await enfileirar(
     ctx.conversa,

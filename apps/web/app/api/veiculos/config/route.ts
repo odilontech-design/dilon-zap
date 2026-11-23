@@ -86,6 +86,8 @@ export async function PUT(req: Request) {
     ...(d.cabecalhoClaro !== undefined ? { cabecalhoClaro: d.cabecalhoClaro } : {}),
     ...(d.estiloSite !== undefined ? { estiloSite: d.estiloSite } : {}),
     ...(d.observacaoPadrao !== undefined ? { observacaoPadrao: d.observacaoPadrao || null } : {}),
+    ...(d.ocultarPrecoNoSite !== undefined ? { ocultarPrecoNoSite: d.ocultarPrecoNoSite } : {}),
+    ...(d.ocultarKmNoSite !== undefined ? { ocultarKmNoSite: d.ocultarKmNoSite } : {}),
     ...(d.corSecundaria !== undefined ? { corSecundaria: corValida(d.corSecundaria) } : {}),
     ...opcional("horario", d.horario || null),
     // Guarda o que a loja digitou (o link é remontado na vitrine, nunca repassado como veio).

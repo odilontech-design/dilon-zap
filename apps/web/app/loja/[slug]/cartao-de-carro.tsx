@@ -3,7 +3,7 @@
 import Link from "next/link";
 import type { CarroPublico } from "@/lib/vitrine";
 import { FotoSemCortes } from "@/components/foto-sem-cortes";
-import { brl, fotoSrcSet, fotoUrl, IconeWhatsapp, whatsappLink } from "./comum";
+import { fotoSrcSet, fotoUrl, IconeWhatsapp, kmTexto, precoTexto, whatsappLink } from "./comum";
 import { registrarContato } from "./rastreio";
 
 /**
@@ -15,7 +15,7 @@ export function CartaoDeCarro({ slug, c, whatsapp, baseUrl, novidade = false }: 
   const href = `/loja/${slug}/${c.id}`;
   const nome = `${c.marca} ${c.modelo} ${c.versao ?? ""}`.replace(/\s+/g, " ").trim();
   const zap = whatsapp ? whatsappLink(whatsapp, `Olá! Tenho interesse no ${nome} ${c.anoFabricacao}/${c.anoModelo} que vi no site: ${baseUrl}/${c.id}`) : null;
-  const chips = [`${c.anoFabricacao}/${c.anoModelo}`, c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel].filter(Boolean) as string[];
+  const chips = [`${c.anoFabricacao}/${c.anoModelo}`, kmTexto(c), c.cambio, c.combustivel].filter(Boolean) as string[];
   return (
     <article className="group relative flex flex-col overflow-hidden rounded-2xl border border-neutral-200 bg-surface shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-xl">
       <div className="foto-moldura relative aspect-square overflow-hidden bg-neutral-100">
@@ -57,7 +57,7 @@ export function CartaoDeCarro({ slug, c, whatsapp, baseUrl, novidade = false }: 
         </div>
         <div className="mt-auto flex items-end justify-between gap-2 pt-3">
           <div>
-            <p className="text-2xl font-extrabold tracking-tight">{brl(c.precoCents)}</p>
+            <p className={`font-extrabold tracking-tight ${c.ocultarPreco ? "text-xl" : "text-2xl"}`}>{precoTexto(c)}</p>
             <p className="text-xs font-medium opacity-0 transition group-hover:opacity-100" style={{ color: "var(--loja)" }}>
               Ver detalhes →
             </p>

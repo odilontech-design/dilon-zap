@@ -30,6 +30,7 @@ export function BuscaRapida({ caminho, faixas, cambios }: { caminho: string; fai
           <span className="mb-1 block text-xs font-medium text-neutral-300">Marca ou modelo</span>
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ex.: Honda Civic" className={campo} />
         </label>
+        {faixas.length > 0 ? (
         <label>
           <span className="mb-1 block text-xs font-medium text-neutral-300">Valor máximo</span>
           <select value={max} onChange={(e) => setMax(e.target.value)} className={campo}>
@@ -41,6 +42,9 @@ export function BuscaRapida({ caminho, faixas, cambios }: { caminho: string; fai
             ))}
           </select>
         </label>
+        ) : (
+          <span className="hidden md:block" />
+        )}
         {cambios.length > 1 ? (
           <label>
             <span className="mb-1 block text-xs font-medium text-neutral-300">Câmbio</span>

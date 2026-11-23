@@ -25,7 +25,7 @@ export default async function FinanciamentoPage({ params, searchParams }: { para
   const loja = await lojaPublica(params.slug);
   if (!loja) notFound();
   const carros = await carrosDaVitrine(loja);
-  const lista = carros.map((c) => ({ id: c.id, nome: `${nomeDoVeiculo(c)} · ${(c.precoCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}` }));
+  const lista = carros.map((c) => ({ id: c.id, nome: c.ocultarPreco ? nomeDoVeiculo(c) : `${nomeDoVeiculo(c)} · ${(c.precoCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}` }));
   const ficha = await fichaDaLoja(loja.tenantId);
   const inicial = lista.some((c) => c.id === searchParams.carro) ? (searchParams.carro as string) : "";
   return (

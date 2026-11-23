@@ -8,7 +8,7 @@ import { registrarContato } from "./rastreio";
 const CHAVE = "zap-oferta-vista";
 
 /** A oferta que abre ao entrar no site: uma vez por visita (some ao fechar, com Esc ou clicando fora). */
-export function OfertaAoEntrar({ slug, carro, whatsapp }: { slug: string; carro: { id: string; nome: string; precoCents: number; fotoId: string | null }; whatsapp: string | null }) {
+export function OfertaAoEntrar({ slug, carro, whatsapp }: { slug: string; carro: { id: string; nome: string; precoCents: number; precoOculto?: boolean; fotoId: string | null }; whatsapp: string | null }) {
   const [aberta, setAberta] = useState(false);
   useEffect(() => {
     try {
@@ -47,7 +47,7 @@ export function OfertaAoEntrar({ slug, carro, whatsapp }: { slug: string; carro:
         </div>
         <div className="flex flex-col gap-3 p-5">
           <p className="text-lg font-bold leading-tight">{carro.nome}</p>
-          <p className="text-3xl font-extrabold tracking-tight">{brl(carro.precoCents)}</p>
+          <p className="text-3xl font-extrabold tracking-tight">{carro.precoOculto ? "Sob consulta" : brl(carro.precoCents)}</p>
           <div className="flex flex-col gap-2 sm:flex-row">
             <Link href={`/loja/${slug}/${carro.id}`} onClick={fechar} className="flex-1 rounded-xl px-4 py-3 text-center text-sm font-bold" style={{ background: "var(--loja)", color: "var(--loja-texto)" }}>Ver a oferta</Link>
             {whatsapp && (

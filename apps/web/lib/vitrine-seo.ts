@@ -25,7 +25,7 @@ const NOME_DA_PAGINA: Record<(typeof PAGINAS)[number], string> = {
 
 /** "Honda Civic EXL 2017/2018 por R$ 90.000 | Sales Automóveis": o que aparece como título no Google. */
 export function tituloDoCarro(c: CarroPublico, loja: Pick<LojaPublica, "nome">): string {
-  return `${nomeDoVeiculo(c)} por ${brl(c.precoCents)} | ${loja.nome}`.slice(0, 110);
+  return `${nomeDoVeiculo(c)}${c.ocultarPreco ? "" : ` por ${brl(c.precoCents)}`} | ${loja.nome}`.slice(0, 110);
 }
 
 /** Descrição de ~155 caracteres com o que o comprador procura: ano, km, câmbio, combustível, cor e a chamada. */
@@ -37,7 +37,7 @@ export function descricaoDoCarro(c: CarroPublico, loja: Pick<LojaPublica, "nome"
     c.combustivel,
     c.cor,
   ].filter(Boolean);
-  return `${partes.join(", ")}. ${brl(c.precoCents)}. Veja fotos, ficha completa e simule o financiamento na ${loja.nome}.`.slice(0, 200);
+  return `${partes.join(", ")}.${c.ocultarPreco ? "" : ` ${brl(c.precoCents)}.`} Veja fotos, ficha completa e simule o financiamento na ${loja.nome}.`.slice(0, 200);
 }
 
 function enderecoDasPaginas(loja: LojaPublica) {
@@ -93,7 +93,7 @@ export function llmsTxtDaLoja(loja: LojaPublica, carros: CarroPublico[]): string
   if (grupos.length) linhas.push("## Por marca", ...grupos.map((g) => `- [${g.marca} (${g.n})](${linkDaMarca(loja, g.marcaSlug)})`), "");
   linhas.push(`## Estoque (${carros.length} veículos)`);
   for (const c of carros.slice(0, 300)) {
-    const detalhe = [brl(c.precoCents), c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel, c.cor, c.status === "RESERVADO" ? "reservado" : null].filter(Boolean).join(", ");
+    const detalhe = [c.ocultarPreco ? "valor sob consulta" : brl(c.precoCents), c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : null, c.cambio, c.combustivel, c.cor, c.status === "RESERVADO" ? "reservado" : null].filter(Boolean).join(", ");
     linhas.push(`- [${nomeDoVeiculo(c)}](${linkDoCarro(loja.slug, c.id, loja.dominio)}): ${detalhe}`);
   }
   return `${linhas.join("\n")}\n`;
@@ -160,15 +160,18 @@ export function carrosDoGrupo<T extends Pick<CarroPublico, "marca" | "modelo">>(
 /** Título/descrição/abertura da página de uma marca ou modelo. */
 export function textosDoGrupo(loja: Pick<LojaPublica, "nome" | "endereco">, nome: string, carros: CarroPublico[]) {
   const cidade = cidadeDaLoja(loja.endereco);
-  const menor = Math.min(...carros.map((c) => c.precoCents));
+  // O "a partir de" só conta os carros com preço à mostra; se nenhum mostra, a frase some.
+  const comPreco = carros.filter((c) => !c.ocultarPreco && c.precoCents > 0);
+  const menor = comPreco.length ? Math.min(...comPreco.map((c) => c.precoCents)) : null;
+  const aPartirDe = menor === null ? "" : `, a partir de ${brl(menor)}`;
   const anos = carros.map((c) => c.anoModelo);
   const faixaAnos = Math.min(...anos) === Math.max(...anos) ? `${anos[0]}` : `${Math.min(...anos)} a ${Math.max(...anos)}`;
   const qtd = carros.length === 1 ? "1 unidade" : `${carros.length} unidades`;
   return {
     titulo: `${nome} usado${cidade ? ` em ${cidade}` : ""} | ${loja.nome}`.slice(0, 110),
     h1: `${nome} usado${cidade ? ` em ${cidade}` : ""}`,
-    descricao: `${nome} usado${cidade ? ` em ${cidade}` : ""}: ${qtd} na ${loja.nome}, anos ${faixaAnos}, a partir de ${brl(menor)}. Veja fotos, ficha completa e simule o financiamento.`.slice(0, 200),
-    abertura: `${qtd} de ${nome} à venda${cidade ? ` em ${cidade}` : ""}, a partir de ${brl(menor)}. Todos com fotos e ficha completa; fale com a ${loja.nome} pelo WhatsApp ou simule o financiamento.`,
+    descricao: `${nome} usado${cidade ? ` em ${cidade}` : ""}: ${qtd} na ${loja.nome}, anos ${faixaAnos}${aPartirDe}. Veja fotos, ficha completa e simule o financiamento.`.slice(0, 200),
+    abertura: `${qtd} de ${nome} à venda${cidade ? ` em ${cidade}` : ""}${aPartirDe}. Todos com fotos e ficha completa; fale com a ${loja.nome} pelo WhatsApp ou simule o financiamento.`,
   };
 }
 

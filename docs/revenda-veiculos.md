@@ -786,3 +786,18 @@ Padroniza a implantação de uma revenda nova (Sprint 1 do plano de evolução d
 - **`GET /api/health`** (público, sem dado de empresa): versão e se o banco responde (503 se não). Serve para monitor de disponibilidade e para conferir o deploy.
 
 Sem mudança de banco. Teste: `apps/web/lib/primeiros-passos.test-manual.ts` (19 checagens, incluindo isolamento entre empresas e o recurso de Vendedor IA).
+
+## Preço "Sob consulta" e km "n/a" no site (v1.94.0)
+
+Para lojas que preferem negociar o valor e a km no atendimento (pedido da Sales). Duas camadas, somadas:
+
+- **Da loja inteira** (Aparência e domínio > Preço e quilometragem no site): "Mostrar Sob consulta no lugar do preço" e "Mostrar Km n/a no lugar da quilometragem", para todos os carros (`VeiculosConfig.ocultarPrecoNoSite` e `ocultarKmNoSite`).
+- **De um carro** (ficha ou entrada do carro): "Sob consulta no site" ao lado do preço (`Veiculo.ocultarPreco`) e "Km n/a no site" ao lado da km (`Veiculo.ocultarKm`, que já existia).
+
+**O que muda:** só o que o visitante vê. Preço e km somem do cartão, da página do carro, do popup de oferta, do título e da descrição que o Google mostra, dos dados estruturados (sem preço não há oferta declarada), do `llms.txt`, das páginas de marca ("a partir de" só conta os carros com preço à mostra) e dos feeds públicos (XML e JSON trazem `preco: null` e a marca de sob consulta). Sem carro com preço, o site esconde os filtros de valor; carro sob consulta continua aparecendo quando alguém filtra por valor e vai para o fim ao ordenar por preço.
+
+**O que NÃO muda:** o valor real continua no banco e vai para os **portais** (Webmotors, MobiAuto, NaPista e OLX exigem preço e km), CRM, relatórios e a ficha interna. O **catálogo do Facebook e Instagram** não aceita item sem preço, então carro sob consulta fica fora dele.
+
+**Vendedor IA e WhatsApp:** a ficha que a IA envia diz "Valor sob consulta" e "Km n/a", e a ferramenta de estoque avisa a IA para não informar nem estimar o valor (o filtro de preço da IA também não lista carro sob consulta, para não revelar o valor por eliminação). O botão "Enviar carro" do Inbox continua mandando a ficha completa, porque é uma decisão da pessoa da equipe.
+
+A regra é aplicada na origem de todo dado público (`aplicarPrivacidade`, em `lib/vitrine.ts`): o preço sai do objeto (vira 0), então um lugar esquecido não vaza o número. Campos novos (só acréscimo): `Veiculo.ocultarPreco`, `VeiculosConfig.ocultarPrecoNoSite`, `VeiculosConfig.ocultarKmNoSite`. Teste: `apps/web/lib/vitrine-privacidade.test-manual.ts`.

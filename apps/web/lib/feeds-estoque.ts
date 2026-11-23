@@ -21,7 +21,8 @@ export type CarroDoFeed = {
   cambio: string | null;
   portas: number | null;
   opcionais: string[];
-  precoCents: number;
+  /** Nulo quando a loja escolheu "sob consulta": o feed público não revela o valor. */
+  precoCents: number | null;
   descricao: string | null;
   status: string;
   diasEmEstoque: number;
@@ -62,7 +63,7 @@ function descricao(c: CarroDoFeed): string {
   return partes.join(" ") || titulo(c);
 }
 
-const reais = (cents: number) => (cents / 100).toFixed(2);
+const reais = (cents: number | null) => (cents == null ? "" : (cents / 100).toFixed(2));
 
 /**
  * Catálogo de veículos da Meta (CSV). Colunas do modelo de "anúncios de
@@ -70,7 +71,9 @@ const reais = (cents: number) => (cents / 100).toFixed(2);
  * ou com o valor genérico aceito, e o Gerenciador de Comércio aponta se
  * faltar algo para a conta dela.
  */
-export function feedMetaCsv(loja: LojaDoFeed, carros: CarroDoFeed[]): string {
+export function feedMetaCsv(loja: LojaDoFeed, todos: CarroDoFeed[]): string {
+  // O catálogo da Meta exige preço em todo item: carro "sob consulta" não entra nele.
+  const carros = todos.filter((c) => c.precoCents != null);
   const maxFotos = Math.min(Math.max(...carros.map((c) => c.fotos.length), 1), 20);
   const cabecalho = [
     "vehicle_id", "title", "description", "url", "make", "model", "year", "trim",
@@ -100,7 +103,7 @@ export function feedXml(loja: LojaDoFeed, carros: CarroDoFeed[], geradoEm: Date)
     (c) =>
       `  <veiculo>${tag("id", c.id)}${tag("marca", c.marca)}${tag("modelo", c.modelo)}${tag("versao", c.versao)}` +
       `${tag("ano_fabricacao", c.anoFabricacao)}${tag("ano_modelo", c.anoModelo)}${tag("km", c.km)}${tag("cor", c.cor)}` +
-      `${tag("combustivel", c.combustivel)}${tag("cambio", c.cambio)}${tag("portas", c.portas)}${tag("preco", reais(c.precoCents))}` +
+      `${tag("combustivel", c.combustivel)}${tag("cambio", c.cambio)}${tag("portas", c.portas)}${tag("preco", reais(c.precoCents))}${c.precoCents == null ? tag("preco_sob_consulta", "true") : ""}` +
       `${tag("situacao", c.status === "RESERVADO" ? "reservado" : "disponivel")}${tag("descricao", c.descricao)}${tag("url", c.url)}` +
       `<opcionais>${c.opcionais.map((o) => tag("opcional", o)).join("")}</opcionais>` +
       `<fotos>${c.fotos.map((f) => tag("foto", f)).join("")}</fotos></veiculo>`
@@ -126,7 +129,8 @@ export function feedJson(loja: LojaDoFeed, carros: CarroDoFeed[], geradoEm: Date
       combustivel: c.combustivel,
       cambio: c.cambio,
       portas: c.portas,
-      preco: Number(reais(c.precoCents)),
+      preco: c.precoCents == null ? null : Number(reais(c.precoCents)),
+      ...(c.precoCents == null ? { precoSobConsulta: true } : {}),
       situacao: c.status === "RESERVADO" ? "reservado" : "disponivel",
       opcionais: c.opcionais,
       descricao: c.descricao,
