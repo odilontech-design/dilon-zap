@@ -805,3 +805,23 @@ A regra é aplicada na origem de todo dado público (`aplicarPrivacidade`, em `l
 ### Onde mudar (v1.94.1)
 
 A opção da loja inteira ganhou uma aba própria: **Veículos > Meu site > Preço e km no site** (salva na hora, sem passar pela tela de configurações). A seção da tela "Aparência e domínio" continua existindo e grava os mesmos campos. Para esconder só alguns carros: ficha do carro > editar dados > "Sob consulta no site" ao lado do preço e/ou "Km n/a no site" ao lado da quilometragem.
+
+## Painel de leads (v1.99.0)
+
+**Veículos > Leads** (só a gestão): o que o AutoCerto chama de Painel, mas numa tela só e respondendo à pergunta "quem eu preciso
+atender agora?". Código: `apps/web/lib/painel-leads.ts`, rota `/api/veiculos/leads/painel?dias=7|30|90`, tela
+`veiculos/leads/painel-de-leads.tsx`, teste `lib/painel-leads.test-manual.ts`.
+
+- **Precisa de atenção:** leads dos portais sem resposta nos últimos 30 dias (qualquer que seja o período escolhido), o mais novo primeiro
+  (ainda está quente), com "Abrir conversa" (leva ao Inbox) e "Já respondi".
+- **Cartões:** leads recebidos (e variação sobre o período anterior), sem resposta agora, tempo típico da 1ª resposta (mediana) e % respondido em
+  até 15 min. Usa a mediana porque a média engana: um lead de 4 dias estraga dez respondidos em 5 minutos.
+- **Tempo de resposta:** faixas do AutoCerto (até 15 min excelente, até 30 atenção, mais que isso crítico). Sem resposta há mais de 30 min conta
+  como crítico; antes disso é "aguardando".
+- **Origem dos leads** (portal, %, tempo típico, vendas ganhas), **Vendedores** (leads, sem resposta, tempo típico) e leads por dia (14 dias).
+- **Como conta "respondeu":** não depende de apertar botão. Vale a primeira mensagem de uma **pessoa** da loja (Inbox ou celular) ou do
+  **Vendedor IA** no WhatsApp depois que o lead chegou (a conversa vem da negociação do lead), ou o "Já respondi" (ligação). Mensagem automática
+  (menu, saudação) e mensagem que falhou no envio não contam; mensagem de antes do lead também não.
+- **Limites:** lead sem negociação (sem telefone) só conta como respondido pelo "Já respondi". Lê até 5.000 leads da janela. Só leitura: nada
+  aqui manda mensagem. Sem mudança de schema.
+- Próximo passo planejado: resposta imediata ao lead do portal (hoje o lead vira negociação e tarefa de chamar, mas ninguém responde sozinho).
