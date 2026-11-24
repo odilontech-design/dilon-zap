@@ -71,7 +71,8 @@ export const FERRAMENTAS: Anthropic.Beta.BetaTool[] = [
         marca: { type: ["string", "null"], description: "Marca, ex.: 'Volkswagen'. Null para não filtrar." },
         preco_max_reais: { type: ["number", "null"], description: "Preço máximo em reais. Null para não filtrar." },
         ano_min: { type: ["integer", "null"], description: "Ano do modelo mínimo. Null para não filtrar." },
-        cambio: { type: ["string", "null"], enum: ["manual", "automatico", null], description: "Câmbio. Null para qualquer um." },
+        // anyOf, e não type ["string","null"] com enum: a API recusa essa combinação no modo estrito (erro 400).
+        cambio: { anyOf: [{ type: "string", enum: ["manual", "automatico"] }, { type: "null" }], description: "Câmbio. Null para qualquer um." },
         limite: { type: ["integer", "null"], description: "Quantos carros devolver, de 1 a 10. Null = 6." },
       },
       required: ["texto", "marca", "preco_max_reais", "ano_min", "cambio", "limite"],
