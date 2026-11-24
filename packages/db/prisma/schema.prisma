@@ -4070,6 +4070,21 @@ model VendedorIaConversa {
   @@index([tenantId, status])
 }
 
+/// A saúde da conexão com a Anthropic, uma linha só (id "global"). O worker do Vendedor IA é o único que tem a chave:
+/// ele confere a conexão de tempos em tempos e quando o Super Admin pede ("Testar agora"), e a tela só lê esta linha.
+model VendedorIaSaude {
+  id                String    @id @default("global")
+  chaveConfigurada  Boolean   @default(false)
+  /// Todos os modelos testados responderam.
+  ok                Boolean   @default(false)
+  /// [{ modelo, ok, ms, erro }], um por modelo testado.
+  resultados        Json?
+  verificadoEm      DateTime?
+  /// O Super Admin pediu um teste agora (o worker atende em poucos segundos).
+  testeSolicitadoEm DateTime?
+  updatedAt         DateTime  @updatedAt
+}
+
 /// Uma chamada à API: os tokens e o custo. É daqui que sai o custo real por lead.
 model VendedorIaUso {
   id               String   @id @default(cuid())

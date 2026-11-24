@@ -29,6 +29,19 @@ por até 1.000 leads, preço de novembro de 2026).
   - **Transfere** depois de 20 respostas na mesma conversa.
   - **Não responde** mensagem com mais de 15 min, por exemplo depois de o
     processo ficar fora do ar.
+- **Se a API falhar** (v1.98.0): o SDK já tenta 3 vezes (2 retentativas, com espera).
+  Se continuar falhando, a conversa passa para a equipe (Pendentes, no setor de
+  transferência), com o motivo "a IA ficou indisponível", e o cliente recebe um aviso
+  ("vou passar você para um dos nossos vendedores"). Antes, a conversa ficava marcada
+  como atendida e o cliente sem resposta, sem ninguém saber. Não repete o aviso.
+- **Saúde da conexão** (v1.98.0, `packages/vendedor-ia/src/saude.ts`, tabela nova
+  `VendedorIaSaude`): só o worker tem a chave, então é ele quem confere. A cada 15 min
+  (e quando o Super Admin clica em **Testar agora**, no cartão "Conexão do Vendedor IA
+  com a Anthropic" da ficha da empresa) faz uma chamada mínima (16 tokens) com o modelo
+  mais barato (`claude-haiku-5-5`) e com cada modelo das lojas ligadas. A tela mostra
+  Conectada / Com problema / Sem chave, o tempo de resposta de cada modelo e a causa em
+  português (chave recusada, saldo ou limite, Anthropic fora do ar). Custo: frações de
+  centavo por conferência. Teste: `falha-e-saude.test-manual.ts`.
 - **Faixa no Inbox** (v1.97.0, `components/agente-de-carros.tsx`): no topo de cada
   conversa mostra quem atende (IA atendendo com N respostas, IA parada por fulano,
   ou "Com a equipe" com o motivo e o resumo que a IA deixou). Botões:
@@ -141,6 +154,10 @@ Local: `npm run dev:vendedor-ia` (lê o `.env` da raiz). Testes:
 
 ## Antes de ligar para um cliente
 
+0. Colocar a `ANTHROPIC_API_KEY` no `.env` do servidor (de preferência numa chave
+   própria da Dilon, em um workspace da Anthropic com **limite de gasto mensal**),
+   reiniciar o `vendedor-ia-worker` e clicar em **Testar agora** na ficha da empresa:
+   tem de aparecer "Conectada" com o modelo da loja.
 1. Com a chave configurada, fazer um teste com um número de teste e um estoque
    pequeno:
    - "ainda tem o X?";
