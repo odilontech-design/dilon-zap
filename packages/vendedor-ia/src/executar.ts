@@ -151,9 +151,30 @@ export async function atenderConversa(conversationId: string, loja: Loja, deps: 
     update: { respondidoAte: ultimaDoCliente },
   });
 
-  await responder({ conversa, loja, historico, deps, agora });
+  try {
+    await responder({ conversa, loja, historico, deps, agora });
+  } catch (e) {
+    // A API falhou depois das tentativas do próprio SDK (2 retentativas com espera). O cliente não pode ficar sem
+    // resposta nem sem ninguém sabendo: passa para um vendedor, com o aviso ao cliente.
+    console.error(`[vendedor-ia] conversa ${conversationId}: a API falhou, passando para um vendedor:`, e instanceof Error ? e.message : e);
+    await passarPorFalha(conversa, loja, deps, agora);
+    return false;
+  }
   await prisma.vendedorIaConversa.update({ where: { conversationId }, data: { turnos: { increment: 1 } } });
   return true;
+}
+
+export const MOTIVO_DA_FALHA = "a IA ficou indisponível";
+
+/** A IA não conseguiu responder: a conversa vai para a equipe (Pendentes) e o cliente é avisado. Nunca lança. */
+async function passarPorFalha(conversa: Conversa, loja: Loja, deps: Dependencias, agora: Date) {
+  try {
+    await transferir(conversa, loja, MOTIVO_DA_FALHA, null, agora);
+    await enfileirar(conversa, [{ body: "Vou passar você para um dos nossos vendedores, que continua o atendimento por aqui. Só um instante!" }]);
+    await deps.acordarFila?.(conversa.tenantId);
+  } catch (e) {
+    console.error(`[vendedor-ia] conversa ${conversa.id}: nem a passagem para a equipe funcionou:`, e instanceof Error ? e.message : e);
+  }
 }
 
 type Conversa = { id: string; tenantId: string; sessionId: string; setorId: string | null };

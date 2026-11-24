@@ -27,7 +27,7 @@ const numero = (nome: string, padrao: number) => {
 
 async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-  const { ciclo, cicloDoVendedor } = await import("@dilon-zap/vendedor-ia");
+  const { ciclo, cicloDoVendedor, precisaVerificar, verificarConexao } = await import("@dilon-zap/vendedor-ia");
   const { chaveAnthropicDoServidor } = await import("@dilon-zap/sdr-core");
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
 
@@ -67,6 +67,15 @@ async function main() {
   console.log(`[vendedor-ia] no ar, ciclo a cada ${intervaloMs} ms`);
 
   while (!parando) {
+    // Saúde da conexão com a Anthropic (a cada 15 min e quando o Super Admin pede): é o que a tela do Super Admin mostra.
+    try {
+      if (await precisaVerificar()) {
+        const v = await verificarConexao(apiKey ? cliente : null);
+        console.log(`[vendedor-ia] conexão com a Anthropic: ${v.ok ? "ok" : "com problema"}${apiKey ? "" : " (sem chave)"}`);
+      }
+    } catch (e) {
+      console.error("[vendedor-ia] conferência da conexão falhou:", e instanceof Error ? e.message : e);
+    }
     if (apiKey) {
       try {
         const r = await ciclo({ cliente, acordarFila, urlDoSite: process.env.NEXTAUTH_URL ?? null });

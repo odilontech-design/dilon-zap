@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import useSWR from "swr";
 import { PACOTES_VENDEDOR_IA, PLANOS_VEICULOS, type PlanoVeiculos } from "@/lib/veiculos-planos";
+import { ConexaoIa } from "./conexao-ia";
 
 /**
  * Plano da revenda de veículos e pacote do Vendedor IA na ficha da empresa.
@@ -56,6 +57,8 @@ export function RevendaPanel({ tenantId }: { tenantId: string }) {
   const pacote = PACOTES_VENDEDOR_IA.find((x) => String(x.leads) === leads);
   const total = (p?.mensalCents ?? 0) + (data.temVendedorIa ? pacote?.mensalCents ?? 0 : 0);
   return (
+    <>
+    {data.temVendedorIa && <ConexaoIa />}
     <section className="mb-8 rounded-lg border border-neutral-800 p-4">
       <h2 className="mb-1 text-sm font-semibold text-neutral-100">Revenda de veículos</h2>
       <p className="mb-3 text-xs text-neutral-400">
@@ -99,5 +102,6 @@ export function RevendaPanel({ tenantId }: { tenantId: string }) {
         {aviso && <span className="text-xs text-neutral-400">{aviso}</span>}
       </div>
     </section>
+    </>
   );
 }
