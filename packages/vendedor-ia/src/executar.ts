@@ -325,8 +325,8 @@ async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise
   }
   const linhas = carros.map(
     (c) =>
-      `- id ${c.id}: ${nomeDoVeiculo(c)}, ${lojaSemKm || c.ocultarKm ? "km n/a" : c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : "km não informada"}, ` +
-      `${lojaSemPreco || c.ocultarPreco ? "VALOR SOB CONSULTA (não informe nem estime o valor: diga que o vendedor passa o valor e as condições)" : reais(c.precoCents)}` +
+      `- id ${c.id}: ${nomeDoVeiculo(c)}, ${lojaSemKm || c.ocultarKm ? "km não divulgada" : c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : "km não informada"}, ` +
+      `${lojaSemPreco || c.ocultarPreco ? "valor não divulgado (não cite valor nem km a menos que o cliente pergunte; se perguntar, não informe nem estime: o vendedor passa)" : reais(c.precoCents)}` +
       `${c.carroceria ? `, ${c.carroceria}` : ""}${c.cambio ? `, ${c.cambio}` : ""}${c.combustivel ? `, ${c.combustivel}` : ""}${c.cor ? `, ${c.cor}` : ""}` +
       `${c.opcionais.length ? `; opcionais: ${c.opcionais.slice(0, 8).join(", ")}` : ""}; ${c._count.fotos} foto(s)` +
       `${c.status === "RESERVADO" ? "; RESERVADO para outro cliente" : ""}`
