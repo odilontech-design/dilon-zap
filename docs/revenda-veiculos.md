@@ -824,4 +824,4 @@ atender agora?". Código: `apps/web/lib/painel-leads.ts`, rota `/api/veiculos/le
   (menu, saudação) e mensagem que falhou no envio não contam; mensagem de antes do lead também não.
 - **Limites:** lead sem negociação (sem telefone) só conta como respondido pelo "Já respondi". Lê até 5.000 leads da janela. Só leitura: nada
   aqui manda mensagem. Sem mudança de schema.
-- Próximo passo planejado: resposta imediata ao lead do portal (hoje o lead vira negociação e tarefa de chamar, mas ninguém responde sozinho).
+- A resposta imediata ao lead do portal (v1.100.0) está descrita em `docs/vendedor-ia.md`; sem ela o lead só vira negociação e tarefa de chamar.

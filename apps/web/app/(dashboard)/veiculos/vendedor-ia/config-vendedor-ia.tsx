@@ -16,6 +16,8 @@ type Dados = {
     limiteLeadsMes: number;
     limiteCustoMesCents: number | null;
     leadsContratados: number | null;
+    respostaImediata: boolean;
+    respostaImediataPorHora: number;
   };
   setores: { id: string; nome: string }[];
   estimativas: { id: string; nome: string; aproximado: boolean; usdPorLead: number }[];
@@ -204,6 +206,23 @@ export function ConfigVendedorIa() {
             </label>
           </div>
           <p className="text-xs text-neutral-500">Passou de um limite, a IA para de assumir conversas novas no mês; as que já está atendendo seguem até passar para um vendedor.</p>
+        </section>
+
+        <section className={secao}>
+          <h2 className="text-sm font-semibold">Resposta imediata ao lead do portal</h2>
+          <label className="flex items-start gap-2 text-sm">
+            <input id="ia-resposta-imediata" type="checkbox" checked={f.respostaImediata} onChange={(e) => setF({ ...f, respostaImediata: e.target.checked })} className="mt-1" />
+            <span>
+              Quando chegar um lead dos portais (Na Pista, MobiAuto, Webmotors) com celular, a IA manda na hora uma primeira mensagem pelo WhatsApp da loja, com a ficha e as fotos do carro. Se o cliente responder, a IA continua a conversa.
+            </span>
+          </label>
+          <label className="flex flex-col gap-1 sm:max-w-xs">
+            <span className={rotulo}>Máximo de primeiras mensagens por hora</span>
+            <input id="ia-resposta-por-hora" inputMode="numeric" value={f.respostaImediataPorHora} onChange={(e) => setF({ ...f, respostaImediataPorHora: Math.min(60, Number(e.target.value.replace(/\D/g, "")) || 1) })} className={campo} />
+          </label>
+          <p className="text-xs text-neutral-500">
+            Só vale para leads que chegarem depois de ligar (os antigos não recebem). Só das 7h às 22h, até 1 hora depois do lead chegar, com pelo menos 20 segundos entre uma mensagem e outra, e nunca para quem já está em conversa com a loja. O teto por hora protege o número da loja: muitas mensagens para números novos de uma vez podem levar o WhatsApp a bloquear o número. Cada lead atendido conta no limite de leads do mês. Precisa do Vendedor IA ligado.
+          </p>
         </section>
 
         {aviso && <p className={`rounded-md px-3 py-2 text-sm ${aviso.erro ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-accent"}`}>{aviso.texto}</p>}

@@ -17,6 +17,8 @@ const corpo = z.object({
   setorTransferenciaId: z.string().nullable(),
   limiteLeadsMes: z.number().int().min(1).max(100_000),
   limiteCustoMesCents: z.number().int().min(100).max(10_000_000).nullable(),
+  respostaImediata: z.boolean().default(false),
+  respostaImediataPorHora: z.number().int().min(1).max(60).default(10),
 });
 
 /** Configuração e painel do mês do Vendedor IA. Só a gestão. */
@@ -61,9 +63,12 @@ export async function PUT(req: Request) {
       setorTransferenciaId: d.setorTransferenciaId,
       limiteLeadsMes: d.limiteLeadsMes,
       limiteCustoMesCents: d.limiteCustoMesCents,
+      respostaImediataPorHora: d.respostaImediataPorHora,
+      // Ao ligar, o relógio começa agora: só leads que chegarem daqui em diante recebem a resposta imediata.
+      ...(d.respostaImediata !== atual.respostaImediata ? { respostaImediata: d.respostaImediata, respostaImediataDesde: d.respostaImediata ? new Date() : null } : {}),
     },
   });
   await ligarOuDesligar(user.tenantId, d.ativo);
-  await logAudit({ actor: user, action: "vendedor-ia.config", metadata: { ativo: d.ativo, modelo: d.modelo, esforco: d.esforco } });
+  await logAudit({ actor: user, action: "vendedor-ia.config", metadata: { ativo: d.ativo, modelo: d.modelo, esforco: d.esforco, respostaImediata: d.respostaImediata, respostaImediataPorHora: d.respostaImediataPorHora } });
   return NextResponse.json({ ok: true });
 }
