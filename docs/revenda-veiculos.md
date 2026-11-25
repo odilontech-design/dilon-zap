@@ -856,3 +856,20 @@ total pago e os juros em 12, 24, 36, 48 e 60 meses (tabela Price) e leva o texto
   há mais de 1 hora. O preço "sob consulta" no site não conta como "sem preço" (só vale o carro sem preço de verdade).
 - **Fora desta versão** (vem do painel do AutoCerto): grade com uma coluna por portal e plano de anúncio de cada carro, uso do plano de cada
   portal e o botão "Atualizar" por portal.
+
+## Grade de anúncios por portal (v1.105.0)
+
+**Veículos > Anúncios** (só a gestão, logo depois de Estoque): o que o AutoCerto mostra na consulta do estoque, com uma coluna por portal.
+Código: `apps/web/lib/grade-portais.ts`, rota `/api/veiculos/anuncios` (GET a grade, POST "publicar os que faltam"), tela
+`veiculos/anuncios/grade-de-portais.tsx`, teste `lib/grade-portais.test-manual.ts`. Sem mudança de schema nem de worker.
+
+- **Cartões por portal** (só os portais com conta da loja ou com anúncio já feito): conectado ou não, publicados, na fila, com erro e quantos
+  carros à venda estão fora do portal, com o botão **Publicar os N que faltam** (pede confirmação e avisa que cada anúncio pode ocupar uma vaga
+  do plano da loja no portal e quantos estão sem km).
+- **Linhas:** um carro à venda por linha (disponível e reservado), com a célula de cada portal: Publicado, Na fila, Com erro (com o motivo) ou
+  Não anunciado, o plano do anúncio quando há (Webmotors), "ver" o anúncio, e **Publicar / Tirar** por carro (só nos disponíveis e com a conta
+  conectada). Filtros: busca, faltando em algum portal, com erro.
+- **Segurança:** os ids vêm do navegador; a rota só aceita carros À VENDA da loja da sessão, exige a conta do portal conectada e registra a
+  ação em auditoria. Usa as mesmas funções de anúncio da ficha do carro (`anunciarNa*`), então vale a regra de que carro sem km não sobe.
+- **Fora desta versão:** escolher o plano do anúncio de cada carro (Ouro, Prata, Bronze...) e o uso de vagas por plano em cada portal (como o
+  "9 de 13" do MobiAuto no AutoCerto); hoje só a Webmotors tem plano padrão da loja, e a grade mostra o plano quando já existe.
