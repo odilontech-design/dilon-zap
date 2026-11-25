@@ -45,6 +45,7 @@ import {
   UNREAD_COUNT_INTERVAL,
 } from "@/lib/polling";
 import { EscolherVeiculo } from "@/components/escolher-veiculo";
+import { SimuladorDeFinanciamento } from "@/components/simulador-financiamento";
 import { AgenteDaConversa } from "@/components/agente-da-conversa";
 import { AgenteDeCarros } from "@/components/agente-de-carros";
 
@@ -902,6 +903,7 @@ export function ConversationThread({
   const temSdr = useRecurso("SDR");
   const temIaDeCarros = useRecurso("VENDEDOR_IA");
   const [escolhendoVeiculo, setEscolhendoVeiculo] = useState(false);
+  const [simulandoFinanciamento, setSimulandoFinanciamento] = useState(false);
   const { data: pedidos, mutate: mutatePedidos } = useSWR<Pedido[]>(
     temPedidos && !modoGrupo ? `/api/orders?conversationId=${conversationId}` : null,
     fetcher,
@@ -1690,6 +1692,15 @@ export function ConversationThread({
                   Carro
                 </button>
               )}
+              {temVeiculos && !modoGrupo && (
+                <button
+                  onClick={() => setSimulandoFinanciamento(true)}
+                  title="Simular o financiamento de um carro para o cliente"
+                  className="text-xs rounded-md border border-neutral-300 px-2.5 py-1.5 hover:bg-neutral-50"
+                >
+                  Financiar
+                </button>
+              )}
               {/* Bloquear é de pessoa: num grupo travaria a fila de envio pra
                   todo mundo dele. Pra parar de acompanhar, Gerenciar grupos. */}
               {!modoGrupo && (
@@ -2437,6 +2448,15 @@ export function ConversationThread({
           onUsarTexto={(texto) => {
             setDraft((atual) => (atual.trim() ? `${atual}\n\n${texto}` : texto));
             setEscolhendoVeiculo(false);
+          }}
+        />
+      )}
+      {simulandoFinanciamento && (
+        <SimuladorDeFinanciamento
+          onFechar={() => setSimulandoFinanciamento(false)}
+          onUsarTexto={(texto) => {
+            setDraft((atual) => (atual.trim() ? `${atual}\n\n${texto}` : texto));
+            setSimulandoFinanciamento(false);
           }}
         />
       )}

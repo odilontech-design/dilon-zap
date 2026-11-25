@@ -825,3 +825,17 @@ atender agora?". Código: `apps/web/lib/painel-leads.ts`, rota `/api/veiculos/le
 - **Limites:** lead sem negociação (sem telefone) só conta como respondido pelo "Já respondi". Lê até 5.000 leads da janela. Só leitura: nada
   aqui manda mensagem. Sem mudança de schema.
 - A resposta imediata ao lead do portal (v1.100.0) está descrita em `docs/vendedor-ia.md`; sem ela o lead só vira negociação e tarefa de chamar.
+
+## Simulador de financiamento (v1.103.0)
+
+Botão **Financiar** no cabeçalho da conversa do Inbox (ao lado de "Carro", só com o recurso de veículos): o vendedor escolhe o carro (ou
+digita o valor), define a entrada (com atalhos de 20, 30, 40 e 50%) e digita a **taxa ao mês que o banco da loja pratica**. Mostra a parcela, o
+total pago e os juros em 12, 24, 36, 48 e 60 meses (tabela Price) e leva o texto para o campo da conversa ou copia.
+
+- **É estimativa:** não consulta banco, não aprova crédito e não inclui IOF, tarifas nem seguro. O texto que vai ao cliente diz isso e mostra a
+  taxa usada. Diferente do simulador do AutoCerto (tabelas do banco Safra), que exige contrato de parceria; esta versão não tem custo.
+- **Taxa:** nunca vem preenchida por nós (não temos taxa de mercado confiável); fica lembrada só neste navegador. Recusa taxa acima de 10% ao mês
+  (erro de digitação) e entrada igual ou maior que o valor.
+- Código: `lib/financiamento.ts` (conta e texto, testado em `lib/financiamento.test-manual.ts` com valores conferidos à parte),
+  `components/simulador-financiamento.tsx`. Sem mudança de schema nem de worker; nada é gravado.
+- Próximos passos possíveis: guardar a taxa por loja, botão na ficha do carro e, se houver cliente que pague, tabelas de banco por parceria.
