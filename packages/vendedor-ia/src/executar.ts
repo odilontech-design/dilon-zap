@@ -3,6 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { custoMicros, PRECOS } from "./custo";
 import { fichaParaCliente, nomeDoVeiculo, reais } from "./ficha";
+import { primeiroNomeDoCliente } from "./nome";
 import { FERRAMENTAS, ROTULO_MOTIVO, montarSistema } from "./prompt";
 import { agoraNaLoja, decidir, montarHistorico, paraWhatsApp, type MensagemDaConversa } from "./regras";
 
@@ -97,7 +98,7 @@ export async function atenderConversa(conversationId: string, loja: Loja, deps: 
   const agora = deps.agora?.() ?? new Date();
   const conversa = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { id: true, tenantId: true, sessionId: true, setorId: true, assignedToId: true },
+    select: { id: true, tenantId: true, sessionId: true, setorId: true, assignedToId: true, contact: { select: { name: true } } },
   });
   if (!conversa || conversa.tenantId !== loja.tenantId) return false;
 
@@ -177,7 +178,7 @@ async function passarPorFalha(conversa: Conversa, loja: Loja, deps: Dependencias
   }
 }
 
-type Conversa = { id: string; tenantId: string; sessionId: string; setorId: string | null };
+type Conversa = { id: string; tenantId: string; sessionId: string; setorId: string | null; contact?: { name?: string | null } | null };
 
 /** Uma rodada de resposta: chama a API, executa as ferramentas pedidas e manda o texto final. */
 async function responder(input: { conversa: Conversa; loja: Loja; historico: Anthropic.Beta.BetaMessageParam[]; deps: Dependencias; agora: Date }) {
@@ -187,7 +188,10 @@ async function responder(input: { conversa: Conversa; loja: Loja; historico: Ant
 
   // A data e hora vão no fim, numa mensagem de sistema: no prompt fixo,
   // mudariam o prefixo a cada minuto e nada ficaria em cache.
-  const mensagens: Anthropic.Beta.BetaMessageParam[] = [...input.historico, { role: "system", content: `Agora na loja: ${agoraNaLoja(agora, loja.tenant.timezone)}.` }];
+  // O nome do cliente também vai no fim (muda a cada conversa, então não pode estar no prompt fixo).
+  const nomeCliente = primeiroNomeDoCliente(conversa.contact?.name);
+  const aviso = `Agora na loja: ${agoraNaLoja(agora, loja.tenant.timezone)}.${nomeCliente ? ` Cliente: ${nomeCliente}.` : ""}`;
+  const mensagens: Anthropic.Beta.BetaMessageParam[] = [...input.historico, { role: "system", content: aviso }];
 
   let transferiu = false;
   let textoFinal = "";
@@ -295,6 +299,8 @@ async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise
   const lojaSemKm = ctx.loja.tenant.veiculosConfig?.ocultarKmNoSite === true;
   if (typeof e.preco_max_reais === "number" && e.preco_max_reais > 0 && !lojaSemPreco) filtros.push({ OR: [{ ocultarPreco: true }, { precoCents: { lte: Math.round(e.preco_max_reais * 100) } }] });
   if (typeof e.ano_min === "number") filtros.push({ anoModelo: { gte: e.ano_min } });
+  const carroceria = typeof e.carroceria === "string" && e.carroceria.trim() ? e.carroceria.trim() : null;
+  if (carroceria) filtros.push({ carroceria: { equals: carroceria, mode: "insensitive" } });
   if (e.cambio === "manual") filtros.push({ cambio: { contains: "manual", mode: "insensitive" } });
   if (e.cambio === "automatico") filtros.push({ NOT: { cambio: { contains: "manual", mode: "insensitive" } }, cambio: { not: null } });
   if (filtros.length) where.AND = filtros;
@@ -307,15 +313,21 @@ async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise
     // Só o que pode ir para o cliente: nada de custo, piso, placa ou observação interna.
     select: {
       id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, km: true, kmInformado: true, ocultarKm: true, ocultarPreco: true,
-      precoCents: true, cambio: true, combustivel: true, cor: true, opcionais: true, status: true, _count: { select: { fotos: true } },
+      precoCents: true, cambio: true, combustivel: true, cor: true, carroceria: true, opcionais: true, status: true, _count: { select: { fotos: true } },
     },
   });
-  if (!carros.length) return { texto: "Nenhum carro no estoque com esses filtros. Tente uma busca mais ampla ou diga ao cliente que no momento não tem e ofereça avisar quando chegar." };
+  if (!carros.length) {
+    return {
+      texto: carroceria
+        ? `Nenhum carro com carroceria ${carroceria} cadastrada no estoque com esses filtros. O cadastro pode estar sem essa informação em alguns carros: busque de novo sem o filtro de carroceria e escolha pelo modelo, ou diga ao cliente que no momento não tem e ofereça avisar quando chegar.`
+        : "Nenhum carro no estoque com esses filtros. Tente uma busca mais ampla ou diga ao cliente que no momento não tem e ofereça avisar quando chegar.",
+    };
+  }
   const linhas = carros.map(
     (c) =>
       `- id ${c.id}: ${nomeDoVeiculo(c)}, ${lojaSemKm || c.ocultarKm ? "km n/a" : c.kmInformado ? `${c.km.toLocaleString("pt-BR")} km` : "km não informada"}, ` +
       `${lojaSemPreco || c.ocultarPreco ? "VALOR SOB CONSULTA (não informe nem estime o valor: diga que o vendedor passa o valor e as condições)" : reais(c.precoCents)}` +
-      `${c.cambio ? `, ${c.cambio}` : ""}${c.combustivel ? `, ${c.combustivel}` : ""}${c.cor ? `, ${c.cor}` : ""}` +
+      `${c.carroceria ? `, ${c.carroceria}` : ""}${c.cambio ? `, ${c.cambio}` : ""}${c.combustivel ? `, ${c.combustivel}` : ""}${c.cor ? `, ${c.cor}` : ""}` +
       `${c.opcionais.length ? `; opcionais: ${c.opcionais.slice(0, 8).join(", ")}` : ""}; ${c._count.fotos} foto(s)` +
       `${c.status === "RESERVADO" ? "; RESERVADO para outro cliente" : ""}`
   );
@@ -337,7 +349,7 @@ async function enviarCarro(e: Record<string, unknown>, ctx: Contexto): Promise<R
   const dominio = ctx.loja.tenant.veiculosConfig?.dominio;
   const site = dominio ? `https://${dominio}` : ctx.deps.urlDoSite?.replace(/\/+$/, "");
   const link = site && ctx.loja.tenant.veiculosConfig?.vitrineAtiva && v.naVitrine ? `${site}/loja/${ctx.loja.tenant.slug}/${v.id}` : null;
-  const ficha = fichaParaCliente({ ...v, precoOculto: ctx.loja.tenant.veiculosConfig?.ocultarPrecoNoSite === true || v.ocultarPreco, kmOculto: ctx.loja.tenant.veiculosConfig?.ocultarKmNoSite === true || v.ocultarKm }) + (link ? `\n\n${link}` : "");
+  const ficha = fichaParaCliente({ ...v, precoOculto: ctx.loja.tenant.veiculosConfig?.ocultarPrecoNoSite === true || v.ocultarPreco, kmOculto: ctx.loja.tenant.veiculosConfig?.ocultarKmNoSite === true || v.ocultarKm }, { enxuta: true }) + (link ? `\n\n${link}` : "");
   const fotos = qtd > 0 ? v.fotos.slice(0, qtd) : [];
   await enfileirar(
     ctx.conversa,
