@@ -839,3 +839,20 @@ total pago e os juros em 12, 24, 36, 48 e 60 meses (tabela Price) e leva o texto
 - Código: `lib/financiamento.ts` (conta e texto, testado em `lib/financiamento.test-manual.ts` com valores conferidos à parte),
   `components/simulador-financiamento.tsx`. Sem mudança de schema nem de worker; nada é gravado.
 - Próximos passos possíveis: guardar a taxa por loja, botão na ficha do carro e, se houver cliente que pague, tabelas de banco por parceria.
+
+## Painel do estoque (v1.104.0)
+
+**Veículos > Painel** (primeira aba, só a gestão): a visão do dono sobre o pátio, no espírito do painel do AutoCerto. Código:
+`apps/web/lib/painel-estoque.ts`, rota `/api/veiculos/painel`, tela `veiculos/painel/painel-do-estoque.tsx`, teste
+`lib/painel-estoque.test-manual.ts`. Só leitura; sem mudança de schema.
+
+- **Cartões:** estoque total (e quantos estão publicados), idade média, mais de 60 dias no pátio e carros à venda fora do site.
+- **Recomendações** (cada uma abre a lista dos 15 carros mais antigos, com link para a ficha): à venda sem publicação; parados há 90 dias ou
+  mais e acima da FIPE (com a % ao lado); sem preço; sem quilometragem; sem fotos; anúncios com problema nos portais. Lista vazia mostra "Nenhum ✓".
+  Mostra também a qualidade média dos anúncios (a mesma nota da ficha do carro).
+- **Dias em estoque** (0–30, 31–60, 61–89, 90 ou mais), os três mais antigos, e **Preço × FIPE** (abaixo = 5% ou mais abaixo; acima = mais de 10%
+  acima; carro sem FIPE ou sem preço fica fora da conta).
+- **Definições:** "publicado" = aparece no site ou tem anúncio publicado em portal; "problema nos portais" = anúncio com erro ou parado na fila
+  há mais de 1 hora. O preço "sob consulta" no site não conta como "sem preço" (só vale o carro sem preço de verdade).
+- **Fora desta versão** (vem do painel do AutoCerto): grade com uma coluna por portal e plano de anúncio de cada carro, uso do plano de cada
+  portal e o botão "Atualizar" por portal.
