@@ -1,6 +1,7 @@
 import { prisma } from "@dilon-zap/db";
 import { NOME_DO_PORTAL } from "@/lib/lead-portal";
 import { diaDeBrasilia } from "@/lib/estatisticas-vitrine";
+import { ESTAGIOS, ORDEM_DA_ATENCAO, autorDaMensagem, estagioDoLead, rotuloDoEstagio, textoDaAtencao, tipoDoMotivoDaIa, type Estagio, type MensagemDoLead } from "@/lib/estagio-lead";
 
 /**
  * Veículos > Leads: o painel de quem precisa de atenção hoje e de quão rápido a loja responde os leads dos portais.
@@ -87,33 +88,56 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
   for (const c of conversas) conversasDoContato.set(c.contactId, [...(conversasDoContato.get(c.contactId) ?? []), c.id]);
   const contatoDaConversa = new Map(conversas.map((c) => [c.id, c.contactId]));
 
-  // As mensagens de saída que contam como resposta: de uma pessoa (Inbox ou celular) ou do Vendedor IA.
+  // Todas as mensagens da conversa do contato, nos dois sentidos: resposta da loja (pessoa, celular ou Vendedor IA),
+  // mensagem do cliente e automações (menu, saudação), que não contam. É daqui que o estágio sai sozinho.
   const mensagens = conversas.length
     ? await prisma.message.findMany({
-        where: {
-          conversationId: { in: conversas.map((c) => c.id) },
-          direction: "OUTBOUND",
-          createdAt: { gte: janela },
-          status: { not: "FAILED" },
-          OR: [{ senderUserId: { not: null } }, { deCelular: true }, { referenciaExterna: { startsWith: "vendedor-ia:" } }],
-        },
+        where: { conversationId: { in: conversas.map((c) => c.id) }, createdAt: { gte: janela }, status: { not: "FAILED" } },
         orderBy: { createdAt: "asc" },
-        take: 50_000,
-        select: { conversationId: true, createdAt: true },
+        take: 100_000,
+        select: { conversationId: true, createdAt: true, direction: true, senderUserId: true, deCelular: true, referenciaExterna: true },
       })
     : [];
-  const respostasDoContato = new Map<string, Date[]>();
+  const mensagensDoContato = new Map<string, MensagemDoLead[]>();
   for (const m of mensagens) {
     const contato = contatoDaConversa.get(m.conversationId);
-    if (contato) respostasDoContato.set(contato, [...(respostasDoContato.get(contato) ?? []), m.createdAt]);
+    if (contato) mensagensDoContato.set(contato, [...(mensagensDoContato.get(contato) ?? []), { de: autorDaMensagem(m), em: m.createdAt }]);
   }
+
+  // O que a IA identificou ao passar a conversa para a equipe (visita, negociação...), e as fichas de financiamento.
+  const passagens = conversas.length
+    ? await prisma.vendedorIaConversa.findMany({ where: { tenantId, conversationId: { in: conversas.map((c) => c.id) }, status: "TRANSFERIDA" }, select: { conversationId: true, motivo: true, transferidaEm: true } })
+    : [];
+  const passagensDoContato = new Map<string, { motivo: string | null; em: Date | null }[]>();
+  for (const p of passagens) {
+    const contato = contatoDaConversa.get(p.conversationId);
+    if (contato) passagensDoContato.set(contato, [...(passagensDoContato.get(contato) ?? []), { motivo: p.motivo, em: p.transferidaEm }]);
+  }
+  const comFicha = new Set(
+    negIds.length ? (await prisma.fichaFinanciamento.findMany({ where: { tenantId, negociacaoId: { in: negIds } }, select: { negociacaoId: true } })).map((f) => f.negociacaoId) : []
+  );
 
   const calculados = leads.map((l) => {
     const neg = l.negociacaoId ? negPorId.get(l.negociacaoId) ?? null : null;
-    const noWhatsapp = neg ? (respostasDoContato.get(neg.contactId) ?? []).find((d) => d >= l.recebidoEm) ?? null : null;
-    const candidatas = [l.respondidoEm, noWhatsapp].filter((d): d is Date => !!d && d >= l.recebidoEm);
-    const respostaEm = candidatas.length ? new Date(Math.min(...candidatas.map((d) => d.getTime()))) : null;
-    return { ...l, neg, respostaEm };
+    // Só vale a passagem para a equipe que aconteceu depois que este lead chegou, e a mais recente que diga o que o cliente quer.
+    const passagem = neg
+      ? (passagensDoContato.get(neg.contactId) ?? [])
+          .filter((p) => tipoDoMotivoDaIa(p.motivo) !== null && (!p.em || p.em >= l.recebidoEm))
+          .sort((a, b) => (b.em?.getTime() ?? 0) - (a.em?.getTime() ?? 0))[0] ?? null
+      : null;
+    const situacao = estagioDoLead(
+      {
+        recebidoEm: l.recebidoEm,
+        respondidoManualEm: l.respondidoEm,
+        mensagens: neg ? mensagensDoContato.get(neg.contactId) ?? [] : [],
+        statusNegociacao: neg?.status ?? null,
+        iaPassouEm: passagem?.em ?? null,
+        iaPassouTipo: passagem ? tipoDoMotivoDaIa(passagem.motivo) : null,
+        temFichaFinanciamento: !!neg && comFicha.has(neg.id),
+      },
+      agora
+    );
+    return { ...l, neg, respostaEm: situacao.respostaEm, situacao };
   });
 
   const doPeriodo = calculados.filter((l) => l.recebidoEm >= inicio);
@@ -124,9 +148,17 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
   const tempoAnterior = resumoDoTempo(doPeriodoAnterior, agora);
   const semRespostaAgora = recentes.filter((l) => !l.respostaEm);
 
-  // Os que pedem ação: o mais novo sem resposta primeiro (ainda está quente).
-  const paraAtender = semRespostaAgora.slice().sort((a, b) => b.recebidoEm.getTime() - a.recebidoEm.getTime()).slice(0, 10);
-  const carroIds = [...new Set(paraAtender.map((l) => l.veiculoId).filter((v): v is string => !!v))];
+  // Os que pedem uma pessoa agora: o que a automação não resolve. O que a IA passou para a equipe vem primeiro (é quem
+  // quer comprar), depois o cliente esperando resposta, depois o sem resposta; dentro de cada grupo, o mais novo.
+  const comAtencao = recentes
+    .filter((l) => l.situacao.precisaDeGente)
+    .sort((a, b) => {
+      const pa = a.situacao.precisaDeGente!;
+      const pb = b.situacao.precisaDeGente!;
+      return ORDEM_DA_ATENCAO[pa.motivo] - ORDEM_DA_ATENCAO[pb.motivo] || pb.desde.getTime() - pa.desde.getTime();
+    });
+  const precisamDeGente = comAtencao.slice(0, 15);
+  const carroIds = [...new Set(precisamDeGente.map((l) => l.veiculoId).filter((v): v is string => !!v))];
   const carros = new Map((carroIds.length ? await prisma.veiculo.findMany({ where: { tenantId, id: { in: carroIds } }, select: { id: true, marca: true, modelo: true, anoModelo: true } }) : []).map((c) => [c.id, `${c.marca} ${c.modelo} ${c.anoModelo}`]));
 
   const porOrigem = new Map<string, typeof doPeriodo>();
@@ -192,18 +224,37 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
     medianaAnteriorMin: tempoAnterior.medianaMin,
     percentualAte15Min: base ? Math.round((tempo.excelente / base) * 100) : null,
     tempo: { excelente: tempo.excelente, atencao: tempo.atencao, critico: tempo.critico, aguardando: tempo.aguardando, respondidos: tempo.respondidos },
-    paraAtender: paraAtender.map((l) => ({
-      id: l.id,
-      nome: l.nome,
-      portal: NOME_DO_PORTAL[l.portal],
-      carro: l.veiculoId ? carros.get(l.veiculoId) ?? null : null,
-      recebidoEm: l.recebidoEm.toISOString(),
-      esperaMin: minutosEntre(l.recebidoEm, agora),
-      semTelefone: l.semTelefone,
-      negociacaoId: l.negociacaoId,
-      conversaId: l.neg ? conversasDoContato.get(l.neg.contactId)?.[0] ?? null : null,
-      vendedor: l.neg?.responsavel?.name ?? null,
-    })),
+    /** Quem uma pessoa precisa ver agora (últimos 30 dias): total e os 15 mais quentes. */
+    precisamDeGenteTotal: comAtencao.length,
+    precisamDeGente: precisamDeGente.map((l) => {
+      const p = l.situacao.precisaDeGente!;
+      return {
+        id: l.id,
+        nome: l.nome,
+        portal: NOME_DO_PORTAL[l.portal],
+        carro: l.veiculoId ? carros.get(l.veiculoId) ?? null : null,
+        recebidoEm: l.recebidoEm.toISOString(),
+        estagio: l.situacao.estagio,
+        rotuloDoEstagio: rotuloDoEstagio(l.situacao.estagio),
+        motivo: p.motivo,
+        textoDoMotivo: textoDaAtencao(p.motivo, l.situacao.estagio),
+        esperaMin: minutosEntre(p.desde, agora),
+        semTelefone: l.semTelefone,
+        negociacaoId: l.negociacaoId,
+        conversaId: l.neg ? conversasDoContato.get(l.neg.contactId)?.[0] ?? null : null,
+        vendedor: l.neg?.responsavel?.name ?? null,
+      };
+    }),
+    /** O funil que anda sozinho, no período: cada passo é deduzido da conversa, ninguém precisa clicar. */
+    funil: {
+      recebidos: doPeriodo.length,
+      respondidos: doPeriodo.filter((l) => l.situacao.respostaEm).length,
+      conversaram: doPeriodo.filter((l) => l.situacao.clienteEscreveu).length,
+      querAvancar: doPeriodo.filter((l) => l.situacao.querAvancar || l.situacao.estagio === "GANHO").length,
+      ganhos: doPeriodo.filter((l) => l.situacao.estagio === "GANHO").length,
+      perdidos: doPeriodo.filter((l) => l.situacao.estagio === "PERDIDO").length,
+    },
+    porEstagio: ESTAGIOS.map((e) => ({ estagio: e.estagio as Estagio, rotulo: e.rotulo, descricao: e.descricao, leads: doPeriodo.filter((l) => l.situacao.estagio === e.estagio).length })),
     origem,
     vendedores,
     porDia,
