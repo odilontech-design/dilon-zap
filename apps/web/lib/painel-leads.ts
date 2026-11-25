@@ -1,7 +1,7 @@
 import { prisma } from "@dilon-zap/db";
 import { NOME_DO_PORTAL } from "@/lib/lead-portal";
 import { diaDeBrasilia } from "@/lib/estatisticas-vitrine";
-import { ESTAGIOS, ORDEM_DA_ATENCAO, autorDaMensagem, estagioDoLead, rotuloDoEstagio, textoDaAtencao, tipoDoMotivoDaIa, type Estagio, type MensagemDoLead } from "@/lib/estagio-lead";
+import { ESTAGIOS, ORDEM_DA_ATENCAO, autorDaMensagem, estagioDoLead, rotuloDoEstagio, textoDaAtencao, tipoDoMotivoDaIa, type Estagio, type MensagemDoLead, type Situacao } from "@/lib/estagio-lead";
 
 /**
  * Veículos > Leads: o painel de quem precisa de atenção hoje e de quão rápido a loja responde os leads dos portais.
@@ -63,7 +63,122 @@ export function variacaoEmPercentual(atual: number, anterior: number): number | 
   return Math.round(((atual - anterior) / anterior) * 100);
 }
 
-export async function painelDeLeads(tenantId: string, dias: number, agora: Date = new Date()) {
+/** Um lead no painel, venha ele de um portal ou de uma conversa de WhatsApp: o mesmo formato para as contas de baixo. */
+type ItemDoPainel = {
+  id: string;
+  tipo: "portal" | "whatsapp";
+  /** Chave da origem: o portal (NAPISTA...) ou "WHATSAPP". */
+  origem: string;
+  origemNome: string;
+  nome: string;
+  recebidoEm: Date;
+  semTelefone: boolean;
+  veiculoId: string | null;
+  negociacaoId: string | null;
+  conversaId: string | null;
+  vendedorId: string | null;
+  vendedorNome: string | null;
+  ganha: boolean;
+  respostaEm: Date | null;
+  situacao: Situacao;
+};
+
+/**
+ * Conversas de WhatsApp que começaram pelo cliente e não vieram de um portal também são leads: quem chama a loja no
+ * número geral é cliente em potencial, com ou sem anúncio. Conta a partir da primeira mensagem DO CLIENTE; conversa que a
+ * própria loja abriu, grupo e número de setor ficam de fora, e o contato que já é lead de portal não conta duas vezes.
+ * O estágio sai da conversa pelas mesmas regras dos leads de portal (estagio-lead.ts).
+ */
+async function leadsDeWhatsapp(p: { tenantId: string; janela: Date; agora: Date; contatosDosPortais: Set<string> }): Promise<ItemDoPainel[]> {
+  const { tenantId, janela, agora } = p;
+  const conversas = await prisma.conversation.findMany({
+    where: {
+      tenantId,
+      createdAt: { gte: janela },
+      session: { setorId: null },
+      contact: { grupo: false },
+      ...(p.contatosDosPortais.size ? { contactId: { notIn: [...p.contatosDosPortais] } } : {}),
+    },
+    orderBy: { createdAt: "desc" },
+    take: 3000,
+    select: { id: true, contactId: true, assignedTo: { select: { id: true, name: true } }, contact: { select: { name: true } } },
+  });
+  if (!conversas.length) return [];
+  const ids = conversas.map((c) => c.id);
+
+  // A primeira mensagem de TODAS, não só da janela: há conversas com o histórico mais antigo que a própria conversa (sincronia
+  // do WhatsApp). Se a janela cortasse o começo, uma mensagem do meio viraria "a primeira" e a conversa antiga pareceria lead novo.
+  const comeco = await prisma.message.groupBy({ by: ["conversationId"], where: { conversationId: { in: ids }, status: { not: "FAILED" } }, _min: { createdAt: true } });
+  const comecoDaConversa = new Map(comeco.map((g) => [g.conversationId, g._min.createdAt]));
+
+  const mensagens = await prisma.message.findMany({
+    where: { conversationId: { in: ids }, createdAt: { gte: janela, lte: agora }, status: { not: "FAILED" } },
+    orderBy: { createdAt: "asc" },
+    take: 200_000,
+    select: { conversationId: true, createdAt: true, direction: true, senderUserId: true, deCelular: true, referenciaExterna: true },
+  });
+  const porConversa = new Map<string, typeof mensagens>();
+  for (const m of mensagens) porConversa.set(m.conversationId, [...(porConversa.get(m.conversationId) ?? []), m]);
+
+  const passagens = await prisma.vendedorIaConversa.findMany({ where: { tenantId, conversationId: { in: ids }, status: "TRANSFERIDA" }, select: { conversationId: true, motivo: true, transferidaEm: true } });
+  const passagemDaConversa = new Map(passagens.map((x) => [x.conversationId, x]));
+
+  // A negociação que o time abriu para este contato depois que ele chamou: diz se a venda foi ganha ou perdida.
+  const negociacoes = await prisma.negociacao.findMany({
+    where: { tenantId, contactId: { in: [...new Set(conversas.map((c) => c.contactId))] }, createdAt: { gte: janela } },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, contactId: true, status: true, createdAt: true },
+  });
+  const comFicha = new Set(
+    negociacoes.length ? (await prisma.fichaFinanciamento.findMany({ where: { tenantId, negociacaoId: { in: negociacoes.map((n) => n.id) } }, select: { negociacaoId: true } })).map((f) => f.negociacaoId) : []
+  );
+
+  const itens: ItemDoPainel[] = [];
+  for (const c of conversas) {
+    const msgs = porConversa.get(c.id) ?? [];
+    const primeira = msgs[0];
+    // Só é lead se quem abriu a conversa foi o cliente.
+    const comecou = comecoDaConversa.get(c.id);
+    if (!primeira || primeira.direction !== "INBOUND" || !comecou || comecou < janela) continue;
+    const recebidoEm = primeira.createdAt;
+    const passagem = passagemDaConversa.get(c.id);
+    const tipoDaPassagem = passagem && (!passagem.transferidaEm || passagem.transferidaEm >= recebidoEm) ? tipoDoMotivoDaIa(passagem.motivo) : null;
+    const neg = negociacoes.find((n) => n.contactId === c.contactId && n.createdAt >= recebidoEm) ?? null;
+    const situacao = estagioDoLead(
+      {
+        recebidoEm,
+        respondidoManualEm: null,
+        // A primeira mensagem do cliente é o lead chegando, não "o cliente respondeu".
+        mensagens: msgs.slice(1).map((m) => ({ de: autorDaMensagem(m), em: m.createdAt })),
+        statusNegociacao: neg?.status ?? null,
+        iaPassouEm: tipoDaPassagem ? passagem!.transferidaEm : null,
+        iaPassouTipo: tipoDaPassagem,
+        temFichaFinanciamento: !!neg && comFicha.has(neg.id),
+      },
+      agora
+    );
+    itens.push({
+      id: c.id,
+      tipo: "whatsapp",
+      origem: "WHATSAPP",
+      origemNome: "WhatsApp (conversa direta)",
+      nome: c.contact.name?.trim() || "Sem nome",
+      recebidoEm,
+      semTelefone: false,
+      veiculoId: null,
+      negociacaoId: neg?.id ?? null,
+      conversaId: c.id,
+      vendedorId: c.assignedTo?.id ?? null,
+      vendedorNome: c.assignedTo?.name ?? null,
+      ganha: neg?.status === "GANHA",
+      respostaEm: situacao.respostaEm,
+      situacao,
+    });
+  }
+  return itens;
+}
+
+export async function painelDeLeads(tenantId: string, dias: number, agora: Date = new Date(), opcoes: { whatsapp?: boolean } = {}) {
   const inicio = new Date(agora.getTime() - dias * DIA_MS);
   const janela = new Date(agora.getTime() - Math.max(dias * 2, JANELA_ATENCAO_DIAS) * DIA_MS);
 
@@ -117,7 +232,7 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
     negIds.length ? (await prisma.fichaFinanciamento.findMany({ where: { tenantId, negociacaoId: { in: negIds } }, select: { negociacaoId: true } })).map((f) => f.negociacaoId) : []
   );
 
-  const calculados = leads.map((l) => {
+  const dosPortais: ItemDoPainel[] = leads.map((l) => {
     const neg = l.negociacaoId ? negPorId.get(l.negociacaoId) ?? null : null;
     // Só vale a passagem para a equipe que aconteceu depois que este lead chegou, e a mais recente que diga o que o cliente quer.
     const passagem = neg
@@ -137,8 +252,28 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
       },
       agora
     );
-    return { ...l, neg, respostaEm: situacao.respostaEm, situacao };
+    return {
+      id: l.id,
+      tipo: "portal",
+      origem: l.portal,
+      origemNome: NOME_DO_PORTAL[l.portal],
+      nome: l.nome,
+      recebidoEm: l.recebidoEm,
+      semTelefone: l.semTelefone,
+      veiculoId: l.veiculoId,
+      negociacaoId: l.negociacaoId,
+      conversaId: neg ? conversasDoContato.get(neg.contactId)?.[0] ?? null : null,
+      vendedorId: neg?.responsavelId ?? null,
+      vendedorNome: neg?.responsavel?.name ?? null,
+      ganha: neg?.status === "GANHA",
+      respostaEm: situacao.respostaEm,
+      situacao,
+    };
   });
+
+  // Conversas de WhatsApp que começaram pelo cliente e não são de um contato que já é lead de portal.
+  const dosWhatsapp = opcoes.whatsapp === false ? [] : await leadsDeWhatsapp({ tenantId, janela, agora, contatosDosPortais: new Set(contatoIds) });
+  const calculados: ItemDoPainel[] = [...dosPortais, ...dosWhatsapp].sort((a, b) => a.recebidoEm.getTime() - b.recebidoEm.getTime());
 
   const doPeriodo = calculados.filter((l) => l.recebidoEm >= inicio);
   const doPeriodoAnterior = calculados.filter((l) => l.recebidoEm < inicio && l.recebidoEm >= new Date(inicio.getTime() - dias * DIA_MS));
@@ -162,40 +297,40 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
   const carros = new Map((carroIds.length ? await prisma.veiculo.findMany({ where: { tenantId, id: { in: carroIds } }, select: { id: true, marca: true, modelo: true, anoModelo: true } }) : []).map((c) => [c.id, `${c.marca} ${c.modelo} ${c.anoModelo}`]));
 
   const porOrigem = new Map<string, typeof doPeriodo>();
-  for (const l of doPeriodo) porOrigem.set(l.portal, [...(porOrigem.get(l.portal) ?? []), l]);
+  for (const l of doPeriodo) porOrigem.set(l.origem, [...(porOrigem.get(l.origem) ?? []), l]);
   const origem = [...porOrigem.entries()]
     .map(([portal, ls]) => {
       const t = resumoDoTempo(ls, agora);
       return {
         portal,
-        nome: NOME_DO_PORTAL[ls[0].portal],
+        nome: ls[0].origemNome,
         leads: ls.length,
         percentual: doPeriodo.length ? Math.round((ls.length / doPeriodo.length) * 1000) / 10 : 0,
         respondidos: t.respondidos,
         medianaMin: t.medianaMin,
-        vendas: ls.filter((l) => l.neg?.status === "GANHA").length,
+        vendas: ls.filter((l) => l.ganha).length,
       };
     })
     .sort((a, b) => b.leads - a.leads);
 
   const porVendedor = new Map<string, { id: string | null; nome: string; leads: typeof doPeriodo }>();
   for (const l of doPeriodo) {
-    const chave = l.neg?.responsavelId ?? "sem";
-    const atual = porVendedor.get(chave) ?? { id: l.neg?.responsavelId ?? null, nome: l.neg?.responsavel?.name ?? "Sem vendedor definido", leads: [] };
+    const chave = l.vendedorId ?? "sem";
+    const atual = porVendedor.get(chave) ?? { id: l.vendedorId, nome: l.vendedorNome ?? "Sem vendedor definido", leads: [] };
     atual.leads.push(l);
     porVendedor.set(chave, atual);
   }
   // Quem só tem lead sem resposta fora do período também precisa aparecer.
   for (const l of semRespostaAgora) {
-    const chave = l.neg?.responsavelId ?? "sem";
-    if (!porVendedor.has(chave)) porVendedor.set(chave, { id: l.neg?.responsavelId ?? null, nome: l.neg?.responsavel?.name ?? "Sem vendedor definido", leads: [] });
+    const chave = l.vendedorId ?? "sem";
+    if (!porVendedor.has(chave)) porVendedor.set(chave, { id: l.vendedorId, nome: l.vendedorNome ?? "Sem vendedor definido", leads: [] });
   }
   const vendedores = [...porVendedor.entries()]
     .map(([chave, v]) => ({
       id: v.id,
       nome: v.nome,
       leads: v.leads.length,
-      semRespostaAgora: semRespostaAgora.filter((l) => (l.neg?.responsavelId ?? "sem") === chave).length,
+      semRespostaAgora: semRespostaAgora.filter((l) => (l.vendedorId ?? "sem") === chave).length,
       medianaMin: resumoDoTempo(v.leads, agora).medianaMin,
     }))
     .sort((a, b) => b.semRespostaAgora - a.semRespostaAgora || b.leads - a.leads);
@@ -231,7 +366,8 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
       return {
         id: l.id,
         nome: l.nome,
-        portal: NOME_DO_PORTAL[l.portal],
+        portal: l.origemNome,
+        tipo: l.tipo,
         carro: l.veiculoId ? carros.get(l.veiculoId) ?? null : null,
         recebidoEm: l.recebidoEm.toISOString(),
         estagio: l.situacao.estagio,
@@ -241,8 +377,8 @@ export async function painelDeLeads(tenantId: string, dias: number, agora: Date 
         esperaMin: minutosEntre(p.desde, agora),
         semTelefone: l.semTelefone,
         negociacaoId: l.negociacaoId,
-        conversaId: l.neg ? conversasDoContato.get(l.neg.contactId)?.[0] ?? null : null,
-        vendedor: l.neg?.responsavel?.name ?? null,
+        conversaId: l.conversaId,
+        vendedor: l.vendedorNome,
       };
     }),
     /** O funil que anda sozinho, no período: cada passo é deduzido da conversa, ninguém precisa clicar. */

@@ -10,7 +10,7 @@ function checa(nome: string, obtido: unknown, esperado: unknown) {
   console.log(`${ok ? "ok  " : "FALHA"}  ${nome}${ok ? "" : `  (obtido ${JSON.stringify(obtido)}, esperado ${JSON.stringify(esperado)})`}`);
 }
 
-const SLUGS = ["teste-painel-a", "teste-painel-b", "teste-painel-c"];
+const SLUGS = ["teste-painel-a", "teste-painel-b", "teste-painel-c", "teste-painel-d"];
 const agora = new Date("2026-11-24T15:00:00Z");
 const antes = (min: number) => new Date(agora.getTime() - min * 60_000);
 
@@ -141,6 +141,38 @@ async function main() {
   checa("empresa C: funil automático", pc.funil, { recebidos: 5, respondidos: 5, conversaram: 3, querAvancar: 2, ganhos: 1, perdidos: 0 });
   checa("empresa C: estágios deduzidos da conversa", pc.porEstagio.filter((e) => e.leads > 0).map((e) => [e.estagio, e.leads]), [["ABORDADO", 1], ["EM_CONVERSA", 1], ["VISITA", 1], ["ESFRIOU", 1], ["GANHO", 1]]);
   checa("empresa C: precisam de gente, o que a IA passou primeiro", pc.precisamDeGente.map((x) => [x.motivo, x.estagio, x.textoDoMotivo]), [["ia_passou", "VISITA", "A IA passou: quer visitar"], ["cliente_esperando", "EM_CONVERSA", "Cliente esperando resposta"]]);
+  // Conversas de WhatsApp sem portal (empresa D): quem chamou a loja também é lead.
+  const d = await prisma.tenant.create({ data: { name: SLUGS[3], slug: SLUGS[3] } });
+  const sessaoD = await prisma.whatsAppSession.create({ data: { tenantId: d.id, status: "CONNECTED" } });
+  const setorD = await prisma.setor.create({ data: { tenantId: d.id, nome: "Financeiro" } });
+  const sessaoSetorD = await prisma.whatsAppSession.create({ data: { tenantId: d.id, status: "CONNECTED", setorId: setorD.id } });
+  let nd = 0;
+  async function conversaD(opts: { grupo?: boolean; sessao?: string; vendedor?: string; passou?: { motivo: string; minAtras: number } } = {}) {
+    nd++;
+    const contato = await prisma.contact.create({ data: { tenantId: d.id, waJid: `55217777${String(nd).padStart(5, "0")}@s.whatsapp.net`, name: `Chamou ${nd}`, grupo: opts.grupo ?? false } });
+    const conv = await prisma.conversation.create({ data: { tenantId: d.id, contactId: contato.id, sessionId: opts.sessao ?? sessaoD.id } });
+    if (opts.passou) await prisma.vendedorIaConversa.create({ data: { conversationId: conv.id, tenantId: d.id, status: "TRANSFERIDA", motivo: opts.passou.motivo, transferidaEm: antes(opts.passou.minAtras) } });
+    return (direction: "INBOUND" | "OUTBOUND", minAtrasMsg: number, extra: object = {}) =>
+      prisma.message.create({ data: { conversationId: conv.id, sessionId: opts.sessao ?? sessaoD.id, direction, body: "x", status: "SENT", createdAt: antes(minAtrasMsg), waMessageId: `d${Math.random()}`, ...extra } });
+  }
+  const d1 = await conversaD(); await d1("INBOUND", 60);
+  const d2 = await conversaD(); await d2("INBOUND", 200); await d2("OUTBOUND", 198, { referenciaExterna: "vendedor-ia:z" });
+  const d3 = await conversaD(); await d3("INBOUND", 300); await d3("OUTBOUND", 290, { senderUserId: null, deCelular: true }); await d3("INBOUND", 280); await d3("OUTBOUND", 270, { deCelular: true });
+  const d4 = await conversaD(); await d4("OUTBOUND", 100, { deCelular: true }); await d4("INBOUND", 90); // a loja abriu: não é lead
+  const d5 = await conversaD({ grupo: true }); await d5("INBOUND", 80); // grupo: não é lead
+  const d6 = await conversaD({ sessao: sessaoSetorD.id }); await d6("INBOUND", 70); // número de setor: não é lead
+  const d7 = await conversaD(); await d7("INBOUND", 100); await d7("OUTBOUND", 99); // só mensagem automática: sem resposta
+  const d9 = await conversaD(); await d9("OUTBOUND", 100 * 1440, { deCelular: true }); await d9("INBOUND", 120); // histórico antigo da loja: a conversa não começou agora
+  const d8 = await conversaD({ passou: { motivo: "financiamento", minAtras: 200 } }); await d8("INBOUND", 300); await d8("OUTBOUND", 299, { referenciaExterna: "vendedor-ia:y" }); await d8("INBOUND", 250); await d8("OUTBOUND", 249, { referenciaExterna: "vendedor-ia:x" });
+  const pd = await painelDeLeads(d.id, 7, agora);
+  checa("WhatsApp sem portal: 5 leads (loja que abriu, grupo e setor ficam de fora)", pd.recebidos, 5);
+  checa("WhatsApp: funil (5 recebidos, 3 respondidos, 2 conversaram, 1 quer avançar)", pd.funil, { recebidos: 5, respondidos: 3, conversaram: 2, querAvancar: 1, ganhos: 0, perdidos: 0 });
+  checa("WhatsApp: estágios", pd.porEstagio.filter((e) => e.leads > 0).map((e) => [e.estagio, e.leads]), [["NOVO", 2], ["ABORDADO", 1], ["EM_CONVERSA", 1], ["NEGOCIACAO", 1]]);
+  checa("WhatsApp: precisam de gente (IA passou primeiro; sem resposta, o mais novo antes)", pd.precisamDeGente.map((x) => [x.tipo, x.motivo, x.esperaMin]), [["whatsapp", "ia_passou", 200], ["whatsapp", "sem_resposta", 60], ["whatsapp", "sem_resposta", 100]]);
+  checa("WhatsApp: origem própria", pd.origem.map((o) => [o.portal, o.nome, o.leads]), [["WHATSAPP", "WhatsApp (conversa direta)", 5]]);
+  checa("WhatsApp: tempo de resposta (2 e 10 min... a primeira resposta da loja)", [pd.tempo.respondidos, pd.tempo.excelente], [3, 3]);
+  const pdSo = await painelDeLeads(d.id, 7, agora, { whatsapp: false });
+  checa("sem a opção de WhatsApp: nenhum lead", pdSo.recebidos, 0);
   const p30 = await painelDeLeads(a.id, 30, agora);
   checa("período de 30 dias inclui o de 20 dias", p30.recebidos, 8);
   const pOutra = await painelDeLeads(b.id, 7, agora);

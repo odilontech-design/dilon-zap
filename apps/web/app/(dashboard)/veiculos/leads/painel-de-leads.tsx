@@ -24,6 +24,8 @@ type Painel = {
     recebidoEm: string;
     estagio: string;
     rotuloDoEstagio: string;
+    /** "portal" tem o botão "Já respondi"; "whatsapp" é conversa direta, sem portal. */
+    tipo: "portal" | "whatsapp";
     motivo: "sem_resposta" | "cliente_esperando" | "ia_passou";
     textoDoMotivo: string;
     esperaMin: number;
@@ -63,7 +65,9 @@ function Cartao({ titulo, valor, detalhe, destaque }: { titulo: string; valor: s
 /** Veículos > Leads: quem precisa de atenção agora e quão rápido a loja responde os leads dos portais. */
 export function PainelDeLeads() {
   const [dias, setDias] = useState(30);
-  const { data, mutate } = useSWR<Painel>(`/api/veiculos/leads/painel?dias=${dias}`, fetcher, { refreshInterval: 60_000 });
+  // Conversas diretas de WhatsApp (sem portal) também contam como lead. Dá para tirar, se a loja quiser ver só os portais.
+  const [comWhatsapp, setComWhatsapp] = useState(true);
+  const { data, mutate } = useSWR<Painel>(`/api/veiculos/leads/painel?dias=${dias}${comWhatsapp ? "" : "&whatsapp=0"}`, fetcher, { refreshInterval: 60_000 });
   const [marcando, setMarcando] = useState<string | null>(null);
 
   async function jaRespondi(id: string) {
@@ -81,12 +85,18 @@ export function PainelDeLeads() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="painel-de-leads">
-      <div className="flex items-center justify-end gap-1 text-sm">
+      <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-2 text-sm">
+        <label className="flex items-center gap-2 text-neutral-600" title="Clientes que chamaram direto no WhatsApp da loja, sem vir de um portal">
+          <input type="checkbox" checked={comWhatsapp} onChange={(e) => setComWhatsapp(e.target.checked)} />
+          Incluir conversas de WhatsApp
+        </label>
+        <div className="flex items-center gap-1">
         {PERIODOS.map((d) => (
           <button key={d} type="button" onClick={() => setDias(d)} className={`rounded-md px-3 py-1.5 ${dias === d ? "bg-neutral-100 font-semibold" : "text-neutral-500 hover:text-neutral-800"}`}>
             {d} dias
           </button>
         ))}
+        </div>
       </div>
 
       {data.precisamDeGenteTotal > 0 ? (
@@ -116,7 +126,7 @@ export function PainelDeLeads() {
                       Abrir conversa
                     </a>
                   )}
-                  {l.motivo === "sem_resposta" && (
+                  {l.motivo === "sem_resposta" && l.tipo === "portal" && (
                     <button type="button" onClick={() => jaRespondi(l.id)} disabled={marcando === l.id} className={botaoSecundario} title="Use quando você respondeu por ligação ou fora do sistema">
                       Já respondi
                     </button>
@@ -272,7 +282,7 @@ export function PainelDeLeads() {
       </div>
 
       <p className="text-xs text-neutral-500">
-        Como contamos: o lead é considerado respondido quando uma pessoa da loja (pelo Inbox ou pelo celular) ou o Vendedor IA manda mensagem no WhatsApp depois que ele chegou, ou quando alguém clica em &quot;Já respondi&quot; (ligação, por exemplo). Mensagem automática de menu ou saudação não conta.
+        Quem é lead: quem chega pelos portais e também quem chama direto no WhatsApp da loja (a conversa que o cliente abriu, sem ser grupo nem número de setor). Como contamos: o lead é considerado respondido quando uma pessoa da loja (pelo Inbox ou pelo celular) ou o Vendedor IA manda mensagem no WhatsApp depois que ele chegou, ou quando alguém clica em &quot;Já respondi&quot; (ligação, por exemplo). Mensagem automática de menu ou saudação não conta.
         {data.semTelefone > 0 ? ` ${data.semTelefone} lead(s) do período vieram sem telefone: só dá para responder por e-mail ou pelo portal.` : ""}
       </p>
     </div>
