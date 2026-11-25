@@ -10,7 +10,7 @@ function checa(nome: string, obtido: unknown, esperado: unknown) {
   console.log(`${ok ? "ok  " : "FALHA"}  ${nome}${ok ? "" : `  (obtido ${JSON.stringify(obtido)}, esperado ${JSON.stringify(esperado)})`}`);
 }
 
-const SLUGS = ["teste-painel-a", "teste-painel-b"];
+const SLUGS = ["teste-painel-a", "teste-painel-b", "teste-painel-c"];
 const agora = new Date("2026-11-24T15:00:00Z");
 const antes = (min: number) => new Date(agora.getTime() - min * 60_000);
 
@@ -95,7 +95,9 @@ async function main() {
   checa("crítico: 3 (só mensagem automática, mensagem de antes do lead e mensagem que falhou)", p.tempo.critico, 3);
   checa("aguardando: o de 10 min", p.tempo.aguardando, 1);
   checa("sem resposta nos últimos 30 dias: l2, l4, l6, l7, l8", p.nuncaAtendidos, 5);
-  checa("lista de atenção: mais novo primeiro, e traz a conversa para abrir", [p.paraAtender.length, p.paraAtender[0].esperaMin, p.paraAtender[0].conversaId !== null], [5, 10, true]);
+  checa("precisam de gente: l2, l4, l7 e l8 sem resposta (l6 chegou há 10 min, ainda não); o mais novo primeiro, com a conversa", [p.precisamDeGenteTotal, p.precisamDeGente.map((x) => x.motivo), p.precisamDeGente[0].esperaMin, p.precisamDeGente[0].conversaId !== null], [4, ["sem_resposta", "sem_resposta", "sem_resposta", "sem_resposta"], 40, true]);
+  checa("funil do período: 7 recebidos, 3 respondidos, ninguém escreveu, 1 venda", p.funil, { recebidos: 7, respondidos: 3, conversaram: 0, querAvancar: 1, ganhos: 1, perdidos: 0 });
+  checa("estágios: 4 novos, 2 respondidos, 1 venda", p.porEstagio.filter((e) => e.leads > 0).map((e) => [e.estagio, e.leads]), [["NOVO", 4], ["ABORDADO", 2], ["GANHO", 1]]);
   checa("sem telefone contado", p.semTelefone, 1);
   checa("mediana dos respondidos (5, 2 e 25 min) = 5", p.medianaMin, 5);
   checa("até 15 min: 2 de 3 = 67%", p.percentualAte15Min, 67);
@@ -108,6 +110,37 @@ async function main() {
   checa("lead sem vendedor aparece em 'Sem vendedor definido'", p.vendedores.some((v) => v.nome === "Sem vendedor definido"), true);
   checa("14 dias, o último é hoje", [p.porDia.length, p.porDia[13].dia, p.porDia[13].leads], [14, "2026-11-24", 7]);
 
+  // Estágio automático (empresa C): o cliente escreve, a IA passa para a equipe, o lead esfria, a venda fecha.
+  const c = await prisma.tenant.create({ data: { name: SLUGS[2], slug: SLUGS[2] } });
+  const sessaoC = await prisma.whatsAppSession.create({ data: { tenantId: c.id, status: "CONNECTED" } });
+  const funilC = await prisma.funil.create({ data: { tenantId: c.id, nome: "Vendas" } });
+  const etapaC = await prisma.stage.create({ data: { tenantId: c.id, funilId: funilC.id, name: "Novos", position: 0 } });
+  let nc = 0;
+  async function leadC(minAtras: number, opts: { ganha?: boolean; passou?: { motivo: string; minAtras: number } } = {}) {
+    nc++;
+    const contato = await prisma.contact.create({ data: { tenantId: c.id, waJid: `55218888${String(nc).padStart(5, "0")}@s.whatsapp.net`, name: `Cliente ${nc}` } });
+    const conv = await prisma.conversation.create({ data: { tenantId: c.id, contactId: contato.id, sessionId: sessaoC.id } });
+    const neg = await prisma.negociacao.create({ data: { tenantId: c.id, contactId: contato.id, funilId: funilC.id, stageId: etapaC.id, titulo: `Neg ${nc}`, status: opts.ganha ? "GANHA" : "ABERTA" } });
+    await prisma.leadPortal.create({ data: { tenantId: c.id, portal: "NAPISTA", chave: `c${nc}`, origem: "email", nome: `Cliente ${nc}`, mensagem: "oi", recebidoEm: antes(minAtras), negociacaoId: neg.id } });
+    if (opts.passou) await prisma.vendedorIaConversa.create({ data: { conversationId: conv.id, tenantId: c.id, status: "TRANSFERIDA", motivo: opts.passou.motivo, transferidaEm: antes(opts.passou.minAtras) } });
+    const msg = (direction: "INBOUND" | "OUTBOUND", minAtrasMsg: number, extra: object = {}) =>
+      prisma.message.create({ data: { conversationId: conv.id, sessionId: sessaoC.id, direction, body: "x", status: "SENT", createdAt: antes(minAtrasMsg), waMessageId: `c${Math.random()}`, ...extra } });
+    return { msg };
+  }
+  const c1 = await leadC(300, { passou: { motivo: "visita ou test drive", minAtras: 150 } });
+  await c1.msg("OUTBOUND", 290, { referenciaExterna: "vendedor-ia:a" }); await c1.msg("INBOUND", 200); await c1.msg("OUTBOUND", 199, { referenciaExterna: "vendedor-ia:b" });
+  const c2 = await leadC(300);
+  await c2.msg("OUTBOUND", 290, { senderUserId: vendedora.id }); await c2.msg("INBOUND", 100);
+  const c3 = await leadC(6 * 1440);
+  await c3.msg("OUTBOUND", 6 * 1440 - 2, { referenciaExterna: "vendedor-ia:c" });
+  const c4 = await leadC(100);
+  await c4.msg("OUTBOUND", 98, { referenciaExterna: "vendedor-ia:d" });
+  const c5 = await leadC(300, { ganha: true });
+  await c5.msg("OUTBOUND", 290, { senderUserId: vendedora.id }); await c5.msg("INBOUND", 250);
+  const pc = await painelDeLeads(c.id, 7, agora);
+  checa("empresa C: funil automático", pc.funil, { recebidos: 5, respondidos: 5, conversaram: 3, querAvancar: 2, ganhos: 1, perdidos: 0 });
+  checa("empresa C: estágios deduzidos da conversa", pc.porEstagio.filter((e) => e.leads > 0).map((e) => [e.estagio, e.leads]), [["ABORDADO", 1], ["EM_CONVERSA", 1], ["VISITA", 1], ["ESFRIOU", 1], ["GANHO", 1]]);
+  checa("empresa C: precisam de gente, o que a IA passou primeiro", pc.precisamDeGente.map((x) => [x.motivo, x.estagio, x.textoDoMotivo]), [["ia_passou", "VISITA", "A IA passou: quer visitar"], ["cliente_esperando", "EM_CONVERSA", "Cliente esperando resposta"]]);
   const p30 = await painelDeLeads(a.id, 30, agora);
   checa("período de 30 dias inclui o de 20 dias", p30.recebidos, 8);
   const pOutra = await painelDeLeads(b.id, 7, agora);

@@ -15,7 +15,25 @@ type Painel = {
   medianaAnteriorMin: number | null;
   percentualAte15Min: number | null;
   tempo: { excelente: number; atencao: number; critico: number; aguardando: number; respondidos: number };
-  paraAtender: { id: string; nome: string; portal: string; carro: string | null; recebidoEm: string; esperaMin: number; semTelefone: boolean; negociacaoId: string | null; conversaId: string | null; vendedor: string | null }[];
+  precisamDeGenteTotal: number;
+  precisamDeGente: {
+    id: string;
+    nome: string;
+    portal: string;
+    carro: string | null;
+    recebidoEm: string;
+    estagio: string;
+    rotuloDoEstagio: string;
+    motivo: "sem_resposta" | "cliente_esperando" | "ia_passou";
+    textoDoMotivo: string;
+    esperaMin: number;
+    semTelefone: boolean;
+    negociacaoId: string | null;
+    conversaId: string | null;
+    vendedor: string | null;
+  }[];
+  funil: { recebidos: number; respondidos: number; conversaram: number; querAvancar: number; ganhos: number; perdidos: number };
+  porEstagio: { estagio: string; rotulo: string; descricao: string; leads: number }[];
   origem: { portal: string; nome: string; leads: number; percentual: number; respondidos: number; medianaMin: number | null; vendas: number }[];
   vendedores: { id: string | null; nome: string; leads: number; semRespostaAgora: number; medianaMin: number | null }[];
   porDia: { dia: string; leads: number }[];
@@ -71,15 +89,20 @@ export function PainelDeLeads() {
         ))}
       </div>
 
-      {data.nuncaAtendidos > 0 ? (
+      {data.precisamDeGenteTotal > 0 ? (
         <section className="flex flex-col gap-3 rounded-lg border border-red-200 bg-red-50 p-4" data-testid="precisa-de-atencao">
-          <h2 className="text-sm font-semibold text-red-800">
-            Precisa de atenção: {data.nuncaAtendidos} {data.nuncaAtendidos === 1 ? "lead sem resposta" : "leads sem resposta"} (últimos 30 dias)
-          </h2>
+          <div>
+            <h2 className="text-sm font-semibold text-red-800">
+              {data.precisamDeGenteTotal} {data.precisamDeGenteTotal === 1 ? "lead precisa" : "leads precisam"} de uma pessoa agora
+            </h2>
+            <p className="text-xs text-red-700/80">Só entra aqui o que a automação não resolve: o que a IA passou para a equipe, o cliente esperando resposta e o lead sem resposta. Últimos 30 dias.</p>
+          </div>
           <ul className="flex flex-col divide-y divide-red-100">
-            {data.paraAtender.map((l) => (
+            {data.precisamDeGente.map((l) => (
               <li key={l.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-sm">
                 <span className="font-medium">{l.nome}</span>
+                <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${l.motivo === "ia_passou" ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`}>{l.textoDoMotivo}</span>
+                <span className="text-xs text-neutral-500">{l.rotuloDoEstagio}</span>
                 <span className="text-neutral-600">
                   {l.portal}
                   {l.carro ? ` · ${l.carro}` : ""}
@@ -93,18 +116,20 @@ export function PainelDeLeads() {
                       Abrir conversa
                     </a>
                   )}
-                  <button type="button" onClick={() => jaRespondi(l.id)} disabled={marcando === l.id} className={botaoSecundario} title="Use quando você respondeu por ligação ou fora do sistema">
-                    Já respondi
-                  </button>
+                  {l.motivo === "sem_resposta" && (
+                    <button type="button" onClick={() => jaRespondi(l.id)} disabled={marcando === l.id} className={botaoSecundario} title="Use quando você respondeu por ligação ou fora do sistema">
+                      Já respondi
+                    </button>
+                  )}
                 </span>
               </li>
             ))}
           </ul>
-          {data.nuncaAtendidos > data.paraAtender.length && <p className="text-xs text-neutral-600">Mostrando os {data.paraAtender.length} mais recentes.</p>}
+          {data.precisamDeGenteTotal > data.precisamDeGente.length && <p className="text-xs text-neutral-600">Mostrando os {data.precisamDeGente.length} mais quentes.</p>}
         </section>
       ) : (
         <section className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800" data-testid="tudo-respondido">
-          Nenhum lead sem resposta nos últimos 30 dias.
+          Nenhum lead precisa de uma pessoa agora: tudo respondido e nada parado esperando a equipe.
         </section>
       )}
 
@@ -114,6 +139,49 @@ export function PainelDeLeads() {
         <Cartao titulo="Tempo típico da 1ª resposta" valor={duracao(data.medianaMin)} detalhe={data.medianaAnteriorMin !== null ? `período anterior: ${duracao(data.medianaAnteriorMin)}` : "o meio da fila: metade respondeu mais rápido"} />
         <Cartao titulo="Respondidos em até 15 min" valor={data.percentualAte15Min === null ? "—" : `${data.percentualAte15Min}%`} detalhe={`${t.respondidos} respondido${t.respondidos === 1 ? "" : "s"} no período`} />
       </div>
+
+      <section className={secao} data-testid="funil-automatico">
+        <div>
+          <h2 className="text-sm font-semibold">Funil de vendas ({data.dias} dias)</h2>
+          <p className="text-xs text-neutral-500">Anda sozinho: cada passo é deduzido das conversas no WhatsApp, ninguém precisa mover cartão nem clicar.</p>
+        </div>
+        {data.funil.recebidos === 0 ? (
+          <p className="text-sm text-neutral-500">Sem leads no período.</p>
+        ) : (
+          <>
+            <ul className="flex flex-col gap-2">
+              {[
+                { rotulo: "Leads recebidos", n: data.funil.recebidos, dica: "chegaram dos portais" },
+                { rotulo: "Respondidos pela loja", n: data.funil.respondidos, dica: "uma pessoa ou a IA falou com o lead" },
+                { rotulo: "Conversaram", n: data.funil.conversaram, dica: "o cliente respondeu" },
+                { rotulo: "Querem avançar", n: data.funil.querAvancar, dica: "pediram visita, negociação, financiamento ou uma pessoa" },
+                { rotulo: "Vendas", n: data.funil.ganhos, dica: "negociação ganha" },
+              ].map((p) => (
+                <li key={p.rotulo} title={p.dica}>
+                  <div className="flex items-baseline justify-between text-sm">
+                    <span>{p.rotulo}</span>
+                    <span className="tabular-nums">
+                      <b>{p.n}</b> <span className="text-xs text-neutral-500">{Math.round((p.n / data.funil.recebidos) * 100)}%</span>
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 overflow-hidden rounded-full bg-neutral-100">
+                    <div className="h-full rounded-full bg-accent" style={{ width: `${Math.max(p.n ? 2 : 0, (p.n / data.funil.recebidos) * 100)}%` }} />
+                  </div>
+                </li>
+              ))}
+            </ul>
+            <ul className="flex flex-wrap gap-2 text-xs" aria-label="Leads por estágio">
+              {data.porEstagio
+                .filter((e) => e.leads > 0)
+                .map((e) => (
+                  <li key={e.estagio} title={e.descricao} className={`rounded-full border px-2.5 py-1 ${e.estagio === "ESFRIOU" || e.estagio === "PERDIDO" ? "border-neutral-200 text-neutral-500" : e.estagio === "NOVO" ? "border-red-200 text-red-700" : "border-emerald-200 text-emerald-800"}`}>
+                    {e.rotulo}: <b className="tabular-nums">{e.leads}</b>
+                  </li>
+                ))}
+            </ul>
+          </>
+        )}
+      </section>
 
       <section className={secao}>
         <h2 className="text-sm font-semibold">Tempo de resposta</h2>
