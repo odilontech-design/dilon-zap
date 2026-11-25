@@ -10,5 +10,6 @@ export { TAREFA_DO_VENDEDOR, ACOES_DO_VENDEDOR } from "./saas/prompt";
 export { obterControleDaConversa, definirControleDaConversa, controleDaConversaSchema } from "./saas/vendedor";
 
 // Controle do Vendedor IA de carros conversa a conversa (faixa do Inbox).
+export { cicloDeRespostaImediata, montarSaudacao, primeiroNome, celular } from "./imediata";
 export { MODELO_DO_TESTE, explicarErro, precisaVerificar, verificarConexao } from "./saude";
 export { obterControleDeCarros, definirControleDeCarros, controleDeCarrosSchema, ErroDoControle } from "./controle";

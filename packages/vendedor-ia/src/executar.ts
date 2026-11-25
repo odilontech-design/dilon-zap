@@ -37,7 +37,7 @@ const MENSAGENS_NO_HISTORICO = 40;
 /* --------------------------------------------------------------- busca */
 
 /** Lojas com o Vendedor IA ligado e o recurso liberado. */
-async function lojasAtivas() {
+export async function lojasAtivas() {
   const liberadas = await prisma.tenantRecurso.findMany({ where: { recurso: "VENDEDOR_IA", ativo: true }, select: { tenantId: true } });
   if (!liberadas.length) return [];
   return prisma.vendedorIaConfig.findMany({
@@ -46,7 +46,7 @@ async function lojasAtivas() {
   });
 }
 
-type Loja = Awaited<ReturnType<typeof lojasAtivas>>[number];
+export type Loja = Awaited<ReturnType<typeof lojasAtivas>>[number];
 
 /** Leads (conversas assumidas) e custo da loja no mês corrente. */
 export async function usoDoMes(tenantId: string, agora: Date) {
@@ -178,7 +178,7 @@ async function passarPorFalha(conversa: Conversa, loja: Loja, deps: Dependencias
   }
 }
 
-type Conversa = { id: string; tenantId: string; sessionId: string; setorId: string | null; contact?: { name?: string | null } | null };
+export type Conversa = { id: string; tenantId: string; sessionId: string; setorId: string | null; contact?: { name?: string | null } | null };
 
 /** Uma rodada de resposta: chama a API, executa as ferramentas pedidas e manda o texto final. */
 async function responder(input: { conversa: Conversa; loja: Loja; historico: Anthropic.Beta.BetaMessageParam[]; deps: Dependencias; agora: Date }) {
@@ -372,7 +372,7 @@ async function enviarCarro(e: Record<string, unknown>, ctx: Contexto): Promise<R
  * worker não confundem com uma pessoa da equipe. A `referenciaExterna`
  * identifica as mensagens da IA nos relatórios.
  */
-async function enfileirar(conversa: Conversa, msgs: { body: string; mediaKey?: string; mediaMimeType?: string; mediaFileName?: string }[]) {
+export async function enfileirar(conversa: Conversa, msgs: { body: string; mediaKey?: string; mediaMimeType?: string; mediaFileName?: string }[]) {
   const base = Date.now();
   await prisma.message.createMany({
     data: msgs.map((m, i) => ({

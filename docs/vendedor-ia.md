@@ -29,6 +29,18 @@ por até 1.000 leads, preço de novembro de 2026).
   - **Transfere** depois de 20 respostas na mesma conversa.
   - **Não responde** mensagem com mais de 15 min, por exemplo depois de o
     processo ficar fora do ar.
+- **Resposta imediata ao lead de portal** (v1.100.0, `packages/vendedor-ia/src/imediata.ts`; ligar em
+  Veículos > Vendedor IA): quando chega um lead dos portais com celular, a IA manda em segundos uma saudação
+  (nome, loja, carro e portal, sem preço) e a ficha e até 3 fotos do carro (as regras de preço e km "sob consulta"
+  valem), pelo WhatsApp da loja. Se o cliente responder, a IA continua a conversa. Roda no worker do Vendedor IA
+  (só grava na fila de saída; não toca no worker do WhatsApp). **Travas** para o número não parecer disparo em massa:
+  só leads que chegam DEPOIS de ligar (`respostaImediataDesde`; o atraso nunca recebe); só até 60 min depois do
+  lead chegar; teto por hora (padrão 10, configurável); 20 s entre uma e outra; só das 7h às 22h no fuso da loja; só
+  celular; nunca para quem a loja já falou nas últimas 24 h, nem em conversa com a IA parada ou já com a equipe;
+  respeita o limite de leads e de custo do mês. Cada lead recebe uma marca (`automaticoResultado`: enviada, ou
+  ignorada com o motivo, ou erro). A resposta conta no painel de leads como resposta (a IA é "resposta").
+  Teste: `imediata.test-manual.ts`. Campos novos (aditivos): `VendedorIaConfig.respostaImediata*`,
+  `LeadPortal.automaticoEm/automaticoResultado`.
 - **Se a API falhar** (v1.98.0): o SDK já tenta 3 vezes (2 retentativas, com espera).
   Se continuar falhando, a conversa passa para a equipe (Pendentes, no setor de
   transferência), com o motivo "a IA ficou indisponível", e o cliente recebe um aviso

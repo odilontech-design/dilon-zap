@@ -4038,6 +4038,13 @@ model VendedorIaConfig {
   // geral, para não falarem os dois. Guarda como estava para devolver.
   semAutomacoesAntes Boolean?
 
+  // Resposta imediata ao lead de portal: a IA manda a primeira mensagem (ficha e fotos do carro) em segundos.
+  // Só vale para leads que chegam DEPOIS de ligar (`respostaImediataDesde`): ligar não dispara para o atraso.
+  respostaImediata       Boolean   @default(false)
+  respostaImediataDesde  DateTime?
+  // Teto de primeiras mensagens por hora, para o número da loja não parecer disparo em massa.
+  respostaImediataPorHora Int      @default(10)
+
   updatedAt DateTime @updatedAt
 }
 
@@ -4236,6 +4243,9 @@ model LeadPortal {
   recebidoEm   DateTime  @default(now())
   // Quando a equipe respondeu pela primeira vez (relógio do tempo de resposta).
   respondidoEm DateTime?
+  // Resposta imediata da IA: quando foi tratada e o resultado ("enviada", "ignorada: motivo" ou "erro: ...").
+  automaticoEm        DateTime?
+  automaticoResultado String?
 
   @@unique([tenantId, portal, chave])
   @@index([tenantId, recebidoEm])

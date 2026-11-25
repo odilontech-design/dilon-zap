@@ -27,7 +27,7 @@ const numero = (nome: string, padrao: number) => {
 
 async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-  const { ciclo, cicloDoVendedor, precisaVerificar, verificarConexao } = await import("@dilon-zap/vendedor-ia");
+  const { ciclo, cicloDoVendedor, cicloDeRespostaImediata, precisaVerificar, verificarConexao } = await import("@dilon-zap/vendedor-ia");
   const { chaveAnthropicDoServidor } = await import("@dilon-zap/sdr-core");
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
 
@@ -75,6 +75,13 @@ async function main() {
       }
     } catch (e) {
       console.error("[vendedor-ia] conferência da conexão falhou:", e instanceof Error ? e.message : e);
+    }
+    // Resposta imediata ao lead de portal (só em loja que ligou): não usa a API, só grava a mensagem na fila de saída.
+    try {
+      const r = await cicloDeRespostaImediata({ cliente, acordarFila, urlDoSite: process.env.NEXTAUTH_URL ?? null });
+      if (r.enviadas || r.erros) console.log(`[resposta-imediata] enviadas ${r.enviadas}, erros ${r.erros}`);
+    } catch (e) {
+      console.error("[resposta-imediata] ciclo falhou:", e instanceof Error ? e.message : e);
     }
     if (apiKey) {
       try {
