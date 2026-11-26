@@ -2,7 +2,7 @@
 // Rodar com: npx tsx packages/portais/src/napista-envio.test-manual.ts
 import { ErroNapista, type OfertaNapista } from "./napista/cliente";
 import { montarOfertaNapista } from "./napista/mapa";
-import { comEquipamentosOpcionais, enderecoPublicoDoAnuncio, enviarFotosNapista, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
+import { comEquipamentosOpcionais, enderecoPublicoDoAnuncio, enviarFotosNapista, enxugarParaDiagnostico, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -80,6 +80,9 @@ async function principal() {
   // O endereço público só vale se o NaPista o devolver; o endereço das fotos não conta.
   checa("acha o endereço público do anúncio num campo do NaPista", enderecoPublicoDoAnuncio({ id: "x", links: { site: "https://www.napista.com.br/anuncios/abc" } }), "https://www.napista.com.br/anuncios/abc");
   checa("ignora o endereço das fotos e devolve nulo sem endereço", enderecoPublicoDoAnuncio({ photos: [{ url: "https://marketplace.development.bvia.zflow.com.br/static/photos/x" }], title: "Fiat Argo" }), null);
+
+  const dg = enxugarParaDiagnostico({ id: "x", description: "a".repeat(500), numeroPublico: 17122550, photos: [1, 2, 3, 4, 5].map((n) => ({ url: `https://f/${n}` })) }) as any;
+  checa("diagnóstico: corta texto longo, mantém o número e encurta lista de fotos", [dg.description.length < 200, dg.numeroPublico, dg.photos.length, dg.photos[3]], [true, 17122550, 4, "(+2 itens)"]);
 
   const resumo = resumoDaOferta(oferta);
   checa("resumo do que foi enviado não leva o texto longo", [resumo.includes("DIESEL"), resumo.includes("texto longo")], [true, false]);

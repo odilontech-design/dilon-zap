@@ -4,6 +4,7 @@ import {
   appNapistaDoAmbiente,
   assinarEstado,
   enderecoPublicoDoAnuncio,
+  enxugarParaDiagnostico,
   chaveDoAmbiente,
   contaNapistaGuardada,
   guardarContaNapista,
@@ -297,5 +298,7 @@ export async function detalheDoAnuncioNapista(tenantId: string, veiculoId: strin
     atualizadoEm: texto(r?.updatedDate),
     enderecoPublico: enderecoPublicoDoAnuncio(r),
     campos: r && typeof r === "object" ? Object.keys(r).slice(0, 40) : [],
+    /** Os dados brutos do NaPista (enxutos): o anúncio, o item na lista e a loja. Para achar o que o NaPista devolve de endereço público. */
+    diagnostico: enxugarParaDiagnostico({ anuncio: r, itemNaLista: await s.ofertaNaListaBruta(pub.idExterno).catch((e) => `erro: ${e instanceof Error ? e.message : e}`), loja: await s.lojaBruta().catch(() => null) }),
   };
 }

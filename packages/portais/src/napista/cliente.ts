@@ -189,6 +189,22 @@ export class SessaoNapista {
     const r = await this.req<any>("GET", this.s(`/offer/${encodeURIComponent(id)}`));
     return { status: typeof r?.status === "string" ? (r.status as StatusOferta) : null, fotos: Array.isArray(r?.photos) ? r.photos.length : 0 };
   }
+  /** O item deste anúncio como aparece na LISTA de anúncios (pode trazer campos que a leitura individual não traz). Para diagnóstico. */
+  async ofertaNaListaBruta(id: string, status: StatusOferta = "PUBLISHED"): Promise<any | null> {
+    for (let pagina = 0; pagina < 50; pagina++) {
+      const r = await this.req<any>("GET", this.s(`/offers?status=${status}&page=${pagina}&limit=100`));
+      const lote: any[] = Array.isArray(r?.pageData) ? r.pageData : [];
+      const achado = lote.find((o) => texto(o?.id) === id);
+      if (achado) return achado;
+      if (!lote.length || pagina + 1 >= Number(r?.totalPages ?? 1)) return null;
+    }
+    return null;
+  }
+  /** A loja como o NaPista devolve em /seller/access (todos os campos), para diagnóstico. */
+  async lojaBruta(): Promise<any | null> {
+    const r = await this.req<any>("GET", "/seller/access");
+    return (Array.isArray(r?.sellers) ? r.sellers : []).find((l: any) => texto(l?.sellerId) === this.sellerId) ?? null;
+  }
   /** O anúncio exatamente como o NaPista devolve, para diagnóstico (o que ele mostra do anúncio e se há endereço público). */
   async ofertaBruta(id: string): Promise<any> {
     return this.req<any>("GET", this.s(`/offer/${encodeURIComponent(id)}`));

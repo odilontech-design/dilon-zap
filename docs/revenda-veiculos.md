@@ -908,6 +908,10 @@ A grade de **Veículos > Anúncios** ficou mais perto da consulta de estoque do 
 - **Km suspeita:** "Km suspeita" é km informada mas **baixa demais para a idade** (menos de 500 km num carro de ano anterior; ex.: **1 km num carro de 2015**), que costuma ser número padrão e não o odômetro. Aparece como filtro com contagem na grade e esses carros entram na lista da tela **Completar**, onde a km real pode ser digitada ou colada da planilha. Motivo: o estoque importado trazia "1 km" e o Zap já publicou esses carros no NaPista com essa km (o NaPista mostra "Baixa Km"). Ao corrigir a km, o anúncio é atualizado sozinho no próximo ciclo.
 - Se o anúncio no NaPista estiver mostrando km baixa, a conferência avisa em vermelho.
 
+### Grade: diagnóstico do endereço público do NaPista (v1.119.0)
+
+O AutoCerto tem o link público de cada anúncio do NaPista no formato **`napista.com.br/anuncios-mcn/<número>`** (ex.: `17122550`), um **número**. O Zap só recebe da API o código do anúncio em formato UUID, que **não** abre a página pública. Para descobrir se o NaPista devolve esse número em algum campo, "Conferir no NaPista" ganhou **"Dados brutos do NaPista (diagnóstico)"** (com botão Copiar): o anúncio, o item na lista de anúncios e a loja (`/seller/access`), enxutos (texto longo cortado, listas curtas). Quando acharmos o campo, o link passa a ser montado com ele (`https://napista.com.br/anuncios-mcn/<número>`). Se o NaPista não devolver o número, o caminho é a página da loja ou a busca pela placa. Código: `enxugarParaDiagnostico` em `packages/portais/src/napista/envio.ts`.
+
 ## Importar o controle de vendas da planilha (v1.110.0)
 
 Para lojas que ainda controlam as vendas numa planilha (uma aba por mês), **Veículos > Importar > "Importar o controle de vendas"** traz o histórico para dentro do Zap.
