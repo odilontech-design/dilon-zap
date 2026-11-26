@@ -963,6 +963,8 @@ model Conversation {
   // mensagens de madrugada — sem ela a automação vira motivo de reclamação.
   outOfHoursNotifiedAt DateTime?
 
+  acompanhamentosIa AcompanhamentoIa[]
+
   // Estado do menu de triagem. Fica na conversa, e não no contato como a
   // saudação, porque o que o menu resolve é de quem é ESTE atendimento.
   //
@@ -4045,6 +4047,12 @@ model VendedorIaConfig {
   // Teto de primeiras mensagens por hora, para o número da loja não parecer disparo em massa.
   respostaImediataPorHora Int      @default(10)
 
+  // Acompanhamento automatico: a IA retoma, no maximo duas vezes, a conversa em que o cliente sumiu. So conversas que a IA
+  // atende e que comecaram DEPOIS de ligar (`acompanhamentoDesde`). Teto por hora para o numero da loja nao parecer disparo.
+  acompanhamento        Boolean   @default(false)
+  acompanhamentoDesde   DateTime?
+  acompanhamentoPorHora Int       @default(5)
+
   updatedAt DateTime @updatedAt
 }
 
@@ -4090,6 +4098,21 @@ model VendedorIaSaude {
   /// O Super Admin pediu um teste agora (o worker atende em poucos segundos).
   testeSolicitadoEm DateTime?
   updatedAt         DateTime  @updatedAt
+}
+
+/// Cada toque do acompanhamento automatico: a tentativa (1 ou 2), quando saiu e o resultado ("enviada", "ignorada: motivo" ou
+/// "erro: ..."). E o que impede um terceiro toque e o que conta para o teto por hora e por dia.
+model AcompanhamentoIa {
+  id             String       @id @default(cuid())
+  tenantId       String
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  tentativa      Int
+  enviadoEm      DateTime     @default(now())
+  resultado      String
+
+  @@unique([conversationId, tentativa])
+  @@index([tenantId, enviadoEm])
 }
 
 /// Uma chamada à API: os tokens e o custo. É daqui que sai o custo real por lead.

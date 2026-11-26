@@ -19,6 +19,8 @@ const corpo = z.object({
   limiteCustoMesCents: z.number().int().min(100).max(10_000_000).nullable(),
   respostaImediata: z.boolean().default(false),
   respostaImediataPorHora: z.number().int().min(1).max(60).default(10),
+  acompanhamento: z.boolean().default(false),
+  acompanhamentoPorHora: z.number().int().min(1).max(30).default(5),
 });
 
 /** Configuração e painel do mês do Vendedor IA. Só a gestão. */
@@ -64,11 +66,14 @@ export async function PUT(req: Request) {
       limiteLeadsMes: d.limiteLeadsMes,
       limiteCustoMesCents: d.limiteCustoMesCents,
       respostaImediataPorHora: d.respostaImediataPorHora,
+      acompanhamentoPorHora: d.acompanhamentoPorHora,
+      // Ao ligar, o relógio começa agora: só conversas que começarem daqui em diante entram no acompanhamento.
+      ...(d.acompanhamento !== atual.acompanhamento ? { acompanhamento: d.acompanhamento, acompanhamentoDesde: d.acompanhamento ? new Date() : null } : {}),
       // Ao ligar, o relógio começa agora: só leads que chegarem daqui em diante recebem a resposta imediata.
       ...(d.respostaImediata !== atual.respostaImediata ? { respostaImediata: d.respostaImediata, respostaImediataDesde: d.respostaImediata ? new Date() : null } : {}),
     },
   });
   await ligarOuDesligar(user.tenantId, d.ativo);
-  await logAudit({ actor: user, action: "vendedor-ia.config", metadata: { ativo: d.ativo, modelo: d.modelo, esforco: d.esforco, respostaImediata: d.respostaImediata, respostaImediataPorHora: d.respostaImediataPorHora } });
+  await logAudit({ actor: user, action: "vendedor-ia.config", metadata: { ativo: d.ativo, modelo: d.modelo, esforco: d.esforco, respostaImediata: d.respostaImediata, respostaImediataPorHora: d.respostaImediataPorHora, acompanhamento: d.acompanhamento, acompanhamentoPorHora: d.acompanhamentoPorHora } });
   return NextResponse.json({ ok: true });
 }

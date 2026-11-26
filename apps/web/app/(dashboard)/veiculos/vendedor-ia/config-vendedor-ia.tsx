@@ -18,6 +18,8 @@ type Dados = {
     leadsContratados: number | null;
     respostaImediata: boolean;
     respostaImediataPorHora: number;
+    acompanhamento: boolean;
+    acompanhamentoPorHora: number;
   };
   setores: { id: string; nome: string }[];
   estimativas: { id: string; nome: string; aproximado: boolean; usdPorLead: number }[];
@@ -222,6 +224,23 @@ export function ConfigVendedorIa() {
           </label>
           <p className="text-xs text-neutral-500">
             Só vale para leads que chegarem depois de ligar (os antigos não recebem). Só das 7h às 22h, até 1 hora depois do lead chegar, com pelo menos 20 segundos entre uma mensagem e outra, e nunca para quem já está em conversa com a loja. O teto por hora protege o número da loja: muitas mensagens para números novos de uma vez podem levar o WhatsApp a bloquear o número. Cada lead atendido conta no limite de leads do mês. Precisa do Vendedor IA ligado.
+          </p>
+        </section>
+
+        <section className={secao}>
+          <h2 className="text-sm font-semibold">Acompanhamento automático</h2>
+          <label className="flex items-start gap-2 text-sm">
+            <input id="ia-acompanhamento" type="checkbox" checked={f.acompanhamento} onChange={(e) => setF({ ...f, acompanhamento: e.target.checked })} className="mt-1" />
+            <span>
+              Quando o cliente que a IA estava atendendo some, a IA retoma a conversa: um primeiro toque depois de 24 horas sem resposta e, se continuar em silêncio, um segundo depois de mais 3 dias. Nunca um terceiro. Se o cliente responder, a IA continua a conversa normalmente.
+            </span>
+          </label>
+          <label className="flex flex-col gap-1 sm:max-w-xs">
+            <span className={rotulo}>Máximo de toques por hora</span>
+            <input id="ia-acompanhamento-por-hora" inputMode="numeric" value={f.acompanhamentoPorHora} onChange={(e) => setF({ ...f, acompanhamentoPorHora: Math.min(30, Number(e.target.value.replace(/\D/g, "")) || 1) })} className={campo} />
+          </label>
+          <p className="text-xs text-neutral-500">
+            Só vale para conversas que começarem depois de ligar, e só as que a IA atende. Só de segunda a sábado, das 9h às 19h, no máximo 30 por dia e com pelo menos 90 segundos entre um toque e outro. Para na hora se o cliente pedir para parar, se uma pessoa da loja já falou com ele ou se você apertar &quot;Assumir&quot; na conversa. O texto é curto, sem preço e sem pressão. Comece com um teto baixo (3 por hora): muitas mensagens seguidas para quem não respondeu podem fazer o WhatsApp tratar o número da loja como disparo em massa.
           </p>
         </section>
 

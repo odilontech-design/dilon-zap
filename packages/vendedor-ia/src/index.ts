@@ -11,5 +11,6 @@ export { obterControleDaConversa, definirControleDaConversa, controleDaConversaS
 
 // Controle do Vendedor IA de carros conversa a conversa (faixa do Inbox).
 export { cicloDeRespostaImediata, montarSaudacao, primeiroNome, celular } from "./imediata";
+export { cicloDeAcompanhamento } from "./acompanhamento";
 export { MODELO_DO_TESTE, explicarErro, precisaVerificar, verificarConexao } from "./saude";
 export { obterControleDeCarros, definirControleDeCarros, controleDeCarrosSchema, ErroDoControle } from "./controle";
