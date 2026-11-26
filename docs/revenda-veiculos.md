@@ -299,6 +299,16 @@ nos portais (os conectores ainda não existem; ver `docs/portais-e-site.md`).
 (21 verificações com um site falso: saiu, voltou, reativado sem duplicar, novo, vendido e
 manual intocados, site fora do ar e vazio, trava de 8 de 10 sumirem).
 
+## Baixa em lote dos carros que saíram do site (v1.112.0)
+
+Em **Veículos > Importar > "Acompanhando o site atual"**, os carros que saíram do site antigo esperam a confirmação da gestão. Antes era um a um, pela ficha. Agora dá para marcar vários e:
+
+- **Baixar como vendidos:** o carro sai do pátio, da vitrine e (pelo worker) dos portais. A data de saída é a em que ele sumiu do site. **Não cria a venda** (comprador, valor, pagamento): isso continua pela ficha ou pela planilha de controle de vendas. Fica registrado no histórico do carro como "baixado em lote".
+- **Foi engano:** os carros voltam à vitrine e deixam de ser comparados com o site antigo (o mesmo que a ficha faz, em lote).
+- **Ficam de fora da baixa** (a tela explica o motivo): carro **reservado** (tem sinal e cliente a resolver) e **consignado** (a venda pela ficha é que gera o repasse ao dono).
+- Pede confirmação na própria tela, vale no máximo 100 carros por vez, só para a gestão, sempre na loja da sessão, e é registrado na auditoria (`veiculos.baixa-em-lote`, `veiculos.reativar-em-lote`).
+- API: `POST /api/veiculos/sincronizar-site/lote` com `{ acao: "baixar" | "reativar", ids }`.
+
 ## Implementado (v1.48.0): planos da revenda
 
 Tabela em `apps/web/lib/veiculos-planos.ts`, com teste. O Super Admin define o
