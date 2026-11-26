@@ -1,7 +1,7 @@
 // Veículos > Anúncios (grade de portais). Rodar de apps/web com:
 //   DATABASE_URL=postgresql://postgres@localhost:5439/zap npx tsx lib/grade-portais.test-manual.ts
 import { prisma } from "@dilon-zap/db";
-import { gradeDePortais } from "./grade-portais";
+import { atualizarAgora, gradeDePortais } from "./grade-portais";
 import { anunciarNaWebmotors } from "./portais-webmotors";
 
 let falhas = 0;
@@ -48,6 +48,7 @@ async function main() {
   checa("Webmotors: conectada, 1 publicado, 1 na fila, 1 com erro (o desligado não conta)", [w.conectado, w.publicados, w.naFila, w.comErro], [true, 1, 1, 1]);
   checa("Webmotors: à venda fora do portal = 'Fora' e o desligado (vendido e reservado não contam)", w.fora, 2);
   checa("Webmotors: dos que faltam, 1 está sem km", w.foraSemKm, 1);
+  checa("Webmotors: pendentes para o Atualizar agora = 1 na fila + 1 com erro", w.pendentes, 2);
   const n = g.portais.find((p) => p.portal === "NAPISTA")!;
   checa("NaPista: conta com erro aparece como desconectada", [n.conectado, n.situacaoConta], [false, "ERRO"]);
   checa("linhas: 6 carros à venda ou reservados (vendido e de outra loja ficam de fora)", g.carros.length, 6);
@@ -60,6 +61,12 @@ async function main() {
   checa("linha traz versão, ano do modelo, vitrine, km e os dois preços", [l1.versao, l1.anoModelo, l1.naVitrine, l1.km, l1.precoClassificadosCents], [null, 2023, true, 10000, null]);
   checa("linha sem foto: capa nula e zero fotos", [l1.capaId, l1.totalFotos], [null, 0]);
 
+  const ag = await atualizarAgora(a.id, "WEBMOTORS");
+  checa("Atualizar agora: reenfileira a fila e o erro (o publicado e o desligado ficam)", ag.reenviados, 2);
+  const depois = await gradeDePortais(a.id);
+  const c3d = depois.carros.find((c) => c.id === c3.id)!.anuncios.WEBMOTORS;
+  checa("o anúncio com erro voltou à fila sem o erro antigo", [c3d?.status, c3d?.erro], ["FILA", null]);
+  checa("Atualizar agora de outra loja não mexe nesta", (await atualizarAgora(b.id, "WEBMOTORS")).reenviados, 0);
   const gb = await gradeDePortais(b.id);
   checa("outra loja vê só a coluna e o carro dela", [gb.portais.map((p) => p.portal), gb.carros.length], [["MOBIAUTO"], 1]);
 

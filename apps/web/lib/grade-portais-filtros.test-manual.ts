@@ -1,6 +1,6 @@
 // Busca, filtros e ordenação da grade de anúncios. Puro: sem banco.
 // Rodar com: npx tsx --tsconfig tsconfig.json lib/grade-portais-filtros.test-manual.ts
-import { classeDosDias, contagemPorFiltro, filtrarEOrdenar, type CarroDaGrade } from "./grade-portais-filtros";
+import { classeDosDias, contagemPorFiltro, filtrarEOrdenar, urlDoAnuncio, type CarroDaGrade } from "./grade-portais-filtros";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -41,6 +41,10 @@ checa("ordem por placa", ids(filtrarEOrdenar(lista, portais, { termo: "", filtro
 const c = contagemPorFiltro(lista, portais, "", "todos");
 checa("contagem por filtro", [c.todos, c.faltando, c.erro, c.semKm, c.semFoto, c.parados, c.reservados], [4, 1, 1, 1, 1, 2, 1]);
 checa("faixas de dias", [classeDosDias(30), classeDosDias(61), classeDosDias(91)], ["normal", "atencao", "parado"]);
+
+checa("NaPista publicado: endereço público pelo código do anúncio", urlDoAnuncio("NAPISTA", { ativo: true, status: "PUBLICADO", url: null, idExterno: "eed79ff2-a526-4eb3-9111-7ca7ab137d6e" }), "https://www.napista.com.br/anuncios/eed79ff2-a526-4eb3-9111-7ca7ab137d6e");
+checa("o endereço que o portal devolveu vale mais", urlDoAnuncio("WEBMOTORS", { ativo: true, status: "PUBLICADO", url: "https://w/1", idExterno: "9" }), "https://w/1");
+checa("não publicado, desligado ou sem código: sem link", [urlDoAnuncio("NAPISTA", { ativo: true, status: "ERRO", url: null, idExterno: "x" }), urlDoAnuncio("NAPISTA", { ativo: false, status: "PUBLICADO", url: null, idExterno: "x" }), urlDoAnuncio("NAPISTA", { ativo: true, status: "PUBLICADO", url: null, idExterno: null }), urlDoAnuncio("MOBIAUTO", { ativo: true, status: "PUBLICADO", url: null, idExterno: "x" })], [null, null, null, null]);
 
 if (falhas) {
   console.log(`\n${falhas} falha(s)`);

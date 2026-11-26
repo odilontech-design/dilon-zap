@@ -108,3 +108,14 @@ export function contagemPorFiltro(carros: CarroDaGrade[], portaisConectados: str
 export function classeDosDias(dias: number): "normal" | "atencao" | "parado" {
   return dias > 90 ? "parado" : dias > 60 ? "atencao" : "normal";
 }
+
+/**
+ * O endereço do anúncio no portal, para "Ver anúncio". Vale o que o portal devolveu e, no NaPista (que não devolve), o
+ * endereço público montado com o código do anúncio. Sem anúncio publicado, não há link.
+ */
+export function urlDoAnuncio(portal: string, pub: { ativo: boolean; status: string; url: string | null; idExterno: string | null }): string | null {
+  if (!pub.ativo || pub.status !== "PUBLICADO") return null;
+  if (pub.url) return pub.url;
+  if (portal === "NAPISTA" && pub.idExterno) return `https://www.napista.com.br/anuncios/${encodeURIComponent(pub.idExterno)}`;
+  return null;
+}

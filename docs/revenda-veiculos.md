@@ -897,6 +897,11 @@ A grade de **Veículos > Anúncios** ficou mais perto da consulta de estoque do 
 - Regras em `lib/grade-portais-filtros.ts` (puras, testadas em `lib/grade-portais-filtros.test-manual.ts`). Sem mudança de schema nem de worker.
 - **Próximas entregas:** "Atualizar agora" por portal com a contagem de pendentes, exportar para CSV e imprimir, e escolher o plano do anúncio por célula.
 
+### Grade: "Atualizar agora" e link do anúncio (v1.117.0)
+
+- **Atualizar agora (N)** em cada cartão de portal, e **Atualizar anúncios (N)** no topo para todos os portais conectados. N é o que está **na fila ou com erro** (só carros à venda, anúncios ligados). O botão devolve esses anúncios à fila, apaga o erro antigo e **zera a espera entre tentativas** (que chega a 5 minutos, 10, 20… até 6 horas); o worker dos portais roda a cada minuto e envia no próximo ciclo. O que está publicado e igual não é tocado, e quem ainda tem pendência de verdade (km, versão, foto) volta com o motivo na linha. API: `PUT /api/veiculos/anuncios` com `{ portal }` (só gestão, só a loja da sessão, exige o portal conectado, registrada na auditoria `veiculos.atualizar_anuncios`).
+- **Ver anúncio no NaPista:** o NaPista não devolve o endereço do anúncio, então a grade o monta com o código do anúncio: `https://www.napista.com.br/anuncios/<código>` (o mesmo formato do endereço público, que o Sales vê no NaPista). **A confirmar em produção**: abrir um "Ver anúncio" e ver se carrega o anúncio certo; se o NaPista usar outro código na página pública, o ajuste é em `urlDoAnuncio` (`lib/grade-portais-filtros.ts`). Nos outros portais vale o endereço que o portal devolveu.
+
 ## Importar o controle de vendas da planilha (v1.110.0)
 
 Para lojas que ainda controlam as vendas numa planilha (uma aba por mês), **Veículos > Importar > "Importar o controle de vendas"** traz o histórico para dentro do Zap.
