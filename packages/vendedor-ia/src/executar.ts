@@ -5,6 +5,7 @@ import { custoMicros, PRECOS } from "./custo";
 import { combinaComABusca } from "./busca-estoque";
 import { fichaParaCliente, nomeDoVeiculo, reais } from "./ficha";
 import { primeiroNomeDoCliente } from "./nome";
+import { atribuirPeloRodizio } from "./rodizio";
 import { FERRAMENTAS, ROTULO_MOTIVO, montarSistema } from "./prompt";
 import { agoraNaLoja, decidir, montarHistorico, paraWhatsApp, type MensagemDaConversa } from "./regras";
 
@@ -425,4 +426,6 @@ async function transferir(conversa: Conversa, loja: Loja, motivo: string, resumo
     where: { id: conversa.id },
     data: { status: "PENDING", ...(loja.setorTransferenciaId ? { setorId: loja.setorTransferenciaId } : {}) },
   });
+  // O vendedor da vez recebe a conversa (se a loja usa o rodízio) e é avisado no celular.
+  await atribuirPeloRodizio(conversa.id, loja, motivo, agora);
 }
