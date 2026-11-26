@@ -21,6 +21,8 @@ type Dados = {
   mobiauto: Anuncio | null;
   contaNapista: "CONECTADA" | "ERRO" | "DESCONECTADA" | null;
   napista: Anuncio | null;
+  contaMercadoLivre: "CONECTADA" | "ERRO" | "DESCONECTADA" | null;
+  mercadolivre: Anuncio | null;
 };
 
 type Anuncio = { ativo: boolean; status: string; rotulo: string; url: string | null; erro: string | null };
@@ -47,8 +49,9 @@ export function AnuncioNosPortais({ id, gerencia }: { id: string; gerencia: bool
   const wmConectada = data.contaWebmotors === "CONECTADA";
   const mbConectada = data.contaMobiauto === "CONECTADA";
   const npConectada = data.contaNapista === "CONECTADA";
+  const mlConectada = data.contaMercadoLivre === "CONECTADA";
   // Sem conta e sem histórico: a seção só aparece para a gestão, com o caminho para conectar.
-  if (!conectada && !pub && !wmConectada && !data.webmotors && !mbConectada && !data.mobiauto && !npConectada && !data.napista && !gerencia) return null;
+  if (!conectada && !pub && !wmConectada && !data.webmotors && !mbConectada && !data.mobiauto && !npConectada && !data.napista && !mlConectada && !data.mercadolivre && !gerencia) return null;
 
   async function salvar(corpo: object) {
     setAviso(null);
@@ -101,6 +104,7 @@ export function AnuncioNosPortais({ id, gerencia }: { id: string; gerencia: bool
       <LinhaWebmotors dados={data.webmotors} conectada={wmConectada} gerencia={gerencia} onLigar={(ativo) => salvar({ portal: "WEBMOTORS", ativo })} />
       <LinhaWebmotors nome="MobiAuto" dados={data.mobiauto} conectada={mbConectada} gerencia={gerencia} onLigar={(ativo) => salvar({ portal: "MOBIAUTO", ativo })} />
       <LinhaWebmotors nome="NaPista" artigo="o" dados={data.napista} conectada={npConectada} gerencia={gerencia} onLigar={(ativo) => salvar({ portal: "NAPISTA", ativo })} />
+      <LinhaWebmotors nome="Mercado Livre" artigo="o" dados={data.mercadolivre} conectada={mlConectada} gerencia={gerencia} onLigar={(ativo) => salvar({ portal: "MERCADO_LIVRE", ativo })} />
       {escolhendo && <EscolherCatalogo veiculoId={id} onEscolheu={(catalogo) => salvar({ ativo: true, catalogo })} />}
       {aviso && <p className={`text-sm ${aviso.erro ? "text-red-600" : "text-accent"}`}>{aviso.texto}</p>}
       <p className="text-xs text-neutral-500">

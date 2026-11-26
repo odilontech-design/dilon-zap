@@ -28,7 +28,7 @@ const numero = (nome: string, padrao: number) => {
 
 async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-  const { cicloPortais, cicloWebmotors, cicloMobiauto, cicloNapista, chaveDoAmbiente } = await import("@dilon-zap/portais");
+  const { cicloPortais, cicloWebmotors, cicloMobiauto, cicloNapista, cicloMercadoLivre, chaveDoAmbiente } = await import("@dilon-zap/portais");
   const intervaloMs = numero("PORTAIS_INTERVALO_MS", 60_000);
 
   let parando = false;
@@ -72,6 +72,12 @@ async function main() {
           if (np.enviados || np.removidos || np.erros) console.log(`[portais] napista: lojas ${np.lojas}, enviados ${np.enviados}, removidos ${np.removidos}, erros ${np.erros}`);
         } catch (e) {
           console.error("[portais] ciclo do NaPista falhou:", e instanceof Error ? e.message : e);
+        }
+        try {
+          const ml = await cicloMercadoLivre(opcoes);
+          if (ml.enviados || ml.removidos || ml.erros) console.log(`[portais] mercadolivre: lojas ${ml.lojas}, enviados ${ml.enviados}, removidos ${ml.removidos}, erros ${ml.erros}`);
+        } catch (e) {
+          console.error("[portais] ciclo do Mercado Livre falhou:", e instanceof Error ? e.message : e);
         }
         if (r.enviados || r.removidos || r.conferidos || r.erros) {
           console.log(`[portais] lojas ${r.lojas}, enviados ${r.enviados}, removidos ${r.removidos}, conferidos ${r.conferidos}, erros ${r.erros}`);

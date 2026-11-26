@@ -9,8 +9,8 @@ import { diaDeBrasilia } from "@/lib/estatisticas-vitrine";
 
 const NO_PATIO = ["PREPARACAO", "DISPONIVEL", "RESERVADO"] as const;
 const DIA = 86_400_000;
-const PORTAIS = ["OLX", "WEBMOTORS", "MOBIAUTO", "NAPISTA"] as const;
-export const NOME_PORTAL: Record<string, string> = { OLX: "OLX", WEBMOTORS: "Webmotors", MOBIAUTO: "MobiAuto", NAPISTA: "NaPista" };
+const PORTAIS = ["OLX", "WEBMOTORS", "MOBIAUTO", "NAPISTA", "MERCADO_LIVRE"] as const;
+export const NOME_PORTAL: Record<string, string> = { OLX: "OLX", WEBMOTORS: "Webmotors", MOBIAUTO: "MobiAuto", NAPISTA: "NaPista", MERCADO_LIVRE: "Mercado Livre" };
 
 const diasDesde = (d: Date, agora: Date) => Math.max(0, Math.floor((agora.getTime() - d.getTime()) / DIA));
 

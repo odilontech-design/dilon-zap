@@ -132,7 +132,13 @@ resto.
 ### O que falta pedir (Dilon Tech)
 
 - [ ] Mercado Livre: criar o app em developers.mercadolivre.com.br (nome Dilon
-      Zap, URL de retorno `https://zap.dilontech.com.br/api/portais/mercadolivre/retorno`).
+      Zap, URL de retorno `https://zap.dilontech.com.br/api/portais/mercadolivre/retorno`),
+      com a conta da Dilon Tech (pessoa jurídica) e a permissão **"Publicação e sincronização"**
+      (leitura e escrita). Colocar `MERCADOLIVRE_CLIENT_ID` e `MERCADOLIVRE_CLIENT_SECRET` no `.env`
+      do servidor (o worker dos portais recebe pelo compose) e reiniciar web e portais-worker.
+- [ ] Mercado Livre: pedir ao comercial (veiculos@mercadolivre.com) o **pacote de publicação de veículos**
+      da loja (não dá para contratar por API; o preço não é público), a ativação da conta como
+      concessionária (car dealer) e um **usuário de teste** ativado como concessionária com pacote.
 - [ ] OLX: e-mail ao time de integração pedindo `client_id`/`client_secret` do
       Autoupload, com a mesma URL de retorno (`…/olx/retorno`). O conector já
       está pronto (ver abaixo).
@@ -413,3 +419,36 @@ Campo novo: `VeiculosConfig.estiloSite` (`"moderno"` | `"classico"`, padrão `"m
 - **Filtros da lista alinhados**: uma linha só, todos com rótulo (Buscar, Marca, Preço até, Ordenar); "Mais filtros" abre a segunda linha.
 - **Últimas ofertas sem buraco**: se um destaque foi vendido, a linha é completada com os carros mais recentes (até 8; `completarDestaques` em `lib/meu-site.ts`).
 - **Rodapé novo** (todos os estilos, `rodape.tsx`): marca, resumo e redes; páginas; contato com todos os telefones, endereço e "Como chegar"; horário em colunas; embaixo, direitos, privacidade e **"Desenvolvido por Dilon Tech"** com o símbolo, levando à página de vendas do Zap para revendas (`zap.dilontech.com.br/revenda-de-veiculos`, com `utm_source=site-loja&utm_medium=rodape&utm_campaign=<slug>` para saber de qual loja veio).
+
+### Conector do Mercado Livre (v1.106.0, só testado contra servidor falso)
+
+Anúncios classificados de veículos (`buying_mode: classified`, categoria Carros e Caminhonetes `MLB1744`,
+`listing_type_id: silver`, canal `marketplace`). Escrito a partir da documentação oficial lida em 26/11/2026
+("Publicação de automóveis", "Gerenciamento de pacotes de veículos" e "Permissões funcionais"). Código:
+`packages/portais/src/mercadolivre/{cliente,mapa}.ts`, `sincronizar-mercadolivre.ts`; web em
+`apps/web/lib/portais-mercadolivre.ts` e `app/api/portais/mercadolivre/*`; tela em Veículos > Portais.
+
+**Como a loja usa:** Veículos > Portais > Mercado Livre > Conectar (OAuth com a conta da loja) > Anunciar todos os
+disponíveis (ou Publicar por carro em Veículos > Anúncios). A tela mostra as **vagas do pacote** e o que impede um carro
+de subir. O worker dos portais cria, atualiza, pausa (reservado), fecha (vendido) e fecha e exclui (desligado ou devolvido).
+
+**Regras:** carro sem km informada não sobe (nunca vai como 0 km); precisa de preço, foto, **placa**, **chassi (6 últimos
+caracteres)** e o **WhatsApp da loja** com DDD (a API exige `seller_contact.country_code2` e `phone2` para perfil de
+concessionária desde 01/10/2026). Só se cria anúncio com **vaga no pacote**: sem vaga, o carro fica com o aviso e tenta de
+novo em 1 hora, sem derrubar a conta. A descrição é enviada à parte (POST /items/{id}/description) e sai sem telefone,
+e-mail ou site (o Mercado Livre penaliza). Até 6 fotos (limite da documentação lida). O refresh token é de uso único: o
+novo é gravado na hora (testado no servidor falso).
+
+**O que NÃO está validado contra a API real** (confirmar quando houver o app e o usuário de teste):
+1. Rotas e corpos de pausar, reativar, fechar e excluir (`PUT /items/{id}` com `status` e `deleted`): seguem o padrão geral da API,
+   não estão na documentação lida.
+2. Troca do refresh token e o formato exato do `GET /users/{id}/classifieds_promotion_packs` (usamos `status`,
+   `package_content` e `remaining_listings`, como na documentação).
+3. Atributos por NOME (`value_name`): marca, modelo, versão (`TRIM`), cor, combustível, câmbio. Se o Mercado Livre
+   recusar algum valor, o motivo aparece no carro; pode ser preciso mapear por id de catálogo.
+4. `location` (só `address_line` e `zip_code`) e o limite de 6 fotos.
+5. Atualização de anúncio publicado: o Mercado Livre pode não deixar trocar alguns atributos.
+6. Leads (perguntas dos compradores) ainda não entram no CRM: ficam no e-mail da loja.
+7. Adoção de anúncio que a loja já tenha por placa (como no NaPista) não existe ainda.
+
+Teste: `packages/portais/src/sincronizar-mercadolivre.test-manual.ts` (servidor falso que aplica as regras da documentação).

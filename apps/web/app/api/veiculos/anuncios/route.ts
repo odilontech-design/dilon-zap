@@ -8,6 +8,7 @@ import { anunciarNaOlx } from "@/lib/portais";
 import { anunciarNaWebmotors } from "@/lib/portais-webmotors";
 import { anunciarNaMobiauto } from "@/lib/portais-mobiauto";
 import { anunciarNoNapista } from "@/lib/portais-napista";
+import { anunciarNoMercadoLivre } from "@/lib/portais-mercadolivre";
 
 /** Veículos > Anúncios: a grade de carros por portal. Só a gestão; a empresa vem da sessão. */
 export async function GET() {
@@ -37,6 +38,7 @@ export async function POST(req: Request) {
     portal === "WEBMOTORS" ? await anunciarNaWebmotors(user.tenantId, ids)
     : portal === "MOBIAUTO" ? await anunciarNaMobiauto(user.tenantId, ids)
     : portal === "NAPISTA" ? await anunciarNoNapista(user.tenantId, ids)
+    : portal === "MERCADO_LIVRE" ? await anunciarNoMercadoLivre(user.tenantId, ids)
     : await anunciarNaOlx(user.tenantId, ids);
   await logAudit({ actor: user, action: "veiculos.anunciar_em_lote", metadata: { portal, pedidos: parsed.data.veiculoIds.length, aceitos: ids.length } });
   return NextResponse.json({ ok: true, pedidos: ids.length, ...r });
