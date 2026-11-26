@@ -2,7 +2,7 @@
 // Rodar com: npx tsx packages/portais/src/napista-envio.test-manual.ts
 import { ErroNapista, type OfertaNapista } from "./napista/cliente";
 import { montarOfertaNapista } from "./napista/mapa";
-import { comEquipamentosOpcionais, enviarFotosNapista, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
+import { comEquipamentosOpcionais, enderecoPublicoDoAnuncio, enviarFotosNapista, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
 
 let falhas = 0;
 function checa(nome: string, obtido: unknown, esperado: unknown) {
@@ -76,6 +76,10 @@ async function principal() {
   checa("cor que o NaPista não tem: pendência clara", !roxo.ok && roxo.faltando.some((f) => /cor/i.test(f)), true);
   const semLista = montarOfertaNapista(carro, "v1", null);
   checa("sem a lista do NaPista, vale o nosso mapa como antes", semLista.ok && semLista.oferta.color, "SILVER");
+
+  // O endereço público só vale se o NaPista o devolver; o endereço das fotos não conta.
+  checa("acha o endereço público do anúncio num campo do NaPista", enderecoPublicoDoAnuncio({ id: "x", links: { site: "https://www.napista.com.br/anuncios/abc" } }), "https://www.napista.com.br/anuncios/abc");
+  checa("ignora o endereço das fotos e devolve nulo sem endereço", enderecoPublicoDoAnuncio({ photos: [{ url: "https://marketplace.development.bvia.zflow.com.br/static/photos/x" }], title: "Fiat Argo" }), null);
 
   const resumo = resumoDaOferta(oferta);
   checa("resumo do que foi enviado não leva o texto longo", [resumo.includes("DIESEL"), resumo.includes("texto longo")], [true, false]);

@@ -11,6 +11,10 @@ import { botaoSecundario, campo, erroDaResposta, fetcher } from "../comum";
 
 type Portal = { portal: string; nome: string; conectado: boolean; situacaoConta: string | null; publicados: number; naFila: number; comErro: number; pendentes: number; fora: number; foraSemKm: number };
 type Grade = { portais: Portal[]; aVenda: number; carros: CarroDaGrade[] };
+type DetalheNapista =
+  | { situacao: "sem-anuncio" | "sem-conta" }
+  | { situacao: "ok"; codigo: string; status: string | null; titulo: string | null; km: number | null; preco: number | null; placa: string | null; fotos: number; atualizadoEm: string | null; enderecoPublico: string | null; campos: string[] }
+  | { erro: string };
 
 const ROTULO: Record<string, { texto: string; classe: string }> = {
   PUBLICADO: { texto: "Publicado", classe: "bg-emerald-500/10 text-emerald-700" },
@@ -91,6 +95,7 @@ export function GradeDePortais() {
   const [ordem, setOrdem] = useState<Ordem>("maisTempo");
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [aviso, setAviso] = useState<{ texto: string; erro?: boolean } | null>(null);
+  const [detalhes, setDetalhes] = useState<Record<string, DetalheNapista | "carregando">>({});
   if (!data) return <p className="text-sm text-neutral-500">Carregando…</p>;
   if (data.portais.length === 0) {
     return (
@@ -150,6 +155,14 @@ export function GradeDePortais() {
     setOcupado(null);
     setAviso({ texto: `${total} anúncio(s) voltaram para a fila e são enviados em até 1 minuto. Os que ainda tiverem pendência (km, versão, foto) continuam com o motivo na linha.` });
     mutate();
+  }
+
+  /** Pergunta ao NaPista como está o anúncio deste carro (status, fotos, km) e se ele devolve o endereço público. */
+  async function conferirNoNapista(c: CarroDaGrade) {
+    setDetalhes((d) => ({ ...d, [c.id]: "carregando" }));
+    const r = await fetch(`/api/portais/napista/anuncio?veiculoId=${encodeURIComponent(c.id)}`);
+    const resultado: DetalheNapista = r.ok ? ((await r.json()) as DetalheNapista) : { erro: await erroDaResposta(r) };
+    setDetalhes((d) => ({ ...d, [c.id]: resultado }));
   }
 
   /** Corrige o preço do site ou a km de um carro, pela mesma rota da tela Completar (vai para o histórico do carro). */
@@ -332,6 +345,7 @@ export function GradeDePortais() {
                             </span>
                           )}
                           {a?.plano && a.ativo && <span className="text-[11px] text-neutral-500">plano {a.plano}</span>}
+                          {p.portal === "NAPISTA" && a?.ativo && a.status === "PUBLICADO" && <DetalheDoNapista detalhe={detalhes[c.id]} aoConferir={() => conferirNoNapista(c)} />}
                           <span className="flex flex-wrap gap-2 text-xs">
                             {a?.url && a.status === "PUBLICADO" && a.ativo && (
                               <a href={a.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
@@ -363,6 +377,40 @@ export function GradeDePortais() {
         </table>
       </div>
       <p className="text-xs text-neutral-500">Clique no preço ou na km de um carro para corrigir ali mesmo. Disponível e anunciado: vai para o portal sozinho. Mudou preço, km ou fotos: o anúncio atualiza. Vendeu ou reservou: sai do ar. Carro sem quilometragem não sobe.</p>
+    </div>
+  );
+}
+
+function DetalheDoNapista({ detalhe, aoConferir }: { detalhe: DetalheNapista | "carregando" | undefined; aoConferir: () => void }) {
+  if (!detalhe || detalhe === "carregando") {
+    return (
+      <button type="button" disabled={detalhe === "carregando"} onClick={aoConferir} className="text-xs text-accent hover:underline disabled:opacity-50">
+        {detalhe === "carregando" ? "Conferindo…" : "Conferir no NaPista"}
+      </button>
+    );
+  }
+  if ("erro" in detalhe) return <span className="text-[11px] text-red-600">{detalhe.erro}</span>;
+  if (detalhe.situacao !== "ok") return <span className="text-[11px] text-neutral-500">{detalhe.situacao === "sem-conta" ? "NaPista desconectado" : "Sem anúncio no NaPista"}</span>;
+  const kmBaixo = detalhe.km !== null && detalhe.km < 500;
+  return (
+    <div className="flex flex-col gap-0.5 rounded-md bg-white/70 p-1.5 text-[11px] text-neutral-700">
+      <span>
+        No NaPista: <b>{detalhe.status ?? "?"}</b> · {detalhe.fotos} foto(s)
+        {detalhe.km !== null && <span className={kmBaixo ? "font-semibold text-red-600" : ""}> · {detalhe.km.toLocaleString("pt-BR")} km</span>}
+        {detalhe.preco !== null && <> · {centsToBRL(detalhe.preco * 100)}</>}
+      </span>
+      {kmBaixo && <span className="text-red-600">O anúncio está mostrando uma km baixa demais ao comprador. Corrija a km do carro.</span>}
+      {detalhe.fotos === 0 && <span className="text-red-600">Sem fotos no NaPista: pode não aparecer na busca.</span>}
+      {detalhe.enderecoPublico ? (
+        <a href={detalhe.enderecoPublico} target="_blank" rel="noreferrer" className="text-accent hover:underline">
+          Abrir o anúncio no NaPista
+        </a>
+      ) : (
+        <span className="text-neutral-500">O NaPista não devolve o endereço público: procure pela placa {detalhe.placa ?? ""} em napista.com.br.</span>
+      )}
+      <span className="font-mono text-neutral-400" title="Código do anúncio na API do NaPista (não é o da página pública)">
+        cód. {detalhe.codigo.slice(0, 8)}…
+      </span>
     </div>
   );
 }

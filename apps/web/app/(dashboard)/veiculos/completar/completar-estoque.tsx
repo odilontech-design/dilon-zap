@@ -23,7 +23,7 @@ export function CompletarEstoque() {
   const [salvando, setSalvando] = useState(false);
   const [colado, setColado] = useState("");
 
-  const pendentes = useMemo(() => (data?.veiculos ?? []).filter((v) => ["PREPARACAO", "DISPONIVEL", "RESERVADO"].includes(v.status) && (!v.kmInformado || v.precoCents <= 0)), [data]);
+  const pendentes = useMemo(() => (data?.veiculos ?? []).filter((v) => ["PREPARACAO", "DISPONIVEL", "RESERVADO"].includes(v.status) && (!v.kmInformado || v.precoCents <= 0 || avisoDeKm(v.km, v.anoModelo) !== null)), [data]);
   const valor = (v: Linha): Edicao => ed[v.id] ?? { km: "", preco: v.precoCents > 0 ? (v.precoCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "" };
   const mudar = (v: Linha, parte: Partial<Edicao>) => setEd((e) => ({ ...e, [v.id]: { ...valor(v), ...parte } }));
 
@@ -100,7 +100,7 @@ export function CompletarEstoque() {
       <section className={secao}>
         <h2 className="text-sm font-semibold">Completar o cadastro</h2>
         <p className="text-xs text-neutral-500">
-          Estes carros ainda não têm a quilometragem informada (ou estão sem preço). Os portais (Webmotors, MobiAuto, Na Pista, OLX) exigem a km, e o Zap não anuncia carro sem ela. Digite a km de cada um, use Tab para ir ao próximo e salve.
+          Estes carros ainda não têm a quilometragem informada, estão sem preço ou têm uma km suspeita (baixa demais para a idade, como 1 km num carro de 2015, que costuma ser número padrão e não o odômetro). Os portais (Webmotors, MobiAuto, Na Pista, OLX) exigem a km, e o Zap não anuncia carro sem ela. Digite a km de cada um, use Tab para ir ao próximo e salve.
         </p>
       </section>
 
@@ -157,6 +157,7 @@ export function CompletarEstoque() {
                       <td className="px-3 py-2">
                         <Link href={`/veiculos/${v.id}`} className="font-medium hover:underline">{nomeDoVeiculo(v)}</Link>
                         <span className="ml-2 text-xs text-neutral-400">{v.status === "PREPARACAO" ? "em preparação" : v.status === "RESERVADO" ? "reservado" : "disponível"}</span>
+                        {v.kmInformado && avisoDeKm(v.km, v.anoModelo) && <span className="ml-2 text-xs text-amber-700">km hoje: {v.km.toLocaleString("pt-BR")} (suspeita)</span>}
                       {(() => {
                           const aviso = avisoDeKm(lerKm(e.km), v.anoModelo);
                           return aviso ? <p className="mt-1 text-xs text-amber-700">{aviso}</p> : null;

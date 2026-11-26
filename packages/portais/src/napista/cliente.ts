@@ -189,6 +189,10 @@ export class SessaoNapista {
     const r = await this.req<any>("GET", this.s(`/offer/${encodeURIComponent(id)}`));
     return { status: typeof r?.status === "string" ? (r.status as StatusOferta) : null, fotos: Array.isArray(r?.photos) ? r.photos.length : 0 };
   }
+  /** O anúncio exatamente como o NaPista devolve, para diagnóstico (o que ele mostra do anúncio e se há endereço público). */
+  async ofertaBruta(id: string): Promise<any> {
+    return this.req<any>("GET", this.s(`/offer/${encodeURIComponent(id)}`));
+  }
   /** Apaga todas as fotos do anúncio (as fotos por endereço SOMAM às que já estão lá). Anúncio sem foto não é erro. */
   async apagarFotos(id: string) {
     try {
