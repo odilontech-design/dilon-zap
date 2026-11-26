@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
 import { prisma, type Prisma } from "@dilon-zap/db";
 import { custoMicros, PRECOS } from "./custo";
+import { combinaComABusca } from "./busca-estoque";
 import { fichaParaCliente, nomeDoVeiculo, reais } from "./ficha";
 import { primeiroNomeDoCliente } from "./nome";
 import { FERRAMENTAS, ROTULO_MOTIVO, montarSistema } from "./prompt";
@@ -288,12 +289,9 @@ export async function executarFerramenta(p: { name: string; input: unknown }, ct
 async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise<Resultado> {
   const where: Prisma.VeiculoWhereInput = { tenantId: ctx.loja.tenantId, status: { in: ["DISPONIVEL", "RESERVADO"] } };
   const filtros: Prisma.VeiculoWhereInput[] = [];
-  if (typeof e.texto === "string" && e.texto.trim()) {
-    for (const palavra of e.texto.trim().split(/\s+/).slice(0, 4)) {
-      filtros.push({ OR: [{ modelo: { contains: palavra, mode: "insensitive" } }, { versao: { contains: palavra, mode: "insensitive" } }, { marca: { contains: palavra, mode: "insensitive" } }] });
-    }
-  }
-  if (typeof e.marca === "string" && e.marca.trim()) filtros.push({ marca: { contains: e.marca.trim(), mode: "insensitive" } });
+  // Texto e marca são conferidos aqui, sem acento (o banco não ignora acento: "Citroën" não acha "Citroen").
+  const palavras = typeof e.texto === "string" && e.texto.trim() ? e.texto.trim().split(/\s+/).slice(0, 4) : [];
+  const marca = typeof e.marca === "string" && e.marca.trim() ? e.marca.trim() : null;
   // Carro "sob consulta" não entra no filtro de preço (listar só os que cabem em X revelaria o valor).
   const lojaSemPreco = ctx.loja.tenant.veiculosConfig?.ocultarPrecoNoSite === true;
   const lojaSemKm = ctx.loja.tenant.veiculosConfig?.ocultarKmNoSite === true;
@@ -306,17 +304,39 @@ async function buscarEstoque(e: Record<string, unknown>, ctx: Contexto): Promise
   if (filtros.length) where.AND = filtros;
   const limite = typeof e.limite === "number" ? Math.min(Math.max(Math.round(e.limite), 1), 10) : 6;
 
-  const carros = await prisma.veiculo.findMany({
+  const candidatos = await prisma.veiculo.findMany({
     where,
     orderBy: [{ status: "asc" }, { precoCents: "asc" }],
-    take: limite,
+    take: 1000,
     // Só o que pode ir para o cliente: nada de custo, piso, placa ou observação interna.
     select: {
       id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, km: true, kmInformado: true, ocultarKm: true, ocultarPreco: true,
       precoCents: true, cambio: true, combustivel: true, cor: true, carroceria: true, opcionais: true, status: true, _count: { select: { fotos: true } },
     },
   });
+  const carros = candidatos.filter((c) => combinaComABusca(c, palavras, marca)).slice(0, limite);
   if (!carros.length) {
+    // Por que não há: o carro pedido pode ter sido vendido ou estar em preparação. A IA diz o motivo em vez de "não temos".
+    if (palavras.length || marca) {
+      const fora = await prisma.veiculo.findMany({
+        where: {
+          tenantId: ctx.loja.tenantId,
+          OR: [{ status: "PREPARACAO" }, { status: "VENDIDO", updatedAt: { gte: new Date(ctx.agora.getTime() - 90 * 86_400_000) } }],
+        },
+        orderBy: { updatedAt: "desc" },
+        take: 300,
+        select: { marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, status: true },
+      });
+      const achados = fora.filter((c) => combinaComABusca(c, palavras, marca)).slice(0, 4);
+      if (achados.length) {
+        return {
+          texto:
+            "Nenhum carro à venda com esses filtros. Mas o cadastro mostra:\n" +
+            achados.map((c) => `- ${nomeDoVeiculo(c)}: ${c.status === "VENDIDO" ? "JÁ FOI VENDIDO (não está mais à venda)" : "EM PREPARAÇÃO (ainda não foi liberado para venda)"}`).join("\n") +
+            "\nDiga ao cliente exatamente isso, em uma frase, e ofereça mostrar parecidos ou avisar quando chegar outro. Não envie esse carro.",
+        };
+      }
+    }
     return {
       texto: carroceria
         ? `Nenhum carro com carroceria ${carroceria} cadastrada no estoque com esses filtros. O cadastro pode estar sem essa informação em alguns carros: busque de novo sem o filtro de carroceria e escolha pelo modelo, ou diga ao cliente que no momento não tem e ofereça avisar quando chegar.`
