@@ -1,4 +1,5 @@
 import { normalizar, soDigitos } from "../texto";
+import { faltaKmReal, kmParecePadrao } from "../km";
 
 /**
  * Tradução de uma ficha do estoque para o anúncio do Autoupload da OLX
@@ -172,6 +173,7 @@ export function montarAnuncioOlx(c: CarroParaPortal, catalogo: CatalogoOlx | nul
   const fotos = [...new Set(c.fotos)].slice(0, MAX_FOTOS_OLX);
   if (!fotos.length) faltando.push("Pelo menos uma foto");
   if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (a OLX exige a km)");
+  else if (kmParecePadrao(c)) faltando.push(faltaKmReal(c));
   const preco = Math.round(c.precoCents / 100);
   if (preco <= 0) faltando.push("Preço de anúncio");
   const cep = soDigitos(loja.cep);

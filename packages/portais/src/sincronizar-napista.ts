@@ -4,7 +4,7 @@ import { decidir, deveEstarNoAr, hashDoAnuncio, proximaTentativa } from "./decis
 import { cifrar, decifrar } from "./seguranca";
 import { linkDaFotoParaPortal, type OpcoesCiclo, type ResumoCiclo } from "./sincronizar";
 import { novosCatalogosNapista, resolverCatalogoNapista, type CatalogoNapista } from "./napista/catalogo";
-import { ErroNapista, SessaoNapista, appNapistaDoAmbiente, type AppNapista, type AtributosNapista, type OfertaExistente, type TokensNapista } from "./napista/cliente";
+import { ErroNapista, SessaoNapista, ambienteDoNapista, appNapistaDoAmbiente, type AppNapista, type AtributosNapista, type OfertaExistente, type TokensNapista } from "./napista/cliente";
 import { comEquipamentosOpcionais, enviarFotosNapista, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
 import { montarOfertaNapista } from "./napista/mapa";
 
@@ -21,8 +21,24 @@ const MAX_FOTOS = 20;
 const estadoDeFotos = novoEstadoDeFotos();
 
 /** O que fica guardado (cifrado) na conta: a loja no NaPista e os tokens do OAuth. */
-export type ContaNapista = { sellerId: string; access: string; refresh: string; expiraEm: number };
+export type ContaNapista = { sellerId: string; access: string; refresh: string; expiraEm: number; ambiente?: "development" | "production" };
 export const contaNapistaGuardada = (guardado: string, chave: Buffer): ContaNapista => JSON.parse(decifrar(guardado, chave)) as ContaNapista;
+/** A conexão foi feita em outro NaPista (teste x produção)? Conexões sem marca são anteriores à marcação e eram todas de teste. */
+export const contaDeOutroAmbiente = (c: ContaNapista) => (c.ambiente ?? "development") !== ambienteDoNapista();
+
+/**
+ * O Zap passou a falar com outro NaPista (teste -> produção): a conexão, os anúncios e as versões escolhidas do outro
+ * ambiente não valem. Desconecta a loja (a gestão reconecta com o login do NaPista de verdade) e devolve os anúncios
+ * à estaca zero (sem código de anúncio, sem versão), para o Zap criar ou adotar os de produção pela placa.
+ */
+export async function reiniciarNapistaDoTenant(tenantId: string, motivo: string) {
+  await prisma.portalConta.updateMany({ where: { tenantId, portal: "NAPISTA" }, data: { status: "DESCONECTADA", accessTokenCripto: "", erro: motivo } });
+  await prisma.publicacaoPortal.updateMany({
+    where: { tenantId, portal: "NAPISTA" },
+    data: { status: "FILA", idExterno: null, url: null, catalogo: {}, hashEnviado: null, hashFotos: null, erro: null, tentativas: 0, proximaTentativaEm: null },
+  });
+}
+
 export const guardarContaNapista = (c: ContaNapista, chave: Buffer) => cifrar(JSON.stringify(c), chave);
 
 type Guardado = CatalogoNapista & { statusNoPortal?: string };
@@ -39,6 +55,10 @@ export async function cicloNapista(op: OpcoesCiclo, criarSessao: CriarSessaoNapi
     resumo.lojas++;
     try {
       const guardada = contaNapistaGuardada(conta.accessTokenCripto, op.chave);
+      if (contaDeOutroAmbiente(guardada)) {
+        await reiniciarNapistaDoTenant(conta.tenantId, "O Zap passou a usar o NaPista de produção: reconecte a loja em Veículos > Portais > NaPista.");
+        continue;
+      }
       const aoRenovar = async (t: TokensNapista) => {
         await prisma.portalConta.update({ where: { id: conta.id }, data: { accessTokenCripto: guardarContaNapista({ ...guardada, access: t.access, refresh: t.refresh, expiraEm: t.expiraEm }, op.chave) } });
       };

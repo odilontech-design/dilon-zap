@@ -2,7 +2,10 @@ import { prisma } from "@dilon-zap/db";
 import {
   SessaoNapista,
   appNapistaDoAmbiente,
+  ambienteDoNapista,
   assinarEstado,
+  contaDeOutroAmbiente,
+  reiniciarNapistaDoTenant,
   enderecoPublicoDoAnuncio,
   enxugarParaDiagnostico,
   chaveDoAmbiente,
@@ -50,7 +53,16 @@ export async function concluirConexaoNapista(code: string, state: string, urlBas
     const t = await trocarCodigoNapista(app, code);
     const lojas = await new SessaoNapista(t, "", app).lojas();
     if (!lojas.length) return { ok: false, motivo: "sem-loja" };
-    const conta: ContaNapista = { sellerId: lojas[0].id, access: t.access, refresh: t.refresh, expiraEm: t.expiraEm };
+    const conta: ContaNapista = { sellerId: lojas[0].id, access: t.access, refresh: t.refresh, expiraEm: t.expiraEm, ambiente: ambienteDoNapista() };
+    // Se a loja estava ligada a outro NaPista (teste), os códigos de anúncio e as versões de lá não valem aqui.
+    const anterior = await prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId: esperado.tenantId, portal: "NAPISTA" } }, select: { accessTokenCripto: true } });
+    let outroAmbiente = false;
+    try {
+      outroAmbiente = !!anterior?.accessTokenCripto && contaDeOutroAmbiente(contaNapistaGuardada(anterior.accessTokenCripto, chaveDoAmbiente(segredo)));
+    } catch {
+      outroAmbiente = !!anterior?.accessTokenCripto;
+    }
+    if (outroAmbiente) await reiniciarNapistaDoTenant(esperado.tenantId, "Conexão trocada de ambiente.");
     const dados = { accessTokenCripto: guardarContaNapista(conta, chaveDoAmbiente(segredo)), status: "CONECTADA" as const, contaNome: lojas[0].nome, contaEmail: lojas[0].documento || null, erro: null, conectadaEm: new Date() };
     await prisma.portalConta.upsert({ where: { tenantId_portal: { tenantId: esperado.tenantId, portal: "NAPISTA" } }, create: { tenantId: esperado.tenantId, portal: "NAPISTA", ...dados }, update: dados });
     return { ok: true };
@@ -71,6 +83,10 @@ async function sessaoDaLoja(tenantId: string): Promise<SessaoNapista | null> {
   if (!app || !segredo || !conta || conta.status === "DESCONECTADA" || !conta.accessTokenCripto) return null;
   const chave = chaveDoAmbiente(segredo);
   const g = contaNapistaGuardada(conta.accessTokenCripto, chave);
+  if (contaDeOutroAmbiente(g)) {
+    await reiniciarNapistaDoTenant(tenantId, "O Zap passou a usar o NaPista de produção: reconecte a loja em Veículos > Portais > NaPista.");
+    return null;
+  }
   return new SessaoNapista({ access: g.access, refresh: g.refresh, expiraEm: g.expiraEm }, g.sellerId, app, async (t) => {
     await prisma.portalConta.update({ where: { id: conta.id }, data: { accessTokenCripto: guardarContaNapista({ ...g, access: t.access, refresh: t.refresh, expiraEm: t.expiraEm }, chave) } });
   });

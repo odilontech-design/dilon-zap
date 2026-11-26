@@ -1,4 +1,5 @@
 import type { CarroParaPortal } from "../olx/mapa";
+import { faltaKmReal, kmParecePadrao } from "../km";
 import { normalizar } from "../texto";
 import type { AtributosNapista, ItemNapista, OfertaNapista } from "./cliente";
 
@@ -64,6 +65,7 @@ export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null
   const faltando: string[] = [];
   if (c.tipo !== "CARRO") faltando.push("Por enquanto a integração com o NaPista publica só carros");
   if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (o Zap não anuncia carro sem km)");
+  else if (kmParecePadrao(c)) faltando.push(faltaKmReal(c));
   if (!versionId) faltando.push("Escolher marca, modelo e versão no catálogo do NaPista");
   const cor = valorAceitoNapista(corNapista(c.cor), atributos?.cores ?? [], c.cor);
   if (!cor) faltando.push("O NaPista não reconheceu a cor do carro: confira a cor na ficha");

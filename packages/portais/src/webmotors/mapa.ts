@@ -1,4 +1,5 @@
 import type { CarroParaPortal } from "../olx/mapa";
+import { faltaKmReal, kmParecePadrao } from "../km";
 import type { AnuncioWM } from "./cliente";
 
 /**
@@ -43,6 +44,7 @@ export function montarAnuncioWebmotors(
   const faltando: string[] = [];
   if (c.tipo !== "CARRO") faltando.push("Por enquanto a integração com a Webmotors publica só carros");
   if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (a Webmotors exige a km)");
+  else if (kmParecePadrao(c)) faltando.push(faltaKmReal(c));
   if (!catalogo) faltando.push("Escolher marca, modelo e versão no catálogo da Webmotors");
   else {
     if (!catalogo.cor) faltando.push("A Webmotors não reconheceu a cor do carro: confira a cor na ficha");
