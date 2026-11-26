@@ -223,7 +223,7 @@ export function Sidebar({
   const pathname = usePathname();
   // Não lidas do Inbox e dos Grupos, no próprio menu: dá pra ver que chegou
   // mensagem estando em qualquer tela (pedido da Dilon Tech, 13/10).
-  const { data: contadores } = useSWR<{ inbox: number; grupos: number; chatEquipe?: number }>(
+  const { data: contadores } = useSWR<{ inbox: number; grupos: number; chatEquipe?: number; instagram?: number }>(
     "/api/menu-contadores",
     (url: string) => fetch(url).then((r) => (r.ok ? r.json() : { inbox: 0, grupos: 0 })),
     { refreshInterval: UNREAD_COUNT_INTERVAL }
@@ -393,7 +393,9 @@ export function Sidebar({
                   ? contadores?.grupos
                   : item.href === "/chat-equipe"
                     ? contadores?.chatEquipe
-                    : 0;
+                    : item.href === "/veiculos"
+                      ? contadores?.instagram
+                      : 0;
             return (
               <Link
                 key={item.href}
@@ -415,7 +417,7 @@ export function Sidebar({
                 <span className={`flex-1 min-w-0 ${collapsed ? "md:hidden" : ""}`}>{rotulo}</span>
                 {!!naoLidas && (
                   <span
-                    title={`${naoLidas} mensagem(ns) não lida(s)`}
+                    title={item.href === "/veiculos" ? `${naoLidas} mensagem(ns) nova(s) no Instagram` : `${naoLidas} mensagem(ns) não lida(s)`}
                     className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 bg-accent text-white ${collapsed ? "md:hidden" : ""}`}
                   >
                     {naoLidas > 99 ? "99+" : naoLidas}

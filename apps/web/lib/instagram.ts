@@ -20,6 +20,7 @@ import {
   urlDeAutorizacaoInstagram,
 } from "@dilon-zap/portais";
 import { registrarEntradaLead } from "@/lib/lead-portal";
+import { avisarInstagramNovo } from "@/lib/aviso-instagram";
 
 /**
  * Caixa de entrada do Instagram da loja. Módulo próprio: guarda as conversas e
@@ -134,6 +135,8 @@ export async function receberWebhookInstagram(corpoBruto: string, assinatura: st
       },
     });
     processadas++;
+    // Mensagem nova de cliente: avisa a equipe (push). Eco do que a loja mandou não avisa.
+    if (!ev.eco) void avisarInstagramNovo({ tenantId: conta.tenantId, conversaId: conversa.id, nome: conversa.nome, username: conversa.username, texto: ev.texto }).catch((e) => console.error("[instagram] aviso não enviado:", e instanceof Error ? e.message : e));
     if (!ev.eco && !conversa.negociacaoId) {
       const tel = telefoneNaMensagem(ev.texto);
       if (tel) await criarNegociacaoDaConversa(conta.tenantId, conversa.id, tel).catch((e) => console.error("[instagram] negociação não criada:", e instanceof Error ? e.message : e));

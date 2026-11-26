@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRecurso } from "@/components/recursos-context";
 import Link from "next/link";
+import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
 import { reaisParaCentavos, type FaixaEstoque } from "@/lib/veiculos-regras";
 
@@ -164,12 +165,14 @@ export function clienteParaRota(c: ClienteEscolhido) {
 
 export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos" | "novo" | "vitrine" | "portais" | "importar" | "completar" | "instagram" | "vendedor-ia" | "relatorios" | "primeiros-passos" | "leads" | "painel" | "anuncios"; gerencia: boolean }) {
   const temIa = useRecurso("VENDEDOR_IA");
+  // Mensagens do Instagram sem leitura: o número aparece na própria aba (a mesma consulta do menu, o SWR junta as duas).
+  const { data: contadores } = useSWR<{ instagram?: number }>("/api/menu-contadores", (u: string) => fetch(u).then((r) => (r.ok ? r.json() : {})), { refreshInterval: 30_000 });
   const abas = [
     ...(gerencia ? [{ id: "painel", href: "/veiculos/painel", rotulo: "Painel" }] : []),
     { id: "estoque", href: "/veiculos", rotulo: "Estoque" },
     ...(gerencia ? [{ id: "anuncios", href: "/veiculos/anuncios", rotulo: "Anúncios" }] : []),
     { id: "vendidos", href: "/veiculos?status=VENDIDO", rotulo: "Vendidos" },
-    { id: "instagram", href: "/veiculos/instagram", rotulo: "Instagram" },
+    { id: "instagram", href: "/veiculos/instagram", rotulo: contadores?.instagram ? `Instagram (${contadores.instagram})` : "Instagram" },
     ...(gerencia
       ? [
           { id: "leads", href: "/veiculos/leads", rotulo: "Leads" },
