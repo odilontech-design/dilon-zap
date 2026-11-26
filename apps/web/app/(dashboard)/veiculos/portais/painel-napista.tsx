@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { botaoPrimario, botaoSecundario, campo, erroDaResposta, fetcher, rotulo, secao } from "../comum";
+import { EscolherVersoesNapista } from "./versoes-napista";
 
 type Painel = {
   configurada: boolean;
@@ -99,12 +100,18 @@ export function PainelNapista() {
           <p className="text-xs text-neutral-500">
             {data.conta?.leadErro ? <span className="text-red-600">Contatos do NaPista com problema: {data.conta.leadErro}</span> : data.conta?.leadEm ? `Contatos conferidos pela última vez em ${new Date(data.conta.leadEm).toLocaleString("pt-BR")}.` : "Os contatos dos compradores entram no CRM a cada 10 minutos."}
           </p>
-          {data.semKm > 0 && <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700">{data.semKm} carro(s) sem quilometragem informada: o Zap não anuncia carro sem km.</p>}
+          {data.semKm > 0 && (
+            <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+              {data.semKm} carro(s) sem quilometragem informada: o Zap não anuncia carro sem km.{" "}
+              <a href="/veiculos/completar" className="font-medium underline">Completar a quilometragem</a>
+            </p>
+          )}
           <div className="flex flex-wrap gap-2">
             <button className={botaoPrimario} disabled={ocupado} onClick={() => chamar("/api/portais/napista/anunciar", "POST", { todos: true })}>Anunciar todos os disponíveis</button>
             <button className={botaoSecundario} disabled={ocupado} onClick={async () => setConf(await chamar("/api/portais/napista/conferir", "GET"))}>Conferir com o NaPista</button>
             <button className={botaoSecundario} disabled={ocupado} onClick={() => chamar("/api/portais/napista/desconectar", "POST")}>Desconectar</button>
           </div>
+          <EscolherVersoesNapista pendentes={data.problemas.filter((p) => /Versão|Escolher marca/.test(p.erro ?? "")).length} aoSalvar={() => mutate()} />
           {conf && (
             <div className="rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-700" data-testid="conferencia-napista">
               <p className="font-medium">Só leitura: nada foi publicado nem alterado.</p>

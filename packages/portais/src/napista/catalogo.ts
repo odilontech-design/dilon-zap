@@ -1,4 +1,4 @@
-import { escolhaSegura, sugerir } from "../olx/catalogo";
+import { escolhaSegura, nota, sugerir } from "../olx/catalogo";
 import type { CarroParaPortal } from "../olx/mapa";
 import type { ItemNapista, SessaoNapista } from "./cliente";
 
@@ -39,4 +39,37 @@ export async function resolverCatalogoNapista(
   const versao = lista.length === 1 ? lista[0] : melhor(c.versao, lista);
   if (!versao) return { catalogo: {}, pendencias: [`Versão "${c.versao ?? "sem versão"}" não identificada no catálogo do NaPista`] };
   return { catalogo: { versao: versao.id, versaoNome: versao.nome }, pendencias: [] };
+}
+
+export type OpcaoVersaoNapista = { id: string; nome: string; nota: number };
+
+/** As versões do catálogo em ordem de chance para o que a ficha diz (a mais parecida primeiro). */
+export function ordenarVersoesNapista(procurado: string | null | undefined, lista: ItemNapista[]): OpcaoVersaoNapista[] {
+  return lista
+    .map((i) => ({ id: i.id, nome: i.nome, nota: procurado ? nota(procurado, i.nome) : 0 }))
+    .sort((a, b) => b.nota - a.nota || a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+export type VersoesDoCarroNapista = { estado: "ok"; versoes: ItemNapista[] } | { estado: "sem-marca" | "sem-modelo"; versoes: []; mensagem: string };
+
+/**
+ * Todas as versões do catálogo para o modelo e ano do carro (para a gestão escolher quando a
+ * escolha automática não teve certeza). Marca e modelo seguem a mesma regra de resolverCatalogoNapista;
+ * se um deles não é reconhecido, devolve o motivo em vez de uma lista.
+ */
+export async function versoesDoCarroNapista(
+  sessao: Pick<SessaoNapista, "marcas" | "modelos" | "versoes">,
+  c: Pick<CarroParaPortal, "marca" | "modelo" | "anoModelo">,
+  cache: CatalogosNapista,
+): Promise<VersoesDoCarroNapista> {
+  cache.marcas ??= await sessao.marcas();
+  const marca = melhor(c.marca, cache.marcas);
+  if (!marca) return { estado: "sem-marca", versoes: [], mensagem: `Marca "${c.marca}" não identificada no catálogo do NaPista` };
+  const km = `${marca.id}/${c.anoModelo}`;
+  if (!cache.modelos.has(km)) cache.modelos.set(km, await sessao.modelos(marca.id, c.anoModelo));
+  const modelo = melhor(c.modelo, cache.modelos.get(km)!);
+  if (!modelo) return { estado: "sem-modelo", versoes: [], mensagem: `Modelo "${c.modelo}" (${c.anoModelo}) não identificado no catálogo do NaPista` };
+  const kv = `${modelo.id}/${c.anoModelo}`;
+  if (!cache.versoes.has(kv)) cache.versoes.set(kv, await sessao.versoes(modelo.id, c.anoModelo));
+  return { estado: "ok", versoes: cache.versoes.get(kv)! };
 }
