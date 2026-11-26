@@ -11,6 +11,7 @@ COPY apps/vendedor-ia-worker/package.json apps/vendedor-ia-worker/package.json
 COPY packages/db/package.json packages/db/package.json
 COPY packages/sdr-core/package.json packages/sdr-core/package.json
 COPY packages/vendedor-ia/package.json packages/vendedor-ia/package.json
+COPY packages/push/package.json packages/push/package.json
 RUN npm install
 
 COPY . .

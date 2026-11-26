@@ -4053,6 +4053,12 @@ model VendedorIaConfig {
   acompanhamentoDesde   DateTime?
   acompanhamentoPorHora Int       @default(5)
 
+  // Rodizio de vendedores: quando a IA passa a conversa para a equipe, o vendedor da vez recebe (e e avisado no celular).
+  // So participa quem a gestao marcou; sem ninguem marcado, nada e atribuido. `rodizioUltimoId` guarda de quem foi a ultima.
+  rodizio          Boolean  @default(false)
+  rodizioUsuarioIds String[] @default([])
+  rodizioUltimoId  String?
+
   updatedAt DateTime @updatedAt
 }
 

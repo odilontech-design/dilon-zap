@@ -5,12 +5,13 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "test": "tsx src/regras.test-manual.ts && tsx src/custo.test-manual.ts && tsx src/ferramentas-esquema.test-manual.ts && tsx src/nome.test-manual.ts && tsx src/ficha.test-manual.ts && tsx src/busca-estoque.test-manual.ts && tsx src/acompanhamento.test-manual.ts --sem-banco",
+    "test": "tsx src/regras.test-manual.ts && tsx src/custo.test-manual.ts && tsx src/ferramentas-esquema.test-manual.ts && tsx src/nome.test-manual.ts && tsx src/ficha.test-manual.ts && tsx src/busca-estoque.test-manual.ts && tsx src/acompanhamento.test-manual.ts --sem-banco && tsx src/rodizio.test-manual.ts --sem-banco",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^1.8.0",
-    "@dilon-zap/db": "*"
+    "@dilon-zap/db": "*",
+    "@dilon-zap/push": "*"
   },
   "devDependencies": {
     "@types/node": "^20.16.10",

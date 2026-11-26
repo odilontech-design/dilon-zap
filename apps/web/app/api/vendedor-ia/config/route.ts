@@ -21,6 +21,8 @@ const corpo = z.object({
   respostaImediataPorHora: z.number().int().min(1).max(60).default(10),
   acompanhamento: z.boolean().default(false),
   acompanhamentoPorHora: z.number().int().min(1).max(30).default(5),
+  rodizio: z.boolean().default(false),
+  rodizioUsuarioIds: z.array(z.string()).max(50).default([]),
 });
 
 /** Configuração e painel do mês do Vendedor IA. Só a gestão. */
@@ -30,12 +32,14 @@ export async function GET() {
   if (bloqueio) return bloqueio;
   if (!ehGerencia(user.role)) return NextResponse.json({ error: "só a gestão configura o Vendedor IA" }, { status: 403 });
 
-  const [config, setores, painel] = await Promise.all([
+  const [config, setores, painel, usuarios] = await Promise.all([
     configDoVendedorIa(user.tenantId),
     prisma.setor.findMany({ where: { tenantId: user.tenantId }, orderBy: { nome: "asc" }, select: { id: true, nome: true } }),
     painelDoMes(user.tenantId),
+    // Quem pode entrar no rodízio: os usuários ativos da empresa (a gestão marca quem participa).
+    prisma.user.findMany({ where: { tenantId: user.tenantId, deactivatedAt: null }, orderBy: { name: "asc" }, select: { id: true, name: true, role: true } }),
   ]);
-  return NextResponse.json({ config, setores, painel, estimativas: estimativas() });
+  return NextResponse.json({ config, setores, painel, usuarios, estimativas: estimativas() });
 }
 
 export async function PUT(req: Request) {
@@ -51,6 +55,9 @@ export async function PUT(req: Request) {
     const s = await prisma.setor.findFirst({ where: { id: d.setorTransferenciaId, tenantId: user.tenantId }, select: { id: true } });
     if (!s) return NextResponse.json({ error: "setor não encontrado" }, { status: 404 });
   }
+  // Só entra no rodízio gente da própria empresa e ativa; a ordem marcada na tela é a ordem do rodízio.
+  const validos = new Set((await prisma.user.findMany({ where: { id: { in: d.rodizioUsuarioIds }, tenantId: user.tenantId, deactivatedAt: null }, select: { id: true } })).map((u) => u.id));
+  const participantes = d.rodizioUsuarioIds.filter((id, i, a) => validos.has(id) && a.indexOf(id) === i);
   const atual = await configDoVendedorIa(user.tenantId);
   if (atual.leadsContratados !== null && d.limiteLeadsMes > atual.leadsContratados) {
     return NextResponse.json({ error: `o pacote contratado é de até ${atual.leadsContratados} leads por mês: o limite não pode passar disso` }, { status: 400 });
@@ -67,6 +74,8 @@ export async function PUT(req: Request) {
       limiteCustoMesCents: d.limiteCustoMesCents,
       respostaImediataPorHora: d.respostaImediataPorHora,
       acompanhamentoPorHora: d.acompanhamentoPorHora,
+      rodizio: d.rodizio,
+      rodizioUsuarioIds: participantes,
       // Ao ligar, o relógio começa agora: só conversas que começarem daqui em diante entram no acompanhamento.
       ...(d.acompanhamento !== atual.acompanhamento ? { acompanhamento: d.acompanhamento, acompanhamentoDesde: d.acompanhamento ? new Date() : null } : {}),
       // Ao ligar, o relógio começa agora: só leads que chegarem daqui em diante recebem a resposta imediata.
@@ -74,6 +83,6 @@ export async function PUT(req: Request) {
     },
   });
   await ligarOuDesligar(user.tenantId, d.ativo);
-  await logAudit({ actor: user, action: "vendedor-ia.config", metadata: { ativo: d.ativo, modelo: d.modelo, esforco: d.esforco, respostaImediata: d.respostaImediata, respostaImediataPorHora: d.respostaImediataPorHora, acompanhamento: d.acompanhamento, acompanhamentoPorHora: d.acompanhamentoPorHora } });
+  await logAudit({ actor: user, action: "vendedor-ia.config", metadata: { ativo: d.ativo, modelo: d.modelo, esforco: d.esforco, respostaImediata: d.respostaImediata, respostaImediataPorHora: d.respostaImediataPorHora, acompanhamento: d.acompanhamento, acompanhamentoPorHora: d.acompanhamentoPorHora, rodizio: d.rodizio, rodizioUsuarioIds: participantes } });
   return NextResponse.json({ ok: true });
 }
