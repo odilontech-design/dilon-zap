@@ -42,6 +42,12 @@ async function main() {
   process.on("SIGINT", () => parar("SIGINT"));
   process.on("SIGTERM", () => parar("SIGTERM"));
   console.log(`[portais] no ar, ciclo a cada ${intervaloMs} ms`);
+  try {
+    const { ambientesDosPortais } = await import("@dilon-zap/portais");
+    for (const a of ambientesDosPortais()) console.log(`[portais] ${a.nome}: ${a.teste ? "AMBIENTE DE TESTE" : "produção"} (${a.endereco})`);
+  } catch (e) {
+    console.error("[portais] não consegui descrever os ambientes:", e instanceof Error ? e.message : e);
+  }
 
   let avisou = false;
   while (!parando) {

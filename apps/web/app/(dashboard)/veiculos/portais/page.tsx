@@ -5,6 +5,7 @@ import { recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { AbasVeiculos } from "../comum";
 import { PainelPortais } from "./painel-portais";
+import { AvisoDeAmbienteDosPortais } from "./aviso-ambiente";
 
 export default async function PortaisPage() {
   const user = await requireUser();
@@ -13,6 +14,7 @@ export default async function PortaisPage() {
   return (
     <div className="p-4 md:p-8">
       <AbasVeiculos atual="portais" gerencia />
+      <AvisoDeAmbienteDosPortais />
       <Suspense>
         <PainelPortais />
       </Suspense>

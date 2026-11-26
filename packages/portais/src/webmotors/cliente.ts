@@ -11,7 +11,8 @@ const NS_ESTOQUE = "www.webmotors.com.br/wsEstoqueRevendedorWebMotors";
 
 /** Produção. Homologação: https://hportal.webmotors.com.br/IntegracaoRevendedor */
 const BASE_PADRAO = "https://integracao.webmotors.com.br";
-const base = () => (process.env.WEBMOTORS_URL_BASE ?? BASE_PADRAO).replace(/\/$/, "");
+export const baseDaWebmotors = () => (process.env.WEBMOTORS_URL_BASE || BASE_PADRAO).replace(/\/$/, "");
+const base = baseDaWebmotors;
 
 export type CredenciaisWebmotors = { cnpj: string; email: string; senha: string };
 

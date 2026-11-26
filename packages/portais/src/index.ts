@@ -25,6 +25,7 @@ export * from "./napista/catalogo";
 export * from "./napista/envio";
 export { cicloNapista, contaDeOutroAmbiente, contaNapistaGuardada, guardarContaNapista, reiniciarNapistaDoTenant, type ContaNapista } from "./sincronizar-napista";
 export * from "./km";
+export * from "./ambientes";
 export * from "./ajustes";
 export * from "./mercadolivre/cliente";
 export * from "./mercadolivre/mapa";

@@ -1,13 +1,14 @@
 import type { CarroParaPortal } from "../olx/mapa";
-import { faltaKmReal, kmParecePadrao } from "../km";
+import { kmParecePadrao } from "../km";
 import { normalizar } from "../texto";
 import type { AtributosNapista, ItemNapista, OfertaNapista } from "./cliente";
 
 /**
  * Tradução de uma ficha do estoque para o anúncio (offer) do NaPista. Puro: não lê banco nem
  * rede. O NaPista pede a versão por ID do catálogo e cor, combustível e câmbio por valores
- * fixos (em inglês). A km é opcional na API deles, mas a regra da gestão vale: carro sem km
- * informada NÃO é publicado, nunca vai como "0 km" por engano.
+ * fixos (em inglês). A km é opcional na API deles (campos obrigatórios: versão, câmbio, cor, combustível, preço e anos):
+ * carro sem km informada, ou com km que parece número padrão (ex.: 1 km num carro antigo), vai SEM o campo, nunca como
+ * "0 km" nem com um número inventado. Os outros portais exigem a km e continuam bloqueando.
  */
 
 const CORES: [RegExp, string][] = [
@@ -64,8 +65,6 @@ export type ResultadoNapista = { ok: true; oferta: OfertaNapista } | { ok: false
 export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null, atributos?: AtributosNapista | null): ResultadoNapista {
   const faltando: string[] = [];
   if (c.tipo !== "CARRO") faltando.push("Por enquanto a integração com o NaPista publica só carros");
-  if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (o Zap não anuncia carro sem km)");
-  else if (kmParecePadrao(c)) faltando.push(faltaKmReal(c));
   if (!versionId) faltando.push("Escolher marca, modelo e versão no catálogo do NaPista");
   const cor = valorAceitoNapista(corNapista(c.cor), atributos?.cores ?? [], c.cor);
   if (!cor) faltando.push("O NaPista não reconheceu a cor do carro: confira a cor na ficha");
@@ -91,7 +90,7 @@ export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null
       versionId,
       modelYear: c.anoModelo,
       manufacturedYear: c.anoFabricacao,
-      mileage: Math.max(0, Math.round(c.km)),
+      ...(c.kmInformado !== false && !kmParecePadrao(c) ? { mileage: Math.max(0, Math.round(c.km)) } : {}),
       // O NaPista recebe o preço como número inteiro (em reais, sem centavos).
       price: preco,
       ...(placa.length >= 7 ? { plate: placa } : {}),

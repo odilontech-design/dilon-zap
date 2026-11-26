@@ -5,7 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { lerReais } from "@/lib/otica-regras";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
-import { avisoDeKm, csvDaLista, kmRepetidos, lerKm, lerListaColada } from "@/lib/veiculos-completar-km";
+import { csvDaLista, lerKm, lerListaColada } from "@/lib/veiculos-completar-km";
 import { botaoPrimario, botaoSecundario, campo, erroDaResposta, fetcher, secao } from "../comum";
 
 type Linha = { id: string; placa: string | null; marca: string; modelo: string; versao: string | null; anoFabricacao: number; anoModelo: number; km: number; kmInformado: boolean; precoCents: number; status: string };
@@ -23,7 +23,7 @@ export function CompletarEstoque() {
   const [salvando, setSalvando] = useState(false);
   const [colado, setColado] = useState("");
 
-  const pendentes = useMemo(() => (data?.veiculos ?? []).filter((v) => ["PREPARACAO", "DISPONIVEL", "RESERVADO"].includes(v.status) && (!v.kmInformado || v.precoCents <= 0 || avisoDeKm(v.km, v.anoModelo) !== null)), [data]);
+  const pendentes = useMemo(() => (data?.veiculos ?? []).filter((v) => ["PREPARACAO", "DISPONIVEL", "RESERVADO"].includes(v.status) && (!v.kmInformado || v.precoCents <= 0)), [data]);
   const valor = (v: Linha): Edicao => ed[v.id] ?? { km: "", preco: v.precoCents > 0 ? (v.precoCents / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "" };
   const mudar = (v: Linha, parte: Partial<Edicao>) => setEd((e) => ({ ...e, [v.id]: { ...valor(v), ...parte } }));
 
@@ -76,8 +76,6 @@ export function CompletarEstoque() {
     campos[campos.indexOf(ev.currentTarget) + 1]?.focus();
   }
 
-  const repetido = kmRepetidos(pendentes.map((v) => lerKm(valor(v).km)));
-
   async function salvar(colocarAVenda: boolean) {
     setAviso(null);
     if (itens.invalidos) return setAviso({ texto: "Há valores inválidos (km só com números; preço no formato 45.900,00).", erro: true });
@@ -100,7 +98,7 @@ export function CompletarEstoque() {
       <section className={secao}>
         <h2 className="text-sm font-semibold">Completar o cadastro</h2>
         <p className="text-xs text-neutral-500">
-          Estes carros ainda não têm a quilometragem informada, estão sem preço ou têm uma km suspeita (baixa demais para a idade, como 1 km num carro de 2015, que costuma ser número padrão e não o odômetro). Os portais (Webmotors, MobiAuto, Na Pista, OLX) exigem a km, e o Zap não anuncia carro sem ela. Digite a km de cada um, use Tab para ir ao próximo e salve.
+          Estes carros ainda não têm a quilometragem informada (ou estão sem preço). Os portais (Webmotors, MobiAuto, Na Pista, OLX) exigem a km, e o Zap não anuncia carro sem ela. Digite a km de cada um, use Tab para ir ao próximo e salve.
         </p>
       </section>
 
@@ -117,7 +115,7 @@ export function CompletarEstoque() {
           <details className="rounded-lg border border-neutral-200 bg-surface p-3 text-sm">
             <summary className="cursor-pointer font-medium">Colar a km de uma planilha ou baixar a lista</summary>
             <p className="mt-2 text-xs text-neutral-500">
-              Baixe a lista dos carros sem km, leve ao pátio e anote a km lida no odômetro. Depois cole aqui uma linha por carro, com a placa e a km (ex.: LSE7D72 84203). Só vale a km real: o Zap não preenche número padrão.
+              Baixe a lista dos carros sem km, leve ao pátio e anote a km lida no odômetro. Depois cole aqui uma linha por carro, com a placa e a km (ex.: LSE7D72 84203). 
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" className={botaoSecundario} onClick={baixarLista}>Baixar a lista (CSV)</button>
@@ -127,11 +125,6 @@ export function CompletarEstoque() {
               <button type="button" className={botaoSecundario} disabled={!colado.trim()} onClick={aplicarColado}>Preencher a tabela</button>
             </div>
           </details>
-          {repetido && (
-            <p role="alert" className="rounded-md bg-amber-500/10 px-3 py-2 text-sm text-amber-700">
-              Você digitou {repetido.km.toLocaleString("pt-BR")} km em {repetido.quantos} carros. Confira se não é um valor padrão: a km precisa ser a lida no odômetro de cada carro, porque o comprador vê esse número no anúncio.
-            </p>
-          )}
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-sm text-neutral-600">{pendentes.length} carro(s) para completar · {itens.lista.length} preenchido(s) agora</span>
             <button className={botaoPrimario} disabled={salvando || !itens.lista.length} onClick={() => salvar(false)}>Salvar</button>
@@ -157,11 +150,6 @@ export function CompletarEstoque() {
                       <td className="px-3 py-2">
                         <Link href={`/veiculos/${v.id}`} className="font-medium hover:underline">{nomeDoVeiculo(v)}</Link>
                         <span className="ml-2 text-xs text-neutral-400">{v.status === "PREPARACAO" ? "em preparação" : v.status === "RESERVADO" ? "reservado" : "disponível"}</span>
-                        {v.kmInformado && avisoDeKm(v.km, v.anoModelo) && <span className="ml-2 text-xs text-amber-700">km hoje: {v.km.toLocaleString("pt-BR")} (suspeita)</span>}
-                      {(() => {
-                          const aviso = avisoDeKm(lerKm(e.km), v.anoModelo);
-                          return aviso ? <p className="mt-1 text-xs text-amber-700">{aviso}</p> : null;
-                        })()}
                       </td>
                       <td className="px-3 py-2 text-neutral-500">{v.placa ?? "—"}</td>
                       <td className="px-3 py-2">

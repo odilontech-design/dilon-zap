@@ -1,5 +1,3 @@
-import { avisoDeKm } from "@/lib/veiculos-completar-km";
-
 /**
  * Veículos > Anúncios: tipos da grade e as regras de busca, filtro e ordenação. Puro: roda no navegador e nos testes.
  */
@@ -26,7 +24,7 @@ export type CarroDaGrade = {
   anuncios: Record<string, AnuncioDaGrade | null>;
 };
 
-export type Filtro = "todos" | "faltando" | "erro" | "semKm" | "kmSuspeita" | "semFoto" | "parados" | "reservados";
+export type Filtro = "todos" | "faltando" | "erro" | "semKm" | "semFoto" | "parados" | "reservados";
 export type Ordem = "maisTempo" | "menosTempo" | "maiorPreco" | "menorPreco" | "nome" | "placa";
 
 export const FILTROS: { id: Filtro; rotulo: string }[] = [
@@ -34,7 +32,6 @@ export const FILTROS: { id: Filtro; rotulo: string }[] = [
   { id: "faltando", rotulo: "Faltando em portal" },
   { id: "erro", rotulo: "Com erro" },
   { id: "semKm", rotulo: "Sem km" },
-  { id: "kmSuspeita", rotulo: "Km suspeita" },
   { id: "semFoto", rotulo: "Sem foto" },
   { id: "parados", rotulo: "Parados +60 dias" },
   { id: "reservados", rotulo: "Reservados" },
@@ -48,9 +45,6 @@ export const ORDENS: { id: Ordem; rotulo: string }[] = [
   { id: "nome", rotulo: "Marca e modelo" },
   { id: "placa", rotulo: "Placa" },
 ];
-
-/** Km informada mas baixa demais para a idade do carro (ex.: 1 km num carro de 2015): costuma ser número padrão e não o odômetro. */
-export const kmSuspeita = (c: Pick<CarroDaGrade, "semKm" | "km" | "anoModelo">) => !c.semKm && avisoDeKm(c.km, c.anoModelo) !== null;
 
 const semAcento = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 const limpaPlaca = (s: string | null) => (s ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -67,8 +61,6 @@ export function passaNoFiltro(c: CarroDaGrade, filtro: Filtro, portaisConectados
       return (portal === "todos" ? Object.keys(c.anuncios) : [portal]).some((p) => c.anuncios[p]?.ativo && c.anuncios[p]?.status === "ERRO");
     case "semKm":
       return c.semKm;
-    case "kmSuspeita":
-      return kmSuspeita(c);
     case "semFoto":
       return c.totalFotos === 0;
     case "parados":

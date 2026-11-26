@@ -12,8 +12,9 @@
 const dev = () => process.env.NAPISTA_AMBIENTE === "development";
 /** Em que NaPista o Zap está falando agora. A conexão da loja guarda o ambiente em que foi feita. */
 export const ambienteDoNapista = (): "development" | "production" => (dev() ? "development" : "production");
-const authBase = () => (process.env.NAPISTA_AUTH_URL ?? `https://auth.${dev() ? "development." : ""}napista.com.br/realms/marketplace-dealer/protocol/openid-connect`).replace(/\/$/, "");
-const apiBase = () => (process.env.NAPISTA_API_URL ?? `https://api.${dev() ? "development." : ""}napista.com.br/seller-inventory-api`).replace(/\/$/, "");
+const authBase = () => (process.env.NAPISTA_AUTH_URL || `https://auth.${dev() ? "development." : ""}napista.com.br/realms/marketplace-dealer/protocol/openid-connect`).replace(/\/$/, "");
+export const baseDoNapista = () => (process.env.NAPISTA_API_URL || `https://api.${dev() ? "development." : ""}napista.com.br/seller-inventory-api`).replace(/\/$/, "");
+const apiBase = baseDoNapista;
 
 export type AppNapista = { clientId: string; redirectUri: string };
 
@@ -63,7 +64,8 @@ export type OfertaNapista = {
   versionId: string;
   modelYear: number;
   manufacturedYear: number;
-  mileage: number;
+  /** Opcional na API do NaPista: sem km informada, vai sem este campo (nunca um número inventado). */
+  mileage?: number;
   price: number;
   plate?: string;
   fuelType: string;
