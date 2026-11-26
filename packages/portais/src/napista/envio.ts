@@ -80,3 +80,18 @@ export function enderecoPublicoDoAnuncio(anuncio: unknown, profundidade = 0): st
   }
   return null;
 }
+
+/**
+ * A resposta do NaPista reduzida para mostrar na tela de diagnóstico: textos longos cortados, listas curtas e o endereço das
+ * fotos encurtado. Serve para descobrir quais campos o NaPista devolve (por exemplo, o número do anúncio público).
+ */
+export function enxugarParaDiagnostico(v: unknown, profundidade = 0): unknown {
+  if (typeof v === "string") return v.length > 140 ? `${v.slice(0, 140)}… (${v.length} caracteres)` : v;
+  if (v === null || typeof v !== "object") return v;
+  if (profundidade >= 4) return "(…)";
+  if (Array.isArray(v)) {
+    const itens = v.slice(0, 3).map((x) => enxugarParaDiagnostico(x, profundidade + 1));
+    return v.length > 3 ? [...itens, `(+${v.length - 3} itens)`] : itens;
+  }
+  return Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([k, x]) => [k, enxugarParaDiagnostico(x, profundidade + 1)]));
+}

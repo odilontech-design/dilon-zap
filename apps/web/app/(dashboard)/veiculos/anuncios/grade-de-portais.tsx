@@ -13,7 +13,7 @@ type Portal = { portal: string; nome: string; conectado: boolean; situacaoConta:
 type Grade = { portais: Portal[]; aVenda: number; carros: CarroDaGrade[] };
 type DetalheNapista =
   | { situacao: "sem-anuncio" | "sem-conta" }
-  | { situacao: "ok"; codigo: string; status: string | null; titulo: string | null; km: number | null; preco: number | null; placa: string | null; fotos: number; atualizadoEm: string | null; enderecoPublico: string | null; campos: string[] }
+  | { situacao: "ok"; codigo: string; status: string | null; titulo: string | null; km: number | null; preco: number | null; placa: string | null; fotos: number; atualizadoEm: string | null; enderecoPublico: string | null; campos: string[]; diagnostico: unknown }
   | { erro: string };
 
 const ROTULO: Record<string, { texto: string; classe: string }> = {
@@ -411,6 +411,13 @@ function DetalheDoNapista({ detalhe, aoConferir }: { detalhe: DetalheNapista | "
       <span className="font-mono text-neutral-400" title="Código do anúncio na API do NaPista (não é o da página pública)">
         cód. {detalhe.codigo.slice(0, 8)}…
       </span>
+      <details className="text-neutral-500">
+        <summary className="cursor-pointer">Dados brutos do NaPista (diagnóstico)</summary>
+        <pre className="mt-1 max-h-60 overflow-auto whitespace-pre-wrap break-all rounded bg-neutral-50 p-1.5 text-[10px]">{JSON.stringify(detalhe.diagnostico, null, 1)}</pre>
+        <button type="button" className="mt-1 text-accent hover:underline" onClick={() => navigator.clipboard?.writeText(JSON.stringify(detalhe.diagnostico, null, 1)).catch(() => {})}>
+          Copiar
+        </button>
+      </details>
     </div>
   );
 }
