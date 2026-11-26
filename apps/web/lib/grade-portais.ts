@@ -8,7 +8,7 @@ import { NOME_PORTAL } from "@/lib/relatorios-veiculos";
  * "publicar os que faltam" por portal. Só leitura aqui; as ações usam as funções de anúncio de cada portal.
  */
 
-export const PORTAIS_DA_GRADE = ["WEBMOTORS", "MOBIAUTO", "NAPISTA", "OLX"] as const;
+export const PORTAIS_DA_GRADE = ["WEBMOTORS", "MOBIAUTO", "NAPISTA", "MERCADO_LIVRE", "OLX"] as const;
 export type PortalDaGrade = (typeof PORTAIS_DA_GRADE)[number];
 
 export type AnuncioDaGrade = { ativo: boolean; status: string; url: string | null; erro: string | null; plano: string | null };

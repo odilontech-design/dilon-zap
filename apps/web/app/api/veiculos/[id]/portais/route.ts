@@ -9,6 +9,7 @@ import { anunciarNaOlx, desligarDaOlx, STATUS_ROTULO } from "@/lib/portais";
 import { anunciarNaWebmotors, desligarDaWebmotors } from "@/lib/portais-webmotors";
 import { anunciarNaMobiauto, desligarDaMobiauto } from "@/lib/portais-mobiauto";
 import { anunciarNoNapista, desligarDoNapista } from "@/lib/portais-napista";
+import { anunciarNoMercadoLivre, desligarDoMercadoLivre } from "@/lib/portais-mercadolivre";
 
 /** Como está o anúncio deste carro na OLX (qualquer pessoa da equipe vê). */
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
@@ -17,7 +18,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   if (bloqueio) return bloqueio;
   const v = await prisma.veiculo.findFirst({ where: { id: params.id, tenantId: user.tenantId }, select: { id: true } });
   if (!v) return NextResponse.json({ error: "veículo não encontrado" }, { status: 404 });
-  const [pub, conta, pubWm, contaWm, pubMb, contaMb, pubNp, contaNp] = await Promise.all([
+  const [pub, conta, pubWm, contaWm, pubMb, contaMb, pubNp, contaNp, pubMl, contaMl] = await Promise.all([
     prisma.publicacaoPortal.findUnique({
       where: { veiculoId_portal: { veiculoId: v.id, portal: "OLX" } },
       select: { ativo: true, status: true, url: true, erro: true, catalogo: true, enviadoEm: true, updatedAt: true },
@@ -38,10 +39,17 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       select: { ativo: true, status: true, url: true, erro: true, enviadoEm: true, updatedAt: true },
     }),
     prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId: user.tenantId, portal: "NAPISTA" } }, select: { status: true } }),
+    prisma.publicacaoPortal.findUnique({
+      where: { veiculoId_portal: { veiculoId: v.id, portal: "MERCADO_LIVRE" } },
+      select: { ativo: true, status: true, url: true, erro: true, enviadoEm: true, updatedAt: true },
+    }),
+    prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId: user.tenantId, portal: "MERCADO_LIVRE" } }, select: { status: true } }),
   ]);
   return NextResponse.json({
     contaOlx: conta?.status ?? null,
     olx: pub ? { ...pub, rotulo: pub.ativo ? STATUS_ROTULO[pub.status] : "Não anunciar" } : null,
+    contaMercadoLivre: contaMl?.status ?? null,
+    mercadolivre: pubMl ? { ...pubMl, rotulo: pubMl.ativo ? STATUS_ROTULO[pubMl.status].replace("a OLX", "o Mercado Livre") : "Não anunciar" } : null,
     contaNapista: contaNp?.status ?? null,
     napista: pubNp ? { ...pubNp, rotulo: pubNp.ativo ? STATUS_ROTULO[pubNp.status].replace("a OLX", "o NaPista") : "Não anunciar" } : null,
     contaMobiauto: contaMb?.status ?? null,
@@ -52,7 +60,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 }
 
 const corpo = z.object({
-  portal: z.enum(["OLX", "WEBMOTORS", "MOBIAUTO", "NAPISTA"]).default("OLX"),
+  portal: z.enum(["OLX", "WEBMOTORS", "MOBIAUTO", "NAPISTA", "MERCADO_LIVRE"]).default("OLX"),
   ativo: z.boolean(),
   catalogo: z.object({ marca: z.string().regex(/^\d+$/), modelo: z.string().regex(/^\d+$/), versao: z.string().regex(/^\d+$/) }).nullable().optional(),
 });
@@ -68,6 +76,11 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const v = await prisma.veiculo.findFirst({ where: { id: params.id, tenantId: user.tenantId }, select: { id: true } });
   if (!v) return NextResponse.json({ error: "veículo não encontrado" }, { status: 404 });
 
+  if (parsed.data.portal === "MERCADO_LIVRE") {
+    if (parsed.data.ativo) await anunciarNoMercadoLivre(user.tenantId, [v.id]);
+    else await desligarDoMercadoLivre(user.tenantId, v.id);
+    return NextResponse.json({ ok: true });
+  }
   if (parsed.data.portal === "NAPISTA") {
     if (parsed.data.ativo) await anunciarNoNapista(user.tenantId, [v.id]);
     else await desligarDoNapista(user.tenantId, v.id);

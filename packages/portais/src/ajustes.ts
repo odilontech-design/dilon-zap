@@ -4,7 +4,7 @@
  * cadastro). Sem ajuste, é o mesmo preço e texto do site. O hash do anúncio é calculado sobre o
  * resultado, então mudar um ajuste reenvia só ao portal afetado.
  */
-export type PortalComAjuste = "OLX" | "WEBMOTORS" | "MOBIAUTO" | "NAPISTA";
+export type PortalComAjuste = "OLX" | "WEBMOTORS" | "MOBIAUTO" | "NAPISTA" | "MERCADO_LIVRE";
 
 type ComPreco = {
   precoCents: number;

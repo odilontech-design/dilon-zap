@@ -24,3 +24,6 @@ export * from "./napista/mapa";
 export * from "./napista/catalogo";
 export { cicloNapista, contaNapistaGuardada, guardarContaNapista, type ContaNapista } from "./sincronizar-napista";
 export * from "./ajustes";
+export * from "./mercadolivre/cliente";
+export * from "./mercadolivre/mapa";
+export { cicloMercadoLivre, contaMercadoLivreGuardada, guardarContaMercadoLivre, lojaParaMercadoLivre, type ContaMercadoLivre } from "./sincronizar-mercadolivre";

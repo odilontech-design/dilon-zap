@@ -48,7 +48,7 @@ export type PrimeirosPassos = {
   };
 };
 
-const NOME_PORTAL: Record<string, string> = { OLX: "OLX", WEBMOTORS: "Webmotors", MOBIAUTO: "MobiAuto", NAPISTA: "NaPista" };
+const NOME_PORTAL: Record<string, string> = { OLX: "OLX", WEBMOTORS: "Webmotors", MOBIAUTO: "MobiAuto", NAPISTA: "NaPista", MERCADO_LIVRE: "Mercado Livre" };
 const DIA = 86_400_000;
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
