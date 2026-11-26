@@ -5,6 +5,7 @@ import { CompletarComAutoCerto } from "./completar-com-autocerto";
 import { EspelhoDoSite } from "./espelho-do-site";
 import { ImportarDoSite } from "./importar-do-site";
 import { ImportarEstoque } from "./importar-estoque";
+import { ImportarVendas } from "./importar-vendas";
 import { SecaoFotos, useFotosDaImportacao } from "./fotos-da-importacao";
 
 /**
@@ -19,6 +20,7 @@ export function ImportarTudo() {
     <div className="mx-auto flex max-w-4xl flex-col gap-8">
       <ImportarDoSite onFotos={baixarFotos} />
       <CompletarComAutoCerto />
+      <ImportarVendas />
       <EspelhoDoSite onFotos={baixarFotos} />
       <div>
         <h2 className="mb-3 text-sm font-semibold text-neutral-500">Ou envie uma planilha</h2>

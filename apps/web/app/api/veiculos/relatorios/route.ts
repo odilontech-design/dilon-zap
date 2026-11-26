@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { gestaoDosPortais as gestao } from "@/lib/portais-api";
-import { estoqueEmCsv, relatorioDesempenho, relatorioEstoque, relatorioIntegracao, relatorioVisitas } from "@/lib/relatorios-veiculos";
+import { estoqueEmCsv, relatorioDesempenho, relatorioEstoque, relatorioIntegracao, relatorioVendas, relatorioVisitas } from "@/lib/relatorios-veiculos";
 
-/** Veículos > Relatórios: ?tipo=estoque|visitas|integracao|desempenho (&dias=7|30|90; &formato=csv no estoque). Só a gestão. */
+/** Veículos > Relatórios: ?tipo=estoque|visitas|integracao|desempenho|vendas (&dias=7|30|90; &formato=csv no estoque). Só a gestão. */
 export async function GET(req: Request) {
   const { user, bloqueio } = await gestao();
   if (bloqueio) return bloqueio;
@@ -13,6 +13,8 @@ export async function GET(req: Request) {
       return NextResponse.json(await relatorioVisitas(user.tenantId, dias));
     case "integracao":
       return NextResponse.json(await relatorioIntegracao(user.tenantId));
+    case "vendas":
+      return NextResponse.json(await relatorioVendas(user.tenantId));
     case "desempenho":
       return NextResponse.json(await relatorioDesempenho(user.tenantId, dias));
     default: {
