@@ -1,6 +1,7 @@
 // Tolerâncias do envio ao NaPista (limite de fotos e equipamentos). Sem rede e sem banco.
 // Rodar com: npx tsx packages/portais/src/napista-envio.test-manual.ts
 import { ErroNapista, type OfertaNapista } from "./napista/cliente";
+import { montarOfertaNapista } from "./napista/mapa";
 import { comEquipamentosOpcionais, enviarFotosNapista, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
 
 let falhas = 0;
@@ -13,23 +14,35 @@ const cheio = () => new ErroNapista('O NaPista respondeu 412: {"message":"The ma
 const fotos = Array.from({ length: 20 }, (_, i) => `https://x/f${i}.jpg`);
 
 async function principal() {
-  // O NaPista aceita no máximo 12 fotos.
-  const chamadas: number[] = [];
-  const sessao = { fotosPorUrl: async (_id: string, urls: string[]) => { chamadas.push(urls.length); if (urls.length > 12) throw cheio(); } };
+  // Como o NaPista: as fotos somam às do anúncio e o máximo é 12 por anúncio.
+  const anuncio = { fotos: 0 };
+  const chamadas: string[] = [];
+  const sessao = {
+    apagarFotos: async (_id: string) => { chamadas.push("apagar"); anuncio.fotos = 0; },
+    fotosPorUrl: async (_id: string, urls: string[]) => { chamadas.push(`enviar ${urls.length}`); if (anuncio.fotos + urls.length > 12) throw cheio(); anuncio.fotos += urls.length; },
+  };
   const estado = novoEstadoDeFotos();
   const r = await enviarFotosNapista(sessao, "o1", fotos, estado);
-  checa("reduz em passos até caber (20 → 14 → 9)", chamadas, [20, 14, 9]);
-  checa("envia as que cabem e aprende o limite", [r.enviadas, r.cheio, estado.limite], [9, false, 9]);
-  const r2 = await enviarFotosNapista(sessao, "o2", fotos, estado);
-  checa("o próximo carro já começa no limite aprendido", [r2.enviadas, chamadas[chamadas.length - 1]], [9, 9]);
+  checa("apaga antes de enviar e reduz em passos até caber (20 → 14 → 9)", chamadas, ["apagar", "enviar 20", "apagar", "enviar 14", "apagar", "enviar 9"]);
+  checa("envia as que cabem e aprende o limite", [r.enviadas, anuncio.fotos, estado.limite], [9, 9, 9]);
+  chamadas.length = 0;
+  await enviarFotosNapista(sessao, "o1", fotos, estado);
+  checa("de novo no mesmo anúncio: não empilha, apaga e põe as mesmas 9", [chamadas, anuncio.fotos], [["apagar", "enviar 9"], 9]);
 
-  // Anúncio adotado que já está cheio: nem 5 fotos entram; segue com as que ele tem.
-  const sempreCheio = { fotosPorUrl: async () => { throw cheio(); } };
-  const r3 = await enviarFotosNapista(sempreCheio, "o3", fotos, novoEstadoDeFotos());
-  checa("anúncio já cheio: mantém as fotos que tem", [r3.enviadas, r3.cheio], [0, true]);
+  // Anúncio recém-criado não tem foto para apagar.
+  chamadas.length = 0;
+  anuncio.fotos = 0;
+  await enviarFotosNapista(sessao, "o2", fotos.slice(0, 5), estado, true);
+  checa("anúncio recém-criado: não chama apagar", chamadas, ["enviar 5"]);
+
+  // Nem 5 fotos cabem: o erro sobe (não esconde o problema).
+  const sempreCheio = { apagarFotos: async () => {}, fotosPorUrl: async () => { throw cheio(); } };
+  let e412 = "";
+  try { await enviarFotosNapista(sempreCheio, "o3", fotos, novoEstadoDeFotos()); } catch (e) { e412 = (e as Error).message; }
+  checa("limite que não cede nem com poucas fotos: o erro aparece", /412/.test(e412), true);
 
   // Outro erro não é engolido.
-  const fora = { fotosPorUrl: async () => { throw new ErroNapista("O NaPista respondeu 500", 500); } };
+  const fora = { apagarFotos: async () => {}, fotosPorUrl: async () => { throw new ErroNapista("O NaPista respondeu 500", 500); } };
   let erro = "";
   try { await enviarFotosNapista(fora, "o4", fotos, novoEstadoDeFotos()); } catch (e) { erro = (e as Error).message; }
   checa("erro que não é de limite continua subindo", erro, "O NaPista respondeu 500");
@@ -46,6 +59,23 @@ async function principal() {
   let e400 = "";
   try { await comEquipamentosOpcionais(semEquip, async () => { throw new ErroNapista("O NaPista respondeu 400: x", 400); }); } catch (e) { e400 = (e as Error).message; }
   checa("400 sem equipamentos: o erro sobe (não há o que tirar)", e400, "O NaPista respondeu 400: x");
+
+  // Cor, combustível, câmbio e equipamentos conferidos com a lista do NaPista.
+  const atributos = {
+    cores: [{ id: "SILVER", nome: "Prata" }, { id: "WINE", nome: "Vinho" }],
+    combustiveis: [{ id: "DIESEL", nome: "Diesel" }, { id: "FLEX", nome: "Flex" }],
+    cambios: [{ id: "MANUAL", nome: "Manual" }, { id: "AUTOMATIC", nome: "Automático" }],
+    equipamentos: [{ id: "CAR_2_4X4", nome: "4x4" }, { id: "CAR_1_AIRBAG", nome: "Airbag" }],
+  };
+  const carro = { tipo: "CARRO", marca: "Mitsubishi", modelo: "Pajero Full", versao: "3.2 4P", anoFabricacao: 2016, anoModelo: 2016, km: 90000, kmInformado: true, cor: "Prata", combustivel: "Diesel", cambio: "Automático", portas: null, precoCents: 12_000_000, fotos: ["x"], opcionais: ["Tração 4x4, Airbag", "Teto solar"], placa: "KRP4E13", descricao: null } as never;
+  const m = montarOfertaNapista(carro, "v1", atributos);
+  checa("equipamento com maiúsculas diferentes vira o código do NaPista; o que não existe na lista sai", m.ok && m.oferta.equipments, ["CAR_2_4X4", "CAR_1_AIRBAG"]);
+  const vinho = montarOfertaNapista({ ...(carro as object), cor: "Vinho" } as never, "v1", atributos);
+  checa("cor pelo nome em português quando o nosso código não existe na lista", vinho.ok && vinho.oferta.color, "WINE");
+  const roxo = montarOfertaNapista({ ...(carro as object), cor: "Roxo" } as never, "v1", atributos);
+  checa("cor que o NaPista não tem: pendência clara", !roxo.ok && roxo.faltando.some((f) => /cor/i.test(f)), true);
+  const semLista = montarOfertaNapista(carro, "v1", null);
+  checa("sem a lista do NaPista, vale o nosso mapa como antes", semLista.ok && semLista.oferta.color, "SILVER");
 
   const resumo = resumoDaOferta(oferta);
   checa("resumo do que foi enviado não leva o texto longo", [resumo.includes("DIESEL"), resumo.includes("texto longo")], [true, false]);

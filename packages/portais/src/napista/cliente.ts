@@ -74,6 +74,9 @@ export type OfertaNapista = {
   status?: StatusOferta;
 };
 
+/** Os valores válidos que o NaPista aceita para cor, combustível, câmbio e equipamentos (`/catalog/attributes`). */
+export type AtributosNapista = { cores: ItemNapista[]; combustiveis: ItemNapista[]; cambios: ItemNapista[]; equipamentos: ItemNapista[] };
+
 export type OfertaExistente = { id: string; placa: string; status: StatusOferta; km: number; preco: number };
 
 export type LeadNapista = {
@@ -172,7 +175,29 @@ export class SessaoNapista {
   async atualizar(id: string, o: OfertaNapista) { await this.req("PATCH", this.s(`/offer/${encodeURIComponent(id)}`), o); }
   async mudarStatus(id: string, status: StatusOferta) { await this.req("PUT", this.s(`/offer/${encodeURIComponent(id)}/${status}`)); }
   async excluir(id: string) { await this.req("DELETE", this.s(`/offer/${encodeURIComponent(id)}`)); }
-  /** Deixa no anúncio exatamente estas fotos, na ordem (o NaPista baixa pelos endereços e substitui as anteriores). */
+  /** Os valores aceitos de cor, combustível, câmbio e equipamentos. A lista é do NaPista: nunca assumimos os códigos. */
+  async atributos(categoria: "CAR" | "MOTORCYCLE" | "TRUCK" = "CAR"): Promise<AtributosNapista> {
+    const r = await this.req<any>("GET", `/catalog/attributes?category=${categoria}`);
+    const grupo = (re: RegExp) => {
+      const chave = Object.keys(r ?? {}).find((k) => re.test(k));
+      return chave ? itens(r[chave]) : [];
+    };
+    return { cores: grupo(/color/i), combustiveis: grupo(/fuel/i), cambios: grupo(/transmission|gear/i), equipamentos: grupo(/equip/i) };
+  }
+  /** O anúncio como está no NaPista: o status e quantas fotos tem agora. */
+  async oferta(id: string): Promise<{ status: StatusOferta | null; fotos: number }> {
+    const r = await this.req<any>("GET", this.s(`/offer/${encodeURIComponent(id)}`));
+    return { status: typeof r?.status === "string" ? (r.status as StatusOferta) : null, fotos: Array.isArray(r?.photos) ? r.photos.length : 0 };
+  }
+  /** Apaga todas as fotos do anúncio (as fotos por endereço SOMAM às que já estão lá). Anúncio sem foto não é erro. */
+  async apagarFotos(id: string) {
+    try {
+      await this.req("DELETE", this.s(`/offer/${encodeURIComponent(id)}/photos`));
+    } catch (e) {
+      if (!(e instanceof ErroNapista && e.http === 404)) throw e;
+    }
+  }
+  /** ACRESCENTA estas fotos ao anúncio, na ordem (o NaPista baixa pelos endereços e SOMA às que já existem: apague antes para deixar só estas). */
   async fotosPorUrl(id: string, urls: string[]) { await this.req("POST", this.s(`/offer/${encodeURIComponent(id)}/photos/url`), { list: urls.map((url, i) => ({ url, order: i })) }); }
 
   // ---- leads ----

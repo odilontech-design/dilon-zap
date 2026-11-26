@@ -1,6 +1,6 @@
 import type { CarroParaPortal } from "../olx/mapa";
 import { normalizar } from "../texto";
-import type { OfertaNapista } from "./cliente";
+import type { AtributosNapista, ItemNapista, OfertaNapista } from "./cliente";
 
 /**
  * Tradução de uma ficha do estoque para o anúncio (offer) do NaPista. Puro: não lê banco nem
@@ -46,18 +46,30 @@ const portasDoCarro = (c: Pick<CarroParaPortal, "portas" | "versao" | "modelo">)
   return m ? Number(m[1]) : null;
 };
 
+/**
+ * Confere um valor com a lista que o NaPista aceita: o nosso código (sem diferenciar maiúsculas, o NaPista
+ * escreve "4X4" onde a ficha pode dar "4x4") ou o nome em português ("Vinho"). Sem lista, confia no nosso mapa.
+ */
+export function valorAceitoNapista(candidato: string | null, lista: ItemNapista[], textoDaFicha?: string | null): string | null {
+  if (!lista.length) return candidato;
+  const porId = new Map(lista.map((i) => [i.id.toUpperCase(), i.id]));
+  if (candidato && porId.has(candidato.toUpperCase())) return porId.get(candidato.toUpperCase())!;
+  const t = normalizar(textoDaFicha ?? "");
+  return (t && lista.find((i) => normalizar(i.nome) === t)?.id) || null;
+}
+
 export type ResultadoNapista = { ok: true; oferta: OfertaNapista } | { ok: false; faltando: string[] };
 
-export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null): ResultadoNapista {
+export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null, atributos?: AtributosNapista | null): ResultadoNapista {
   const faltando: string[] = [];
   if (c.tipo !== "CARRO") faltando.push("Por enquanto a integração com o NaPista publica só carros");
   if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (o Zap não anuncia carro sem km)");
   if (!versionId) faltando.push("Escolher marca, modelo e versão no catálogo do NaPista");
-  const cor = corNapista(c.cor);
+  const cor = valorAceitoNapista(corNapista(c.cor), atributos?.cores ?? [], c.cor);
   if (!cor) faltando.push("O NaPista não reconheceu a cor do carro: confira a cor na ficha");
-  const cambio = cambioNapista(c.cambio);
+  const cambio = valorAceitoNapista(cambioNapista(c.cambio), atributos?.cambios ?? [], c.cambio) as "MANUAL" | "AUTOMATIC" | null;
   if (!cambio) faltando.push("Informar o câmbio (manual ou automático) na ficha");
-  const combustivel = combustivelNapista(c.combustivel);
+  const combustivel = valorAceitoNapista(combustivelNapista(c.combustivel), atributos?.combustiveis ?? [], c.combustivel);
   if (!combustivel) faltando.push("Informar o combustível na ficha");
   const preco = Math.round(c.precoCents / 100);
   if (preco <= 0) faltando.push("Preço de anúncio");
@@ -67,7 +79,10 @@ export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null
   const placa = (c.placa ?? "").toUpperCase().replace(/[^A-Z0-9]/g, "");
   const descricao = (c.descricao ?? "").replace(/\s+/g, " ").trim().slice(0, LIMITE_DESCRICAO_NAPISTA);
   const portas = portasDoCarro(c);
-  const equipamentos = equipamentosNapista(c.opcionais);
+  // Só equipamentos que existem na lista do NaPista (o código certo, com as maiúsculas deles); o resto fica na descrição.
+  const equipamentos = equipamentosNapista(c.opcionais)
+    .map((e) => valorAceitoNapista(e, atributos?.equipamentos ?? []))
+    .filter((e): e is string => !!e);
   return {
     ok: true,
     oferta: {
