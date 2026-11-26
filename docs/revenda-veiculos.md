@@ -873,3 +873,15 @@ Código: `apps/web/lib/grade-portais.ts`, rota `/api/veiculos/anuncios` (GET a g
   ação em auditoria. Usa as mesmas funções de anúncio da ficha do carro (`anunciarNa*`), então vale a regra de que carro sem km não sobe.
 - **Fora desta versão:** escolher o plano do anúncio de cada carro (Ouro, Prata, Bronze...) e o uso de vagas por plano em cada portal (como o
   "9 de 13" do MobiAuto no AutoCerto); hoje só a Webmotors tem plano padrão da loja, e a grade mostra o plano quando já existe.
+
+## Importar o controle de vendas da planilha (v1.110.0)
+
+Para lojas que ainda controlam as vendas numa planilha (uma aba por mês), **Veículos > Importar > "Importar o controle de vendas"** traz o histórico para dentro do Zap.
+
+- **Arquivo:** `.xlsx` com abas JANEIRO, FEVEREIRO… e colunas DATA, PLACA, VEICULO, MODELO/ANO, RENAVAM, CHASSI, COR, NOME DO COMPRADOR, ENDEREÇO, TELEFONE, RG, CPF, VALOR FINANCIADO, ENTRADA, FINANCEIRA, PRAZO, PARCELA, KM. Aceita data como número do Excel ou texto `dd/mm/aaaa` e cabeçalho de data em branco. As abas de transferência, IPVA, financiamento externo e repasse são ignoradas (por enquanto).
+- **O que cria, por linha:** o carro como VENDIDO (fora da vitrine, não ocupa o limite do plano), o comprador como contato (nome, telefone, CPF, RG e endereço) e uma venda CONCLUÍDA com a data da venda, o banco e o financiado. Nada de financeiro (contas a pagar/receber) é criado e o WhatsApp não é consultado.
+- **Valor aproximado:** a planilha não traz o preço. O valor da venda é financiado + dinheiro da entrada. Boleto e carro na troca não entram. A venda importada diz isso nas observações. Vendedor e origem do cliente ficam em branco; o "tempo em estoque" dos carros importados não vale (usamos a data da venda).
+- **Segurança:** em dois tempos (Conferir, depois Importar). Idempotente: enviar a mesma planilha de novo não duplica (conferido por carro + dia). Carro da planilha que ainda está no estoque do Zap vira "conflito" e não é importado. Linhas sem placa válida, comprador ou telefone são listadas. Só a gestão; sempre na empresa da sessão; fica no log de auditoria.
+- **Dados pessoais (LGPD):** CPF, RG e endereço dos compradores ficam só no contato da empresa, como os demais dados do cliente.
+- **Indicadores:** Veículos > Relatórios > **Vendas** (12 meses): vendas e valor por mês, ticket médio, % financiado, modelos, marcas e financeiras.
+- **Teste do interpretador:** `cd apps/web && npx tsx --tsconfig tsconfig.json --test lib/importar-vendas.test.ts`.

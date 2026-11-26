@@ -196,3 +196,58 @@ export async function relatorioDesempenho(tenantId: string, dias = 30, agora = n
   linhas.sort((a, b) => b.contatos - a.contatos || b.visitas - a.visitas);
   return { dias, linhas };
 }
+
+// ---------------------------------------------------------------------------------------------
+// Vendas (as importadas da planilha de controle e as feitas no Zap)
+// ---------------------------------------------------------------------------------------------
+
+export type DadosVendas = {
+  meses: number;
+  total: { vendas: number; valorCents: number; ticketCents: number; financiadas: number; aproximadas: number };
+  porMes: { mes: string; vendas: number; valorCents: number; financiadas: number }[];
+  porModelo: { nome: string; vendas: number }[];
+  porMarca: { nome: string; vendas: number }[];
+  porBanco: { nome: string; vendas: number; financiadoCents: number }[];
+};
+
+/** Vendas concluídas dos últimos `meses` meses (padrão 12), por mês, modelo, marca e banco. Sempre da empresa da sessão. */
+export async function relatorioVendas(tenantId: string, meses = 12, agora = new Date()): Promise<DadosVendas> {
+  const hoje = diaDeBrasilia(agora);
+  const inicio = new Date(Date.UTC(hoje.getUTCFullYear(), hoje.getUTCMonth() - (meses - 1), 1));
+  const vendas = await prisma.vendaVeiculo.findMany({
+    where: { tenantId, status: "CONCLUIDA", concluidaEm: { gte: inicio } },
+    select: { precoCents: true, financiadoCents: true, banco: true, concluidaEm: true, observacoes: true, veiculo: { select: { marca: true, modelo: true } } },
+    take: 20_000,
+  });
+  const porMes = new Map<string, { vendas: number; valorCents: number; financiadas: number }>();
+  for (let i = 0; i < meses; i++) {
+    const d = new Date(Date.UTC(inicio.getUTCFullYear(), inicio.getUTCMonth() + i, 1));
+    porMes.set(d.toISOString().slice(0, 7), { vendas: 0, valorCents: 0, financiadas: 0 });
+  }
+  const modelos = new Map<string, number>();
+  const marcas = new Map<string, number>();
+  const bancos = new Map<string, { vendas: number; financiadoCents: number }>();
+  let valorCents = 0, financiadas = 0, aproximadas = 0;
+  for (const v of vendas) {
+    const preco = v.precoCents ?? 0;
+    const financiada = (v.financiadoCents ?? 0) > 0;
+    valorCents += preco;
+    if (financiada) financiadas++;
+    if (v.observacoes?.startsWith("Importada da planilha")) aproximadas++;
+    const m = porMes.get((v.concluidaEm ?? inicio).toISOString().slice(0, 7));
+    if (m) { m.vendas++; m.valorCents += preco; if (financiada) m.financiadas++; }
+    const nome = `${v.veiculo.marca} ${v.veiculo.modelo}`;
+    modelos.set(nome, (modelos.get(nome) ?? 0) + 1);
+    marcas.set(v.veiculo.marca, (marcas.get(v.veiculo.marca) ?? 0) + 1);
+    if (v.banco) { const b = bancos.get(v.banco) ?? { vendas: 0, financiadoCents: 0 }; b.vendas++; b.financiadoCents += v.financiadoCents ?? 0; bancos.set(v.banco, b); }
+  }
+  const topo = <T extends { vendas: number }>(m: Map<string, T>, n: number) => [...m.entries()].map(([nome, x]) => ({ nome, ...x })).sort((a, b) => b.vendas - a.vendas || a.nome.localeCompare(b.nome)).slice(0, n);
+  return {
+    meses,
+    total: { vendas: vendas.length, valorCents, ticketCents: vendas.length ? Math.round(valorCents / vendas.length) : 0, financiadas, aproximadas },
+    porMes: [...porMes.entries()].map(([mes, x]) => ({ mes, ...x })),
+    porModelo: topo(new Map([...modelos].map(([k, n]) => [k, { vendas: n }])), 10),
+    porMarca: topo(new Map([...marcas].map(([k, n]) => [k, { vendas: n }])), 8),
+    porBanco: topo(bancos, 8),
+  };
+}

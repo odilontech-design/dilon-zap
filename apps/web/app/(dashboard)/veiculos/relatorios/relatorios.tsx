@@ -10,6 +10,7 @@ const ABAS = [
   { id: "visitas", rotulo: "Visitas no site" },
   { id: "integracao", rotulo: "Integração" },
   { id: "desempenho", rotulo: "Desempenho por veículo" },
+  { id: "vendas", rotulo: "Vendas" },
 ] as const;
 type Aba = (typeof ABAS)[number]["id"];
 
@@ -45,6 +46,7 @@ export function RelatoriosVeiculos() {
       {aba === "visitas" && <Visitas dias={dias} />}
       {aba === "integracao" && <Integracao />}
       {aba === "desempenho" && <Desempenho dias={dias} />}
+      {aba === "vendas" && <Vendas />}
     </div>
   );
 }
@@ -247,5 +249,72 @@ function Desempenho({ dias }: { dias: number }) {
         {data.linhas.length === 0 && <p className="text-sm text-neutral-500">Nenhum carro à venda.</p>}
       </section>
     </div>
+  );
+}
+
+// ---- Vendas ----
+
+type DadosVendas = {
+  meses: number;
+  total: { vendas: number; valorCents: number; ticketCents: number; financiadas: number; aproximadas: number };
+  porMes: { mes: string; vendas: number; valorCents: number; financiadas: number }[];
+  porModelo: { nome: string; vendas: number }[];
+  porMarca: { nome: string; vendas: number }[];
+  porBanco: { nome: string; vendas: number; financiadoCents: number }[];
+};
+const NOME_MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+
+function Vendas() {
+  const { data } = useSWR<DadosVendas>("/api/veiculos/relatorios?tipo=vendas", fetcher);
+  if (!data) return <Carregando />;
+  const t = data.total;
+  if (t.vendas === 0) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Nenhuma venda registrada nos últimos {data.meses} meses. Importe a planilha de controle de vendas em <Link href="/veiculos/importar" className="text-accent hover:underline">Importar</Link>.
+      </p>
+    );
+  }
+  const maior = Math.max(1, ...data.porMes.map((m) => m.vendas));
+  return (
+    <div className="flex flex-col gap-4" data-testid="relatorio-vendas">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Cartao titulo={`Vendas em ${data.meses} meses`} valor={t.vendas} />
+        <Cartao titulo="Valor vendido" valor={brl(t.valorCents)} detalhe={t.aproximadas > 0 ? `aproximado em ${t.aproximadas} venda(s) importada(s)` : undefined} />
+        <Cartao titulo="Ticket médio" valor={brl(t.ticketCents)} />
+        <Cartao titulo="Vendas financiadas" valor={`${Math.round((t.financiadas / t.vendas) * 100)}%`} detalhe={`${t.financiadas} de ${t.vendas}`} />
+      </div>
+      <section className={secao}>
+        <h2 className="text-sm font-semibold">Vendas por mês</h2>
+        <ul className="flex flex-col gap-1.5 text-sm">
+          {data.porMes.map((m) => (
+            <li key={m.mes} className="grid grid-cols-[4rem_1fr_9rem] items-center gap-3">
+              <span className="text-neutral-500">{NOME_MES[Number(m.mes.slice(5, 7)) - 1]}/{m.mes.slice(2, 4)}</span>
+              <span className="h-3 rounded bg-neutral-100"><span className="block h-3 rounded bg-accent" style={{ width: `${(m.vendas / maior) * 100}%` }} /></span>
+              <span className="text-right tabular-nums">{m.vendas} · {brl(m.valorCents)}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Ranking titulo="Modelos mais vendidos" linhas={data.porModelo.map((x) => [x.nome, `${x.vendas}`])} />
+        <Ranking titulo="Marcas" linhas={data.porMarca.map((x) => [x.nome, `${x.vendas}`])} />
+        <Ranking titulo="Financeiras" linhas={data.porBanco.map((x) => [x.nome, `${x.vendas} · ${brl(x.financiadoCents)}`])} />
+      </div>
+      <p className="text-xs text-neutral-500">Vendedor e origem do cliente só aparecem nas vendas feitas pelo Zap; a planilha não traz essas informações.</p>
+    </div>
+  );
+}
+
+function Ranking({ titulo, linhas }: { titulo: string; linhas: [string, string][] }) {
+  return (
+    <section className={secao}>
+      <h2 className="text-sm font-semibold">{titulo}</h2>
+      <ul className="flex flex-col gap-1 text-sm">
+        {linhas.map(([n, v]) => (
+          <li key={n} className="flex justify-between gap-3 border-t border-neutral-100 pt-1 first:border-0 first:pt-0"><span>{n}</span><span className="tabular-nums text-neutral-600">{v}</span></li>
+        ))}
+      </ul>
+    </section>
   );
 }
