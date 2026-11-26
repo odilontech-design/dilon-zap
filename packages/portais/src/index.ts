@@ -22,6 +22,7 @@ export { cicloMobiauto, contaMobiautoGuardada, guardarContaMobiauto, type ContaM
 export * from "./napista/cliente";
 export * from "./napista/mapa";
 export * from "./napista/catalogo";
+export * from "./napista/envio";
 export { cicloNapista, contaNapistaGuardada, guardarContaNapista, type ContaNapista } from "./sincronizar-napista";
 export * from "./ajustes";
 export * from "./mercadolivre/cliente";
