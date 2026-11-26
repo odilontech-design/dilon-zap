@@ -14,7 +14,7 @@ const carro = (id: string, nome: string, extra: Partial<CarroDaGrade> = {}): Car
   anuncios: { WEBMOTORS: ok(), NAPISTA: ok() }, ...extra,
 });
 const lista = [
-  carro("1", "Chevrolet Classic 2014/2015", { placa: "OTU-5D85", versao: "1.0 MPFI LS 8V FLEX 4P MANUAL", dias: 83, precoCents: 3_599_999 }),
+  carro("1", "Chevrolet Classic 2014/2015", { placa: "OTU-5D85", versao: "1.0 MPFI LS 8V FLEX 4P MANUAL", dias: 83, precoCents: 3_599_999, km: 1, anoModelo: 2015 }),
   carro("2", "Chevrolet Cobalt 2012/2013", { placa: "LLT-2A17", dias: 35, anuncios: { WEBMOTORS: null, NAPISTA: null }, semKm: true }),
   carro("3", "Citroën C3 2015/2016", { placa: "LSE-3604", dias: 367, precoCents: 4_499_999, anuncios: { WEBMOTORS: ok(), NAPISTA: ok("ERRO") }, totalFotos: 0 }),
   carro("4", "Fiat Mobi 2018/2018", { status: "RESERVADO", dias: 5, anuncios: { WEBMOTORS: ok(), NAPISTA: ok() } }),
@@ -32,6 +32,7 @@ checa("com erro (qualquer portal)", f("erro"), ["3"]);
 checa("com erro no Webmotors escolhido: nenhum", f("erro", { portal: "WEBMOTORS" }), []);
 checa("sem km", f("semKm"), ["2"]);
 checa("sem foto", f("semFoto"), ["3"]);
+checa("km suspeita: 1 km num carro de 2015 (o sem km não conta)", f("kmSuspeita"), ["1"]);
 checa("parados +60 dias", f("parados"), ["3", "1"]);
 checa("reservados", f("reservados"), ["4"]);
 checa("ordem padrão: mais tempo no pátio primeiro", f("todos"), ["3", "1", "2", "4"]);
@@ -39,12 +40,12 @@ checa("ordem por maior preço (empate pelo nome)", ids(filtrarEOrdenar(lista, po
 checa("ordem por menor preço começa pelo mais barato", ids(filtrarEOrdenar(lista, portais, { termo: "", filtro: "todos", portal: "todos", ordem: "menorPreco" }))[0], "1");
 checa("ordem por placa", ids(filtrarEOrdenar(lista, portais, { termo: "", filtro: "todos", portal: "todos", ordem: "placa" })), ["2", "3", "1", "4"]);
 const c = contagemPorFiltro(lista, portais, "", "todos");
-checa("contagem por filtro", [c.todos, c.faltando, c.erro, c.semKm, c.semFoto, c.parados, c.reservados], [4, 1, 1, 1, 1, 2, 1]);
+checa("contagem por filtro", [c.todos, c.faltando, c.erro, c.semKm, c.semFoto, c.parados, c.reservados, c.kmSuspeita], [4, 1, 1, 1, 1, 2, 1, 1]);
 checa("faixas de dias", [classeDosDias(30), classeDosDias(61), classeDosDias(91)], ["normal", "atencao", "parado"]);
 
-checa("NaPista publicado: endereço público pelo código do anúncio", urlDoAnuncio("NAPISTA", { ativo: true, status: "PUBLICADO", url: null, idExterno: "eed79ff2-a526-4eb3-9111-7ca7ab137d6e" }), "https://www.napista.com.br/anuncios/eed79ff2-a526-4eb3-9111-7ca7ab137d6e");
-checa("o endereço que o portal devolveu vale mais", urlDoAnuncio("WEBMOTORS", { ativo: true, status: "PUBLICADO", url: "https://w/1", idExterno: "9" }), "https://w/1");
-checa("não publicado, desligado ou sem código: sem link", [urlDoAnuncio("NAPISTA", { ativo: true, status: "ERRO", url: null, idExterno: "x" }), urlDoAnuncio("NAPISTA", { ativo: false, status: "PUBLICADO", url: null, idExterno: "x" }), urlDoAnuncio("NAPISTA", { ativo: true, status: "PUBLICADO", url: null, idExterno: null }), urlDoAnuncio("MOBIAUTO", { ativo: true, status: "PUBLICADO", url: null, idExterno: "x" })], [null, null, null, null]);
+checa("o endereço que o portal devolveu vale", urlDoAnuncio("WEBMOTORS", { ativo: true, status: "PUBLICADO", url: "https://w/1", idExterno: "9" }), "https://w/1");
+checa("NaPista: sem endereço devolvido, não há link por palpite", urlDoAnuncio("NAPISTA", { ativo: true, status: "PUBLICADO", url: null, idExterno: "eed79ff2" }), null);
+checa("não publicado ou desligado: sem link", [urlDoAnuncio("WEBMOTORS", { ativo: true, status: "ERRO", url: "https://w/1", idExterno: "x" }), urlDoAnuncio("WEBMOTORS", { ativo: false, status: "PUBLICADO", url: "https://w/1", idExterno: "x" })], [null, null]);
 
 if (falhas) {
   console.log(`\n${falhas} falha(s)`);

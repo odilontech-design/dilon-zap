@@ -3,6 +3,7 @@ import {
   SessaoNapista,
   appNapistaDoAmbiente,
   assinarEstado,
+  enderecoPublicoDoAnuncio,
   chaveDoAmbiente,
   contaNapistaGuardada,
   guardarContaNapista,
@@ -270,4 +271,31 @@ export async function salvarVersoesNapista(tenantId: string, escolhas: { veiculo
     salvas++;
   }
   return { salvas, recusadas };
+}
+
+/**
+ * O que o NaPista tem hoje de um anúncio publicado pelo Zap: status, fotos, km, preço e, se ele devolver, o endereço
+ * público. Para a gestão conferir se o anúncio está de fato no ar (a página pública pode não existir ainda ou ser outro código).
+ */
+export async function detalheDoAnuncioNapista(tenantId: string, veiculoId: string) {
+  const pub = await prisma.publicacaoPortal.findFirst({ where: { tenantId, veiculoId, portal: "NAPISTA", idExterno: { not: null } }, select: { idExterno: true, status: true, ativo: true } });
+  if (!pub?.idExterno) return { situacao: "sem-anuncio" as const };
+  const s = await sessaoDaLoja(tenantId);
+  if (!s) return { situacao: "sem-conta" as const };
+  const r = await s.ofertaBruta(pub.idExterno);
+  const texto = (v: unknown) => (typeof v === "string" ? v : null);
+  const numero = (v: unknown) => (typeof v === "number" ? v : null);
+  return {
+    situacao: "ok" as const,
+    codigo: pub.idExterno,
+    status: texto(r?.status),
+    titulo: texto(r?.title),
+    km: numero(r?.mileage),
+    preco: numero(r?.price),
+    placa: texto(r?.plate),
+    fotos: Array.isArray(r?.photos) ? r.photos.length : 0,
+    atualizadoEm: texto(r?.updatedDate),
+    enderecoPublico: enderecoPublicoDoAnuncio(r),
+    campos: r && typeof r === "object" ? Object.keys(r).slice(0, 40) : [],
+  };
 }

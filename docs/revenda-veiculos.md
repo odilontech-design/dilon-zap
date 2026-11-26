@@ -900,7 +900,13 @@ A grade de **Veículos > Anúncios** ficou mais perto da consulta de estoque do 
 ### Grade: "Atualizar agora" e link do anúncio (v1.117.0)
 
 - **Atualizar agora (N)** em cada cartão de portal, e **Atualizar anúncios (N)** no topo para todos os portais conectados. N é o que está **na fila ou com erro** (só carros à venda, anúncios ligados). O botão devolve esses anúncios à fila, apaga o erro antigo e **zera a espera entre tentativas** (que chega a 5 minutos, 10, 20… até 6 horas); o worker dos portais roda a cada minuto e envia no próximo ciclo. O que está publicado e igual não é tocado, e quem ainda tem pendência de verdade (km, versão, foto) volta com o motivo na linha. API: `PUT /api/veiculos/anuncios` com `{ portal }` (só gestão, só a loja da sessão, exige o portal conectado, registrada na auditoria `veiculos.atualizar_anuncios`).
-- **Ver anúncio no NaPista:** o NaPista não devolve o endereço do anúncio, então a grade o monta com o código do anúncio: `https://www.napista.com.br/anuncios/<código>` (o mesmo formato do endereço público, que o Sales vê no NaPista). **A confirmar em produção**: abrir um "Ver anúncio" e ver se carrega o anúncio certo; se o NaPista usar outro código na página pública, o ajuste é em `urlDoAnuncio` (`lib/grade-portais-filtros.ts`). Nos outros portais vale o endereço que o portal devolveu.
+- **Ver anúncio no NaPista:** a v1.117.0 montava o endereço com o código do anúncio da API, mas ele **não é o da página pública** (testado em produção: "não encontramos o que você está procurando"). Corrigido na v1.118.0, abaixo.
+
+### Grade: conferir o anúncio no NaPista e km suspeita (v1.118.0)
+
+- **Conferir no NaPista** (em cada anúncio publicado do NaPista na grade): pergunta à API do NaPista como o anúncio está agora (status, quantas fotos, km e preço que o comprador vê) e **só mostra "Abrir o anúncio" se o NaPista devolver um endereço público**; senão avisa que não há como montar o link e manda procurar pela placa em napista.com.br. O código da API aparece só como referência (`cód. xxxxxxxx…`). Sem link por palpite. API: `GET /api/portais/napista/anuncio?veiculoId=` (só gestão, só a loja da sessão, só leitura).
+- **Km suspeita:** "Km suspeita" é km informada mas **baixa demais para a idade** (menos de 500 km num carro de ano anterior; ex.: **1 km num carro de 2015**), que costuma ser número padrão e não o odômetro. Aparece como filtro com contagem na grade e esses carros entram na lista da tela **Completar**, onde a km real pode ser digitada ou colada da planilha. Motivo: o estoque importado trazia "1 km" e o Zap já publicou esses carros no NaPista com essa km (o NaPista mostra "Baixa Km"). Ao corrigir a km, o anúncio é atualizado sozinho no próximo ciclo.
+- Se o anúncio no NaPista estiver mostrando km baixa, a conferência avisa em vermelho.
 
 ## Importar o controle de vendas da planilha (v1.110.0)
 

@@ -66,3 +66,17 @@ export function resumoDaOferta(o: OfertaNapista): string {
   const { description: _d, ...resto } = o;
   return JSON.stringify(resto).slice(0, 400);
 }
+
+/**
+ * O endereço público do anúncio, se o NaPista o devolver em algum campo do anúncio. O código do anúncio na API NÃO é o da
+ * página pública (testado em produção), então procuramos um endereço de verdade em vez de montar um. Ignora o endereço das fotos.
+ */
+export function enderecoPublicoDoAnuncio(anuncio: unknown, profundidade = 0): string | null {
+  if (typeof anuncio === "string") return /^https?:\/\/(www\.)?napista\.com\.br\/(anuncios?|carro|moto|comprar|veiculo)/i.test(anuncio) ? anuncio : null;
+  if (profundidade >= 3 || !anuncio || typeof anuncio !== "object") return null;
+  for (const v of Object.values(anuncio as Record<string, unknown>)) {
+    const achado = enderecoPublicoDoAnuncio(v, profundidade + 1);
+    if (achado) return achado;
+  }
+  return null;
+}
