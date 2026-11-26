@@ -874,7 +874,7 @@ Código: `apps/web/lib/grade-portais.ts`, rota `/api/veiculos/anuncios` (GET a g
 - **Fora desta versão:** escolher o plano do anúncio de cada carro (Ouro, Prata, Bronze...) e o uso de vagas por plano em cada portal (como o
   "9 de 13" do MobiAuto no AutoCerto); hoje só a Webmotors tem plano padrão da loja, e a grade mostra o plano quando já existe.
 
-## Importar o controle de vendas da planilha (v1.109.0)
+## Importar o controle de vendas da planilha (v1.110.0)
 
 Para lojas que ainda controlam as vendas numa planilha (uma aba por mês), **Veículos > Importar > "Importar o controle de vendas"** traz o histórico para dentro do Zap.
 
