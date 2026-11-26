@@ -32,7 +32,6 @@ checa("com erro (qualquer portal)", f("erro"), ["3"]);
 checa("com erro no Webmotors escolhido: nenhum", f("erro", { portal: "WEBMOTORS" }), []);
 checa("sem km", f("semKm"), ["2"]);
 checa("sem foto", f("semFoto"), ["3"]);
-checa("km suspeita: 1 km num carro de 2015 (o sem km não conta)", f("kmSuspeita"), ["1"]);
 checa("parados +60 dias", f("parados"), ["3", "1"]);
 checa("reservados", f("reservados"), ["4"]);
 checa("ordem padrão: mais tempo no pátio primeiro", f("todos"), ["3", "1", "2", "4"]);
@@ -40,7 +39,7 @@ checa("ordem por maior preço (empate pelo nome)", ids(filtrarEOrdenar(lista, po
 checa("ordem por menor preço começa pelo mais barato", ids(filtrarEOrdenar(lista, portais, { termo: "", filtro: "todos", portal: "todos", ordem: "menorPreco" }))[0], "1");
 checa("ordem por placa", ids(filtrarEOrdenar(lista, portais, { termo: "", filtro: "todos", portal: "todos", ordem: "placa" })), ["2", "3", "1", "4"]);
 const c = contagemPorFiltro(lista, portais, "", "todos");
-checa("contagem por filtro", [c.todos, c.faltando, c.erro, c.semKm, c.semFoto, c.parados, c.reservados, c.kmSuspeita], [4, 1, 1, 1, 1, 2, 1, 1]);
+checa("contagem por filtro", [c.todos, c.faltando, c.erro, c.semKm, c.semFoto, c.parados, c.reservados], [4, 1, 1, 1, 1, 2, 1]);
 checa("faixas de dias", [classeDosDias(30), classeDosDias(61), classeDosDias(91)], ["normal", "atencao", "parado"]);
 
 checa("o endereço que o portal devolveu vale", urlDoAnuncio("WEBMOTORS", { ativo: true, status: "PUBLICADO", url: "https://w/1", idExterno: "9" }), "https://w/1");

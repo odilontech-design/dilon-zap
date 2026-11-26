@@ -6,8 +6,9 @@ import type { AnuncioOlx } from "./mapa";
  * contra um servidor falso, sem conta de verdade.
  */
 
-const authUrl = () => (process.env.OLX_AUTH_URL ?? "https://auth.olx.com.br").replace(/\/$/, "");
-const apiUrl = () => (process.env.OLX_API_URL ?? "https://apps.olx.com.br").replace(/\/$/, "");
+const authUrl = () => (process.env.OLX_AUTH_URL || "https://auth.olx.com.br").replace(/\/$/, "");
+export const baseDaOlx = () => (process.env.OLX_API_URL || "https://apps.olx.com.br").replace(/\/$/, "");
+const apiUrl = baseDaOlx;
 
 export type CredenciaisApp = { clientId: string; clientSecret: string; redirectUri: string };
 

@@ -101,9 +101,9 @@ export function PainelNapista() {
             {data.conta?.leadErro ? <span className="text-red-600">Contatos do NaPista com problema: {data.conta.leadErro}</span> : data.conta?.leadEm ? `Contatos conferidos pela última vez em ${new Date(data.conta.leadEm).toLocaleString("pt-BR")}.` : "Os contatos dos compradores entram no CRM a cada 10 minutos."}
           </p>
           {data.semKm > 0 && (
-            <p className="rounded-md bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
-              {data.semKm} carro(s) sem quilometragem informada: o Zap não anuncia carro sem km.{" "}
-              <a href="/veiculos/completar" className="font-medium underline">Completar a quilometragem</a>
+            <p className="rounded-md bg-neutral-100 px-3 py-2 text-xs text-neutral-600">
+              {data.semKm} carro(s) sem quilometragem: vão ao NaPista sem esse campo (o NaPista não exige). Se quiser informar a km,{" "}
+              <a href="/veiculos/completar" className="font-medium underline">complete aqui</a>.
             </p>
           )}
           <div className="flex flex-wrap gap-2">

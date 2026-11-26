@@ -6,7 +6,7 @@ import useSWR from "swr";
 import { centsToBRL } from "@/lib/billing";
 import { lerReais } from "@/lib/otica-regras";
 import { classeDosDias, contagemPorFiltro, filtrarEOrdenar, FILTROS, ORDENS, type AnuncioDaGrade, type CarroDaGrade, type Filtro, type Ordem } from "@/lib/grade-portais-filtros";
-import { avisoDeKm, lerKm } from "@/lib/veiculos-completar-km";
+import { lerKm } from "@/lib/veiculos-completar-km";
 import { botaoSecundario, campo, erroDaResposta, fetcher } from "../comum";
 
 type Portal = { portal: string; nome: string; conectado: boolean; situacaoConta: string | null; publicados: number; naFila: number; comErro: number; pendentes: number; fora: number; foraSemKm: number };
@@ -325,7 +325,7 @@ export function GradeDePortais() {
                           </span>
                           <span>
                             Km{" "}
-                            <Editavel rotulo="Km" exibido={c.semKm ? "sem km" : `${c.km.toLocaleString("pt-BR")} km`} inicial={c.semKm ? "" : String(c.km)} ajuda={c.semKm ? null : avisoDeKm(c.km, c.anoModelo)} aoSalvar={(t) => corrigir(c, "km", t)} destaque={c.semKm} />
+                            <Editavel rotulo="Km" exibido={c.semKm ? "sem km" : `${c.km.toLocaleString("pt-BR")} km`} inicial={c.semKm ? "" : String(c.km)} aoSalvar={(t) => corrigir(c, "km", t)} destaque={c.semKm} />
                           </span>
                         </p>
                       </div>

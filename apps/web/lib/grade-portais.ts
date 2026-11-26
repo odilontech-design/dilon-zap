@@ -48,7 +48,8 @@ export async function gradeDePortais(tenantId: string) {
       /** O que "Atualizar agora" reenvia: na fila ou com erro. */
       pendentes: ativos.filter((p) => p.status === "FILA" || p.status === "ERRO").length,
       fora: fora.length,
-      foraSemKm: fora.filter((c) => !c.kmInformado && !c.zeroKm).length,
+      // O NaPista não exige a km (sobe sem o campo); os outros portais exigem e esperam a km.
+      foraSemKm: portal === "NAPISTA" ? 0 : fora.filter((c) => !c.kmInformado && !c.zeroKm).length,
     };
   });
 

@@ -180,6 +180,17 @@ services:
       MERCADOLIVRE_CLIENT_SECRET: ${MERCADOLIVRE_CLIENT_SECRET:-}
       OLX_CLIENT_ID: ${OLX_CLIENT_ID:-}
       OLX_CLIENT_SECRET: ${OLX_CLIENT_SECRET:-}
+      # Endereços de cada portal (vazios = produção). O site lê o .env inteiro, então o worker precisa receber os MESMOS
+      # endereços: sem isto, o site podia falar com a homologação e o worker com a produção (ou o contrário).
+      WEBMOTORS_URL_BASE: ${WEBMOTORS_URL_BASE:-}
+      MOBIAUTO_API_URL: ${MOBIAUTO_API_URL:-}
+      MOBIAUTO_AUTH_URL: ${MOBIAUTO_AUTH_URL:-}
+      OLX_API_URL: ${OLX_API_URL:-}
+      OLX_AUTH_URL: ${OLX_AUTH_URL:-}
+      MERCADOLIVRE_API_URL: ${MERCADOLIVRE_API_URL:-}
+      MERCADOLIVRE_AUTH_URL: ${MERCADOLIVRE_AUTH_URL:-}
+      NAPISTA_API_URL: ${NAPISTA_API_URL:-}
+      NAPISTA_AUTH_URL: ${NAPISTA_AUTH_URL:-}
       NODE_OPTIONS: --max-old-space-size=256
     mem_limit: 384m
     stop_grace_period: 30s

@@ -15,8 +15,9 @@
  * `MERCADOLIVRE_API_URL` e `MERCADOLIVRE_AUTH_URL` trocam os endereços (testes).
  */
 
-const apiBase = () => (process.env.MERCADOLIVRE_API_URL ?? "https://api.mercadolibre.com").replace(/\/$/, "");
-const authBase = () => (process.env.MERCADOLIVRE_AUTH_URL ?? "https://auth.mercadolivre.com.br").replace(/\/$/, "");
+export const baseDoMercadoLivre = () => (process.env.MERCADOLIVRE_API_URL || "https://api.mercadolibre.com").replace(/\/$/, "");
+const apiBase = baseDoMercadoLivre;
+const authBase = () => (process.env.MERCADOLIVRE_AUTH_URL || "https://auth.mercadolivre.com.br").replace(/\/$/, "");
 
 export const CATEGORIA_CARROS_ML = "MLB1744";
 

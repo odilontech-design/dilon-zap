@@ -7,8 +7,9 @@
  * servidor falso.
  */
 
-const authBase = () => (process.env.MOBIAUTO_AUTH_URL ?? "https://auth.mobiauto.com.br/auth/realms/mobiauto/protocol/openid-connect").replace(/\/$/, "");
-const apiBase = () => (process.env.MOBIAUTO_API_URL ?? "https://open-api.mobiauto.com.br").replace(/\/$/, "");
+const authBase = () => (process.env.MOBIAUTO_AUTH_URL || "https://auth.mobiauto.com.br/auth/realms/mobiauto/protocol/openid-connect").replace(/\/$/, "");
+export const baseDaMobiauto = () => (process.env.MOBIAUTO_API_URL || "https://open-api.mobiauto.com.br").replace(/\/$/, "");
+const apiBase = baseDaMobiauto;
 
 export type AppMobiauto = { clientId: string; clientSecret: string; redirectUri: string };
 

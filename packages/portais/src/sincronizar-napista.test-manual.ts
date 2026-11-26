@@ -102,7 +102,7 @@ async function main() {
   checa("opcionais reconhecidos viram equipamentos", equipamentosNapista(["Ar-condicionado, Direção elétrica", "Câmera de ré", "Tapete de borracha"]), ["CAR_1_ARCONDICIONADO", "CAR_1_DIRECAOELETRICA", "CAR_2_SENSORDEESTACIONAMENTO"]);
   const base0 = { tipo: "CARRO", marca: "Fiat", modelo: "Argo", versao: "1.0 4P", anoFabricacao: 2021, anoModelo: 2021, km: 0, kmInformado: false, cor: "Branco", combustivel: "Flex", cambio: "Manual", portas: null, precoCents: 5_599_999, fotos: ["x"], opcionais: [], descricao: null, placa: null, id: "a" } as any;
   const sem = montarOfertaNapista(base0, "v1");
-  checa("mapa: sem km informada não monta o anúncio", sem.ok === false && sem.faltando, ["Informar a quilometragem do carro (o Zap não anuncia carro sem km)"]);
+  checa("mapa: sem km informada o anúncio sai sem o campo (a km é opcional no NaPista)", sem.ok === true && sem.oferta.mileage === undefined, true);
   const com = montarOfertaNapista({ ...base0, km: 31000, kmInformado: true }, "v1");
   checa("mapa: preço inteiro em reais, portas pelo '4P' da versão", com.ok && [com.oferta.price, com.oferta.numberOfDoors, com.oferta.mileage], [56000, 4, 31000]);
 
@@ -155,10 +155,10 @@ async function main() {
   checa("o anúncio chegou com versão, cor, combustível, câmbio, preço, km, placa, portas e equipamento", [o1.versionId, o1.color, o1.fuelType, o1.transmissionType, o1.price, o1.mileage, o1.plate, o1.numberOfDoors, o1.equipments, o1.status], ["v-argo-drive", "WHITE", "FLEX", "MANUAL", 55999, 31000, "RMO1H85", 4, ["CAR_1_ARCONDICIONADO"], "PUBLISHED"]);
   checa("as 2 fotos foram por endereço assinado, na ordem", o1.photos, a.fts.map((f, i) => ({ url: `https://zap.exemplo.com.br/api/portais/foto/${f.id}/${assinarFoto(f.id, segredo)}.jpg`, order: i })));
   const pb = await estado(b.v);
-  checa("sem km informada: NÃO publica e diz por quê", [pb.status, pb.idExterno, pb.erro], ["FILA", null, "Falta para anunciar: Informar a quilometragem do carro (o Zap não anuncia carro sem km)"]);
+  checa("sem km informada: publica SEM o campo de km (nunca um número inventado)", [pb.status, pb.idExterno, ofertas.get("of-2")?.mileage], ["PUBLICADO", "of-2", undefined]);
   checa("marca fora do catálogo: pendência clara", (await estado(c.v)).erro?.includes('Marca "Ferrari" não identificada'), true);
   checa("cor que o NaPista não tem: pendência clara", (await estado(d.v)).erro, "Falta para anunciar: O NaPista não reconheceu a cor do carro: confira a cor na ficha");
-  checa("só 1 anúncio criado", n(POST_OFERTA), 1);
+  checa("2 anúncios criados (o Argo e o sem km)", n(POST_OFERTA), 2);
 
   // 2) Nada mudou.
   const antes = chamadas.length;
@@ -168,7 +168,7 @@ async function main() {
   // 3) Preço novo: atualiza o mesmo anúncio, sem mexer nas fotos.
   await prisma.veiculo.update({ where: { id: a.v.id }, data: { precoCents: 5_299_900 } });
   await cicloNapista(op);
-  checa("preço novo: PATCH no mesmo anúncio, sem criar e sem reenviar fotos", [ofertas.get("of-1")!.price, n(POST_OFERTA), n(`POST /seller/${SELLER}/offer/of-1/photos/url`)], [52999, 1, 1]);
+  checa("preço novo: PATCH no mesmo anúncio, sem criar e sem reenviar fotos", [ofertas.get("of-1")!.price, n(POST_OFERTA), n(`POST /seller/${SELLER}/offer/of-1/photos/url`)], [52999, 2, 1]);
 
   // 4) Foto nova: reenvia a lista de fotos.
   await prisma.fotoVeiculo.create({ data: { tenantId: t0.id, veiculoId: a.v.id, key: `k/${a.v.id}-3.jpg`, ordem: 2 } });
