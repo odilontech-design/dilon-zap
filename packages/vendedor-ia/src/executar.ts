@@ -392,7 +392,7 @@ async function enviarCarro(e: Record<string, unknown>, ctx: Contexto): Promise<R
  * worker não confundem com uma pessoa da equipe. A `referenciaExterna`
  * identifica as mensagens da IA nos relatórios.
  */
-export async function enfileirar(conversa: Conversa, msgs: { body: string; mediaKey?: string; mediaMimeType?: string; mediaFileName?: string }[]) {
+export async function enfileirar(conversa: Conversa, msgs: { body: string; mediaKey?: string; mediaMimeType?: string; mediaFileName?: string }[], marca?: string) {
   const base = Date.now();
   await prisma.message.createMany({
     data: msgs.map((m, i) => ({
@@ -402,7 +402,8 @@ export async function enfileirar(conversa: Conversa, msgs: { body: string; media
       status: "PENDING" as const,
       body: m.body,
       setorId: conversa.setorId,
-      referenciaExterna: `vendedor-ia:${randomUUID()}`,
+      // `marca` diz de onde veio ("acomp" = acompanhamento automático); o prefixo `vendedor-ia:` é o que os relatórios usam.
+      referenciaExterna: `vendedor-ia:${marca ? `${marca}:` : ""}${randomUUID()}`,
       // createdAt crescente: o worker manda na ordem de criação.
       createdAt: new Date(base + i),
       ...(m.mediaKey ? { mediaType: "IMAGE" as const, mediaKey: m.mediaKey, mediaMimeType: m.mediaMimeType, mediaFileName: m.mediaFileName } : {}),

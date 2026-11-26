@@ -27,7 +27,7 @@ const numero = (nome: string, padrao: number) => {
 
 async function main() {
   dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
-  const { ciclo, cicloDoVendedor, cicloDeRespostaImediata, precisaVerificar, verificarConexao } = await import("@dilon-zap/vendedor-ia");
+  const { ciclo, cicloDoVendedor, cicloDeRespostaImediata, cicloDeAcompanhamento, precisaVerificar, verificarConexao } = await import("@dilon-zap/vendedor-ia");
   const { chaveAnthropicDoServidor } = await import("@dilon-zap/sdr-core");
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
 
@@ -82,6 +82,14 @@ async function main() {
       if (r.enviadas || r.erros) console.log(`[resposta-imediata] enviadas ${r.enviadas}, erros ${r.erros}`);
     } catch (e) {
       console.error("[resposta-imediata] ciclo falhou:", e instanceof Error ? e.message : e);
+    }
+    // Acompanhamento automático (só em loja que ligou): retoma, no máximo duas vezes, a conversa em que o cliente sumiu.
+    // Também não usa a API: só grava a mensagem na fila de saída, com teto por hora e horário da loja.
+    try {
+      const r = await cicloDeAcompanhamento({ cliente, acordarFila });
+      if (r.enviados || r.erros) console.log(`[acompanhamento] enviados ${r.enviados}, erros ${r.erros}`);
+    } catch (e) {
+      console.error("[acompanhamento] ciclo falhou:", e instanceof Error ? e.message : e);
     }
     if (apiKey) {
       try {

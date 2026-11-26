@@ -182,6 +182,32 @@ Local: `npm run dev:vendedor-ia` (lê o `.env` da raiz). Testes:
 2. Conferir no painel o custo por lead e ajustar as premissas e o preço.
 3. Ler 10 a 20 conversas reais da primeira semana e ajustar as instruções.
 
+## Acompanhamento automático (desligado por padrão)
+
+Quando o cliente que a IA estava atendendo some, a IA retoma a conversa — **no máximo duas vezes**:
+
+| Toque | Quando | Texto |
+| --- | --- | --- |
+| 1º | 24 h depois da última fala da loja, cliente em silêncio | pergunta se ainda tem interesse (cita o carro do lead, se houver) |
+| 2º | mais 72 h de silêncio | "não quero te incomodar…", com saída fácil: se já resolveu, é só avisar |
+
+Nunca um 3º. Passou de 6 dias (7 no 2º toque), não escreve mais. Os textos são fixos (duas variações por toque, escolhidas
+pela conversa), curtos, sem preço, sem desconto e sem pressão: a IA não gera nada novo, então não há risco de ela prometer algo.
+
+**Quem entra:** só conversa que a IA atende (`ATIVA`), aberta, sem responsável, no número geral, que começou DEPOIS de ligar
+(`acompanhamentoDesde`). O cliente precisa ser alcançável: se já escreveu para a loja (a maioria vem como `@lid`, sem número),
+ou, sem mensagem dele, um celular de verdade. **Não entra** onde uma pessoa da loja já falou, onde a IA foi parada ("Assumir")
+ou onde o cliente pediu para parar ("pare", "não quero mais", "me tire da lista"…).
+
+**Proteção do número da loja:** só de segunda a sábado, 9h às 19h no horário da loja; teto por hora configurável (padrão 5; na tela,
+de 1 a 30), no máximo 30 por dia, pelo menos 90 s entre um toque e outro e um toque por volta do ciclo. O resultado de cada toque
+fica em `AcompanhamentoIa` (tentativa 1 ou 2, `enviada` ou `erro`; a linha de tentativa 0 marca "conversa descartada" e o motivo).
+A mensagem sai com `referenciaExterna` `vendedor-ia:acomp:…`, o que a distingue das respostas normais. Se o cliente responde, a
+conversa volta ao Vendedor IA normal, e o prompt manda confirmar e não insistir se ele pedir para parar.
+
+Liga em **Veículos > Vendedor IA > Acompanhamento automático**. Comece com 3 por hora: muitas mensagens seguidas para quem
+não responde podem fazer o WhatsApp tratar o número da loja como disparo em massa.
+
 ## Ainda não faz
 
 - Atender só fora do horário comercial (hoje atende sempre que ligada).
