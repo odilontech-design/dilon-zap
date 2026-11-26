@@ -1,7 +1,7 @@
 import { prisma } from "@dilon-zap/db";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { NOME_PORTAL } from "@/lib/relatorios-veiculos";
-import type { AnuncioDaGrade, CarroDaGrade } from "@/lib/grade-portais-filtros";
+import { urlDoAnuncio, type AnuncioDaGrade, type CarroDaGrade } from "@/lib/grade-portais-filtros";
 
 export type { AnuncioDaGrade, CarroDaGrade };
 
@@ -25,7 +25,7 @@ export async function gradeDePortais(tenantId: string) {
         id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, placa: true, status: true, entradaEm: true, kmInformado: true, zeroKm: true, precoCents: true, precoClassificadosCents: true, km: true, naVitrine: true,
         fotos: { orderBy: { ordem: "asc" }, take: 1, select: { id: true } },
         _count: { select: { fotos: true } },
-        publicacoes: { where: { portal: { in: [...PORTAIS_DA_GRADE] } }, select: { portal: true, ativo: true, status: true, url: true, erro: true, plano: true } },
+        publicacoes: { where: { portal: { in: [...PORTAIS_DA_GRADE] } }, select: { portal: true, ativo: true, status: true, url: true, idExterno: true, erro: true, plano: true } },
       },
     }),
   ]);
@@ -45,6 +45,8 @@ export async function gradeDePortais(tenantId: string) {
       publicados: ativos.filter((p) => p.status === "PUBLICADO").length,
       naFila: ativos.filter((p) => p.status === "FILA" || p.status === "ENVIADO").length,
       comErro: ativos.filter((p) => p.status === "ERRO").length,
+      /** O que "Atualizar agora" reenvia: na fila ou com erro. */
+      pendentes: ativos.filter((p) => p.status === "FILA" || p.status === "ERRO").length,
       fora: fora.length,
       foraSemKm: fora.filter((c) => !c.kmInformado && !c.zeroKm).length,
     };
@@ -72,10 +74,23 @@ export async function gradeDePortais(tenantId: string) {
         anuncios: Object.fromEntries(
           portais.map((p) => {
             const pub = c.publicacoes.find((x) => x.portal === p.portal);
-            return [p.portal, pub ? ({ ativo: pub.ativo, status: pub.status, url: pub.url, erro: pub.erro, plano: pub.plano } satisfies AnuncioDaGrade) : null];
+            return [p.portal, pub ? ({ ativo: pub.ativo, status: pub.status, url: urlDoAnuncio(p.portal, pub), erro: pub.erro, plano: pub.plano } satisfies AnuncioDaGrade) : null];
           }),
         ) as Record<string, AnuncioDaGrade | null>,
       }),
     ),
   };
+}
+
+/**
+ * "Atualizar agora": devolve à fila os anúncios do portal que estão na fila ou com erro, zerando a espera entre
+ * tentativas, para o worker (que roda a cada minuto) tentar no próximo ciclo em vez de esperar 5 minutos a 6 horas.
+ * Só mexe nos anúncios ligados dos carros à venda, e só da loja pedida. Quem já está publicado e igual não é tocado.
+ */
+export async function atualizarAgora(tenantId: string, portal: PortalDaGrade): Promise<{ reenviados: number }> {
+  const r = await prisma.publicacaoPortal.updateMany({
+    where: { tenantId, portal, ativo: true, status: { in: ["FILA", "ERRO"] }, veiculo: { status: "DISPONIVEL" } },
+    data: { status: "FILA", erro: null, hashEnviado: null, tentativas: 0, proximaTentativaEm: null },
+  });
+  return { reenviados: r.count };
 }

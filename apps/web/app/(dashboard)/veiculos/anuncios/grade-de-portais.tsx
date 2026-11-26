@@ -9,7 +9,7 @@ import { classeDosDias, contagemPorFiltro, filtrarEOrdenar, FILTROS, ORDENS, typ
 import { avisoDeKm, lerKm } from "@/lib/veiculos-completar-km";
 import { botaoSecundario, campo, erroDaResposta, fetcher } from "../comum";
 
-type Portal = { portal: string; nome: string; conectado: boolean; situacaoConta: string | null; publicados: number; naFila: number; comErro: number; fora: number; foraSemKm: number };
+type Portal = { portal: string; nome: string; conectado: boolean; situacaoConta: string | null; publicados: number; naFila: number; comErro: number; pendentes: number; fora: number; foraSemKm: number };
 type Grade = { portais: Portal[]; aVenda: number; carros: CarroDaGrade[] };
 
 const ROTULO: Record<string, { texto: string; classe: string }> = {
@@ -132,6 +132,26 @@ export function GradeDePortais() {
     mutate();
   }
 
+  /** "Atualizar agora": devolve à fila o que está pendente ou com erro, sem esperar a próxima tentativa. Sem portal = todos os conectados com pendência. */
+  async function atualizarAgora(alvo: Portal | null) {
+    const portais = alvo ? [alvo] : data!.portais.filter((p) => p.conectado && p.pendentes > 0);
+    if (!portais.length) return;
+    setAviso(null);
+    setOcupado(alvo ? `atualizar:${alvo.portal}` : "atualizar:todos");
+    let total = 0;
+    for (const p of portais) {
+      const r = await fetch("/api/veiculos/anuncios", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ portal: p.portal }) });
+      if (!r.ok) {
+        setOcupado(null);
+        return setAviso({ texto: `${p.nome}: ${await erroDaResposta(r)}`, erro: true });
+      }
+      total += ((await r.json()) as { reenviados: number }).reenviados;
+    }
+    setOcupado(null);
+    setAviso({ texto: `${total} anúncio(s) voltaram para a fila e são enviados em até 1 minuto. Os que ainda tiverem pendência (km, versão, foto) continuam com o motivo na linha.` });
+    mutate();
+  }
+
   /** Corrige o preço do site ou a km de um carro, pela mesma rota da tela Completar (vai para o histórico do carro). */
   async function corrigir(c: CarroDaGrade, campoEditado: "km" | "preco", texto: string): Promise<string | null> {
     const item: { id: string; km?: number; precoCents?: number } = { id: c.id };
@@ -152,6 +172,12 @@ export function GradeDePortais() {
 
   return (
     <div className="flex flex-col gap-4" data-testid="grade-de-portais">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-neutral-600">Os anúncios são enviados sozinhos a cada minuto. Use o botão se quiser forçar agora o que está na fila ou com erro.</p>
+        <button type="button" className={botaoSecundario} disabled={ocupado === "atualizar:todos" || !(data.portais.filter((p) => p.conectado).reduce((t, p) => t + p.pendentes, 0))} onClick={() => atualizarAgora(null)}>
+          {ocupado === "atualizar:todos" ? "Atualizando…" : `Atualizar anúncios (${data.portais.filter((p) => p.conectado).reduce((t, p) => t + p.pendentes, 0)})`}
+        </button>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {data.portais.map((p) => {
           const pct = data.aVenda > 0 ? Math.min(100, Math.round((p.publicados / data.aVenda) * 100)) : 0;
@@ -175,9 +201,14 @@ export function GradeDePortais() {
                 {p.fora} fora do portal
               </p>
               {p.conectado ? (
-                <button className={botaoSecundario} disabled={p.fora === 0 || ocupado === `lote:${p.portal}`} onClick={() => publicarOsQueFaltam(p)}>
-                  {ocupado === `lote:${p.portal}` ? "Enviando…" : p.fora ? `Publicar os ${p.fora} que faltam` : "Tudo publicado ✓"}
-                </button>
+                <>
+                  <button className={botaoSecundario} disabled={p.fora === 0 || ocupado === `lote:${p.portal}`} onClick={() => publicarOsQueFaltam(p)}>
+                    {ocupado === `lote:${p.portal}` ? "Enviando…" : p.fora ? `Publicar os ${p.fora} que faltam` : "Tudo publicado ✓"}
+                  </button>
+                  <button className={botaoSecundario} disabled={p.pendentes === 0 || ocupado === `atualizar:${p.portal}`} onClick={() => atualizarAgora(p)}>
+                    {ocupado === `atualizar:${p.portal}` ? "Atualizando…" : `Atualizar agora (${p.pendentes})`}
+                  </button>
+                </>
               ) : (
                 <Link href="/veiculos/portais" className="text-xs text-accent hover:underline">
                   Reconectar em Portais
