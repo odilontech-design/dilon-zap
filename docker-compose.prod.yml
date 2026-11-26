@@ -145,6 +145,10 @@ services:
       WORKER_INTERNAL_SECRET: ${WORKER_INTERNAL_SECRET}
       # Endereço do site, para o link do carro na vitrine.
       NEXTAUTH_URL: ${NEXTAUTH_URL}
+      # Aviso no celular quando o rodízio atribui uma conversa a um vendedor (sem estas chaves o aviso simplesmente não sai).
+      NEXT_PUBLIC_VAPID_PUBLIC_KEY: ${NEXT_PUBLIC_VAPID_PUBLIC_KEY:-}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:-}
+      VAPID_SUBJECT: ${VAPID_SUBJECT:-}
       NODE_OPTIONS: --max-old-space-size=256
     mem_limit: 384m
     stop_grace_period: 30s

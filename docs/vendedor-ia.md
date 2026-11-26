@@ -208,6 +208,21 @@ conversa volta ao Vendedor IA normal, e o prompt manda confirmar e não insistir
 Liga em **Veículos > Vendedor IA > Acompanhamento automático**. Comece com 3 por hora: muitas mensagens seguidas para quem
 não responde podem fazer o WhatsApp tratar o número da loja como disparo em massa.
 
+## Rodízio de vendedores (desligado por padrão)
+
+Quando a IA **passa a conversa para a equipe** (visita, negociação, financiamento, troca, pedido do cliente, ou falha da API), o
+vendedor da vez vira o responsável (`assignedToId`) e recebe um aviso no celular ("Cliente para você"). Sem isso a conversa cai em
+Pendentes sem dono e o painel de leads mostra tudo em "Sem vendedor definido".
+
+- **Só na passagem, nunca antes:** conversa com responsável deixa de ser atendida pela IA e pelo acompanhamento, então atribuir já na
+  chegada do lead desligaria a IA onde ela é útil.
+- **Quem participa:** a gestão marca em Veículos > Vendedor IA > Rodízio de vendedores (`rodizioUsuarioIds`, na ordem da lista). Sem
+  ninguém marcado, nada é atribuído. Entram só usuários da própria empresa e ativos; desativado é pulado.
+- **A vez:** em círculo; `rodizioUltimoId` guarda o último, lido do banco na hora (duas passagens seguidas não caem na mesma pessoa).
+- **Nunca muda de mãos:** conversa que já tem responsável fica como está; "equipe respondeu" não atribui.
+- **Aviso:** push só das 7h às 22h (a atribuição vale sempre). O `vendedor-ia-worker` recebe `NEXT_PUBLIC_VAPID_PUBLIC_KEY`,
+  `VAPID_PRIVATE_KEY` e `VAPID_SUBJECT` no compose; sem as chaves o aviso simplesmente não sai.
+
 ## Ainda não faz
 
 - Atender só fora do horário comercial (hoje atende sempre que ligada).

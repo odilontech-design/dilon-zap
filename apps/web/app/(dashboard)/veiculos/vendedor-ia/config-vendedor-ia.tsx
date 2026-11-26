@@ -20,8 +20,11 @@ type Dados = {
     respostaImediataPorHora: number;
     acompanhamento: boolean;
     acompanhamentoPorHora: number;
+    rodizio: boolean;
+    rodizioUsuarioIds: string[];
   };
   setores: { id: string; nome: string }[];
+  usuarios: { id: string; name: string; role: string }[];
   estimativas: { id: string; nome: string; aproximado: boolean; usdPorLead: number }[];
   painel: {
     leads: number;
@@ -241,6 +244,33 @@ export function ConfigVendedorIa() {
           </label>
           <p className="text-xs text-neutral-500">
             Só vale para conversas que começarem depois de ligar, e só as que a IA atende. Só de segunda a sábado, das 9h às 19h, no máximo 30 por dia e com pelo menos 90 segundos entre um toque e outro. Para na hora se o cliente pedir para parar, se uma pessoa da loja já falou com ele ou se você apertar &quot;Assumir&quot; na conversa. O texto é curto, sem preço e sem pressão. Comece com um teto baixo (3 por hora): muitas mensagens seguidas para quem não respondeu podem fazer o WhatsApp tratar o número da loja como disparo em massa.
+          </p>
+        </section>
+
+        <section className={secao}>
+          <h2 className="text-sm font-semibold">Rodízio de vendedores</h2>
+          <label className="flex items-start gap-2 text-sm">
+            <input id="ia-rodizio" type="checkbox" checked={f.rodizio} onChange={(e) => setF({ ...f, rodizio: e.target.checked })} className="mt-1" />
+            <span>
+              Quando a IA passa uma conversa para a equipe (visita, negociação, financiamento, ou o cliente pediu uma pessoa), o próximo vendedor da lista vira o responsável e recebe um aviso no celular. Assim o painel de leads mostra quem atende cada cliente e quão rápido.
+            </span>
+          </label>
+          <fieldset className="flex flex-col gap-1">
+            <legend className={rotulo}>Quem participa (na ordem da lista)</legend>
+            {data.usuarios.map((u) => (
+              <label key={u.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={f.rodizioUsuarioIds.includes(u.id)}
+                  onChange={(e) => setF({ ...f, rodizioUsuarioIds: e.target.checked ? [...f.rodizioUsuarioIds, u.id] : f.rodizioUsuarioIds.filter((x) => x !== u.id) })}
+                />
+                <span>{u.name}</span>
+                <span className="text-xs text-neutral-500">{u.role === "OWNER" ? "dono" : "vendedor"}</span>
+              </label>
+            ))}
+          </fieldset>
+          <p className="text-xs text-neutral-500">
+            Sem ninguém marcado, nada é atribuído. Uma conversa que já tem responsável nunca muda de mãos, e a IA e o acompanhamento só param de atender a conversa depois que ela é passada. O aviso no celular só sai das 7h às 22h; a atribuição vale a qualquer hora.
           </p>
         </section>
 
