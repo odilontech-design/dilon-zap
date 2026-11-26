@@ -56,6 +56,9 @@ async function main() {
   checa("célula: sem anúncio é nula", g.carros.find((c) => c.id === c4.id)!.anuncios.WEBMOTORS, null);
   checa("célula: erro traz o motivo", g.carros.find((c) => c.id === c3.id)!.anuncios.WEBMOTORS?.erro, "recusado");
   checa("carro sem km é marcado", g.carros.find((c) => c.id === c4.id)!.semKm, true);
+  checa("à venda no topo: 5 (o reservado fica de fora do total)", g.aVenda, 5);
+  checa("linha traz versão, ano do modelo, vitrine, km e os dois preços", [l1.versao, l1.anoModelo, l1.naVitrine, l1.km, l1.precoClassificadosCents], [null, 2023, true, 10000, null]);
+  checa("linha sem foto: capa nula e zero fotos", [l1.capaId, l1.totalFotos], [null, 0]);
 
   const gb = await gradeDePortais(b.id);
   checa("outra loja vê só a coluna e o carro dela", [gb.portais.map((p) => p.portal), gb.carros.length], [["MOBIAUTO"], 1]);

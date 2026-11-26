@@ -885,6 +885,18 @@ Código: `apps/web/lib/grade-portais.ts`, rota `/api/veiculos/anuncios` (GET a g
 - **Fora desta versão:** escolher o plano do anúncio de cada carro (Ouro, Prata, Bronze...) e o uso de vagas por plano em cada portal (como o
   "9 de 13" do MobiAuto no AutoCerto); hoje só a Webmotors tem plano padrão da loja, e a grade mostra o plano quando já existe.
 
+### Grade no jeito do AutoCerto, primeira entrega (v1.116.0)
+
+A grade de **Veículos > Anúncios** ficou mais perto da consulta de estoque do AutoCerto, que o Sales usa e compara:
+
+- **Números por portal no topo:** "54 de 67 no ar" com barra (publicados sobre os carros à venda), na fila, com erro e fora do portal. O limite do plano de cada portal não aparece porque os portais não o informam à integração.
+- **Linha completa do carro:** foto de capa com os **dias no pátio em cor** (cinza até 60, âmbar até 90, vermelho depois, o mesmo corte do painel do estoque), marca, modelo e ano, versão, **placa**, status na vitrine (Na vitrine, Fora da vitrine, Reservado) e os **dois preços**: Site e Classificados (igual ao site quando não há preço de classificados).
+- **Corrigir ali mesmo:** clicar no **preço do site** ou na **km** abre um campo; Enter salva e Esc cancela. Usa a mesma rota da tela Completar (`POST /api/veiculos/completar`), então fica no histórico do carro. Km abaixo de 500 em carro de ano anterior mostra aviso.
+- **Busca e filtros:** busca por marca, modelo, versão ou placa (sem acento, placa com ou sem hífen); filtros com contagem (Faltando em portal, Com erro, Sem km, Sem foto, Parados +60 dias, Reservados); filtro por portal; ordenação (mais ou menos tempo no pátio, preço, marca e modelo, placa).
+- **Células por portal:** verde quando publicado, vermelho quando com erro (com o motivo), **Ver anúncio** e **+ Publicar** / **Tirar**.
+- Regras em `lib/grade-portais-filtros.ts` (puras, testadas em `lib/grade-portais-filtros.test-manual.ts`). Sem mudança de schema nem de worker.
+- **Próximas entregas:** "Atualizar agora" por portal com a contagem de pendentes, exportar para CSV e imprimir, e escolher o plano do anúncio por célula.
+
 ## Importar o controle de vendas da planilha (v1.110.0)
 
 Para lojas que ainda controlam as vendas numa planilha (uma aba por mês), **Veículos > Importar > "Importar o controle de vendas"** traz o histórico para dentro do Zap.

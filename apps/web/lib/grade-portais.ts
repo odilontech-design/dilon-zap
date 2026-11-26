@@ -1,6 +1,9 @@
 import { prisma } from "@dilon-zap/db";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { NOME_PORTAL } from "@/lib/relatorios-veiculos";
+import type { AnuncioDaGrade, CarroDaGrade } from "@/lib/grade-portais-filtros";
+
+export type { AnuncioDaGrade, CarroDaGrade };
 
 /**
  * Veículos > Anúncios: a grade de carros por portal. Uma linha por carro à venda e uma coluna por portal onde a loja
@@ -11,8 +14,6 @@ import { NOME_PORTAL } from "@/lib/relatorios-veiculos";
 export const PORTAIS_DA_GRADE = ["WEBMOTORS", "MOBIAUTO", "NAPISTA", "MERCADO_LIVRE", "OLX"] as const;
 export type PortalDaGrade = (typeof PORTAIS_DA_GRADE)[number];
 
-export type AnuncioDaGrade = { ativo: boolean; status: string; url: string | null; erro: string | null; plano: string | null };
-
 export async function gradeDePortais(tenantId: string) {
   const [contas, carros] = await Promise.all([
     prisma.portalConta.findMany({ where: { tenantId, portal: { in: [...PORTAIS_DA_GRADE] } }, select: { portal: true, status: true } }),
@@ -21,7 +22,9 @@ export async function gradeDePortais(tenantId: string) {
       orderBy: { entradaEm: "asc" },
       take: 1000,
       select: {
-        id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, placa: true, status: true, entradaEm: true, kmInformado: true, zeroKm: true, precoCents: true,
+        id: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, placa: true, status: true, entradaEm: true, kmInformado: true, zeroKm: true, precoCents: true, precoClassificadosCents: true, km: true, naVitrine: true,
+        fotos: { orderBy: { ordem: "asc" }, take: 1, select: { id: true } },
+        _count: { select: { fotos: true } },
         publicacoes: { where: { portal: { in: [...PORTAIS_DA_GRADE] } }, select: { portal: true, ativo: true, status: true, url: true, erro: true, plano: true } },
       },
     }),
@@ -49,20 +52,30 @@ export async function gradeDePortais(tenantId: string) {
 
   return {
     portais,
-    carros: carros.map((c) => ({
-      id: c.id,
-      nome: nomeDoVeiculo(c),
-      placa: c.placa,
-      status: c.status,
-      dias: Math.max(0, Math.floor((Date.now() - c.entradaEm.getTime()) / 86_400_000)),
-      precoCents: c.precoCents,
-      semKm: !c.kmInformado && !c.zeroKm,
-      anuncios: Object.fromEntries(
-        portais.map((p) => {
-          const pub = c.publicacoes.find((x) => x.portal === p.portal);
-          return [p.portal, pub ? ({ ativo: pub.ativo, status: pub.status, url: pub.url, erro: pub.erro, plano: pub.plano } satisfies AnuncioDaGrade) : null];
-        })
-      ) as Record<string, AnuncioDaGrade | null>,
-    })),
+    aVenda: carros.filter((c) => c.status === "DISPONIVEL").length,
+    carros: carros.map(
+      (c): CarroDaGrade => ({
+        id: c.id,
+        nome: nomeDoVeiculo({ ...c, versao: null }),
+        versao: c.versao,
+        anoModelo: c.anoModelo,
+        placa: c.placa,
+        status: c.status === "RESERVADO" ? "RESERVADO" : "DISPONIVEL",
+        naVitrine: c.naVitrine,
+        dias: Math.max(0, Math.floor((Date.now() - c.entradaEm.getTime()) / 86_400_000)),
+        precoCents: c.precoCents,
+        precoClassificadosCents: c.precoClassificadosCents && c.precoClassificadosCents > 0 ? c.precoClassificadosCents : null,
+        km: c.km,
+        semKm: !c.kmInformado && !c.zeroKm,
+        capaId: c.fotos[0]?.id ?? null,
+        totalFotos: c._count.fotos,
+        anuncios: Object.fromEntries(
+          portais.map((p) => {
+            const pub = c.publicacoes.find((x) => x.portal === p.portal);
+            return [p.portal, pub ? ({ ativo: pub.ativo, status: pub.status, url: pub.url, erro: pub.erro, plano: pub.plano } satisfies AnuncioDaGrade) : null];
+          }),
+        ) as Record<string, AnuncioDaGrade | null>,
+      }),
+    ),
   };
 }
