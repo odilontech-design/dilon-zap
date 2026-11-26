@@ -7,6 +7,9 @@ import {
   contaNapistaGuardada,
   guardarContaNapista,
   lerEstado,
+  novosCatalogosNapista,
+  ordenarVersoesNapista,
+  versoesDoCarroNapista,
   telefoneDoLead,
   trocarCodigoNapista,
   urlDeAutorizacaoNapista,
@@ -183,4 +186,88 @@ export async function lojasComNapista(): Promise<string[]> {
 
 export async function registrarFalhaDeLeadsNapista(tenantId: string, erro: string) {
   await prisma.portalConta.updateMany({ where: { tenantId, portal: "NAPISTA" }, data: { leadErro: erro.slice(0, 500) } });
+}
+
+// ---- Escolher a versão do catálogo quando a automática não teve certeza ----------------------
+
+export type PendenciaVersaoNapista = {
+  veiculoId: string;
+  nome: string;
+  placa: string | null;
+  anoModelo: number;
+  /** O que a ficha diz de versão. */
+  pedida: string | null;
+  /** "ok" tem lista para escolher; os outros dois dizem o que o NaPista não reconheceu. */
+  estado: "ok" | "sem-marca" | "sem-modelo";
+  mensagem: string | null;
+  opcoes: { id: string; nome: string; nota: number }[];
+  /** A mais parecida, só quando é boa o bastante para vir marcada (nota 0,5 ou mais). */
+  sugerida: string | null;
+};
+
+type CarroDaPublicacao = { id: string; marca: string; modelo: string; versao: string | null; anoModelo: number; placa: string | null };
+const carroDaPublicacao = { id: true, marca: true, modelo: true, versao: true, anoModelo: true, placa: true } as const;
+const semVersaoEscolhida = (catalogo: unknown) => !(catalogo && typeof catalogo === "object" && (catalogo as { versao?: unknown }).versao);
+
+/** Carros à venda ligados ao NaPista que ainda não têm versão do catálogo, com as opções do catálogo para a gestão escolher. */
+export async function versoesPendentesNapista(tenantId: string, limite = 12, deslocar = 0): Promise<{ total: number; itens: PendenciaVersaoNapista[] } | null> {
+  const s = await sessaoDaLoja(tenantId);
+  if (!s) return null;
+  const pubs = await prisma.publicacaoPortal.findMany({
+    where: { tenantId, portal: "NAPISTA", ativo: true, status: { in: ["FILA", "ERRO"] }, veiculo: { status: "DISPONIVEL" } },
+    orderBy: { id: "asc" },
+    select: { catalogo: true, veiculo: { select: carroDaPublicacao } },
+  });
+  const pendentes = pubs.filter((p) => semVersaoEscolhida(p.catalogo));
+  const cache = novosCatalogosNapista();
+  const itens: PendenciaVersaoNapista[] = [];
+  for (const p of pendentes.slice(deslocar, deslocar + limite)) {
+    const c: CarroDaPublicacao = p.veiculo;
+    const r = await versoesDoCarroNapista(s, c, cache);
+    const opcoes = ordenarVersoesNapista(c.versao, r.versoes);
+    itens.push({
+      veiculoId: c.id,
+      nome: `${c.marca} ${c.modelo} ${c.anoModelo}`,
+      placa: c.placa,
+      anoModelo: c.anoModelo,
+      pedida: c.versao,
+      estado: r.estado,
+      mensagem: r.estado === "ok" ? null : r.mensagem,
+      opcoes,
+      sugerida: opcoes[0] && opcoes[0].nota >= 0.5 ? opcoes[0].id : null,
+    });
+  }
+  return { total: pendentes.length, itens };
+}
+
+/** Guarda a versão escolhida pela gestão no anúncio e devolve o carro à fila. Só aceita versões que existem no catálogo daquele carro. */
+export async function salvarVersoesNapista(tenantId: string, escolhas: { veiculoId: string; versaoId: string }[]): Promise<{ salvas: number; recusadas: { veiculoId: string; motivo: string }[] } | null> {
+  const s = await sessaoDaLoja(tenantId);
+  if (!s) return null;
+  const cache = novosCatalogosNapista();
+  const recusadas: { veiculoId: string; motivo: string }[] = [];
+  let salvas = 0;
+  for (const e of escolhas) {
+    const pub = await prisma.publicacaoPortal.findUnique({
+      where: { veiculoId_portal: { veiculoId: e.veiculoId, portal: "NAPISTA" } },
+      select: { id: true, tenantId: true, catalogo: true, veiculo: { select: carroDaPublicacao } },
+    });
+    if (!pub || pub.tenantId !== tenantId) {
+      recusadas.push({ veiculoId: e.veiculoId, motivo: "carro não está ligado ao NaPista" });
+      continue;
+    }
+    const r = await versoesDoCarroNapista(s, pub.veiculo, cache);
+    const versao = r.versoes.find((v) => v.id === e.versaoId);
+    if (!versao) {
+      recusadas.push({ veiculoId: e.veiculoId, motivo: "essa versão não existe no catálogo do NaPista para este carro" });
+      continue;
+    }
+    const antigo = (pub.catalogo && typeof pub.catalogo === "object" ? pub.catalogo : {}) as Record<string, unknown>;
+    await prisma.publicacaoPortal.update({
+      where: { id: pub.id },
+      data: { catalogo: { ...antigo, versao: versao.id, versaoNome: versao.nome }, status: "FILA", erro: null, tentativas: 0, proximaTentativaEm: null },
+    });
+    salvas++;
+  }
+  return { salvas, recusadas };
 }
