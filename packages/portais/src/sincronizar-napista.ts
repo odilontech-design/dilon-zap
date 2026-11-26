@@ -5,6 +5,7 @@ import { cifrar, decifrar } from "./seguranca";
 import { linkDaFotoParaPortal, type OpcoesCiclo, type ResumoCiclo } from "./sincronizar";
 import { novosCatalogosNapista, resolverCatalogoNapista, type CatalogoNapista } from "./napista/catalogo";
 import { ErroNapista, SessaoNapista, appNapistaDoAmbiente, type AppNapista, type OfertaExistente, type TokensNapista } from "./napista/cliente";
+import { comEquipamentosOpcionais, enviarFotosNapista, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
 import { montarOfertaNapista } from "./napista/mapa";
 
 /**
@@ -16,6 +17,8 @@ import { montarOfertaNapista } from "./napista/mapa";
 
 const MAX_POR_RODADA = 30;
 const MAX_FOTOS = 20;
+/** O limite de fotos que o NaPista aceita, aprendido nos erros 412 (começa em 20). */
+const estadoDeFotos = novoEstadoDeFotos();
 
 /** O que fica guardado (cifrado) na conta: a loja no NaPista e os tokens do OAuth. */
 export type ContaNapista = { sellerId: string; access: string; refresh: string; expiraEm: number };
@@ -111,17 +114,17 @@ async function sincronizarLoja(tenantId: string, contaId: string, sessao: Sessao
             id = ja.id;
             statusLa = ja.status;
             await prisma.publicacaoPortal.update({ where: { id: p.id }, data: { idExterno: id } });
-            await sessao.atualizar(id, mapa.oferta);
+            await comEquipamentosOpcionais(mapa.oferta, (o) => sessao.atualizar(id!, o));
           } else {
-            id = await sessao.criar({ ...mapa.oferta, status: "PUBLISHED" });
+            id = (await comEquipamentosOpcionais(mapa.oferta, (o) => sessao.criar({ ...o, status: "PUBLISHED" }))).resultado;
             statusLa = "PUBLISHED";
             // Grava o código na hora: se as fotos falharem, o próximo ciclo atualiza em vez de criar de novo.
             await prisma.publicacaoPortal.update({ where: { id: p.id }, data: { idExterno: id } });
           }
         } else {
-          await sessao.atualizar(id, mapa.oferta);
+          await comEquipamentosOpcionais(mapa.oferta, (o) => sessao.atualizar(id!, o));
         }
-        if (hashFotos !== p.hashFotos) await sessao.fotosPorUrl(id, fotos);
+        if (hashFotos !== p.hashFotos) await enviarFotosNapista(sessao, id, fotos.slice(0, MAX_FOTOS), estadoDeFotos);
         if (statusLa !== "PUBLISHED") {
           await sessao.mudarStatus(id, "PUBLISHED");
           statusLa = "PUBLISHED";
@@ -156,7 +159,7 @@ async function sincronizarLoja(tenantId: string, contaId: string, sessao: Sessao
       r.erros++;
       await prisma.publicacaoPortal.update({
         where: { id: p.id },
-        data: { status: "ERRO", erro: (e instanceof Error ? e.message : String(e)).slice(0, 1000), ...(hash ? { hashEnviado: hash } : {}), catalogo: catalogo as object, tentativas: { increment: 1 }, proximaTentativaEm: proximaTentativa(p.tentativas + 1, agora) },
+        data: { status: "ERRO", erro: ((e instanceof Error ? e.message : String(e)) + (e instanceof ErroNapista && e.http === 400 && mapa.ok ? ` | enviado: ${resumoDaOferta(mapa.oferta)}` : "")).slice(0, 1000), ...(hash ? { hashEnviado: hash } : {}), catalogo: catalogo as object, tentativas: { increment: 1 }, proximaTentativaEm: proximaTentativa(p.tentativas + 1, agora) },
       });
     }
   }
