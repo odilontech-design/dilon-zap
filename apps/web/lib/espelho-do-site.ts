@@ -99,9 +99,9 @@ export async function pendentesDeConfirmacao(tenantId: string) {
     where: { tenantId, sumiuDoSiteEm: { not: null }, status: { in: STATUS_NO_PATIO } },
     orderBy: { sumiuDoSiteEm: "desc" },
     take: 100,
-    select: { id: true, marca: true, modelo: true, versao: true, anoModelo: true, sumiuDoSiteEm: true },
+    select: { id: true, marca: true, modelo: true, versao: true, anoModelo: true, sumiuDoSiteEm: true, status: true, origem: true },
   });
-  return carros;
+  return carros.map((c) => ({ ...c, motivoSemBaixa: motivoSemBaixaEmLote(c) }));
 }
 
 /** O agendamento não conseguiu ler o site: a gestão vê o motivo na tela, em vez de achar que está tudo em dia. */
@@ -126,4 +126,59 @@ export async function reativarCarroDoSite(tenantId: string, veiculoId: string, u
 export async function lojasComEspelho(): Promise<string[]> {
   const cfgs = await prisma.veiculosConfig.findMany({ where: { siteOrigemUrl: { not: null } }, select: { tenantId: true } });
   return cfgs.map((c) => c.tenantId);
+}
+
+/**
+ * Por que um carro que saiu do site NÃO pode ser baixado em lote (null = pode). Em lote só entra o
+ * carro à venda ou em preparação e que não é consignado: o reservado tem sinal e cliente a resolver, e o
+ * consignado gera repasse ao dono, que só a venda pela ficha cria.
+ */
+export function motivoSemBaixaEmLote(v: { status: string; origem: string; sumiuDoSiteEm: Date | string | null }): string | null {
+  if (!v.sumiuDoSiteEm) return "não está marcado como fora do site";
+  if (v.status === "VENDIDO" || v.status === "DEVOLVIDO") return "já saiu do estoque";
+  if (v.status === "RESERVADO") return "está reservado: conclua ou cancele a reserva pela ficha";
+  if (v.origem === "CONSIGNACAO") return "é consignado: registre a venda pela ficha para gerar o repasse ao dono";
+  return null;
+}
+
+/**
+ * "Baixar do estoque" vários carros que saíram do site de uma vez: ficam VENDIDOS (saem do pátio, da vitrine
+ * e, pelo worker, dos portais). Não cria a venda no financeiro (comprador, valor e forma de pagamento): isso
+ * continua pela ficha ou pela planilha de controle de vendas. A data de saída é a em que o carro sumiu do site.
+ */
+export async function baixarEmLote(input: { tenantId: string; userId: string; ids: string[] }): Promise<{ baixados: number; ignorados: { id: string; nome: string; motivo: string }[] }> {
+  const ids = [...new Set(input.ids)].slice(0, 100);
+  const carros = await prisma.veiculo.findMany({
+    where: { tenantId: input.tenantId, id: { in: ids } },
+    select: { id: true, marca: true, modelo: true, anoModelo: true, status: true, origem: true, sumiuDoSiteEm: true },
+  });
+  const ignorados: { id: string; nome: string; motivo: string }[] = [];
+  let baixados = 0;
+  const achados = new Set(carros.map((c) => c.id));
+  for (const id of ids) if (!achados.has(id)) ignorados.push({ id, nome: "carro não encontrado", motivo: "não é desta loja" });
+  for (const c of carros) {
+    const motivo = motivoSemBaixaEmLote(c);
+    if (motivo) {
+      ignorados.push({ id: c.id, nome: `${c.marca} ${c.modelo} ${c.anoModelo}`, motivo });
+      continue;
+    }
+    await prisma.$transaction(async (tx) => {
+      // Só baixa se ainda estiver como estava (outra pessoa pode ter mexido no carro enquanto a lista estava aberta).
+      const r = await tx.veiculo.updateMany({
+        where: { id: c.id, tenantId: input.tenantId, status: c.status, sumiuDoSiteEm: { not: null } },
+        data: { status: "VENDIDO", statusDesde: new Date(), saidaEm: c.sumiuDoSiteEm ?? new Date(), naVitrine: false },
+      });
+      if (r.count !== 1) return;
+      await registrarEvento(tx, c.id, "saida", "Baixado do estoque em lote: saiu do site antigo. A venda (comprador e valor) não foi registrada aqui.", input.userId);
+      baixados++;
+    });
+  }
+  return { baixados, ignorados };
+}
+
+/** "Foi engano" em vários carros de uma vez: voltam para a vitrine e deixam de ser comparados com o site antigo. */
+export async function reativarEmLote(input: { tenantId: string; userId: string; ids: string[] }): Promise<{ reativados: number }> {
+  let reativados = 0;
+  for (const id of [...new Set(input.ids)].slice(0, 100)) if (await reativarCarroDoSite(input.tenantId, id, input.userId)) reativados++;
+  return { reativados };
 }
