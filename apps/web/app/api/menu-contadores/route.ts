@@ -11,7 +11,7 @@ import { naoLidasDoChat, naoLidasDoSuporte } from "@/lib/team-chat-leitura";
  */
 export async function GET() {
   const user = await requireUser();
-  const [inbox, grupos, chat, suporte] = await Promise.all([
+  const [inbox, grupos, chat, suporte, instagram] = await Promise.all([
     prisma.message.count({
       where: {
         direction: "INBOUND",
@@ -29,6 +29,8 @@ export async function GET() {
     naoLidasDoChat(user),
     // Conversas diretas escritas ao suporte (só o SUPERADMIN recebe valor).
     user.role === "SUPERADMIN" ? naoLidasDoSuporte(user) : null,
+    // Mensagens do Instagram da loja ainda sem leitura (aparecem no menu Veículos e na aba Instagram).
+    prisma.instagramConversa.aggregate({ where: { tenantId: user.tenantId }, _sum: { naoLidas: true } }),
   ]);
-  return NextResponse.json({ inbox, grupos, chatEquipe: chat.total, suporte: suporte?.totalDiretas ?? 0 });
+  return NextResponse.json({ inbox, grupos, chatEquipe: chat.total, suporte: suporte?.totalDiretas ?? 0, instagram: instagram._sum.naoLidas ?? 0 });
 }
