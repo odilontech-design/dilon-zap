@@ -1,4 +1,5 @@
 import type { CarroParaPortal } from "../olx/mapa";
+import { faltaKmReal, kmParecePadrao } from "../km";
 import type { DealMobi } from "./cliente";
 
 /**
@@ -35,6 +36,7 @@ export function montarDealMobiauto(c: CarroParaPortal, catalogo: CatalogoMobiaut
   const faltando: string[] = [];
   if (c.tipo !== "CARRO") faltando.push("Por enquanto a integração com a MobiAuto publica só carros");
   if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (a MobiAuto exige a km)");
+  else if (kmParecePadrao(c)) faltando.push(faltaKmReal(c));
   if (!catalogo) faltando.push("Escolher marca, modelo e versão no catálogo da MobiAuto");
   else {
     if (!catalogo.cor) faltando.push("A MobiAuto não reconheceu a cor do carro: confira a cor na ficha");

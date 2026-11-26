@@ -1,4 +1,5 @@
 import type { CarroParaPortal } from "../olx/mapa";
+import { faltaKmReal, kmParecePadrao } from "../km";
 import { normalizar, soDigitos } from "../texto";
 import { CATEGORIA_CARROS_ML, type ItemMercadoLivre } from "./cliente";
 
@@ -85,6 +86,7 @@ export function montarItemMercadoLivre(c: CarroParaPortal, loja: LojaParaMercado
   const faltando: string[] = [];
   if (c.tipo !== "CARRO") faltando.push("Por enquanto a integração com o Mercado Livre publica só carros");
   if (c.kmInformado === false) faltando.push("Informar a quilometragem do carro (o Zap não anuncia carro sem km)");
+  else if (kmParecePadrao(c)) faltando.push(faltaKmReal(c));
   const preco = Math.round(c.precoCents / 100);
   if (preco <= 0) faltando.push("Preço de anúncio");
   if (!c.fotos.length) faltando.push("Pelo menos uma foto");
