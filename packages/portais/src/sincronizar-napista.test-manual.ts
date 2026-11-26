@@ -17,6 +17,7 @@ type Oferta = Record<string, any> & { id: string; status: string; photos: { url:
 const ofertas = new Map<string, Oferta>();
 const chamadas: string[] = [];
 let proximo = 1;
+const MAX_FOTOS_DO_NAPISTA = 20;
 let tokenValido = "A1";
 let refreshOk = true;
 let fora = false;
@@ -48,6 +49,15 @@ const servidor = http.createServer((req, res) => {
     chamadas.push(`${m} ${P}`);
     const s = `/seller/${SELLER}`;
     if (P === "/seller/access") return json({ sellers: [{ sellerId: SELLER, name: "Sales Automóveis", sellerDocument: "20458995000146" }] });
+    if (P === "/catalog/attributes") {
+      const lista = (ids: string[]) => ({ items: ids.map((id) => ({ id, name: id.charAt(0) + id.slice(1).toLowerCase() })) });
+      return json({
+        colors: lista(["WHITE", "BLACK", "SILVER", "GRAY", "BURGUNDY", "RED", "NAVY", "BLUE", "GREEN", "YELLOW", "ORANGE", "BROWN", "BEIGE", "GOLD", "BRONZE", "PINK", "PURPLE", "PEARLED", "TURQUOISE"]),
+        fuelTypes: lista(["HYBRID", "ELECTRIC", "NGV", "FLEX", "DIESEL", "ALCOHOL", "GASOLINE"]),
+        transmissionTypes: lista(["MANUAL", "AUTOMATIC"]),
+        equipments: lista(["CAR_1_AIRBAG", "CAR_1_ARCONDICIONADO", "CAR_1_DIRECAOELETRICA", "CAR_2_SENSORDEESTACIONAMENTO", "CAR_2_4X4"]),
+      });
+    }
     if (P === "/catalog/makes/CAR") return json({ items: [{ id: "mk-fiat", name: "Fiat" }, { id: "mk-vw", name: "Volkswagen" }] });
     if (P === "/catalog/CAR/make/mk-fiat/models") return json({ items: url.searchParams.get("modelYear") === "2021" ? [{ id: "md-argo", name: "Argo" }, { id: "md-mobi", name: "Mobi" }] : [] });
     if (P === "/catalog/versions/CAR") return json({ items: url.searchParams.get("modelId") === "md-argo" ? [{ id: "v-argo-drive", name: "1.0 Firefly Flex Drive Manual" }, { id: "v-argo-trek", name: "1.3 Trekking Automático" }] : [] });
@@ -69,7 +79,15 @@ const servidor = http.createServer((req, res) => {
       if (!o) return json({ message: "não encontrado" }, 404);
       if (!mo[2] && m === "PATCH") { const b = JSON.parse(corpo); delete b.status; Object.assign(o, b); return json(o); }
       if (!mo[2] && m === "DELETE") { o.status = "DELETED"; return json(undefined, 204); }
-      if (mo[2] === "photos/url" && m === "POST") { o.photos = JSON.parse(corpo).list; return json({}); }
+      // Como o NaPista de verdade: as fotos por endereço SOMAM às existentes, há um limite por anúncio e dá para apagar todas.
+      if (mo[2] === "photos/url" && m === "POST") {
+        const novas = JSON.parse(corpo).list;
+        if (o.photos.length + novas.length > MAX_FOTOS_DO_NAPISTA) return json({ message: "The maximum number of photos in this Offer has been reached!" }, 412);
+        o.photos = [...o.photos, ...novas];
+        return json({});
+      }
+      if (mo[2] === "photos" && m === "DELETE") { o.photos = []; return json(undefined, 204); }
+      if (!mo[2] && m === "GET") return json(o);
       if (m === "PUT" && ["PUBLISHED", "DRAFT", "UNPUBLISHED", "SOLD", "DELETED"].includes(mo[2])) { o.status = mo[2]; return json({}); }
     }
     if (P === `${s}/leads`) return json({ pageNumber: 1, pageSize: 200, totalElements: 2, totalPages: 1, pageData: [{ id: "L1", clientName: "João Lima", clientEmail: "JOAO@X.COM", clientPhone: { phoneType: "MOBILE", areaCode: "21", number: "998765432" }, vehicleVersion: "Fiat Argo 1.0 Drive", contactMessage: "Aceita troca?", updatedAt: "2026-11-14T15:00:00Z", vehiclePlate: "rmo-1h85", upfrontValue: 10000, installments: 48, clientCreditStatus: "PRE_APPROVED" }, { id: "L2", clientName: "Ana", vehicleVersion: "x", updatedAt: "2026-11-14T16:00:00Z" }] });

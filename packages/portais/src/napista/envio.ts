@@ -3,9 +3,9 @@ import { ErroNapista, type OfertaNapista } from "./cliente";
 /**
  * Tolerâncias do envio ao NaPista para dois erros reais vistos em produção, sem depender do que o
  * NaPista aceita de fato (a documentação deles é fechada por senha):
- *  - 412 "maximum number of photos in this Offer has been reached": o limite de fotos é menor que o
- *    nosso, ou o anúncio adotado já tem fotos do sistema antigo. Reduzimos a lista em passos até caber;
- *    se nem 5 fotos cabem, o anúncio já está cheio e seguimos com as fotos que ele tem.
+ *  - 412 "maximum number of photos in this Offer has been reached": as fotos enviadas SOMAM às que o
+ *    anúncio já tem, então cada tentativa antiga empilhava mais 20. Agora apagamos as fotos antes de enviar
+ *    e, se o limite do NaPista for menor que o nosso, reduzimos a lista em passos até caber.
  *  - 400 "Failed to read request": o corpo tem um valor que o NaPista não reconhece. O candidato mais
  *    provável são os equipamentos (códigos de lista fixa); sem eles o anúncio vai assim mesmo, em vez de
  *    ficar parado por um opcional.
@@ -20,20 +20,28 @@ export const novoEstadoDeFotos = (): EstadoDeFotos => ({ limite: LIMITE_INICIAL_
 
 const ehLimiteDeFotos = (e: unknown) => e instanceof ErroNapista && e.http === 412 && /photo/i.test(e.message);
 
+/**
+ * Deixa no anúncio exatamente estas fotos. O NaPista SOMA as fotos enviadas às que o anúncio já tem
+ * (confirmado na documentação), então apaga todas antes, a não ser que o anúncio acabou de ser criado.
+ * Se o limite estourar (412), apaga de novo, reduz a lista e tenta outra vez; o limite aprendido vale para os próximos carros.
+ */
 export async function enviarFotosNapista(
-  sessao: { fotosPorUrl: (id: string, urls: string[]) => Promise<void> },
+  sessao: { fotosPorUrl: (id: string, urls: string[]) => Promise<void>; apagarFotos: (id: string) => Promise<void> },
   id: string,
   urls: string[],
   estado: EstadoDeFotos,
-): Promise<{ enviadas: number; cheio: boolean }> {
+  recemCriado = false,
+): Promise<{ enviadas: number }> {
   let lista = urls.slice(0, estado.limite);
+  let limpo = recemCriado;
   for (;;) {
+    if (!limpo) await sessao.apagarFotos(id);
+    limpo = false;
     try {
       await sessao.fotosPorUrl(id, lista);
-      return { enviadas: lista.length, cheio: false };
+      return { enviadas: lista.length };
     } catch (e) {
-      if (!ehLimiteDeFotos(e)) throw e;
-      if (lista.length <= MENOR_LOTE_DE_FOTOS) return { enviadas: 0, cheio: true };
+      if (!ehLimiteDeFotos(e) || lista.length <= MENOR_LOTE_DE_FOTOS) throw e;
       estado.limite = Math.max(MENOR_LOTE_DE_FOTOS, Math.floor(lista.length * 0.7));
       lista = lista.slice(0, estado.limite);
     }

@@ -4,7 +4,7 @@ import { decidir, deveEstarNoAr, hashDoAnuncio, proximaTentativa } from "./decis
 import { cifrar, decifrar } from "./seguranca";
 import { linkDaFotoParaPortal, type OpcoesCiclo, type ResumoCiclo } from "./sincronizar";
 import { novosCatalogosNapista, resolverCatalogoNapista, type CatalogoNapista } from "./napista/catalogo";
-import { ErroNapista, SessaoNapista, appNapistaDoAmbiente, type AppNapista, type OfertaExistente, type TokensNapista } from "./napista/cliente";
+import { ErroNapista, SessaoNapista, appNapistaDoAmbiente, type AppNapista, type AtributosNapista, type OfertaExistente, type TokensNapista } from "./napista/cliente";
 import { comEquipamentosOpcionais, enviarFotosNapista, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
 import { montarOfertaNapista } from "./napista/mapa";
 
@@ -65,6 +65,9 @@ async function sincronizarLoja(tenantId: string, contaId: string, sessao: Sessao
   });
   const cache = novosCatalogosNapista();
   let feitas = 0;
+  // Os valores que o NaPista aceita de cor, combustível, câmbio e equipamentos, buscados uma vez por rodada.
+  let atributos: AtributosNapista | null | undefined;
+  const atributosDaLoja = async () => (atributos === undefined ? (atributos = await sessao.atributos().catch(() => null)) : atributos);
   // Os anúncios que a loja já tem no NaPista (no ar, pausados ou rascunho), buscados só se algum carro novo vai ser incluído.
   let existentes: Map<string, OfertaExistente> | null = null;
   const existentePorPlaca = async (placa: string | null): Promise<OfertaExistente | null> => {
@@ -92,7 +95,7 @@ async function sincronizarLoja(tenantId: string, contaId: string, sessao: Sessao
       catalogo = { ...catalogo, ...res.catalogo };
       pendencias = res.pendencias;
     }
-    const mapa = montarOfertaNapista({ ...v, opcionais: v.opcionais, fotos }, catalogo.versao ?? null);
+    const mapa = montarOfertaNapista({ ...v, opcionais: v.opcionais, fotos }, catalogo.versao ?? null, noAr ? await atributosDaLoja() : null);
     const hash = mapa.ok ? hashDoAnuncio({ ...mapa.oferta, fotos: hashFotos }) : null;
     const acao = decidir(p, noAr, hash, agora);
 
@@ -107,6 +110,7 @@ async function sincronizarLoja(tenantId: string, contaId: string, sessao: Sessao
         feitas++;
         let id = p.idExterno;
         let statusLa = catalogo.statusNoPortal ?? null;
+        let recemCriado = false;
         if (!id) {
           // Antes de criar, vê se o NaPista já tem este carro (mesma placa): adota o anúncio, sem duplicar.
           const ja = await existentePorPlaca(v.placa);
@@ -116,15 +120,20 @@ async function sincronizarLoja(tenantId: string, contaId: string, sessao: Sessao
             await prisma.publicacaoPortal.update({ where: { id: p.id }, data: { idExterno: id } });
             await comEquipamentosOpcionais(mapa.oferta, (o) => sessao.atualizar(id!, o));
           } else {
-            id = (await comEquipamentosOpcionais(mapa.oferta, (o) => sessao.criar({ ...o, status: "PUBLISHED" }))).resultado;
-            statusLa = "PUBLISHED";
+            // Sem status no cadastro (a documentação não o lista): o anúncio só é publicado depois que as fotos entram.
+            id = (await comEquipamentosOpcionais(mapa.oferta, (o) => sessao.criar(o))).resultado;
+            statusLa = null;
+            recemCriado = true;
             // Grava o código na hora: se as fotos falharem, o próximo ciclo atualiza em vez de criar de novo.
             await prisma.publicacaoPortal.update({ where: { id: p.id }, data: { idExterno: id } });
           }
         } else {
           await comEquipamentosOpcionais(mapa.oferta, (o) => sessao.atualizar(id!, o));
         }
-        if (hashFotos !== p.hashFotos) await enviarFotosNapista(sessao, id, fotos.slice(0, MAX_FOTOS), estadoDeFotos);
+        if (hashFotos !== p.hashFotos) await enviarFotosNapista(sessao, id, fotos.slice(0, MAX_FOTOS), estadoDeFotos, recemCriado);
+        // Confere o status de verdade no NaPista (ele pode ter criado como rascunho) e publica só se faltar.
+        const atual = await sessao.oferta(id).catch(() => null);
+        if (atual?.status) statusLa = atual.status;
         if (statusLa !== "PUBLISHED") {
           await sessao.mudarStatus(id, "PUBLISHED");
           statusLa = "PUBLISHED";
