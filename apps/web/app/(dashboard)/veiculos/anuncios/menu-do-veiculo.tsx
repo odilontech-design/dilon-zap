@@ -149,7 +149,7 @@ export function MenuDoVeiculo({ carro, portaisAtivos, aoMudar, avisar }: { carro
 
   return (
     <>
-      <button ref={botao} type="button" onClick={abrir} aria-haspopup="menu" aria-expanded={!!aberto} aria-label={`Mais ações de ${carro.nome}`} className="rounded border border-neutral-200 px-1.5 py-0.5 text-sm leading-none text-neutral-500 hover:border-accent hover:text-accent">
+      <button ref={botao} type="button" onClick={abrir} aria-haspopup="menu" aria-expanded={!!aberto} aria-label={`Mais ações de ${carro.nome}`} className="flex h-8 w-8 items-center justify-center rounded-md border border-neutral-200 text-base leading-none text-neutral-500 hover:border-accent hover:text-accent">
         ⋯
       </button>
       {aberto &&
