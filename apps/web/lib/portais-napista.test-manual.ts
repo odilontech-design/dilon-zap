@@ -55,7 +55,7 @@ async function main() {
   const b = await mk("QQQ1Q11", { kmInformado: false, km: 0 });
   const conf = await lib.conferirNapista(t.id);
   checa("conferência: casa pela placa, mostra o que sobra de cada lado", [conf?.noPortal, conf?.noZap, conf?.casam, conf?.soNoZap.map((c) => c.placa), conf?.soNoPortal.map((c) => c.placa)], [2, 2, 1, ["QQQ1Q11"], ["ZZZ9Z99"]]);
-  checa("anunciar: liga os dois (a km é opcional no NaPista)", await lib.anunciarNoNapista(t.id, [a.id, b.id]), { ligados: 2, semKm: 0 });
+  checa("anunciar: liga e conta os sem km", await lib.anunciarNoNapista(t.id, [a.id, b.id]), { ligados: 2, semKm: 1 });
   await lib.desligarDoNapista(t.id, a.id);
   checa("desligar um carro", await prisma.publicacaoPortal.count({ where: { tenantId: t.id, portal: "NAPISTA", ativo: true } }), 1);
 

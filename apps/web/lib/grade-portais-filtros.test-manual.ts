@@ -10,7 +10,7 @@ function checa(nome: string, obtido: unknown, esperado: unknown) {
 }
 const ok = (s = "PUBLICADO") => ({ ativo: true, status: s, url: null, erro: s === "ERRO" ? "recusado" : null, plano: null });
 const carro = (id: string, nome: string, extra: Partial<CarroDaGrade> = {}): CarroDaGrade => ({
-  id, nome, versao: null, anoModelo: 2020, placa: null, status: "DISPONIVEL", naVitrine: true, dias: 10, precoCents: 5_000_000, precoClassificadosCents: null, km: 50000, semKm: false, capaId: "f", totalFotos: 5,
+  id, nome, versao: null, anoModelo: 2020, placa: null, status: "DISPONIVEL", naVitrine: true, dias: 10, precoCents: 5_000_000, precoClassificadosCents: null, km: 50000, semKm: false, capaId: "f", totalFotos: 5, linkPublico: null,
   anuncios: { WEBMOTORS: ok(), NAPISTA: ok() }, ...extra,
 });
 const lista = [

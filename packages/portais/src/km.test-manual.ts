@@ -23,9 +23,9 @@ checa("mensagem diz o que fazer", /Veículos > Completar/.test(faltaKmReal({ km:
 const carro = { tipo: "CARRO", marca: "Chevrolet", modelo: "Classic", versao: "1.0 4P", anoFabricacao: 2014, anoModelo: 2015, km: 1, kmInformado: true, cor: "Cinza", combustivel: "Flex", cambio: "Manual", portas: 4, precoCents: 3_600_000, fotos: ["x"], opcionais: [], placa: "OTU5D85", descricao: null } as never;
 const r = montarOfertaNapista(carro, "v1");
 const sem1 = montarOfertaNapista(carro, "v1");
-checa("NaPista: 1 km num carro antigo sobe SEM o campo de km (nunca com o número inventado)", sem1.ok && sem1.oferta.mileage === undefined, true);
+checa("NaPista: 1 km num carro antigo espera, com o motivo (não envia número inventado)", !sem1.ok && sem1.faltando.some((f) => /quilometragem/i.test(f)), true);
 const semKm = montarOfertaNapista({ ...(carro as object), km: 0, kmInformado: false } as never, "v1");
-checa("NaPista: sem km informada também sobe sem o campo (a km é opcional na API)", semKm.ok && semKm.oferta.mileage === undefined, true);
+checa("NaPista: sem km informada espera e diz que o NaPista exige", !semKm.ok && semKm.faltando.some((f) => /NaPista exige a quilometragem/.test(f)), true);
 const real = montarOfertaNapista({ ...(carro as object), km: 84203 } as never, "v1");
 checa("NaPista: com a km real, vai a km", real.ok && real.oferta.mileage, 84203);
 const wm = montarAnuncioWebmotors(carro, { marca: "1", modelo: "2", versao: "3" } as never, null, 0);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRecurso } from "@/components/recursos-context";
 import Link from "next/link";
 import useSWR from "swr";
@@ -167,39 +167,80 @@ export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos
   const temIa = useRecurso("VENDEDOR_IA");
   // Mensagens do Instagram sem leitura: o número aparece na própria aba (a mesma consulta do menu, o SWR junta as duas).
   const { data: contadores } = useSWR<{ instagram?: number }>("/api/menu-contadores", (u: string) => fetch(u).then((r) => (r.ok ? r.json() : {})), { refreshInterval: 30_000 });
-  const abas = [
+  type Aba = { id: string; href: string; rotulo: string };
+  // O dia a dia fica na barra; o que se mexe de vez em quando (configurar, importar, completar) vai para "Configurar".
+  const principais: Aba[] = [
     ...(gerencia ? [{ id: "painel", href: "/veiculos/painel", rotulo: "Painel" }] : []),
     { id: "estoque", href: "/veiculos", rotulo: "Estoque" },
     ...(gerencia ? [{ id: "anuncios", href: "/veiculos/anuncios", rotulo: "Anúncios" }] : []),
     { id: "vendidos", href: "/veiculos?status=VENDIDO", rotulo: "Vendidos" },
+    ...(gerencia ? [{ id: "leads", href: "/veiculos/leads", rotulo: "Leads" }] : []),
     { id: "instagram", href: "/veiculos/instagram", rotulo: contadores?.instagram ? `Instagram (${contadores.instagram})` : "Instagram" },
-    ...(gerencia
-      ? [
-          { id: "leads", href: "/veiculos/leads", rotulo: "Leads" },
-          { id: "primeiros-passos", href: "/veiculos/primeiros-passos", rotulo: "Primeiros passos" },
-          { id: "importar", href: "/veiculos/importar", rotulo: "Importar" },
-          { id: "completar", href: "/veiculos/completar", rotulo: "Completar" },
-          { id: "vitrine", href: "/veiculos/site", rotulo: "Meu site" },
-          { id: "portais", href: "/veiculos/portais", rotulo: "Portais" },
-          { id: "relatorios", href: "/veiculos/relatorios", rotulo: "Relatórios" },
-          ...(temIa ? [{ id: "vendedor-ia", href: "/veiculos/vendedor-ia", rotulo: "Vendedor IA" }] : []),
-        ]
-      : []),
+    ...(gerencia ? [{ id: "relatorios", href: "/veiculos/relatorios", rotulo: "Relatórios" }] : []),
+    ...(gerencia && temIa ? [{ id: "vendedor-ia", href: "/veiculos/vendedor-ia", rotulo: "Vendedor IA" }] : []),
   ];
+  const configurar: Aba[] = gerencia
+    ? [
+        { id: "primeiros-passos", href: "/veiculos/primeiros-passos", rotulo: "Primeiros passos" },
+        { id: "importar", href: "/veiculos/importar", rotulo: "Importar" },
+        { id: "completar", href: "/veiculos/completar", rotulo: "Completar cadastro" },
+        { id: "vitrine", href: "/veiculos/site", rotulo: "Meu site" },
+        { id: "portais", href: "/veiculos/portais", rotulo: "Portais" },
+      ]
+    : [];
+  const [aberto, setAberto] = useState(false);
+  const caixa = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!aberto) return;
+    const fora = (e: MouseEvent) => {
+      if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
+    };
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
+    document.addEventListener("mousedown", fora);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", fora);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [aberto]);
+  const noConfigurar = configurar.find((a) => a.id === atual);
+  const base = "shrink-0 rounded-md px-3 py-1.5";
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2">
+    <div className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2">
       <h1 className="text-lg font-semibold">Veículos</h1>
-      <nav className="flex flex-wrap gap-1 text-sm">
-        {abas.map((a) =>
+      <nav className="-mx-1 flex min-w-0 max-w-full flex-1 items-center gap-1 overflow-x-auto px-1 pb-1 text-sm whitespace-nowrap" aria-label="Seções de Veículos">
+        {principais.map((a) =>
           a.id === atual ? (
-            <span key={a.id} className="rounded-md bg-accent/10 px-3 py-1 font-medium text-accent">
+            <span key={a.id} aria-current="page" className={`${base} bg-accent/10 font-medium text-accent`}>
               {a.rotulo}
             </span>
           ) : (
-            <Link key={a.id} href={a.href} className="rounded-md px-3 py-1 text-neutral-500 hover:text-neutral-800">
+            <Link key={a.id} href={a.href} className={`${base} text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800`}>
               {a.rotulo}
             </Link>
           )
+        )}
+        {configurar.length > 0 && (
+          <div ref={caixa} className="relative shrink-0">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={aberto}
+              onClick={() => setAberto((v) => !v)}
+              className={`${base} ${noConfigurar ? "bg-accent/10 font-medium text-accent" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"}`}
+            >
+              {noConfigurar ? noConfigurar.rotulo : "Configurar"} <span aria-hidden className="text-[10px]">▾</span>
+            </button>
+            {aberto && (
+              <div role="menu" className="absolute left-0 top-full z-30 mt-1 w-52 rounded-lg border border-neutral-200 bg-surface p-1 shadow-lg">
+                {configurar.map((a) => (
+                  <Link key={a.id} role="menuitem" href={a.href} onClick={() => setAberto(false)} className={`block rounded-md px-3 py-2 text-sm ${a.id === atual ? "bg-accent/10 font-medium text-accent" : "text-neutral-700 hover:bg-neutral-100"}`}>
+                    {a.rotulo}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </nav>
     </div>

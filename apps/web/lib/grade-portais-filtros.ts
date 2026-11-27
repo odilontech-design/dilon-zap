@@ -21,6 +21,8 @@ export type CarroDaGrade = {
   semKm: boolean;
   capaId: string | null;
   totalFotos: number;
+  /** O endereço do carro na vitrine pública da loja (null = vitrine desligada ou carro fora dela). */
+  linkPublico: string | null;
   anuncios: Record<string, AnuncioDaGrade | null>;
 };
 
