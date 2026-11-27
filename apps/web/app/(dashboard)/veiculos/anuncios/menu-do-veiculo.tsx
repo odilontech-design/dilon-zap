@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { createPortal } from "react-dom";
 import QRCode from "qrcode";
 import type { CarroDaGrade } from "@/lib/grade-portais-filtros";
 import { montarZip } from "@/lib/zip-simples";
+import { gerarStory } from "@/lib/story-canvas";
+import type { CardDoStory } from "@/lib/story-card";
 import { erroDaResposta } from "../comum";
 
 type Aviso = { texto: string; erro?: boolean };
@@ -33,7 +37,8 @@ async function copiar(texto: string): Promise<boolean> {
  */
 export function MenuDoVeiculo({ carro, portaisAtivos, aoMudar, avisar }: { carro: CarroDaGrade; portaisAtivos: PortalLigado[]; aoMudar: () => void; avisar: (a: Aviso) => void }) {
   const [aberto, setAberto] = useState<{ x: number; y: number } | null>(null);
-  const [modal, setModal] = useState<"qr" | "acessos" | null>(null);
+  const [modal, setModal] = useState<"qr" | "acessos" | "story" | null>(null);
+  const router = useRouter();
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [confirmaTirar, setConfirmaTirar] = useState(false);
   const botao = useRef<HTMLButtonElement>(null);
@@ -118,6 +123,15 @@ export function MenuDoVeiculo({ carro, portaisAtivos, aoMudar, avisar }: { carro
       avisar({ texto: `${arquivos.length} foto(s) baixadas.` });
     });
 
+  const duplicar = () =>
+    executar("duplicar", async () => {
+      const r = await fetch(`/api/veiculos/${carro.id}/duplicar`, { method: "POST" });
+      if (!r.ok) throw new Error(await erroDaResposta(r));
+      const novo = (await r.json()) as { id: string };
+      avisar({ texto: "Cadastro duplicado. Falta a placa, a km real e as fotos." });
+      router.push(`/veiculos/${novo.id}`);
+    });
+
   const tirarDeTodos = () =>
     executar("tirar", async () => {
       let tirados = 0;
@@ -138,11 +152,15 @@ export function MenuDoVeiculo({ carro, portaisAtivos, aoMudar, avisar }: { carro
       <button ref={botao} type="button" onClick={abrir} aria-haspopup="menu" aria-expanded={!!aberto} aria-label={`Mais ações de ${carro.nome}`} className="rounded border border-neutral-200 px-1.5 py-0.5 text-sm leading-none text-neutral-500 hover:border-accent hover:text-accent">
         ⋯
       </button>
-      {aberto && (
+      {aberto &&
+        createPortal(
         <div ref={caixa} role="menu" style={{ position: "fixed", left: aberto.x, top: aberto.y, width: 240 }} className="z-50 max-h-[80vh] overflow-auto rounded-lg border border-neutral-200 bg-surface p-1 shadow-xl">
           <Link role="menuitem" href={`/veiculos/${carro.id}`} className={item} onClick={fechar}>
             Abrir a ficha
           </Link>
+          <button role="menuitem" type="button" className={item} disabled={!!ocupado} onClick={duplicar} title="Nova ficha com os dados do modelo; falta a placa, a km real e as fotos">
+            {ocupado === "duplicar" ? "Duplicando…" : "Duplicar cadastro"}
+          </button>
           {separador}
           <button role="menuitem" type="button" className={item} disabled={!carro.linkPublico || !!ocupado} onClick={copiarLink} title={carro.linkPublico ? undefined : "A vitrine está desligada ou o carro está fora dela"}>
             Copiar link do carro
@@ -183,6 +201,17 @@ export function MenuDoVeiculo({ carro, portaisAtivos, aoMudar, avisar }: { carro
             type="button"
             className={item}
             onClick={() => {
+              setModal("story");
+              fechar();
+            }}
+          >
+            Criar story
+          </button>
+          <button
+            role="menuitem"
+            type="button"
+            className={item}
+            onClick={() => {
               setModal("acessos");
               fechar();
             }}
@@ -197,10 +226,12 @@ export function MenuDoVeiculo({ carro, portaisAtivos, aoMudar, avisar }: { carro
               </button>
             </>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
-      {modal === "qr" && carro.linkPublico && <ModalQr nome={carro.nome} placa={carro.placa} link={carro.linkPublico} aoFechar={() => setModal(null)} />}
-      {modal === "acessos" && <ModalAcessos carro={carro} aoFechar={() => setModal(null)} />}
+      {modal === "qr" && carro.linkPublico && createPortal(<ModalQr nome={carro.nome} placa={carro.placa} link={carro.linkPublico} aoFechar={() => setModal(null)} />, document.body)}
+      {modal === "acessos" && createPortal(<ModalAcessos carro={carro} aoFechar={() => setModal(null)} />, document.body)}
+      {modal === "story" && createPortal(<ModalStory carro={carro} aoFechar={() => setModal(null)} />, document.body)}
     </>
   );
 }
@@ -301,6 +332,67 @@ function ModalAcessos({ carro, aoFechar }: { carro: CarroDaGrade; aoFechar: () =
           <p className="mt-1 text-[11px] text-neutral-500">Visitas por dia na vitrine do Zap (não inclui os portais).</p>
           {dados.total.visitas === 0 && <p className="mt-2 text-xs text-neutral-500">Nenhuma visita registrada no período. {carro.linkPublico ? "" : "A vitrine está desligada ou o carro está fora dela."}</p>}
         </>
+      )}
+    </Moldura>
+  );
+}
+
+/** A imagem do story (9:16) do carro, montada aqui no navegador: foto de capa, dados, preço (se a loja mostra) e QR Code do link. */
+function ModalStory({ carro, aoFechar }: { carro: CarroDaGrade; aoFechar: () => void }) {
+  const [pronto, setPronto] = useState<{ url: string; blob: Blob; foto: "ok" | "nenhuma" | "falhou" } | null>(null);
+  const [erro, setErro] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelado = false;
+    let url: string | null = null;
+    (async () => {
+      try {
+        const r = await fetch(`/api/veiculos/${carro.id}/descritivo`);
+        if (!r.ok) throw new Error(await erroDaResposta(r));
+        const d = (await r.json()) as { fotoIds: string[]; story: CardDoStory };
+        let foto: ImageBitmap | null = null;
+        if (d.fotoIds[0]) {
+          const f = await fetch(`/api/veiculos/fotos/${d.fotoIds[0]}?baixar=1`);
+          if (f.ok) foto = await createImageBitmap(await f.blob()).catch(() => null);
+        }
+        const blob = await gerarStory(d.story, foto);
+        foto?.close();
+        if (cancelado) return;
+        url = URL.createObjectURL(blob);
+        setPronto({ url, blob, foto: foto ? "ok" : d.fotoIds[0] ? "falhou" : "nenhuma" });
+      } catch (e) {
+        if (!cancelado) setErro(e instanceof Error ? e.message : "Não consegui montar o story.");
+      }
+    })();
+    return () => {
+      cancelado = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [carro.id]);
+  const nomeArquivo = `story-${(carro.placa ?? carro.nome).replace(/[^A-Za-z0-9]+/g, "-")}.png`;
+  const arquivo = pronto ? new File([pronto.blob], nomeArquivo, { type: "image/png" }) : null;
+  const podeCompartilhar = !!arquivo && typeof navigator !== "undefined" && !!navigator.canShare?.({ files: [arquivo] });
+  return (
+    <Moldura titulo={`Story: ${carro.nome}`} aoFechar={aoFechar}>
+      {erro && <p className="text-sm text-red-600">{erro}</p>}
+      {!pronto && !erro && <p className="py-16 text-center text-sm text-neutral-500">Montando a imagem…</p>}
+      {pronto && (
+        <div className="flex flex-col items-center gap-3">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={pronto.url} alt={`Story de ${carro.nome}`} className="max-h-[60vh] w-auto rounded-lg border border-neutral-200" />
+          {pronto.foto === "nenhuma" && <p className="text-center text-xs text-amber-700">Este carro não tem foto: o story saiu só com os dados. Suba as fotos na ficha para um story melhor.</p>}
+          {pronto.foto === "falhou" && <p className="text-center text-xs text-amber-700">Não consegui carregar a foto de capa: o story saiu só com os dados. Feche e tente de novo.</p>}
+          <div className="flex flex-wrap justify-center gap-2">
+            <a href={pronto.url} download={nomeArquivo} className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+              Baixar imagem
+            </a>
+            {podeCompartilhar && arquivo && (
+              <button type="button" onClick={() => navigator.share({ files: [arquivo] }).catch(() => {})} className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:border-accent">
+                Compartilhar
+              </button>
+            )}
+          </div>
+          <p className="text-center text-[11px] text-neutral-500">Publique pelo Instagram. O QR Code leva o cliente direto à ficha do carro.</p>
+        </div>
       )}
     </Moldura>
   );

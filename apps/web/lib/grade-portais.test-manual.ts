@@ -76,6 +76,21 @@ async function main() {
   const aberta = await anunciarNaWebmotors(a.id, [c4.id]);
   checa("anunciar um carro desta loja liga e avisa que está sem km", [aberta.ligados, aberta.semKm], [1, 1]);
 
+  // Link público do carro (menu "Compartilhar"/"QR Code"): só com a vitrine ligada, o carro nela e, se reservado, "mostrar reservados".
+  process.env.NEXTAUTH_URL = "https://zap.exemplo.com.br";
+  const links = async (t: string) => Object.fromEntries((await gradeDePortais(t)).carros.map((c) => [c.nome.split(" ")[1], c.linkPublico]));
+  checa("vitrine desligada ou sem configuração: nenhum link", Object.values(await links(a.id)).every((l) => l === null), true);
+  await prisma.veiculosConfig.create({ data: { tenantId: a.id, vitrineAtiva: true } });
+  await prisma.veiculo.update({ where: { id: c6.id }, data: { naVitrine: false } });
+  await prisma.veiculosConfig.update({ where: { tenantId: a.id }, data: { mostrarReservados: false } });
+  const comVitrine = await links(a.id);
+  checa("vitrine ligada: link do carro na vitrine", comVitrine["Publicado"], `https://zap.exemplo.com.br/loja/${SLUGS[0]}/${c1.id}`);
+  checa("carro fora da vitrine: sem link", comVitrine["Desligado"], null);
+  checa("reservado sem 'mostrar reservados': sem link", comVitrine["Reservado"], null);
+  await prisma.veiculosConfig.update({ where: { tenantId: a.id }, data: { mostrarReservados: true } });
+  checa("reservado com 'mostrar reservados': com link", (await links(a.id))["Reservado"], `https://zap.exemplo.com.br/loja/${SLUGS[0]}/${c5.id}`);
+  checa("a outra loja (sem vitrine) não ganha link de ninguém", Object.values(await links(b.id)).every((l) => l === null), true);
+
   const vazio = await prisma.tenant.create({ data: { name: "v", slug: "teste-grade-vazio" } });
   const gv = await gradeDePortais(vazio.id);
   checa("loja sem portal nem carro: grade vazia, sem erro", [gv.portais.length, gv.carros.length], [0, 0]);

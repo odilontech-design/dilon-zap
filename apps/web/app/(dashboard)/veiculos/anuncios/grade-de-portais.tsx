@@ -33,6 +33,63 @@ const controle = "rounded-md border border-neutral-300 bg-surface px-3 py-2 text
 const botaoPequeno = "rounded-md border border-neutral-300 px-2 py-1 text-xs hover:border-accent disabled:opacity-50";
 const FUNDO_CELULA = (a: AnuncioDaGrade | null) => (a?.ativo && a.status === "ERRO" ? "bg-red-500/5" : a?.ativo && a.status === "PUBLICADO" ? "bg-emerald-500/5" : "");
 
+type Modalidade = { codigo: string; descricao: string; total: number; usados: number };
+
+/**
+ * O plano deste carro na Webmotors. A lista vem ao vivo da Webmotors e só é pedida quando alguém abre o seletor (e fica
+ * em cache por 1 minuto), para a grade não consultar o portal a cada carro. Trocar muda o que a loja gasta lá: confirma antes.
+ */
+function PlanoDoCarro({ carroId, plano, aoMudar, avisar }: { carroId: string; plano: string | null; aoMudar: () => void; avisar: (a: { texto: string; erro?: boolean }) => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const planos = useSWR<{ modalidades: Modalidade[] }>(aberto ? "/api/portais/webmotors/plano" : null, fetcher, { revalidateOnFocus: false, dedupingInterval: 60_000 });
+  async function trocar(codigo: string) {
+    const novo = codigo || null;
+    const m = planos.data?.modalidades.find((x) => x.codigo === codigo);
+    const destino = novo ? `o plano "${m?.descricao ?? novo}"` : "o plano padrão da loja";
+    if (!confirm(`Passar este carro para ${destino} na Webmotors?\n\nO anúncio muda de plano no próximo envio e isso pode mudar o que a loja paga lá.`)) return;
+    setSalvando(true);
+    try {
+      const r = await fetch(`/api/veiculos/${carroId}/plano-webmotors`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codigo: novo }) });
+      if (!r.ok) return avisar({ texto: await erroDaResposta(r), erro: true });
+      avisar({ texto: "Plano salvo: a troca vai na próxima rodada de envio." });
+      setAberto(false);
+      aoMudar();
+    } finally {
+      setSalvando(false);
+    }
+  }
+  if (!aberto) {
+    return (
+      <button type="button" onClick={() => setAberto(true)} className="text-[11px] text-neutral-500 hover:text-accent" title="Trocar o plano deste carro na Webmotors">
+        {plano ? `plano ${plano}` : "plano padrão"} ▾
+      </button>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-0.5">
+      <select
+        aria-label="Plano do anúncio na Webmotors"
+        value={plano ?? ""}
+        disabled={salvando || !planos.data}
+        onChange={(e) => trocar(e.target.value)}
+        className="max-w-[12rem] rounded border border-neutral-300 bg-surface px-1 py-0.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-accent/40"
+      >
+        <option value="">{planos.error ? "Erro ao consultar a Webmotors" : planos.data ? "Plano padrão da loja" : "Carregando…"}</option>
+        {planos.data?.modalidades.map((m) => (
+          <option key={m.codigo} value={m.codigo} disabled={m.total > 0 && m.usados >= m.total && m.codigo !== plano}>
+            {m.descricao}
+            {m.total > 0 ? ` (${m.usados}/${m.total})` : ""}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={() => setAberto(false)} className="self-start text-[11px] text-neutral-400 hover:text-neutral-600">
+        fechar
+      </button>
+    </span>
+  );
+}
+
 /**
  * Valor que se corrige ali mesmo: clica, digita, Enter salva (Esc cancela). O salvamento é de quem chama e devolve o
  * texto do erro, se houver.
@@ -241,7 +298,7 @@ export function GradeDePortais() {
         <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr>
-              <th className="sticky left-0 top-0 z-30 min-w-[240px] border-b border-neutral-200 bg-surface px-3 py-2 text-left text-xs font-normal text-neutral-500">Veículo</th>
+              <th className="sticky top-0 z-30 min-w-[240px] max-w-[15rem] border-b border-neutral-200 bg-surface px-3 py-2 text-left text-xs font-normal text-neutral-500 md:left-0 md:max-w-none">Veículo</th>
               {data.portais.map((p) => {
                 const pct = data.aVenda > 0 ? Math.min(100, Math.round((p.publicados / data.aVenda) * 100)) : 0;
                 return (
@@ -282,7 +339,7 @@ export function GradeDePortais() {
               const precoPortal = c.precoClassificadosCents ?? c.precoCents;
               return (
                 <tr key={c.id} className="align-top">
-                  <td className="sticky left-0 z-10 border-b border-neutral-100 bg-surface px-3 py-2.5">
+                  <td className="max-w-[15rem] border-b border-neutral-100 bg-surface px-3 py-2.5 md:sticky md:left-0 md:z-10 md:max-w-none">
                     <div className="flex gap-3">
                       <Link href={`/veiculos/${c.id}`} className="relative block h-[56px] w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100 sm:h-[68px] sm:w-24" aria-label={`Abrir ${c.nome}`}>
                         {c.capaId ? (
@@ -294,8 +351,8 @@ export function GradeDePortais() {
                         <span className={`absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${CLASSE_DIAS[classeDosDias(c.dias)]}`}>{c.dias} dias</span>
                       </Link>
                       <div className="min-w-0">
-                        <div className="flex items-start justify-between gap-2">
-                          <Link href={`/veiculos/${c.id}`} className="font-medium leading-tight hover:text-accent">
+                        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                          <Link href={`/veiculos/${c.id}`} className="min-w-0 flex-1 basis-24 font-medium leading-tight hover:text-accent">
                             {c.nome}
                           </Link>
                           <span className="flex shrink-0 items-center gap-1">
@@ -323,7 +380,7 @@ export function GradeDePortais() {
                           </span>
                           <span>
                             Classificados <b className="font-semibold text-neutral-800">{precoPortal > 0 ? centsToBRL(precoPortal) : "—"}</b>
-                            {c.precoClassificadosCents === null && <span className="text-neutral-400"> (= site)</span>}
+                            {c.precoClassificadosCents === null && <span className="hidden text-neutral-400 sm:inline"> (= site)</span>}
                           </span>
                           <span>
                             Km{" "}
@@ -342,7 +399,11 @@ export function GradeDePortais() {
                         <div className="flex flex-col items-start gap-1">
                           {rot ? <span className={`rounded-full px-2 py-0.5 text-xs ${rot.classe}`}>{rot.texto}</span> : <span className="text-xs text-neutral-400">Não anunciado</span>}
                           {a?.ativo && a.erro && <ErroDoAnuncio erro={a.erro} />}
-                          {a?.plano && a.ativo && <span className="text-[11px] text-neutral-500">plano {a.plano}</span>}
+                          {p.portal === "WEBMOTORS" && a?.ativo ? (
+                            <PlanoDoCarro carroId={c.id} plano={a.plano} aoMudar={() => mutate()} avisar={setAviso} />
+                          ) : (
+                            a?.plano && a.ativo && <span className="text-[11px] text-neutral-500">plano {a.plano}</span>
+                          )}
                           {p.portal === "NAPISTA" && a?.ativo && a.status === "PUBLICADO" && <DetalheDoNapista detalhe={detalhes[c.id]} aoConferir={() => conferirNoNapista(c)} />}
                           <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                             {a?.url && a.status === "PUBLICADO" && a.ativo && (

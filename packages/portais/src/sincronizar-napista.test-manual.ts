@@ -129,7 +129,7 @@ async function main() {
   const chave = randomBytes(32);
   const segredo = "segredo-fotos";
   const op = { chave, segredoFotos: segredo, urlBase: "https://zap.exemplo.com.br" };
-  const conta = await prisma.portalConta.create({ data: { tenantId: t0.id, portal: "NAPISTA", status: "CONECTADA", accessTokenCripto: guardarContaNapista({ sellerId: SELLER, access: "A1", refresh: "R1", expiraEm: Date.now() + 3_600_000 }, chave) } });
+  const conta = await prisma.portalConta.create({ data: { tenantId: t0.id, portal: "NAPISTA", status: "CONECTADA", accessTokenCripto: guardarContaNapista({ sellerId: SELLER, access: "A1", refresh: "R1", expiraEm: Date.now() + 3_600_000, ambiente: "production" }, chave) } });
 
   let seq = 0;
   const novo = async (marca: string, modelo: string, extra: object = {}) => {

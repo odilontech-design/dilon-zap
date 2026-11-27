@@ -189,18 +189,25 @@ export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos
       ]
     : [];
   const [aberto, setAberto] = useState(false);
+  // O menu abre em posição fixa: a barra de abas rola para o lado (overflow) e cortaria um menu posicionado dentro dela.
+  const [posicao, setPosicao] = useState({ x: 0, y: 0 });
   const caixa = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!aberto) return;
     const fora = (e: MouseEvent) => {
       if (caixa.current && !caixa.current.contains(e.target as Node)) setAberto(false);
     };
+    const fechar = () => setAberto(false);
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setAberto(false);
     document.addEventListener("mousedown", fora);
     document.addEventListener("keydown", esc);
+    window.addEventListener("resize", fechar);
+    window.addEventListener("scroll", fechar, true);
     return () => {
       document.removeEventListener("mousedown", fora);
       document.removeEventListener("keydown", esc);
+      window.removeEventListener("resize", fechar);
+      window.removeEventListener("scroll", fechar, true);
     };
   }, [aberto]);
   const noConfigurar = configurar.find((a) => a.id === atual);
@@ -221,18 +228,22 @@ export function AbasVeiculos({ atual, gerencia }: { atual: "estoque" | "vendidos
           )
         )}
         {configurar.length > 0 && (
-          <div ref={caixa} className="relative shrink-0">
+          <div ref={caixa} className="shrink-0">
             <button
               type="button"
               aria-haspopup="menu"
               aria-expanded={aberto}
-              onClick={() => setAberto((v) => !v)}
+              onClick={(e) => {
+                const r = e.currentTarget.getBoundingClientRect();
+                setPosicao({ x: Math.max(8, Math.min(r.left, window.innerWidth - 216)), y: r.bottom + 4 });
+                setAberto((v) => !v);
+              }}
               className={`${base} ${noConfigurar ? "bg-accent/10 font-medium text-accent" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"}`}
             >
               {noConfigurar ? noConfigurar.rotulo : "Configurar"} <span aria-hidden className="text-[10px]">▾</span>
             </button>
             {aberto && (
-              <div role="menu" className="absolute left-0 top-full z-30 mt-1 w-52 rounded-lg border border-neutral-200 bg-surface p-1 shadow-lg">
+              <div role="menu" style={{ position: "fixed", left: posicao.x, top: posicao.y }} className="z-50 w-52 rounded-lg border border-neutral-200 bg-surface p-1 shadow-lg">
                 {configurar.map((a) => (
                   <Link key={a.id} role="menuitem" href={a.href} onClick={() => setAberto(false)} className={`block rounded-md px-3 py-2 text-sm ${a.id === atual ? "bg-accent/10 font-medium text-accent" : "text-neutral-700 hover:bg-neutral-100"}`}>
                     {a.rotulo}
