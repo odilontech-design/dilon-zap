@@ -1,6 +1,6 @@
 // Tolerâncias do envio ao NaPista (limite de fotos e equipamentos). Sem rede e sem banco.
 // Rodar com: npx tsx packages/portais/src/napista-envio.test-manual.ts
-import { ErroNapista, type OfertaNapista } from "./napista/cliente";
+import { ErroNapista, resumirCorpoDeErro, type OfertaNapista } from "./napista/cliente";
 import { montarOfertaNapista } from "./napista/mapa";
 import { comEquipamentosOpcionais, enderecoPublicoDoAnuncio, enviarFotosNapista, enxugarParaDiagnostico, novoEstadoDeFotos, resumoDaOferta } from "./napista/envio";
 
@@ -83,6 +83,9 @@ async function principal() {
 
   const dg = enxugarParaDiagnostico({ id: "x", description: "a".repeat(500), numeroPublico: 17122550, photos: [1, 2, 3, 4, 5].map((n) => ({ url: `https://f/${n}` })) }) as any;
   checa("diagnóstico: corta texto longo, mantém o número e encurta lista de fotos", [dg.description.length < 200, dg.numeroPublico, dg.photos.length, dg.photos[3]], [true, 17122550, 4, "(+2 itens)"]);
+
+  checa("erro de validação do NaPista mostra o campo recusado", resumirCorpoDeErro(JSON.stringify({ message: "Bean validation error. Check 'items' field for details", items: [{ field: "mileage", message: "must not be null" }] })), "Bean validation error. Check 'items' field for details (mileage: must not be null)");
+  checa("corpo que não é JSON é cortado sem quebrar", resumirCorpoDeErro("x".repeat(900)).length, 300);
 
   const resumo = resumoDaOferta(oferta);
   checa("resumo do que foi enviado não leva o texto longo", [resumo.includes("DIESEL"), resumo.includes("texto longo")], [true, false]);

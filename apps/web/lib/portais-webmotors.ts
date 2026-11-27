@@ -60,6 +60,30 @@ export async function definirPlanoPadrao(tenantId: string, codigo: string | null
   await prisma.portalConta.updateMany({ where: { tenantId, portal: "WEBMOTORS" }, data: { planoPadrao: codigo } });
 }
 
+export type ResultadoPlanoDoCarro = { ok: true } | { ok: false; status: number; erro: string };
+
+/**
+ * Troca o plano (modalidade) de UM carro na Webmotors, ou volta ao plano padrão da loja (`codigo` nulo). Só grava a
+ * escolha: quem troca de fato é o worker, no próximo ciclo (o plano entra na assinatura do anúncio, então mudar o plano
+ * reenvia o carro e chama a troca de modalidade). `modalidades` é a lista ao vivo da Webmotors, que quem chama consulta.
+ * Recusa plano que a Webmotors não listou e plano já cheio, e só mexe em carro da empresa da sessão.
+ */
+export async function definirPlanoDoCarro(tenantId: string, veiculoId: string, codigo: string | null, modalidades: Modalidade[]): Promise<ResultadoPlanoDoCarro> {
+  const [pub, conta] = await Promise.all([
+    prisma.publicacaoPortal.findFirst({ where: { tenantId, veiculoId, portal: "WEBMOTORS" }, select: { id: true, plano: true } }),
+    prisma.portalConta.findUnique({ where: { tenantId_portal: { tenantId, portal: "WEBMOTORS" } }, select: { planoPadrao: true } }),
+  ]);
+  if (!pub) return { ok: false, status: 404, erro: "este carro ainda não foi ligado na Webmotors" };
+  if (codigo !== null) {
+    const m = modalidades.find((x) => x.codigo === codigo);
+    if (!m) return { ok: false, status: 400, erro: "a Webmotors não lista esse plano para a sua loja" };
+    const atual = pub.plano ?? conta?.planoPadrao ?? null;
+    if (codigo !== atual && m.total > 0 && m.usados >= m.total) return { ok: false, status: 409, erro: `o plano "${m.descricao}" está cheio (${m.usados} de ${m.total} anúncios)` };
+  }
+  await prisma.publicacaoPortal.updateMany({ where: { id: pub.id, tenantId }, data: { plano: codigo } });
+  return { ok: true };
+}
+
 /** Liga o anúncio na Webmotors. Sem km informada o worker não publica: mostra o que falta. */
 export async function anunciarNaWebmotors(tenantId: string, veiculoIds: string[]): Promise<{ ligados: number; semKm: number }> {
   const carros = await prisma.veiculo.findMany({ where: { tenantId, id: { in: veiculoIds } }, select: { id: true, kmInformado: true } });

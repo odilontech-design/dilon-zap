@@ -293,6 +293,49 @@ export async function registrarEntrada(input: {
   });
 }
 
+/* --------------------------------------------------------------- duplicar */
+
+/**
+ * "Duplicar cadastro": uma ficha nova a partir de outra, para a loja que tem dois ou mais carros do mesmo modelo.
+ * Leva o que é do MODELO (marca, versão, ano, cor, opcionais, preço, textos e ajustes por portal) e deixa de fora o que
+ * é do CARRO: placa, chassi, renavam, km, fotos, custos, consignação, observações internas e o vínculo com o site de
+ * origem. A km nasce não informada (o carro não vai à venda até alguém preencher a real) e o carro entra em
+ * preparação. As fotos não são copiadas de propósito: apagar uma foto apaga o arquivo no R2, e duas fichas com o mesmo
+ * arquivo se quebrariam. Respeita o limite de carros do plano e só enxerga carros da empresa da sessão.
+ */
+export async function duplicarVeiculo(input: { tenantId: string; userId: string; veiculoId: string }): Promise<{ id: string }> {
+  return prisma.$transaction(async (tx) => {
+    const o = await tx.veiculo.findFirst({
+      where: { id: input.veiculoId, tenantId: input.tenantId },
+      select: {
+        tipo: true, marca: true, modelo: true, versao: true, anoFabricacao: true, anoModelo: true, cor: true, combustivel: true, cambio: true, portas: true,
+        opcionais: true, caracteristicas: true, carroceria: true, zeroKm: true, ocultarKm: true, ocultarPreco: true, videoUrl: true,
+        precoCents: true, precoMinimoCents: true, precoClassificadosCents: true, descricao: true, descricaoClassificados: true, ajustesPorPortal: true,
+        codigoFipe: true, fipeCents: true, fipeReferencia: true, fipeEm: true,
+      },
+    });
+    if (!o) throw new ErroDeVeiculo("veículo não encontrado", 404);
+    const patio = await patioDoPlano(tx, input.tenantId);
+    if (patio.vagas === 0) throw new ErroDeVeiculo(mensagemPatioCheio(patio.plano!, patio.noPatio), 402);
+    const { ajustesPorPortal, ...resto } = o;
+    const novo = await tx.veiculo.create({
+      data: {
+        ...resto,
+        ...(ajustesPorPortal ? { ajustesPorPortal } : {}),
+        tenantId: input.tenantId,
+        km: 0,
+        kmInformado: false,
+        status: "PREPARACAO",
+        origem: "COMPRA",
+        entradaEm: new Date(),
+      },
+      select: { id: true },
+    });
+    await registrarEvento(tx, novo.id, "entrada", `Cadastro duplicado de ${nomeDoVeiculo(o)}: falta placa, km real e fotos`, input.userId);
+    return novo;
+  });
+}
+
 /* ------------------------------------------------------------ venda: apoio */
 
 async function carroParaVenda(db: Db, tenantId: string, veiculoId: string) {

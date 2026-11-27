@@ -1,14 +1,13 @@
 import type { CarroParaPortal } from "../olx/mapa";
-import { kmParecePadrao } from "../km";
+import { faltaKmReal, kmParecePadrao } from "../km";
 import { normalizar } from "../texto";
 import type { AtributosNapista, ItemNapista, OfertaNapista } from "./cliente";
 
 /**
  * Tradução de uma ficha do estoque para o anúncio (offer) do NaPista. Puro: não lê banco nem
  * rede. O NaPista pede a versão por ID do catálogo e cor, combustível e câmbio por valores
- * fixos (em inglês). A km é opcional na API deles (campos obrigatórios: versão, câmbio, cor, combustível, preço e anos):
- * carro sem km informada, ou com km que parece número padrão (ex.: 1 km num carro antigo), vai SEM o campo, nunca como
- * "0 km" nem com um número inventado. Os outros portais exigem a km e continuam bloqueando.
+ * fixos (em inglês). A km é exigida pelo NaPista (a API recusa o anúncio sem ela, mesmo a documentação não listando o campo): carro sem
+ * km informada, ou com km que parece número padrão (ex.: 1 km num carro antigo), espera com o motivo, nunca vai como "0 km" nem inventada.
  */
 
 const CORES: [RegExp, string][] = [
@@ -65,6 +64,10 @@ export type ResultadoNapista = { ok: true; oferta: OfertaNapista } | { ok: false
 export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null, atributos?: AtributosNapista | null): ResultadoNapista {
   const faltando: string[] = [];
   if (c.tipo !== "CARRO") faltando.push("Por enquanto a integração com o NaPista publica só carros");
+  // Testado em produção: o NaPista recusa (400 "Bean validation error") o anúncio sem a quilometragem, apesar de a documentação
+  // não listar o campo como obrigatório. Sem a km, não adianta enviar: o carro espera com o motivo claro na linha.
+  if (c.kmInformado === false) faltando.push("O NaPista exige a quilometragem do carro: informe a km real (Veículos > Completar)");
+  else if (kmParecePadrao(c)) faltando.push(faltaKmReal(c));
   if (!versionId) faltando.push("Escolher marca, modelo e versão no catálogo do NaPista");
   const cor = valorAceitoNapista(corNapista(c.cor), atributos?.cores ?? [], c.cor);
   if (!cor) faltando.push("O NaPista não reconheceu a cor do carro: confira a cor na ficha");
@@ -90,7 +93,7 @@ export function montarOfertaNapista(c: CarroParaPortal, versionId: string | null
       versionId,
       modelYear: c.anoModelo,
       manufacturedYear: c.anoFabricacao,
-      ...(c.kmInformado !== false && !kmParecePadrao(c) ? { mileage: Math.max(0, Math.round(c.km)) } : {}),
+      mileage: Math.max(0, Math.round(c.km)),
       // O NaPista recebe o preço como número inteiro (em reais, sem centavos).
       price: preco,
       ...(placa.length >= 7 ? { plate: placa } : {}),

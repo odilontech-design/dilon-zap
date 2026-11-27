@@ -109,16 +109,17 @@ export async function definirLojaNapista(tenantId: string, sellerId: string): Pr
 }
 
 export async function anunciarNoNapista(tenantId: string, veiculoIds: string[]): Promise<{ ligados: number; semKm: number }> {
-  const carros = await prisma.veiculo.findMany({ where: { tenantId, id: { in: veiculoIds } }, select: { id: true } });
+  const carros = await prisma.veiculo.findMany({ where: { tenantId, id: { in: veiculoIds } }, select: { id: true, kmInformado: true } });
+  let semKm = 0;
   for (const c of carros) {
+    if (c.kmInformado === false) semKm++;
     await prisma.publicacaoPortal.upsert({
       where: { veiculoId_portal: { veiculoId: c.id, portal: "NAPISTA" } },
       create: { tenantId, veiculoId: c.id, portal: "NAPISTA", idEnviado: c.id.slice(-12) },
       update: { ativo: true, erro: null, proximaTentativaEm: null },
     });
   }
-  // A km é opcional no NaPista: carro sem km sobe sem o campo, então não há "esperando km" para contar.
-  return { ligados: carros.length, semKm: 0 };
+  return { ligados: carros.length, semKm };
 }
 
 export async function desligarDoNapista(tenantId: string, veiculoId: string) {

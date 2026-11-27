@@ -7,7 +7,8 @@ import { centsToBRL } from "@/lib/billing";
 import { lerReais } from "@/lib/otica-regras";
 import { classeDosDias, contagemPorFiltro, filtrarEOrdenar, FILTROS, ORDENS, type AnuncioDaGrade, type CarroDaGrade, type Filtro, type Ordem } from "@/lib/grade-portais-filtros";
 import { lerKm } from "@/lib/veiculos-completar-km";
-import { botaoSecundario, campo, erroDaResposta, fetcher } from "../comum";
+import { erroDaResposta, fetcher } from "../comum";
+import { MenuDoVeiculo } from "./menu-do-veiculo";
 
 type Portal = { portal: string; nome: string; conectado: boolean; situacaoConta: string | null; publicados: number; naFila: number; comErro: number; pendentes: number; fora: number; foraSemKm: number };
 type Grade = { portais: Portal[]; aVenda: number; carros: CarroDaGrade[] };
@@ -27,7 +28,67 @@ const ROTULO: Record<string, { texto: string; classe: string }> = {
 
 const naFila = (a: AnuncioDaGrade | null) => !!a?.ativo && (a.status === "FILA" || a.status === "ENVIADO");
 const CLASSE_DIAS = { normal: "bg-black/60 text-white", atencao: "bg-amber-500 text-white", parado: "bg-red-600 text-white" } as const;
+/** Controles da barra de filtros: sem `w-full` (o `campo` da tela ocupa a linha inteira e empilhava tudo). */
+const controle = "rounded-md border border-neutral-300 bg-surface px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40";
+const botaoPequeno = "rounded-md border border-neutral-300 px-2 py-1 text-xs hover:border-accent disabled:opacity-50";
 const FUNDO_CELULA = (a: AnuncioDaGrade | null) => (a?.ativo && a.status === "ERRO" ? "bg-red-500/5" : a?.ativo && a.status === "PUBLICADO" ? "bg-emerald-500/5" : "");
+
+type Modalidade = { codigo: string; descricao: string; total: number; usados: number };
+
+/**
+ * O plano deste carro na Webmotors. A lista vem ao vivo da Webmotors e só é pedida quando alguém abre o seletor (e fica
+ * em cache por 1 minuto), para a grade não consultar o portal a cada carro. Trocar muda o que a loja gasta lá: confirma antes.
+ */
+function PlanoDoCarro({ carroId, plano, aoMudar, avisar }: { carroId: string; plano: string | null; aoMudar: () => void; avisar: (a: { texto: string; erro?: boolean }) => void }) {
+  const [aberto, setAberto] = useState(false);
+  const [salvando, setSalvando] = useState(false);
+  const planos = useSWR<{ modalidades: Modalidade[] }>(aberto ? "/api/portais/webmotors/plano" : null, fetcher, { revalidateOnFocus: false, dedupingInterval: 60_000 });
+  async function trocar(codigo: string) {
+    const novo = codigo || null;
+    const m = planos.data?.modalidades.find((x) => x.codigo === codigo);
+    const destino = novo ? `o plano "${m?.descricao ?? novo}"` : "o plano padrão da loja";
+    if (!confirm(`Passar este carro para ${destino} na Webmotors?\n\nO anúncio muda de plano no próximo envio e isso pode mudar o que a loja paga lá.`)) return;
+    setSalvando(true);
+    try {
+      const r = await fetch(`/api/veiculos/${carroId}/plano-webmotors`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ codigo: novo }) });
+      if (!r.ok) return avisar({ texto: await erroDaResposta(r), erro: true });
+      avisar({ texto: "Plano salvo: a troca vai na próxima rodada de envio." });
+      setAberto(false);
+      aoMudar();
+    } finally {
+      setSalvando(false);
+    }
+  }
+  if (!aberto) {
+    return (
+      <button type="button" onClick={() => setAberto(true)} className="text-[11px] text-neutral-500 hover:text-accent" title="Trocar o plano deste carro na Webmotors">
+        {plano ? `plano ${plano}` : "plano padrão"} ▾
+      </button>
+    );
+  }
+  return (
+    <span className="flex flex-col gap-0.5">
+      <select
+        aria-label="Plano do anúncio na Webmotors"
+        value={plano ?? ""}
+        disabled={salvando || !planos.data}
+        onChange={(e) => trocar(e.target.value)}
+        className="max-w-[12rem] rounded border border-neutral-300 bg-surface px-1 py-0.5 text-[11px] focus:outline-none focus:ring-2 focus:ring-accent/40"
+      >
+        <option value="">{planos.error ? "Erro ao consultar a Webmotors" : planos.data ? "Plano padrão da loja" : "Carregando…"}</option>
+        {planos.data?.modalidades.map((m) => (
+          <option key={m.codigo} value={m.codigo} disabled={m.total > 0 && m.usados >= m.total && m.codigo !== plano}>
+            {m.descricao}
+            {m.total > 0 ? ` (${m.usados}/${m.total})` : ""}
+          </option>
+        ))}
+      </select>
+      <button type="button" onClick={() => setAberto(false)} className="self-start text-[11px] text-neutral-400 hover:text-neutral-600">
+        fechar
+      </button>
+    </span>
+  );
+}
 
 /**
  * Valor que se corrige ali mesmo: clica, digita, Enter salva (Esc cancela). O salvamento é de quem chama e devolve o
@@ -79,7 +140,7 @@ function Editavel({ rotulo, exibido, inicial, ajuda, aoSalvar, destaque }: { rot
           if (e.key === "Escape") setEditando(false);
         }}
         onBlur={() => !salvando && !erro && setEditando(false)}
-        className={`${campo} w-28 py-0.5 text-sm`}
+        className="w-28 rounded-md border border-neutral-300 bg-surface px-2 py-0.5 text-sm focus:outline-none focus:ring-2 focus:ring-accent/40"
       />
       {erro && <span className="text-[11px] text-red-600">{erro}</span>}
     </span>
@@ -183,114 +244,104 @@ export function GradeDePortais() {
     return null;
   }
 
+  const pendentesTotal = data.portais.filter((p) => p.conectado).reduce((t, p) => t + p.pendentes, 0);
+
   return (
-    <div className="flex flex-col gap-4" data-testid="grade-de-portais">
+    <div className="flex flex-col gap-3" data-testid="grade-de-portais">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-sm text-neutral-600">Os anúncios são enviados sozinhos a cada minuto. Use o botão se quiser forçar agora o que está na fila ou com erro.</p>
-        <button type="button" className={botaoSecundario} disabled={ocupado === "atualizar:todos" || !(data.portais.filter((p) => p.conectado).reduce((t, p) => t + p.pendentes, 0))} onClick={() => atualizarAgora(null)}>
-          {ocupado === "atualizar:todos" ? "Atualizando…" : `Atualizar anúncios (${data.portais.filter((p) => p.conectado).reduce((t, p) => t + p.pendentes, 0)})`}
+        <h2 className="text-base font-semibold">
+          <span className="text-accent">{data.aVenda}</span> veículos à venda
+        </h2>
+        <button type="button" className={botaoPequeno} disabled={ocupado === "atualizar:todos" || pendentesTotal === 0} onClick={() => atualizarAgora(null)}>
+          {ocupado === "atualizar:todos" ? "Atualizando…" : `Atualizar anúncios (${pendentesTotal})`}
         </button>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {data.portais.map((p) => {
-          const pct = data.aVenda > 0 ? Math.min(100, Math.round((p.publicados / data.aVenda) * 100)) : 0;
-          return (
-            <div key={p.portal} className="flex flex-col gap-2 rounded-lg border border-neutral-200 bg-surface p-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold">{p.nome}</h2>
-                <span className={`rounded-full px-2 py-0.5 text-xs ${p.conectado ? "bg-emerald-500/10 text-emerald-700" : "bg-red-500/10 text-red-600"}`}>{p.conectado ? "Conectado" : "Desconectado"}</span>
-              </div>
-              <p className="text-2xl font-bold tabular-nums">
-                {p.publicados}
-                <span className="text-sm font-normal text-neutral-500"> de {data.aVenda} no ar</span>
-              </p>
-              <div className="h-1.5 overflow-hidden rounded-full bg-neutral-100" role="progressbar" aria-label={`${p.nome}: ${p.publicados} de ${data.aVenda} carros à venda no ar`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-                <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
-              </div>
-              <p className="text-xs text-neutral-600">
-                {p.naFila > 0 && <>{p.naFila} na fila · </>}
-                {p.comErro > 0 ? <span className="text-red-600">{p.comErro} com erro</span> : "nenhum com erro"}
-                {" · "}
-                {p.fora} fora do portal
-              </p>
-              {p.conectado ? (
-                <>
-                  <button className={botaoSecundario} disabled={p.fora === 0 || ocupado === `lote:${p.portal}`} onClick={() => publicarOsQueFaltam(p)}>
-                    {ocupado === `lote:${p.portal}` ? "Enviando…" : p.fora ? `Publicar os ${p.fora} que faltam` : "Tudo publicado ✓"}
-                  </button>
-                  <button className={botaoSecundario} disabled={p.pendentes === 0 || ocupado === `atualizar:${p.portal}`} onClick={() => atualizarAgora(p)}>
-                    {ocupado === `atualizar:${p.portal}` ? "Atualizando…" : `Atualizar agora (${p.pendentes})`}
-                  </button>
-                </>
-              ) : (
-                <Link href="/veiculos/portais" className="text-xs text-accent hover:underline">
-                  Reconectar em Portais
-                </Link>
-              )}
-            </div>
-          );
-        })}
-      </div>
 
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Marca, modelo, versão ou placa" className={`${campo} max-w-xs`} aria-label="Buscar carro" />
-          <select value={portalFiltro} onChange={(e) => setPortalFiltro(e.target.value)} className={`${campo} w-auto`} aria-label="Portal do filtro">
-            <option value="todos">Todos os portais</option>
-            {data.portais.map((p) => (
-              <option key={p.portal} value={p.portal}>
-                {p.nome}
-              </option>
-            ))}
-          </select>
-          <select value={ordem} onChange={(e) => setOrdem(e.target.value as Ordem)} className={`${campo} w-auto`} aria-label="Ordenar por">
-            {ORDENS.map((o) => (
-              <option key={o.id} value={o.id}>
-                {o.rotulo}
-              </option>
-            ))}
-          </select>
-          <span className="ml-auto text-xs text-neutral-500">
-            {carros.length} de {data.carros.length} carros
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-1">
-          {FILTROS.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              aria-pressed={filtro === f.id}
-              onClick={() => setFiltro(f.id)}
-              className={`rounded-md px-3 py-1.5 text-sm ${filtro === f.id ? "bg-neutral-100 font-semibold" : "text-neutral-500 hover:text-neutral-800"}`}
-            >
-              {f.rotulo}
-              {f.id !== "todos" && <span className={`ml-1.5 text-xs ${contagens[f.id] > 0 && f.id !== "reservados" ? "text-amber-700" : "text-neutral-400"}`}>{contagens[f.id]}</span>}
-            </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Marca, modelo, versão ou placa" className={`${controle} min-w-[12rem] flex-1 sm:max-w-sm`} aria-label="Buscar carro" />
+        <select value={portalFiltro} onChange={(e) => setPortalFiltro(e.target.value)} className={controle} aria-label="Portal do filtro">
+          <option value="todos">Todos os portais</option>
+          {data.portais.map((p) => (
+            <option key={p.portal} value={p.portal}>
+              {p.nome}
+            </option>
           ))}
-        </div>
+        </select>
+        <select value={ordem} onChange={(e) => setOrdem(e.target.value as Ordem)} className={controle} aria-label="Ordenar por">
+          {ORDENS.map((o) => (
+            <option key={o.id} value={o.id}>
+              {o.rotulo}
+            </option>
+          ))}
+        </select>
+        <span className="ml-auto text-xs text-neutral-500">
+          {carros.length} de {data.carros.length}
+        </span>
+      </div>
+      <div className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" role="group" aria-label="Filtros">
+        {FILTROS.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            aria-pressed={filtro === f.id}
+            onClick={() => setFiltro(f.id)}
+            className={`shrink-0 whitespace-nowrap rounded-full px-3 py-1.5 text-sm ${filtro === f.id ? "bg-accent/10 font-medium text-accent" : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"}`}
+          >
+            {f.rotulo}
+            {f.id !== "todos" && <span className={`ml-1.5 text-xs ${contagens[f.id] > 0 && f.id !== "reservados" ? "text-amber-700" : "text-neutral-400"}`}>{contagens[f.id]}</span>}
+          </button>
+        ))}
       </div>
       {aviso && <p className={`rounded-md px-3 py-2 text-sm ${aviso.erro ? "bg-red-500/10 text-red-600" : "bg-accent/10 text-accent"}`}>{aviso.texto}</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-neutral-200 bg-surface">
-        <table className="w-full min-w-[760px] text-sm">
-          <thead className="text-left text-xs text-neutral-500">
+      <div className="max-h-[78vh] overflow-auto rounded-lg border border-neutral-200 bg-surface">
+        <table className="w-full min-w-[640px] border-separate border-spacing-0 text-sm">
+          <thead>
             <tr>
-              <th className="px-3 py-2 font-normal">Carro</th>
-              {data.portais.map((p) => (
-                <th key={p.portal} className="w-40 px-3 py-2 font-normal">
-                  {p.nome}
-                </th>
-              ))}
+              <th className="sticky top-0 z-30 min-w-[240px] max-w-[15rem] border-b border-neutral-200 bg-surface px-3 py-2 text-left text-xs font-normal text-neutral-500 md:left-0 md:max-w-none">Veículo</th>
+              {data.portais.map((p) => {
+                const pct = data.aVenda > 0 ? Math.min(100, Math.round((p.publicados / data.aVenda) * 100)) : 0;
+                return (
+                  <th key={p.portal} className="sticky top-0 z-20 w-44 min-w-[11rem] border-b border-l border-neutral-200 bg-surface px-3 py-2 text-left align-top font-normal">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-semibold text-neutral-900">{p.nome}</span>
+                      <span title={p.conectado ? "Conectado" : "Desconectado"} className={`h-2 w-2 rounded-full ${p.conectado ? "bg-emerald-500" : "bg-red-500"}`} />
+                    </div>
+                    <p className="mt-0.5 text-xs text-neutral-600">
+                      <b className="text-sm tabular-nums text-neutral-900">{p.publicados}</b>
+                      <span className="tabular-nums">/{data.aVenda}</span> no ar
+                      {p.comErro > 0 && <span className="text-red-600"> · {p.comErro} com erro</span>}
+                    </p>
+                    <div className="mt-1 h-1 overflow-hidden rounded-full bg-neutral-100" role="progressbar" aria-label={`${p.nome}: ${p.publicados} de ${data.aVenda} no ar`} aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
+                      <div className="h-full rounded-full bg-accent" style={{ width: `${pct}%` }} />
+                    </div>
+                    {p.conectado ? (
+                      <div className="mt-1.5 flex flex-wrap gap-1">
+                        <button className={botaoPequeno} disabled={p.fora === 0 || ocupado === `lote:${p.portal}`} onClick={() => publicarOsQueFaltam(p)} title="Publicar os carros à venda que ainda não estão neste portal">
+                          {ocupado === `lote:${p.portal}` ? "Enviando…" : p.fora ? `+ Publicar ${p.fora}` : "Tudo publicado ✓"}
+                        </button>
+                        <button className={botaoPequeno} disabled={p.pendentes === 0 || ocupado === `atualizar:${p.portal}`} onClick={() => atualizarAgora(p)} title="Reenviar já o que está na fila ou com erro">
+                          {ocupado === `atualizar:${p.portal}` ? "…" : `Atualizar ${p.pendentes}`}
+                        </button>
+                      </div>
+                    ) : (
+                      <Link href="/veiculos/portais" className="mt-1.5 inline-block text-xs text-accent hover:underline">
+                        Reconectar
+                      </Link>
+                    )}
+                  </th>
+                );
+              })}
             </tr>
           </thead>
           <tbody>
             {carros.map((c) => {
               const precoPortal = c.precoClassificadosCents ?? c.precoCents;
               return (
-                <tr key={c.id} className="border-t border-neutral-100 align-top">
-                  <td className="px-3 py-2.5">
+                <tr key={c.id} className="align-top">
+                  <td className="max-w-[15rem] border-b border-neutral-100 bg-surface px-3 py-2.5 md:sticky md:left-0 md:z-10 md:max-w-none">
                     <div className="flex gap-3">
-                      <Link href={`/veiculos/${c.id}`} className="relative block h-[68px] w-24 shrink-0 overflow-hidden rounded-md bg-neutral-100" aria-label={`Abrir ${c.nome}`}>
+                      <Link href={`/veiculos/${c.id}`} className="relative block h-[56px] w-20 shrink-0 overflow-hidden rounded-md bg-neutral-100 sm:h-[68px] sm:w-24" aria-label={`Abrir ${c.nome}`}>
                         {c.capaId ? (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={`/api/veiculos/fotos/${c.capaId}`} alt="" loading="lazy" className="h-full w-full object-cover" />
@@ -300,10 +351,18 @@ export function GradeDePortais() {
                         <span className={`absolute bottom-1 left-1 rounded-full px-1.5 py-0.5 text-[11px] font-medium ${CLASSE_DIAS[classeDosDias(c.dias)]}`}>{c.dias} dias</span>
                       </Link>
                       <div className="min-w-0">
-                        <Link href={`/veiculos/${c.id}`} className="font-medium hover:text-accent">
-                          {c.nome}
-                        </Link>
-                        {c.versao && <p className="truncate text-xs text-neutral-500">{c.versao}</p>}
+                        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                          <Link href={`/veiculos/${c.id}`} className="min-w-0 flex-1 basis-24 font-medium leading-tight hover:text-accent">
+                            {c.nome}
+                          </Link>
+                          <span className="flex shrink-0 items-center gap-1">
+                            <Link href={`/veiculos/${c.id}`} className="rounded border border-neutral-200 px-1.5 py-0.5 text-[11px] text-neutral-500 hover:border-accent hover:text-accent" title="Abrir a ficha do carro">
+                              Editar
+                            </Link>
+                            <MenuDoVeiculo carro={c} portaisAtivos={data.portais.filter((p) => c.anuncios[p.portal]?.ativo).map((p) => ({ portal: p.portal, nome: p.nome }))} aoMudar={() => mutate()} avisar={setAviso} />
+                          </span>
+                        </div>
+                        {c.versao && <p className="line-clamp-1 text-xs text-neutral-500">{c.versao}</p>}
                         <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs">
                           {c.placa && <span className="rounded border border-neutral-200 px-1.5 py-0.5 font-mono text-[11px] text-neutral-600">{c.placa}</span>}
                           {c.status === "RESERVADO" ? (
@@ -321,7 +380,7 @@ export function GradeDePortais() {
                           </span>
                           <span>
                             Classificados <b className="font-semibold text-neutral-800">{precoPortal > 0 ? centsToBRL(precoPortal) : "—"}</b>
-                            {c.precoClassificadosCents === null && <span className="text-neutral-400"> (igual ao site)</span>}
+                            {c.precoClassificadosCents === null && <span className="hidden text-neutral-400 sm:inline"> (= site)</span>}
                           </span>
                           <span>
                             Km{" "}
@@ -336,17 +395,17 @@ export function GradeDePortais() {
                     const rot = a?.ativo ? ROTULO[a.status] : null;
                     const ocupadoAqui = ocupado === `${c.id}:${p.portal}`;
                     return (
-                      <td key={p.portal} className={`px-3 py-2.5 ${FUNDO_CELULA(a)}`}>
+                      <td key={p.portal} className={`w-44 min-w-[11rem] max-w-[14rem] border-b border-l border-neutral-100 px-3 py-2.5 ${FUNDO_CELULA(a)}`}>
                         <div className="flex flex-col items-start gap-1">
                           {rot ? <span className={`rounded-full px-2 py-0.5 text-xs ${rot.classe}`}>{rot.texto}</span> : <span className="text-xs text-neutral-400">Não anunciado</span>}
-                          {a?.ativo && a.erro && (
-                            <span className="line-clamp-3 text-[11px] text-red-600" title={a.erro}>
-                              {a.erro}
-                            </span>
+                          {a?.ativo && a.erro && <ErroDoAnuncio erro={a.erro} />}
+                          {p.portal === "WEBMOTORS" && a?.ativo ? (
+                            <PlanoDoCarro carroId={c.id} plano={a.plano} aoMudar={() => mutate()} avisar={setAviso} />
+                          ) : (
+                            a?.plano && a.ativo && <span className="text-[11px] text-neutral-500">plano {a.plano}</span>
                           )}
-                          {a?.plano && a.ativo && <span className="text-[11px] text-neutral-500">plano {a.plano}</span>}
                           {p.portal === "NAPISTA" && a?.ativo && a.status === "PUBLICADO" && <DetalheDoNapista detalhe={detalhes[c.id]} aoConferir={() => conferirNoNapista(c)} />}
-                          <span className="flex flex-wrap gap-2 text-xs">
+                          <span className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs">
                             {a?.url && a.status === "PUBLICADO" && a.ativo && (
                               <a href={a.url} target="_blank" rel="noreferrer" className="text-accent hover:underline">
                                 Ver anúncio
@@ -368,7 +427,7 @@ export function GradeDePortais() {
             })}
             {carros.length === 0 && (
               <tr>
-                <td colSpan={data.portais.length + 1} className="px-3 py-6 text-center text-sm text-neutral-500">
+                <td colSpan={data.portais.length + 1} className="px-3 py-8 text-center text-sm text-neutral-500">
                   Nenhum carro com esse filtro.
                 </td>
               </tr>
@@ -376,7 +435,22 @@ export function GradeDePortais() {
           </tbody>
         </table>
       </div>
-      <p className="text-xs text-neutral-500">Clique no preço ou na km de um carro para corrigir ali mesmo. Disponível e anunciado: vai para o portal sozinho. Mudou preço, km ou fotos: o anúncio atualiza. Vendeu ou reservou: sai do ar. Carro sem quilometragem não sobe.</p>
+      <p className="text-xs text-neutral-500">Mostrando {carros.length} de {data.carros.length} veículos. Clique no preço ou na km para corrigir ali mesmo. Disponível e anunciado: vai para o portal sozinho, a cada minuto. Mudou preço, km ou fotos: o anúncio atualiza. Vendeu ou reservou: sai do ar.</p>
+    </div>
+  );
+}
+
+/** O erro do portal numa linha só; clicar mostra o texto inteiro (os erros dos portais são longos e quebravam a tela). */
+function ErroDoAnuncio({ erro }: { erro: string }) {
+  const [aberto, setAberto] = useState(false);
+  return (
+    <div className="max-w-full text-[11px] text-red-600">
+      <p className={`break-words ${aberto ? "" : "line-clamp-2"}`}>{erro}</p>
+      {erro.length > 70 && (
+        <button type="button" onClick={() => setAberto((v) => !v)} className="mt-0.5 underline">
+          {aberto ? "ver menos" : "ver o erro completo"}
+        </button>
+      )}
     </div>
   );
 }

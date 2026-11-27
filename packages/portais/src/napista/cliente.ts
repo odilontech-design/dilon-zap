@@ -64,8 +64,8 @@ export type OfertaNapista = {
   versionId: string;
   modelYear: number;
   manufacturedYear: number;
-  /** Opcional na API do NaPista: sem km informada, vai sem este campo (nunca um número inventado). */
-  mileage?: number;
+  /** O NaPista recusa o anúncio sem a km (400), mesmo a documentação não listando o campo como obrigatório. */
+  mileage: number;
   price: number;
   plate?: string;
   fuelType: string;
@@ -97,6 +97,25 @@ export type LeadNapista = {
   parcelas: number | null;
   credito: string | null;
 };
+
+/**
+ * O corpo de um erro do NaPista em poucas palavras. Os erros de validação (400 "Bean validation error") trazem os campos
+ * recusados numa lista `items`: mostra "campo: motivo" de cada um, em vez de cortar o texto no meio e perder justamente o motivo.
+ */
+export function resumirCorpoDeErro(corpo: string): string {
+  try {
+    const j = JSON.parse(corpo);
+    const lista: unknown[] = Array.isArray(j?.items) ? j.items : Array.isArray(j?.errors) ? j.errors : [];
+    const itens = lista
+      .map((i: any) => (i && typeof i === "object" ? [i.field ?? i.name ?? i.property, i.message ?? i.description ?? i.error].filter(Boolean).join(": ") : String(i)))
+      .filter(Boolean);
+    if (itens.length) return `${String(j.message ?? "dados recusados").slice(0, 80)} (${itens.slice(0, 6).join("; ")})`.slice(0, 500);
+    if (typeof j?.message === "string") return j.message.slice(0, 300);
+  } catch {
+    /* corpo que não é JSON */
+  }
+  return corpo.slice(0, 300);
+}
 
 const texto = (v: unknown) => (v === undefined || v === null ? "" : String(v));
 const itens = (r: any): ItemNapista[] => (Array.isArray(r?.items) ? r.items : []).map((x: any) => ({ id: texto(x.id), nome: texto(x.name) })).filter((x: ItemNapista) => x.id);
@@ -135,7 +154,7 @@ export class SessaoNapista {
         continue;
       }
       const t = await r.text();
-      if (!r.ok) throw new ErroNapista(`O NaPista respondeu ${r.status}${t ? `: ${t.slice(0, 200)}` : ""}`, r.status);
+      if (!r.ok) throw new ErroNapista(`O NaPista respondeu ${r.status}${t ? `: ${resumirCorpoDeErro(t)}` : ""}`, r.status);
       if (!t) return undefined as T;
       try {
         return JSON.parse(t) as T;

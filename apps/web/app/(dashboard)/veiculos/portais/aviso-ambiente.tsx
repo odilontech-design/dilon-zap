@@ -7,11 +7,12 @@ import { ambientesDosPortais } from "@dilon-zap/portais";
 export function AvisoDeAmbienteDosPortais() {
   const emTeste = ambientesDosPortais().filter((a) => a.teste);
   if (emTeste.length === 0) return null;
+  const nomes = emTeste.map((a) => a.nome).join(", ");
   return (
-    <div role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/5 p-3 text-sm text-red-700" data-testid="aviso-ambiente-portais">
-      <p className="font-semibold">{emTeste.length === 1 ? `${emTeste[0].nome} está no ambiente de TESTE.` : `${emTeste.map((a) => a.nome).join(", ")} estão no ambiente de TESTE.`}</p>
-      <p className="mt-1 text-xs">
-        Os anúncios enviados vão para o ambiente de testes do portal e <b>não aparecem no site de verdade</b>. Para publicar de verdade, o servidor precisa apontar para a produção do portal (peça à Dilon Tech).
+    <div role="status" className="mb-4 rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-900" data-testid="aviso-ambiente-portais">
+      <p className="font-semibold">{emTeste.length === 1 ? `${nomes} em fase de homologação` : `${nomes} em fase de homologação`}</p>
+      <p className="mt-0.5 text-xs">
+        Por enquanto os anúncios ficam no ambiente de testes do portal e <b>ainda não aparecem no site</b>. A liberação para produção está em andamento e este aviso some sozinho quando for concluída.
       </p>
     </div>
   );

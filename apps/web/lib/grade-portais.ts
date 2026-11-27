@@ -1,6 +1,7 @@
 import { prisma } from "@dilon-zap/db";
 import { nomeDoVeiculo } from "@/lib/veiculos-regras";
 import { NOME_PORTAL } from "@/lib/relatorios-veiculos";
+import { baseDoSite, linkDoCarro } from "@/lib/vitrine";
 import { urlDoAnuncio, type AnuncioDaGrade, type CarroDaGrade } from "@/lib/grade-portais-filtros";
 
 export type { AnuncioDaGrade, CarroDaGrade };
@@ -15,7 +16,8 @@ export const PORTAIS_DA_GRADE = ["WEBMOTORS", "MOBIAUTO", "NAPISTA", "MERCADO_LI
 export type PortalDaGrade = (typeof PORTAIS_DA_GRADE)[number];
 
 export async function gradeDePortais(tenantId: string) {
-  const [contas, carros] = await Promise.all([
+  const [loja, contas, carros] = await Promise.all([
+    prisma.tenant.findUnique({ where: { id: tenantId }, select: { slug: true, veiculosConfig: { select: { vitrineAtiva: true, mostrarReservados: true, dominio: true } } } }),
     prisma.portalConta.findMany({ where: { tenantId, portal: { in: [...PORTAIS_DA_GRADE] } }, select: { portal: true, status: true } }),
     prisma.veiculo.findMany({
       where: { tenantId, status: { in: ["DISPONIVEL", "RESERVADO"] } },
@@ -48,8 +50,7 @@ export async function gradeDePortais(tenantId: string) {
       /** O que "Atualizar agora" reenvia: na fila ou com erro. */
       pendentes: ativos.filter((p) => p.status === "FILA" || p.status === "ERRO").length,
       fora: fora.length,
-      // O NaPista não exige a km (sobe sem o campo); os outros portais exigem e esperam a km.
-      foraSemKm: portal === "NAPISTA" ? 0 : fora.filter((c) => !c.kmInformado && !c.zeroKm).length,
+      foraSemKm: fora.filter((c) => !c.kmInformado && !c.zeroKm).length,
     };
   });
 
@@ -72,6 +73,10 @@ export async function gradeDePortais(tenantId: string) {
         semKm: !c.kmInformado && !c.zeroKm,
         capaId: c.fotos[0]?.id ?? null,
         totalFotos: c._count.fotos,
+        linkPublico:
+          loja && c.naVitrine && loja.veiculosConfig?.vitrineAtiva && (baseDoSite() || loja.veiculosConfig.dominio) && (c.status !== "RESERVADO" || loja.veiculosConfig.mostrarReservados)
+            ? linkDoCarro(loja.slug, c.id, loja.veiculosConfig.dominio)
+            : null,
         anuncios: Object.fromEntries(
           portais.map((p) => {
             const pub = c.publicacoes.find((x) => x.portal === p.portal);
