@@ -4,7 +4,6 @@ import { recursosDoUsuario } from "@/lib/plano";
 import { ehGerencia } from "@/lib/papeis";
 import { AbasVeiculos } from "../comum";
 import { GradeDePortais } from "./grade-de-portais";
-import { AvisoDeAmbienteDosPortais } from "../portais/aviso-ambiente";
 
 export default async function AnunciosDaRevendaPage() {
   const user = await requireUser();
@@ -13,7 +12,6 @@ export default async function AnunciosDaRevendaPage() {
   return (
     <div className="p-4 md:p-8">
       <AbasVeiculos atual="anuncios" gerencia />
-      <AvisoDeAmbienteDosPortais />
       <GradeDePortais />
     </div>
   );

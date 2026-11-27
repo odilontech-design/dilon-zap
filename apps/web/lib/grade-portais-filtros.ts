@@ -119,3 +119,20 @@ export function classeDosDias(dias: number): "normal" | "atencao" | "parado" {
 export function urlDoAnuncio(_portal: string, pub: { ativo: boolean; status: string; url: string | null; idExterno: string | null }): string | null {
   return pub.ativo && pub.status === "PUBLICADO" && pub.url ? pub.url : null;
 }
+
+/**
+ * O erro do portal em poucas palavras, para caber na célula da grade (o texto inteiro fica a um clique). Os portais
+ * devolvem frases longas ("Falta para anunciar: ...", "O NaPista respondeu 400: ..."); aqui vira o que a loja precisa fazer.
+ */
+export function resumoDoErro(erro: string): string {
+  const e = erro.replace(/^Falta para anunciar:\s*/i, "").trim();
+  if (/quilometragem|\bkm\b|mileage/i.test(e)) return "Corrigir a km";
+  if (/foto|photo/i.test(e)) return "Faltam fotos";
+  if (/\bcor\b|color/i.test(e)) return "Cor não reconhecida";
+  if (/marca|modelo|vers[ãa]o|cat[áa]logo|version/i.test(e)) return "Versão não identificada";
+  if (/pre[çc]o|price/i.test(e)) return "Conferir o preço";
+  if (/modalidade|plano/i.test(e)) return "Escolher o plano";
+  if (/\b40[13]\b|recus|token|login|autoriz/i.test(e)) return "Reconectar o portal";
+  const primeira = e.split(/[;:.]/)[0].trim();
+  return primeira.length > 32 ? `${primeira.slice(0, 31).trimEnd()}…` : primeira || "Erro no portal";
+}
